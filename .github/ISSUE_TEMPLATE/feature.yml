@@ -1,0 +1,32 @@
+name: Feature ticket
+description: A screen, component or behavior to build from Figma
+labels: ["type:feature"]
+body:
+  - type: input
+    id: figma
+    attributes:
+      label: Figma link
+      description: Page and frame (include node-id)
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: "- [ ] "
+    validations:
+      required: true
+  - type: textarea
+    id: mui
+    attributes:
+      label: MUI components to use
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
