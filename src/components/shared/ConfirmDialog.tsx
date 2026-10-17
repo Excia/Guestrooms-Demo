@@ -4,7 +4,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -21,7 +21,10 @@ export interface ConfirmDialogProps {
 }
 
 // Confirm Leaving (Figma 88:4839). MUI Dialog traps focus, restores it to the opener on close and
-// closes on Escape; the primary action is autofocused so Enter saves rather than discards.
+// closes on Escape. The primary action takes focus once the open transition ends (a ref, not
+// `autoFocus`, which loses to the focus trap under React StrictMode), so Enter saves rather than
+// discards. Specific to leaving with unsaved changes; a generic or destructive confirm needs its
+// own copy, actions and tone.
 export default function ConfirmDialog({
   open,
   onClose,
@@ -33,12 +36,16 @@ export default function ConfirmDialog({
   discardLabel = 'Leave without saving',
 }: ConfirmDialogProps) {
   const id = useId();
+  const primaryRef = useRef<HTMLButtonElement>(null);
   return (
     <Dialog
       open={open}
       onClose={onClose}
       // Figma paper width is 444px; the default margin keeps it inside narrow viewports.
-      slotProps={{ paper: { sx: { width: (t) => t.spacing(55.5) } } }}
+      slotProps={{
+        paper: { sx: { width: (t) => t.spacing(55.5) } },
+        transition: { onEntered: () => primaryRef.current?.focus() },
+      }}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-message`}
     >
@@ -56,7 +63,7 @@ export default function ConfirmDialog({
         >
           {discardLabel}
         </Button>
-        <Button variant="contained" onClick={onConfirm} autoFocus>
+        <Button ref={primaryRef} variant="contained" onClick={onConfirm}>
           {confirmLabel}
         </Button>
       </DialogActions>
