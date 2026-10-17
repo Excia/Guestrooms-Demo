@@ -1,4 +1,9 @@
-import { isAllLocations, normalizeSelection, toggleLocation } from './locationSelection';
+import {
+  isAllLocations,
+  toReported,
+  normalizeSelection,
+  toggleLocation,
+} from './locationSelection';
 
 describe('location selection', () => {
   it('toggles a location on and off', () => {
@@ -18,5 +23,11 @@ describe('location selection', () => {
     expect(isAllLocations([], ['a', 'b'])).toBe(true);
     expect(isAllLocations(['b', 'a'], ['a', 'b'])).toBe(true);
     expect(isAllLocations(['a'], ['a', 'b'])).toBe(false);
+  });
+
+  it('reports "every location" as the empty selection', () => {
+    expect(toReported(['b', 'a'], ['a', 'b'])).toEqual([]);
+    expect(toReported(['a'], ['a', 'b'])).toEqual(['a']);
+    expect(toReported([], ['a', 'b'])).toEqual([]);
   });
 });

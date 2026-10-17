@@ -17,3 +17,8 @@ export function normalizeSelection(selected: readonly string[], all: readonly st
 export function isAllLocations(selected: readonly string[], all: readonly string[]): boolean {
   return selected.length === 0 || normalizeSelection(selected, all).length === all.length;
 }
+
+/** One representation for the consumer: every location selected is reported as [] (All). */
+export function toReported(selected: readonly string[], all: readonly string[]): string[] {
+  return isAllLocations(selected, all) ? [] : normalizeSelection(selected, all);
+}

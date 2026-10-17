@@ -301,6 +301,25 @@ describe('derived comparisons follow the period', () => {
     }
   });
 
+  it('editing a range comparison forces the custom preset', () => {
+    const v = on('thisWeek');
+    const edited = updateComparison(v, {
+      kind: 'range',
+      preset: 'lastWeek',
+      from: '2025-01-01',
+      to: '2025-01-07',
+    });
+    expect(edited.comparison).toMatchObject({ preset: 'custom', from: '2025-01-01' });
+    const moved = updatePeriod(edited, { kind: 'thisWeek', from: '2025-03-02', to: '2025-03-08' });
+    expect(moved.comparison).toEqual(edited.comparison);
+  });
+
+  it('a comparison without `derived` (fixture or saved value) counts as derived', () => {
+    const v = { ...on('month'), comparison: { kind: 'month', month: '2020-01' } } as const;
+    const next = updatePeriod(v, { kind: 'month', month: '2025-05' });
+    expect(next.comparison).toEqual({ kind: 'month', month: '2024-05', derived: true });
+  });
+
   it('editing a month or date comparison marks it independent', () => {
     const v = updateComparison(on('month'), { kind: 'month', month: '2020-01', derived: true });
     expect(v.comparison).toMatchObject({ derived: false });

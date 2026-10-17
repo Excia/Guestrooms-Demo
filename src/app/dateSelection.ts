@@ -21,12 +21,14 @@ export type RangePreset = 'lastWeek' | 'previousPeriod' | 'custom';
 // "Month -> same month a year earlier" (Compare-Month frame). The rest are invented and need the
 // owner's confirmation: Custom -> previous period of equal length, Single Day -> previous day,
 // As Of -> same date one year earlier.
-// `derived` / preset !== 'custom' means the comparison follows the period; once the user edits it
-// (derived: false, or preset 'custom') it stays independent.
+// `derived` is internal bookkeeping: absent or true means the comparison follows the period; the
+// library sets it to false once the user edits it (ranges use preset 'custom' instead), after which
+// it stays independent. Fixtures and saved values may omit it. Changing the period KIND rebuilds
+// the comparison and discards a user edit (intentional: the old shape no longer fits).
 export type Comparison =
   | { kind: 'range'; preset: RangePreset; from: IsoDate; to: IsoDate }
-  | { kind: 'month'; month: IsoMonth; derived: boolean }
-  | { kind: 'date'; date: IsoDate; derived: boolean };
+  | { kind: 'month'; month: IsoMonth; derived?: boolean }
+  | { kind: 'date'; date: IsoDate; derived?: boolean };
 
 /**
  * What <DateSelection> reports. `comparison` is null while "Compare Dates" is off.
@@ -270,7 +272,7 @@ export function updatePeriod(value: DateSelectionValue, period: Period): DateSel
     if (c.preset === 'custom' || !('from' in period)) return { period, comparison: c };
     return { period, comparison: { ...c, ...presetRange(c.preset, period.from, period.to) } };
   }
-  return { period, comparison: c.derived ? defaultComparison(period) : c };
+  return { period, comparison: c.derived !== false ? defaultComparison(period) : c };
 }
 
 export function setCompare(value: DateSelectionValue, on: boolean): DateSelectionValue {
@@ -285,7 +287,10 @@ export function updateComparison(
 ): DateSelectionValue {
   return {
     ...value,
-    comparison: comparison.kind === 'range' ? comparison : { ...comparison, derived: false },
+    comparison:
+      comparison.kind === 'range'
+        ? { ...comparison, preset: 'custom' }
+        : { ...comparison, derived: false },
   };
 }
 
