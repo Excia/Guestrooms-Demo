@@ -21,12 +21,12 @@ import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
 import Paper from '@mui/material/Paper';
-import { alpha, type Theme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, type ElementType } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router';
 import { getTabbables, isPlainLeftClick, nextFocusTarget } from '../app/focusLoop';
-import { HEADER_HEIGHT, HEADER_ID } from '../app/layout';
+import { HEADER_HEIGHT, HEADER_ID, menuFontPx, menuPx } from '../app/layout';
 import { buildMenu, type MenuItem } from '../app/menu';
 import { usePermissions } from '../app/permissions';
 import type { MenuRouteId } from '../app/routes';
@@ -60,12 +60,17 @@ const ICONS: Record<Exclude<MenuRouteId, 'dashboard'>, ElementType> = {
   notifications: MailIcon,
 };
 
-// Figma 1302:18023 values in theme.spacing units (8px): rows 70px, top buttons 68px, column
-// gap 68px, panel 800px (two columns) or 480px (one column).
-const ROW_HEIGHT = 8.75;
-const BUTTON_HEIGHT = 8.5;
-const COLUMN_GAP = 8.5;
-const PANEL_WIDTH = { two: 100, one: 60 };
+// Figma 1302:18023 values (px), scaled by MENU_SCALE: rows 70, top buttons 68, column gap 68,
+// panel 800 (two columns) or 480 (one column), padding 32, row padding 15, icon 32, icon gap 14.
+const px = (figmaPx: number) => `${menuPx(figmaPx)}px`;
+const ROW_HEIGHT = px(70);
+const BUTTON_HEIGHT = px(68);
+const COLUMN_GAP = px(68);
+const PANEL_PADDING = px(32);
+const SECTION_GAP = px(20);
+const ROW_PADDING_X = px(15);
+const ICON_GAP = px(14);
+const PANEL_WIDTH = { two: px(800), one: px(480) };
 // Scrim left visible below the panel so a click can always dismiss it, even on narrow screens.
 const SCRIM_STRIP = 4;
 
@@ -80,11 +85,11 @@ function MenuColumn({ heading, items, currentPath, onNavigate }: ColumnProps) {
   return (
     <div>
       <Typography
-        variant="h6"
+        variant="menu_heading"
         component="h2"
         sx={{
-          height: (t) => t.spacing(ROW_HEIGHT),
-          px: 2,
+          height: ROW_HEIGHT,
+          px: ROW_PADDING_X,
           display: 'flex',
           alignItems: 'center',
           borderBottom: 1,
@@ -108,9 +113,9 @@ function MenuColumn({ heading, items, currentPath, onNavigate }: ColumnProps) {
               selected={selected}
               aria-current={selected ? 'page' : undefined}
               sx={{
-                height: (t) => t.spacing(ROW_HEIGHT),
-                px: 2,
-                gap: 1.75,
+                height: ROW_HEIGHT,
+                px: ROW_PADDING_X,
+                gap: ICON_GAP,
                 borderBottom: 1,
                 borderColor: 'divider',
                 color: 'primary.main',
@@ -119,7 +124,7 @@ function MenuColumn({ heading, items, currentPath, onNavigate }: ColumnProps) {
               }}
             >
               <ListItemIcon sx={{ minWidth: 0, color: 'inherit' }}>
-                <Icon aria-hidden sx={{ fontSize: (t: Theme) => t.spacing(4) }} />
+                <Icon aria-hidden sx={{ fontSize: px(32) }} />
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
@@ -208,15 +213,16 @@ export default function MenuOverlay({
         elevation={1}
         square
         sx={{
-          width: (t) => t.spacing(twoColumns ? PANEL_WIDTH.two : PANEL_WIDTH.one),
-          maxWidth: '100%',
+          width: twoColumns ? PANEL_WIDTH.two : PANEL_WIDTH.one,
+          // Never wider than 60% of the window on mid-size screens; full width when stacked.
+          maxWidth: { xs: '100%', md: '60vw' },
           maxHeight: (t) => `calc(100% - ${t.spacing(SCRIM_STRIP)})`,
           overflowY: 'auto',
           overscrollBehavior: 'contain',
-          p: 4,
+          p: PANEL_PADDING,
           display: 'flex',
           flexDirection: 'column',
-          gap: 2.5,
+          gap: SECTION_GAP,
           border: 1,
           borderColor: 'divider',
           outline: 0,
@@ -226,7 +232,7 @@ export default function MenuOverlay({
           <Box
             sx={{
               display: 'grid',
-              gap: 2.5,
+              gap: SECTION_GAP,
               columnGap: { md: twoColumns ? COLUMN_GAP : 2.5 },
               gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
             }}
@@ -243,9 +249,11 @@ export default function MenuOverlay({
                 size="large"
                 startIcon={<SpaceDashboardIcon />}
                 sx={{
-                  height: (t) => t.spacing(BUTTON_HEIGHT),
+                  height: BUTTON_HEIGHT,
                   justifyContent: 'flex-start',
-                  px: 2.75,
+                  px: px(22),
+                  fontSize: `${menuFontPx(15)}px`,
+                  '& .MuiButton-startIcon > *:nth-of-type(1)': { fontSize: px(22) },
                 }}
               >
                 {menu.dashboard.label}
@@ -257,7 +265,8 @@ export default function MenuOverlay({
                 size="large"
                 startIcon={<ExitToAppIcon />}
                 sx={{
-                  height: (t) => t.spacing(BUTTON_HEIGHT),
+                  height: BUTTON_HEIGHT,
+                  fontSize: `${menuFontPx(15)}px`,
                   justifyContent: 'flex-end',
                 }}
               >
