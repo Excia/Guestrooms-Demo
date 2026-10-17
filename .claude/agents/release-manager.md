@@ -17,10 +17,8 @@ needed is missing from the ticket, say so in your report instead of guessing.
 - Check CI is green and every merged PR since the last release has a Conventional Commit title.
 - Do not merge the release PR.
 
-## Skills and docs
-- Use the **Agent Skills** plugin skills named below when they fit (load with the Skill tool).
-- For library APIs (MUI, React, Vite, Vitest) verify against current documentation before relying on memory: use the **Context7** tools if they are connected in this session, otherwise the official docs site. Cite the doc you relied on in your report.
-- Skills to consider: git-workflow-and-versioning, shipping-and-launch.
+## Skills
+- Use the **Agent Skills** plugin skills below when they fit (load with the Skill tool): git-workflow-and-versioning, shipping-and-launch
 
 ## Report back
 Version proposed, a plain-language summary of the notes, any problems with titles or entries

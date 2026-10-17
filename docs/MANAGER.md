@@ -31,7 +31,9 @@ specialists or touching the board, and a human merges every PR.
 Agents use the **Agent Skills** plugin (skills and the `agent-skills:*` reviewer, security and test
 agents) and **Context7** for current MUI/React docs when it is connected. `ui-engineer` also needs
 the **Figma** connector. `ui-engineer` and `data-engineer` inherit all tools so MCP tools work;
-`qa-engineer`, `reviewer`, `release-manager` and `spec-refiner` are limited to read tools plus Skill.
+`qa-engineer`, `reviewer`, `release-manager` and `spec-refiner` are limited to read tools plus Skill, and
+cannot call Context7 or other agents. The Manager can add the `agent-skills:code-reviewer` and
+`agent-skills:security-auditor` agents as extra reviewers.
 
 ## Picking rules (`scripts/board.py next`)
 - Only tickets in **Ready**, not labeled `epic`, `blocked` or `agent:working`.
@@ -39,7 +41,8 @@ the **Figma** connector. `ui-engineer` and `data-engineer` inherit all tools so 
   8 Notifications, 7 Admin Setup, 6 Reporting, 5 Online Booking, then the rest; ticket
   number within an epic.
 - The board's **Depends on** field lists issue numbers that must be **Done** first.
-- A ticket whose Open questions block the work is sent back with `board.py block`.
+- A ticket whose Open questions block the work is sent back with `board.py block`; if a claim must be undone, `board.py release`.
+- `board.py claim` refuses anything that is not Ready, is blocked, already claimed, or waiting on a dependency.
 
 ## Guardrails
 - Humans merge PRs and releases. Agents never push to `main` or change repo settings.

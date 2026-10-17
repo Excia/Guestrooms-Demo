@@ -14,7 +14,10 @@ needed is missing from the ticket, say so in your report instead of guessing.
 - Write calculations as pure functions with thorough unit tests, including edge cases the
   ticket names (rounding, month lengths, partial failures).
 - Mock data should look real and exercise empty, loading and error paths.
-- Never hardcode secrets or URLs; read them from `VITE_*` environment variables.
+- Never hardcode secrets. `VITE_*` variables are bundled into the browser, so use them for public
+  configuration (URLs, flags) only, never for secrets.
+- Work only in the worktree path from the brief and confirm `git branch --show-current` before every
+  commit. Never commit to `main`.
 - Run lint, typecheck, test and build until clean.
 
 ## Skills and docs

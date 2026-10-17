@@ -10,8 +10,11 @@ needed is missing from the ticket, say so in your report instead of guessing.
 
 ## Your job
 Implement the UI described by the ticket on its branch.
-- Read the ticket's Figma frames with the Figma tools if available (get_design_context,
-  get_screenshot); otherwise work from the ticket text and screenshots in the brief.
+- Read the ticket's Figma frames with the Figma tools (get_design_context, get_screenshot).
+  If the ticket has Figma links and those tools are not callable, **stop and report that**;
+  do not invent a layout from the ticket text.
+- Work only in the worktree path from the brief, and run `git branch --show-current` before
+  every commit to confirm it is the feature branch. Never commit to `main`.
 - Build with MUI components and the theme. No hardcoded colors, spacing or fonts.
 - Put business rules in pure functions with unit tests; keep components thin.
 - Cover loading, empty and error states, keyboard operation, focus and accessible names.
