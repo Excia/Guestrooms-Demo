@@ -4,7 +4,6 @@ import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import MenuIcon from '@mui/icons-material/Menu';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
-import Breadcrumbs from '@mui/material/Breadcrumbs';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Link from '@mui/material/Link';
@@ -12,11 +11,9 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router';
-import type { Crumb } from '../app/breadcrumbs';
 import { SCHEDULE_PATH } from '../app/routes';
 
 export interface AppHeaderProps {
-  breadcrumbs: Crumb[];
   menuOpen: boolean;
   /** Toggle button click. */
   onMenuToggle: () => void;
@@ -34,7 +31,6 @@ const HEADER_HEIGHT = 7;
 const RETURN_LABEL = 'Return to Site';
 
 export default function AppHeader({
-  breadcrumbs,
   menuOpen,
   onMenuToggle,
   onMenuClose,
@@ -55,9 +51,6 @@ export default function AppHeader({
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [menuOpen, onMenuClose]);
-
-  const parents = breadcrumbs.slice(0, -1);
-  const current = breadcrumbs.at(-1);
 
   return (
     <AppBar
@@ -118,24 +111,6 @@ export default function AppHeader({
             Guest Rooms
           </Typography>
         </Link>
-        {current && breadcrumbs.length > 1 && (
-          <Breadcrumbs aria-label="Breadcrumb" sx={{ display: { xs: 'none', sm: 'block' }, ml: 2 }}>
-            {parents.map((c) => (
-              <Link
-                key={c.path}
-                component={RouterLink}
-                to={c.path}
-                underline="hover"
-                color="inherit"
-              >
-                {c.title}
-              </Link>
-            ))}
-            <Typography color="text.primary" aria-current="page">
-              {current.title}
-            </Typography>
-          </Breadcrumbs>
-        )}
         <Box sx={{ flexGrow: 1 }} />
         <Button
           href={axisUrl}

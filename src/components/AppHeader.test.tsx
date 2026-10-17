@@ -3,19 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import AppHeader, { type AppHeaderProps } from './AppHeader';
 
-const crumbs = [
-  { title: 'Schedule', path: '/schedule' },
-  { title: 'Admin Setup', path: '/admin' },
-  { title: 'Rooms', path: '/admin/rooms' },
-];
-
 function setup(props: Partial<AppHeaderProps> = {}) {
   const onMenuToggle = vi.fn();
   const onMenuClose = vi.fn();
   render(
     <MemoryRouter>
       <AppHeader
-        breadcrumbs={crumbs}
         menuOpen={false}
         onMenuToggle={onMenuToggle}
         onMenuClose={onMenuClose}
@@ -36,19 +29,6 @@ describe('AppHeader', () => {
   it('home logo links to the Schedule route', () => {
     setup();
     expect(screen.getByRole('link', { name: 'Guest Rooms' })).toHaveAttribute('href', '/schedule');
-  });
-
-  it('renders breadcrumbs with the current page marked', () => {
-    setup();
-    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' });
-    expect(nav).toHaveTextContent('Schedule/Admin Setup/Rooms');
-    expect(screen.getByText('Rooms')).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Admin Setup' })).toHaveAttribute('href', '/admin');
-  });
-
-  it('omits breadcrumbs for a single-level trail', () => {
-    setup({ breadcrumbs: [crumbs[0]] });
-    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument();
   });
 
   it('menu button toggles and exposes aria-expanded', async () => {

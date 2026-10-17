@@ -13,14 +13,13 @@ describe('App', () => {
     expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 
-  it('shows the page title and breadcrumbs for a trailing-slash path', () => {
+  it('shows the page title for a trailing-slash path', () => {
     render(
       <MemoryRouter initialEntries={['/admin/']}>
         <App />
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { name: 'Admin Setup' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeInTheDocument();
   });
 
   it('shows Not found for unknown paths', () => {
