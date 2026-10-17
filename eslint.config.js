@@ -13,4 +13,22 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
+  {
+    // Colors come from the theme; hex literals are only allowed in theme.ts and tests.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/theme.ts', 'src/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/#[0-9a-fA-F]{3,8}\\b/]',
+          message: 'Use theme palette tokens instead of hex colors.',
+        },
+        {
+          selector: 'TemplateElement[value.raw=/#[0-9a-fA-F]{3,8}\\b/]',
+          message: 'Use theme palette tokens instead of hex colors.',
+        },
+      ],
+    },
+  },
 );
