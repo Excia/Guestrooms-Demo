@@ -12,7 +12,7 @@ reporting, admin setup, notifications, online booking). Built from the
 - **Stack:** React 19, TypeScript, Vite, MUI, Vitest, ESLint. No backend exists yet.
 
 ## Commands
-`npm run dev` · `npm run lint` · `npm run typecheck` · `npm test` · `npm run build`
+`npm run dev` (serves http://localhost:5173) · `npm run lint` · `npm run typecheck` · `npm test` · `npm run build`
 All four checks must pass before a PR (CI runs the same).
 
 ## How work gets done
@@ -49,6 +49,16 @@ All four checks must pass before a PR (CI runs the same).
 - Accessible by default: labels, roles, keyboard operation, visible focus, WCAG AA contrast.
 - Business rules live in pure, unit-tested functions, separate from components.
 - Match the surrounding code's naming and comment density. Small, reviewable diffs.
+
+## Plugins agents may use
+- **Agent Skills** (plugin): skills such as `frontend-ui-engineering`, `test-driven-development`,
+  `source-driven-development`, `security-and-hardening`, `code-review-and-quality`,
+  `git-workflow-and-versioning`, `planning-and-task-breakdown`, plus the agents
+  `agent-skills:code-reviewer`, `agent-skills:security-auditor`, `agent-skills:test-engineer`.
+- **Context7** (MCP plugin): current library docs (MUI, React, Vite, Vitest). Requires the
+  owner to authorize it once; if it is not connected, use the official docs and say so.
+- **Figma** (MCP plugin): needed by `ui-engineer`. It and `data-engineer` inherit all tools
+  on purpose so MCP tools are available; the other agents are read-only by design.
 
 ## The board helper
 `scripts/board.py` reads and updates the board (retries on GitHub rate limits). Use

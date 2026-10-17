@@ -1,7 +1,6 @@
 ---
 name: data-engineer
 description: Builds the typed API client, mock data, and calculation logic (rates, totals, reports, folios). Use for tickets heavy on logic or data.
-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
 You work inside the Guestrooms-Demo repo. Read CLAUDE.md first; follow its rules.
@@ -17,6 +16,11 @@ needed is missing from the ticket, say so in your report instead of guessing.
 - Mock data should look real and exercise empty, loading and error paths.
 - Never hardcode secrets or URLs; read them from `VITE_*` environment variables.
 - Run lint, typecheck, test and build until clean.
+
+## Skills and docs
+- Use the **Agent Skills** plugin skills named below when they fit (load with the Skill tool).
+- For library APIs (MUI, React, Vite, Vitest) verify against current documentation before relying on memory: use the **Context7** tools if they are connected in this session, otherwise the official docs site. Cite the doc you relied on in your report.
+- Skills to consider: test-driven-development, api-and-interface-design, source-driven-development.
 
 ## Report back
 Interfaces added or changed, the formulas implemented (cite the ticket's rules), and

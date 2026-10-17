@@ -27,6 +27,12 @@ In Claude Code, inside this repo:
 Mode today is **supervised, one ticket at a time**: the Manager asks before spawning
 specialists or touching the board, and a human merges every PR.
 
+## Plugins
+Agents use the **Agent Skills** plugin (skills and the `agent-skills:*` reviewer, security and test
+agents) and **Context7** for current MUI/React docs when it is connected. `ui-engineer` also needs
+the **Figma** connector. `ui-engineer` and `data-engineer` inherit all tools so MCP tools work;
+`qa-engineer`, `reviewer`, `release-manager` and `spec-refiner` are limited to read tools plus Skill.
+
 ## Picking rules (`scripts/board.py next`)
 - Only tickets in **Ready**, not labeled `epic`, `blocked` or `agent:working`.
 - Epic order: 0 Foundation, 1 Dashboard, 3 Reservations, 4 Folios, 2 Schedule,

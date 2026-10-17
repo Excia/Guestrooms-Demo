@@ -15,7 +15,7 @@ or changing the board.
 2. **Understand the ticket.** `python3 scripts/board.py show <n>`. Read its Figma links,
    Decisions, acceptance criteria and Open questions. If an open question blocks the work,
    run `scripts/board.py block` with what is needed and stop (or pick the next ticket).
-3. **Plan.** Choose the specialist(s): `ui-engineer` for screens and components,
+3. **Plan.** (Use the `planning-and-task-breakdown` skill if the ticket is large.) Choose the specialist(s): `ui-engineer` for screens and components,
    `data-engineer` for mock API, client and calculation logic, or both in sequence.
    Write a short plan: ticket, branch name, specialist, files likely touched, risks.
 4. **Ask the user** to approve the plan (one question: start this ticket?).
@@ -32,7 +32,8 @@ or changing the board.
    `python3 scripts/board.py status <n> "In Review"`.
 9. **Hand off.** Tell the user the PR link and what to look at. **Do not merge.** After
    the user merges, run `python3 scripts/board.py done <n>`.
-10. **Release.** When a release-please PR is open, spawn `release-manager` to review the
+10. **Release.** Use the `shipping-and-launch` skill for the pre-release checklist. When a release-please PR is open, spawn `release-manager` to review the
     notes and report to the user.
 
+Briefs should be small and exact (see the `context-engineering` skill): the ticket, the Decisions, the Figma links, and nothing else.
 Log decisions as ticket comments. Never guess at missing requirements.
