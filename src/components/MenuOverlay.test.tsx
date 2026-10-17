@@ -1,10 +1,13 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ThemeProvider } from '@mui/material/styles';
 import { useState } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router';
 import App from '../App';
 import { pagePermission } from '../app/menu';
 import { createMockPermissions, PermissionsProvider, type Permission } from '../app/permissions';
+import { theme } from '../theme';
+import AppHeader from './AppHeader';
 import MenuOverlay from './MenuOverlay';
 
 const RESERVATION = [
@@ -29,11 +32,13 @@ const ADMIN = [
 
 function renderOverlay(granted?: Permission[], onClose = vi.fn()) {
   render(
-    <PermissionsProvider value={createMockPermissions(granted)}>
-      <MemoryRouter initialEntries={['/reservations']}>
-        <MenuOverlay open onClose={onClose} axisUrl="https://axis.example.com" />
-      </MemoryRouter>
-    </PermissionsProvider>,
+    <ThemeProvider theme={theme}>
+      <PermissionsProvider value={createMockPermissions(granted)}>
+        <MemoryRouter initialEntries={['/reservations']}>
+          <MenuOverlay open onClose={onClose} axisUrl="https://axis.example.com" />
+        </MemoryRouter>
+      </PermissionsProvider>
+    </ThemeProvider>,
   );
   return { onClose };
 }
@@ -63,25 +68,43 @@ describe('MenuOverlay layouts', () => {
   });
 
   it('non-admin: one column, Return to Site, no Admin Setup', () => {
-    renderOverlay(
-      RESERVATION.length ? [pagePermission('schedule'), pagePermission('reporting')] : [],
-    );
+    renderOverlay([
+      pagePermission('dashboard'),
+      pagePermission('schedule'),
+      pagePermission('reporting'),
+    ]);
     expect(screen.queryByRole('heading', { name: 'Admin Setup' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Return to Site' })).toHaveAttribute(
       'href',
       'https://axis.example.com',
     );
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Reporting' })).toHaveAttribute('href', '/reporting');
     expect(screen.queryByRole('link', { name: 'Reservations' })).not.toBeInTheDocument();
   });
 
-  it('marks the current page', () => {
+  it('hides the Dashboard button without page.dashboard', () => {
+    renderOverlay([pagePermission('schedule')]);
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Schedule | Home' })).toBeInTheDocument();
+  });
+
+  it('all denied: only Return to Site, no empty column headings', () => {
+    renderOverlay([]);
+    expect(screen.getByRole('link', { name: 'Return to Site' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading')).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+  });
+
+  it('marks the current page and labels each nav distinctly', () => {
     renderOverlay();
     expect(screen.getByRole('link', { name: 'Reservations' })).toHaveAttribute(
       'aria-current',
       'page',
     );
     expect(screen.getByRole('link', { name: 'Waitlist' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('navigation', { name: 'Reservation Management pages' })).toBeVisible();
+    expect(screen.getByRole('navigation', { name: 'Admin Setup pages' })).toBeVisible();
   });
 
   it('renders nothing when closed', () => {
@@ -97,47 +120,82 @@ describe('MenuOverlay layouts', () => {
 describe('MenuOverlay closing (in the app shell)', () => {
   function setup(path = '/reservations') {
     render(
-      <MemoryRouter initialEntries={[path]}>
-        <App />
-      </MemoryRouter>,
+      <ThemeProvider theme={theme}>
+        <MemoryRouter initialEntries={[path]}>
+          <App />
+        </MemoryRouter>
+      </ThemeProvider>,
     );
     return userEvent.setup();
   }
 
-  it('opens from the header button and closes on the close icon with focus on the button', async () => {
+  it('keeps the header operable while open and closes on the X, focus on the button', async () => {
     const user = setup();
-    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const toggle = screen.getByRole('button', { name: 'Open menu' });
+    expect(toggle).not.toHaveAttribute('aria-controls');
+    await user.click(toggle);
     expect(screen.getByRole('dialog', { name: 'Menu' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Close menu', hidden: true }));
+    // No `hidden: true`: the header stays in the accessibility tree.
+    const close = screen.getByRole('button', { name: 'Close menu' });
+    expect(close).toHaveAttribute('aria-expanded', 'true');
+    expect(close).toHaveAttribute('aria-controls', 'main-menu');
+    expect(document.getElementById('main-menu')).toBeInTheDocument();
+    await user.click(close);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
   });
 
-  it('a single Escape closes once and returns focus to the menu button', async () => {
+  it('moves focus into the panel on open and Tab loops to the X', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const dialog = screen.getByRole('dialog', { name: 'Menu' });
+    expect(dialog).toHaveFocus();
+    const close = screen.getByRole('button', { name: 'Close menu' });
+    let reached = false;
+    for (let i = 0; i < 40; i++) {
+      await user.tab();
+      if (document.activeElement === close) reached = true;
+      const a = document.activeElement as HTMLElement;
+      expect(dialog.contains(a) || screen.getByRole('banner').contains(a)).toBe(true);
+    }
+    expect(reached).toBe(true);
+    await user.keyboard('{Enter}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('Shift+Tab from the panel wraps backwards within the shell', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.tab({ shift: true });
+    const a = document.activeElement as HTMLElement;
+    expect(screen.getByRole('dialog').contains(a)).toBe(true);
+  });
+
+  it('closes on a scrim click but not on a click inside the panel', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.click(screen.getByRole('heading', { name: 'Admin Setup' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByTestId('menu-scrim'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
+  });
+
+  it('Escape closes and returns focus to the menu button', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
-    // A second Escape does nothing (no reopen, no throw).
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('closes on backdrop click', async () => {
-    const user = setup();
-    await user.click(screen.getByRole('button', { name: 'Open menu' }));
-    const backdrop = document.querySelector('.MuiBackdrop-root') as HTMLElement;
-    await user.click(backdrop);
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('choosing a link navigates and closes', async () => {
+  it('choosing a link navigates, closes and returns focus to the button', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
     await user.click(screen.getByRole('link', { name: 'Rooms' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Rooms' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
   });
 
   it('the Dashboard button routes to the dashboard', async () => {
@@ -147,14 +205,53 @@ describe('MenuOverlay closing (in the app shell)', () => {
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
   });
 
-  it('keeps focus inside the dialog while open', async () => {
-    const user = setup();
+  it('marks the Dashboard button as current on the dashboard route', async () => {
+    const user = setup('/dashboard');
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
-    const dialog = screen.getByRole('dialog', { name: 'Menu' });
-    for (let i = 0; i < 30; i++) {
-      await user.tab();
-      expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+describe('Escape with header and overlay together', () => {
+  it('one Escape calls onClose exactly once and focuses the menu button', async () => {
+    const onClose = vi.fn();
+    function Harness() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <AppHeader
+            menuOpen={open}
+            onMenuToggle={() => setOpen((o) => !o)}
+            onMenuClose={() => {
+              onClose();
+              setOpen(false);
+            }}
+            axisUrl="x"
+            menuId="main-menu"
+          />
+          <MenuOverlay
+            open={open}
+            onClose={() => {
+              onClose();
+              setOpen(false);
+            }}
+            axisUrl="x"
+          />
+        </>
+      );
     }
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider theme={theme}>
+        <MemoryRouter>
+          <Harness />
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
   });
 });
 
@@ -176,10 +273,7 @@ describe('MenuOverlay route change', () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    // The modal hides siblings from the a11y tree; drive the navigation directly.
-    await userEvent.click(screen.getByRole('button', { name: 'go', hidden: true }), {
-      pointerEventsCheck: 0,
-    });
+    await userEvent.click(screen.getByRole('button', { name: 'go' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

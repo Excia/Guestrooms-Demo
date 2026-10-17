@@ -46,8 +46,29 @@ describe('buildMenu', () => {
     expect(menu.showReturnToSite).toBe(true);
   });
 
+  it('has a Dashboard entry driven by page.dashboard', () => {
+    expect(buildMenu(createMockPermissions()).dashboard).toEqual({
+      id: 'dashboard',
+      label: 'Dashboard',
+      path: '/dashboard',
+    });
+    const denied = buildMenu(createMockPermissions([pagePermission('schedule')]));
+    expect(denied.dashboard).toBeNull();
+  });
+
+  it('an all-denied user gets no items, one column and Return to Site', () => {
+    const menu = buildMenu(createMockPermissions([]));
+    expect(menu).toEqual({
+      dashboard: null,
+      reservation: [],
+      admin: [],
+      columns: 1,
+      showReturnToSite: true,
+    });
+  });
+
   it('every menu item routes to a path in the route table', () => {
-    const paths = new Set(routes.map((r) => r.path));
+    const paths = new Set<string>(routes.map((r) => r.path));
     const menu = buildMenu(createMockPermissions());
     for (const item of [...menu.reservation, ...menu.admin])
       expect(paths.has(item.path)).toBe(true);

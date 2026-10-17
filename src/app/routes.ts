@@ -1,7 +1,7 @@
 // Route table. Pages arrive in later tickets; paths follow the menu (Figma 12047:5743).
 // App.tsx generates its <Route>s from this table, so a page registers here only.
 // The menu overlay and the dashboard derive their links from `section`, in table order.
-export type RouteSection = 'reservation' | 'admin';
+export type RouteSection = 'dashboard' | 'reservation' | 'admin';
 
 export interface RouteMeta {
   /** Stable id; the menu checks the `page.<id>` permission for routes that have a section. */
@@ -17,8 +17,10 @@ export interface RouteMeta {
 export const SCHEDULE_PATH = '/schedule';
 export const DASHBOARD_PATH = '/dashboard';
 
-export const routes: RouteMeta[] = [
-  { id: 'dashboard', path: DASHBOARD_PATH, title: 'Dashboard' },
+// Note: '/admin' (Admin Setup landing) is not a menu link, so it has no menu permission yet;
+// gate it on "any admin page" when the real permissions (0.8) arrive.
+export const routes = [
+  { id: 'dashboard', path: DASHBOARD_PATH, title: 'Dashboard', section: 'dashboard' },
   {
     id: 'schedule',
     path: SCHEDULE_PATH,
@@ -66,4 +68,8 @@ export const routes: RouteMeta[] = [
     title: 'Notifications',
     section: 'admin',
   },
-];
+] as const satisfies readonly RouteMeta[];
+
+export type PageId = (typeof routes)[number]['id'];
+/** Ids of routes listed in the menu; the overlay keys its icons to these. */
+export type MenuRouteId = Extract<(typeof routes)[number], { section: RouteSection }>['id'];

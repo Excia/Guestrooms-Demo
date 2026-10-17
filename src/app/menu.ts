@@ -1,13 +1,15 @@
-import type { Permission, Permissions } from './permissions';
-import { routes, type RouteMeta, type RouteSection } from './routes';
+import { pagePermission, type Permissions } from './permissions';
+import { routes, type MenuRouteId, type RouteMeta, type RouteSection } from './routes';
 
 export interface MenuItem {
-  id: string;
+  id: MenuRouteId;
   label: string;
   path: string;
 }
 
 export interface MenuModel {
+  /** The Dashboard button; null when the user cannot open the dashboard. */
+  dashboard: MenuItem | null;
   reservation: MenuItem[];
   admin: MenuItem[];
   /** Follows access: one column when the user has no Admin Setup page. */
@@ -16,17 +18,25 @@ export interface MenuModel {
   showReturnToSite: boolean;
 }
 
-export const pagePermission = (id: string): Permission => `page.${id}`;
-
-function itemsFor(section: RouteSection, can: Permissions['can'], table: RouteMeta[]): MenuItem[] {
+function itemsFor(
+  section: RouteSection,
+  can: Permissions['can'],
+  table: readonly RouteMeta[],
+): MenuItem[] {
   return table
-    .filter((r) => r.section === section && can(pagePermission(r.id)))
-    .map((r) => ({ id: r.id, label: r.menuLabel ?? r.title, path: r.path }));
+    .filter((r) => r.section === section && can(pagePermission(r.id as MenuRouteId)))
+    .map((r) => ({ id: r.id as MenuRouteId, label: r.menuLabel ?? r.title, path: r.path }));
 }
 
-export function buildMenu(permissions: Permissions, table: RouteMeta[] = routes): MenuModel {
+export function buildMenu(
+  permissions: Permissions,
+  table: readonly RouteMeta[] = routes,
+): MenuModel {
+  const dashboard = itemsFor('dashboard', permissions.can, table)[0] ?? null;
   const reservation = itemsFor('reservation', permissions.can, table);
   const admin = itemsFor('admin', permissions.can, table);
   const columns = admin.length > 0 ? 2 : 1;
-  return { reservation, admin, columns, showReturnToSite: columns === 1 };
+  return { dashboard, reservation, admin, columns, showReturnToSite: columns === 1 };
 }
+
+export { pagePermission };

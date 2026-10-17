@@ -20,29 +20,28 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import Modal from '@mui/material/Modal';
 import Paper from '@mui/material/Paper';
-import type { Theme } from '@mui/material/styles';
+import { alpha, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, type ElementType } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router';
+import { HEADER_HEIGHT } from '../app/layout';
 import { buildMenu, type MenuItem } from '../app/menu';
 import { usePermissions } from '../app/permissions';
-import { DASHBOARD_PATH } from '../app/routes';
+import type { MenuRouteId } from '../app/routes';
 
 export interface MenuOverlayProps {
   open: boolean;
-  /** Backdrop click, Escape, route change or a link choice. */
+  /** Scrim click, route change or a link choice. Escape is handled by the header. */
   onClose: () => void;
   /** Target of Return to Site (see getAxisUrl). */
   axisUrl: string;
-  /** Id for the dialog; pair with the header button's aria-controls. */
+  /** Id for the panel; pair with the header button's aria-controls. */
   id?: string;
-  /** Header height in theme.spacing units; the overlay starts below it. */
-  headerHeight?: number;
 }
 
-const ICONS: Record<string, ElementType> = {
+// Typed by route id: adding a menu route without an icon fails typecheck.
+const ICONS: Record<Exclude<MenuRouteId, 'dashboard'>, ElementType> = {
   schedule: CalendarTodayIcon,
   reservations: ViewListIcon,
   'open-folios': ReceiptLongIcon,
@@ -60,9 +59,20 @@ const ICONS: Record<string, ElementType> = {
   notifications: MailIcon,
 };
 
-// Figma 1302:18023: rows are 70px (8.75 x 8px); the top buttons are 68px.
+// Figma 1302:18023 values in theme.spacing units (8px): rows 70px, top buttons 68px, column
+// gap 68px, panel 800px (two columns) or 480px (one column).
 const ROW_HEIGHT = 8.75;
 const BUTTON_HEIGHT = 8.5;
+const COLUMN_GAP = 8.5;
+const PANEL_WIDTH = { two: 100, one: 60 };
+// Scrim left visible below the panel so a click can always dismiss it, even on narrow screens.
+const SCRIM_STRIP = 4;
+
+const TABBABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function isShown(el: HTMLElement) {
+  return !el.closest('[hidden]') && getComputedStyle(el).display !== 'none';
+}
 
 interface ColumnProps {
   id: string;
@@ -74,7 +84,7 @@ interface ColumnProps {
 
 function MenuColumn({ id, heading, items, currentPath, onNavigate }: ColumnProps) {
   return (
-    <Box component="section" aria-labelledby={id}>
+    <div>
       <Typography
         id={id}
         variant="h6"
@@ -90,9 +100,9 @@ function MenuColumn({ id, heading, items, currentPath, onNavigate }: ColumnProps
       >
         {heading}
       </Typography>
-      <List component="nav" aria-labelledby={id} disablePadding>
+      <List component="nav" aria-label={`${heading} pages`} disablePadding>
         {items.map((item) => {
-          const Icon = ICONS[item.id];
+          const Icon = ICONS[item.id as keyof typeof ICONS];
           const selected = currentPath === item.path;
           return (
             <ListItemButton
@@ -114,34 +124,37 @@ function MenuColumn({ id, heading, items, currentPath, onNavigate }: ColumnProps
               }}
             >
               <ListItemIcon sx={{ minWidth: 0, color: 'inherit' }}>
-                {Icon ? <Icon aria-hidden sx={{ fontSize: (t: Theme) => t.spacing(4) }} /> : null}
+                <Icon aria-hidden sx={{ fontSize: (t: Theme) => t.spacing(4) }} />
               </ListItemIcon>
               <ListItemText
                 primary={item.label}
-                slotProps={{
-                  primary: {
-                    sx: { fontSize: (t: Theme) => t.typography.pxToRem(22), fontWeight: 500 },
-                  },
-                }}
+                slotProps={{ primary: { variant: 'menu_item' } }}
               />
             </ListItemButton>
           );
         })}
       </List>
-    </Box>
+    </div>
   );
 }
 
+/**
+ * Non-modal overlay rendered inside the app shell, below the header. It deliberately does not use
+ * MUI Modal: Modal portals to <body> and aria-hides the app root, which would hide the header's
+ * close button from keyboard and screen-reader users. The shell marks <main> inert instead, focus
+ * moves into the panel on open, Tab loops across header controls and panel, and the header
+ * returns focus to the menu button on close.
+ */
 export default function MenuOverlay({
   open,
   onClose,
   axisUrl,
   id = 'main-menu',
-  headerHeight = 7,
 }: MenuOverlayProps) {
   const { pathname } = useLocation();
   const menu = buildMenu(usePermissions());
   const twoColumns = menu.columns === 2;
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Close when the route changes while open (back/forward, links elsewhere).
   const lastPath = useRef(pathname);
@@ -152,32 +165,69 @@ export default function MenuOverlay({
     }
   }, [pathname, open, onClose]);
 
+  // Move focus into the panel on open and loop Tab across the header controls and the panel.
+  useEffect(() => {
+    if (!open) return;
+    panelRef.current?.focus();
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      // The app has a single banner landmark: the header.
+      const scope = [
+        ...(document.querySelector('header')?.querySelectorAll<HTMLElement>(TABBABLE) ?? []),
+        ...panelRef.current.querySelectorAll<HTMLElement>(TABBABLE),
+      ].filter(isShown);
+      const first = scope[0];
+      const last = scope[scope.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement;
+      const inScope = scope.includes(active as HTMLElement);
+      if (e.shiftKey && (active === first || active === panelRef.current || !inScope)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !inScope)) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  if (!open) return null;
+
+  const hasTopRow = menu.dashboard !== null || menu.showReturnToSite;
+
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      // Escape inside the dialog: Modal handles it and stops propagation, so the header's document
-      // listener does not also fire. Escape with focus elsewhere is the header's job. Either way
-      // the menu closes once and focus is restored to the menu button.
-      sx={{ top: (t) => t.spacing(headerHeight) }}
-      slotProps={{ backdrop: { sx: { bgcolor: 'common.black', opacity: 0.32 } } }}
+    <Box
+      data-testid="menu-scrim"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      sx={{
+        position: 'fixed',
+        top: (t) => t.spacing(HEADER_HEIGHT),
+        right: 0,
+        bottom: 0,
+        left: 0,
+        zIndex: 'drawer',
+        // Same 50% black as MUI's Backdrop; set as a color, not opacity, so it never hides the panel.
+        bgcolor: (t) => alpha(t.palette.common.black, 0.5),
+      }}
     >
       <Paper
+        ref={panelRef}
         id={id}
         role="dialog"
-        aria-modal="true"
         aria-label="Menu"
         tabIndex={-1}
         elevation={1}
         square
         sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: (t) => (twoColumns ? t.spacing(100) : t.spacing(60)),
+          width: (t) => t.spacing(twoColumns ? PANEL_WIDTH.two : PANEL_WIDTH.one),
           maxWidth: '100%',
-          maxHeight: '100%',
+          maxHeight: (t) => `calc(100% - ${t.spacing(SCRIM_STRIP)})`,
           overflowY: 'auto',
+          overscrollBehavior: 'contain',
           p: 4,
           display: 'flex',
           flexDirection: 'column',
@@ -187,52 +237,66 @@ export default function MenuOverlay({
           outline: 0,
         }}
       >
-        <Box
-          sx={{
-            display: 'grid',
-            gap: 2.5,
-            columnGap: { md: twoColumns ? 8.5 : 2.5 },
-            gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          }}
-        >
-          <Button
-            component={RouterLink}
-            to={DASHBOARD_PATH}
-            onClick={onClose}
-            variant="contained"
-            size="large"
-            startIcon={<SpaceDashboardIcon />}
-            sx={{ height: (t) => t.spacing(BUTTON_HEIGHT), justifyContent: 'flex-start', px: 2.75 }}
+        {hasTopRow ? (
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2.5,
+              columnGap: { md: twoColumns ? COLUMN_GAP : 2.5 },
+              gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+            }}
           >
-            Dashboard
-          </Button>
-          {menu.showReturnToSite ? (
-            <Button
-              href={axisUrl}
-              size="large"
-              startIcon={<ExitToAppIcon />}
-              sx={{ height: (t) => t.spacing(BUTTON_HEIGHT), justifyContent: 'flex-end' }}
-            >
-              Return to Site
-            </Button>
-          ) : null}
-        </Box>
+            {menu.dashboard ? (
+              <Button
+                component={RouterLink}
+                to={menu.dashboard.path}
+                onClick={onClose}
+                aria-current={pathname === menu.dashboard.path ? 'page' : undefined}
+                variant="contained"
+                size="large"
+                startIcon={<SpaceDashboardIcon />}
+                sx={{
+                  height: (t) => t.spacing(BUTTON_HEIGHT),
+                  justifyContent: 'flex-start',
+                  px: 2.75,
+                }}
+              >
+                {menu.dashboard.label}
+              </Button>
+            ) : null}
+            {menu.showReturnToSite ? (
+              <Button
+                href={axisUrl}
+                size="large"
+                startIcon={<ExitToAppIcon />}
+                sx={{
+                  height: (t) => t.spacing(BUTTON_HEIGHT),
+                  justifyContent: 'flex-end',
+                }}
+              >
+                Return to Site
+              </Button>
+            ) : null}
+          </Box>
+        ) : null}
         <Box
           sx={{
             display: 'grid',
-            columnGap: 8.5,
+            columnGap: COLUMN_GAP,
             gridTemplateColumns: { xs: '1fr', md: twoColumns ? '1fr 1fr' : '1fr' },
             alignItems: 'start',
           }}
         >
-          <MenuColumn
-            id={`${id}-reservation`}
-            heading="Reservation Management"
-            items={menu.reservation}
-            currentPath={pathname}
-            onNavigate={onClose}
-          />
-          {twoColumns ? (
+          {menu.reservation.length > 0 ? (
+            <MenuColumn
+              id={`${id}-reservation`}
+              heading="Reservation Management"
+              items={menu.reservation}
+              currentPath={pathname}
+              onNavigate={onClose}
+            />
+          ) : null}
+          {menu.admin.length > 0 ? (
             <MenuColumn
               id={`${id}-admin`}
               heading="Admin Setup"
@@ -243,6 +307,6 @@ export default function MenuOverlay({
           ) : null}
         </Box>
       </Paper>
-    </Modal>
+    </Box>
   );
 }

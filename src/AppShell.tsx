@@ -37,7 +37,7 @@ export default function AppShell({ children }: { children?: React.ReactNode }) {
         menuId={MENU_ID}
       />
       <MenuOverlay open={menuOpen} onClose={close} axisUrl={axisUrl} id={MENU_ID} />
-      <main id={MAIN_ID} tabIndex={-1}>
+      <main id={MAIN_ID} tabIndex={-1} inert={menuOpen}>
         {children}
       </main>
     </>

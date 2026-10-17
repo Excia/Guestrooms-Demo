@@ -14,15 +14,18 @@ declare module '@mui/material/styles' {
   }
   interface TypographyVariants {
     h4_fixed: CSSProperties;
+    menu_item: CSSProperties;
   }
   interface TypographyVariantsOptions {
     h4_fixed?: CSSProperties;
+    menu_item?: CSSProperties;
   }
 }
 
 declare module '@mui/material/Typography' {
   interface TypographyPropsVariantOverrides {
     h4_fixed: true;
+    menu_item: true;
   }
 }
 
@@ -61,6 +64,8 @@ const base = createTheme({
     subtitle1: font(18, 500, 1.4, 0.15),
     subtitle2: font(14, 500, 1.57, 0.1),
     h4_fixed: font(16, 700, 1.4, 0.15),
+    // Menu overlay links (Figma 1302:18023): 22px Medium.
+    menu_item: font(22, 500, 1.2, 0),
     caption: font(12, 400, 1.4, 0.4),
     button: font(14, 500, 24 / 14, 0.4),
   },
@@ -99,7 +104,7 @@ const base = createTheme({
     // Input label: Figma shows 12px when shrunk. MUI scales the 16px root by 0.75
     // (= 12px), so the label keeps its default size and needs no override.
     MuiTypography: {
-      defaultProps: { variantMapping: { h4_fixed: 'h4' } },
+      defaultProps: { variantMapping: { h4_fixed: 'h4', menu_item: 'span' } },
     },
   },
 });
