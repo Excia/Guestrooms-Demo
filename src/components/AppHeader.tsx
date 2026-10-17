@@ -11,6 +11,8 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router';
+import { isPlainLeftClick } from '../app/focusLoop';
+import { HEADER_HEIGHT, HEADER_ID } from '../app/layout';
 import { SCHEDULE_PATH } from '../app/routes';
 
 export interface AppHeaderProps {
@@ -25,9 +27,6 @@ export interface AppHeaderProps {
   menuId?: string;
 }
 
-// Header height in theme.spacing units (7 x 8px = 56px, Figma 12047:5668); the Toolbar's py: 1 sits inside it.
-const HEADER_HEIGHT = 7;
-
 const RETURN_LABEL = 'Return to Site';
 
 export default function AppHeader({
@@ -38,6 +37,13 @@ export default function AppHeader({
   menuId,
 }: AppHeaderProps) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Whenever the menu closes (X, Escape, backdrop, link, route change) focus goes back to its button.
+  const wasOpen = useRef(menuOpen);
+  useEffect(() => {
+    if (wasOpen.current && !menuOpen) menuButtonRef.current?.focus();
+    wasOpen.current = menuOpen;
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -55,6 +61,7 @@ export default function AppHeader({
   return (
     <AppBar
       component="header"
+      id={HEADER_ID}
       position="sticky"
       color="inherit"
       elevation={0}
@@ -78,7 +85,7 @@ export default function AppHeader({
           onClick={onMenuToggle}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
-          aria-controls={menuId}
+          aria-controls={menuOpen ? menuId : undefined}
           sx={{
             width: (t) => t.spacing(5),
             height: (t) => t.spacing(5),
@@ -93,6 +100,10 @@ export default function AppHeader({
         <Link
           component={RouterLink}
           to={SCHEDULE_PATH}
+          // Already on Schedule the route does not change, so close the menu here.
+          onClick={(e) => {
+            if (menuOpen && isPlainLeftClick(e)) onMenuClose();
+          }}
           underline="none"
           color="text.primary"
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}

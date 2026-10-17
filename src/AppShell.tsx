@@ -2,11 +2,13 @@ import Link from '@mui/material/Link';
 import { useCallback, useState } from 'react';
 import { getAxisUrl } from './app/axisUrl';
 import AppHeader from './components/AppHeader';
+import MenuOverlay from './components/MenuOverlay';
 
 const axisUrl = getAxisUrl();
 const MAIN_ID = 'main-content';
 
-// The menu overlay is ticket 0.7; until then the shell only owns the open/closed state.
+const MENU_ID = 'main-menu';
+
 export default function AppShell({ children }: { children?: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const toggle = useCallback(() => setMenuOpen((open) => !open), []);
@@ -15,6 +17,7 @@ export default function AppShell({ children }: { children?: React.ReactNode }) {
     <>
       <Link
         href={`#${MAIN_ID}`}
+        inert={menuOpen}
         sx={{
           position: 'absolute',
           left: (t) => t.spacing(1),
@@ -27,8 +30,15 @@ export default function AppShell({ children }: { children?: React.ReactNode }) {
       >
         Skip to content
       </Link>
-      <AppHeader menuOpen={menuOpen} onMenuToggle={toggle} onMenuClose={close} axisUrl={axisUrl} />
-      <main id={MAIN_ID} tabIndex={-1}>
+      <AppHeader
+        menuOpen={menuOpen}
+        onMenuToggle={toggle}
+        onMenuClose={close}
+        axisUrl={axisUrl}
+        menuId={MENU_ID}
+      />
+      <MenuOverlay open={menuOpen} onClose={close} axisUrl={axisUrl} id={MENU_ID} />
+      <main id={MAIN_ID} tabIndex={-1} inert={menuOpen}>
         {children}
       </main>
     </>

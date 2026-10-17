@@ -26,6 +26,7 @@ describe('theme tokens (Figma variables)', () => {
     const t = theme.typography;
     expect(t.subtitle1).toMatchObject({ fontSize: '1.125rem', fontWeight: 500 });
     expect(t.subtitle2).toMatchObject({ fontSize: '0.875rem', fontWeight: 500 });
+    expect(t.h6).toMatchObject({ fontSize: '1.25rem', fontWeight: 500, lineHeight: 1.6 });
     expect(t.h4_fixed).toMatchObject({ fontSize: '1rem', fontWeight: 700 });
     expect(t.caption).toMatchObject({ fontSize: '0.75rem', fontWeight: 400 });
   });
@@ -91,9 +92,52 @@ describe('theme tokens (Figma variables)', () => {
     expect(buttonRoot({ theme })['&.Mui-focusVisible']).toMatchObject({
       outline: `2px solid ${theme.palette.primary.main}`,
     });
-    const linkRoot = theme.components?.MuiLink?.styleOverrides?.root as typeof buttonRoot;
-    expect(linkRoot({ theme })['&:focus-visible']).toMatchObject({
+    const linkRoot = theme.components?.MuiLink?.styleOverrides?.root as (a: {
+      theme: typeof theme;
+      ownerState: Record<string, unknown>;
+    }) => Record<string, Record<string, unknown>>;
+    expect(linkRoot({ theme, ownerState: {} })['&:focus-visible']).toMatchObject({
       outline: `2px solid ${theme.palette.primary.main}`,
     });
+  });
+});
+
+describe('hover tint', () => {
+  const tint = theme.palette.primary.tint;
+  type Root = (args: { ownerState: Record<string, unknown>; theme: typeof theme }) => {
+    '&:hover'?: { backgroundColor?: string };
+    [key: string]: unknown;
+  };
+  const root = (name: 'MuiButton' | 'MuiIconButton' | 'MuiListItemButton' | 'MuiLink') =>
+    (theme.components?.[name]?.styleOverrides as { root: Root }).root;
+
+  it('tints text and outlined buttons on hover', () => {
+    for (const variant of ['text', 'outlined']) {
+      expect(root('MuiButton')({ ownerState: { variant }, theme })['&:hover']).toEqual({
+        backgroundColor: tint,
+      });
+    }
+  });
+
+  it('leaves contained buttons on MUI solid hover (no tint behind white text)', () => {
+    expect(root('MuiButton')({ ownerState: { variant: 'contained' }, theme })).toEqual({});
+  });
+
+  it('tints icon buttons and list rows, selected rows included', () => {
+    expect(root('MuiIconButton')({ ownerState: {}, theme })['&:hover']).toEqual({
+      backgroundColor: tint,
+    });
+    expect(root('MuiListItemButton')({ ownerState: {}, theme })).toEqual({
+      '&:hover, &.Mui-selected, &.Mui-selected:hover': { backgroundColor: tint },
+    });
+  });
+
+  it('tints only underline-less (button-like) links', () => {
+    expect(root('MuiLink')({ ownerState: { underline: 'none' }, theme })['&:hover']).toEqual({
+      backgroundColor: tint,
+    });
+    expect(
+      root('MuiLink')({ ownerState: { underline: 'always' }, theme })['&:hover'],
+    ).toBeUndefined();
   });
 });

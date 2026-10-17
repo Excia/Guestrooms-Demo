@@ -1,5 +1,6 @@
 import { alpha, createTheme } from '@mui/material/styles';
 import type { CSSProperties } from 'react';
+import { menuFontPx } from './app/layout';
 
 // Tokens from the CE Guest Rooms Figma variables (dashboard frame 69:3712). Light mode only.
 declare module '@mui/material/styles' {
@@ -14,15 +15,21 @@ declare module '@mui/material/styles' {
   }
   interface TypographyVariants {
     h4_fixed: CSSProperties;
+    menu_item: CSSProperties;
+    menu_heading: CSSProperties;
   }
   interface TypographyVariantsOptions {
     h4_fixed?: CSSProperties;
+    menu_item?: CSSProperties;
+    menu_heading?: CSSProperties;
   }
 }
 
 declare module '@mui/material/Typography' {
   interface TypographyPropsVariantOverrides {
     h4_fixed: true;
+    menu_item: true;
+    menu_heading: true;
   }
 }
 
@@ -60,13 +67,25 @@ const base = createTheme({
     fontFamily,
     subtitle1: font(18, 500, 1.4, 0.15),
     subtitle2: font(14, 500, 1.57, 0.1),
+    // Figma typography/h6: 20px Medium, line height 1.6, 0.15px tracking (menu overlay headings).
+    h6: font(20, 500, 1.6, 0.15),
     h4_fixed: font(16, 700, 1.4, 0.15),
+    // Menu overlay (Figma 1302:18023): links 22px and headings 20px Medium, scaled by MENU_SCALE.
+    menu_item: font(menuFontPx(22), 500, 1.2, 0),
+    menu_heading: font(menuFontPx(20), 500, 1.6, 0.15),
     caption: font(12, 400, 1.4, 0.4),
     button: font(14, 500, 24 / 14, 0.4),
   },
   components: {
+    // Hover: non-solid buttons, icon buttons, list rows and unstyled links get the light green tint
+    // (palette.primary.tint, the same as the selected row). Solid contained buttons keep MUI's
+    // darker solid hover (primary.dark) so white text stays legible; the tint is never behind it.
     MuiButton: {
       styleOverrides: {
+        root: ({ ownerState, theme }) =>
+          ownerState.variant === 'contained'
+            ? {}
+            : { '&:hover': { backgroundColor: theme.palette.primary.tint } },
         sizeSmall: font(13, 500, 22 / 13, 0.46),
         sizeMedium: font(14, 500, 24 / 14, 0.4),
         sizeLarge: font(15, 500, 26 / 15, 0.46),
@@ -83,9 +102,29 @@ const base = createTheme({
         }),
       },
     },
-    MuiLink: {
+    MuiIconButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({ '&:hover': { backgroundColor: theme.palette.primary.tint } }),
+      },
+    },
+    // Selected rows keep the tint on hover (a darker wash would drop the text below AA).
+    MuiListItemButton: {
       styleOverrides: {
         root: ({ theme }) => ({
+          '&:hover, &.Mui-selected, &.Mui-selected:hover': {
+            backgroundColor: theme.palette.primary.tint,
+          },
+        }),
+      },
+    },
+    MuiLink: {
+      styleOverrides: {
+        root: ({ ownerState, theme }) => ({
+          // Links without an underline (the header logo) are button-like: tint on hover.
+          ...(ownerState.underline === 'none' && {
+            borderRadius: theme.shape.borderRadius,
+            '&:hover': { backgroundColor: theme.palette.primary.tint },
+          }),
           '&:focus-visible': {
             outline: `2px solid ${theme.palette.primary.main}`,
             outlineOffset: 2,
@@ -99,7 +138,7 @@ const base = createTheme({
     // Input label: Figma shows 12px when shrunk. MUI scales the 16px root by 0.75
     // (= 12px), so the label keeps its default size and needs no override.
     MuiTypography: {
-      defaultProps: { variantMapping: { h4_fixed: 'h4' } },
+      defaultProps: { variantMapping: { h4_fixed: 'h4', menu_item: 'span', menu_heading: 'h2' } },
     },
   },
 });
