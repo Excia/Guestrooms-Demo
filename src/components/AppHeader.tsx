@@ -10,7 +10,7 @@ import IconButton from '@mui/material/IconButton';
 import Link from '@mui/material/Link';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router';
 import type { Crumb } from '../app/breadcrumbs';
 import { SCHEDULE_PATH } from '../app/routes';
@@ -18,7 +18,10 @@ import { SCHEDULE_PATH } from '../app/routes';
 export interface AppHeaderProps {
   breadcrumbs: Crumb[];
   menuOpen: boolean;
+  /** Toggle button click. */
   onMenuToggle: () => void;
+  /** Escape while open; separate from the toggle so the overlay (0.7) can own closing. */
+  onMenuClose: () => void;
   /** Target of Return to Site (see getAxisUrl). */
   axisUrl: string;
   /** Id of the menu element this button controls (ticket 0.7). */
@@ -31,17 +34,23 @@ export default function AppHeader({
   breadcrumbs,
   menuOpen,
   onMenuToggle,
+  onMenuClose,
   axisUrl,
   menuId,
 }: AppHeaderProps) {
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
     if (!menuOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onMenuToggle();
+      if (e.key === 'Escape') {
+        onMenuClose();
+        menuButtonRef.current?.focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [menuOpen, onMenuToggle]);
+  }, [menuOpen, onMenuClose]);
 
   const parents = breadcrumbs.slice(0, -1);
   const current = breadcrumbs.at(-1);
@@ -54,15 +63,25 @@ export default function AppHeader({
       elevation={0}
       sx={{ bgcolor: 'background.default' }}
     >
-      <Toolbar disableGutters sx={{ minHeight: 56, px: 2, py: 1, gap: 2 }}>
+      <Toolbar
+        disableGutters
+        sx={{
+          px: 2,
+          py: 1,
+          gap: 2,
+          // Doubled selector beats Toolbar's responsive min-height (48/56/64) so the header stays 56px.
+          '&&': { height: (t) => t.spacing(7), minHeight: (t) => t.spacing(7) },
+        }}
+      >
         <IconButton
+          ref={menuButtonRef}
           onClick={onMenuToggle}
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={menuOpen}
           aria-controls={menuId}
           sx={{
-            width: 40,
-            height: 40,
+            width: (t) => t.spacing(5),
+            height: (t) => t.spacing(5),
             p: 0.5,
             bgcolor: menuOpen ? 'grey.600' : 'primary.main',
             color: menuOpen ? 'common.white' : 'primary.contrastText',
@@ -78,7 +97,14 @@ export default function AppHeader({
           color="text.primary"
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
         >
-          <Box sx={{ width: 32, height: 32, display: 'grid', placeItems: 'center' }}>
+          <Box
+            sx={{
+              width: (t) => t.spacing(4),
+              height: (t) => t.spacing(4),
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
             <CalendarTodayIcon aria-hidden />
           </Box>
           <Typography variant="h4_fixed" component="span">
@@ -88,7 +114,13 @@ export default function AppHeader({
         {current && breadcrumbs.length > 1 && (
           <Breadcrumbs aria-label="Breadcrumb" sx={{ display: { xs: 'none', sm: 'block' }, ml: 2 }}>
             {parents.map((c) => (
-              <Link key={c.path} component={RouterLink} to={c.path} underline="hover" color="inherit">
+              <Link
+                key={c.path}
+                component={RouterLink}
+                to={c.path}
+                underline="hover"
+                color="inherit"
+              >
                 {c.title}
               </Link>
             ))}
@@ -110,7 +142,11 @@ export default function AppHeader({
           href={axisUrl}
           color="inherit"
           aria-label={RETURN_LABEL}
-          sx={{ display: { xs: 'inline-flex', sm: 'none' }, color: 'action.active' }}
+          sx={{
+            display: { xs: 'inline-flex', sm: 'none' },
+            color: 'action.active',
+            p: 0.5,
+          }}
         >
           <ExitToAppIcon fontSize="large" />
         </IconButton>

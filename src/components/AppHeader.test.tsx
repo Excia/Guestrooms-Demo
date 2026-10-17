@@ -11,18 +11,20 @@ const crumbs = [
 
 function setup(props: Partial<AppHeaderProps> = {}) {
   const onMenuToggle = vi.fn();
+  const onMenuClose = vi.fn();
   render(
     <MemoryRouter>
       <AppHeader
         breadcrumbs={crumbs}
         menuOpen={false}
         onMenuToggle={onMenuToggle}
+        onMenuClose={onMenuClose}
         axisUrl="https://axis.example.com"
         {...props}
       />
     </MemoryRouter>,
   );
-  return { onMenuToggle };
+  return { onMenuToggle, onMenuClose };
 }
 
 describe('AppHeader', () => {
@@ -58,19 +60,21 @@ describe('AppHeader', () => {
   });
 
   it('open state shows the close button and Escape closes it', () => {
-    const { onMenuToggle } = setup({ menuOpen: true });
+    const { onMenuToggle, onMenuClose } = setup({ menuOpen: true });
     expect(screen.getByRole('button', { name: 'Close menu' })).toHaveAttribute(
       'aria-expanded',
       'true',
     );
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onMenuToggle).toHaveBeenCalledTimes(1);
+    expect(onMenuClose).toHaveBeenCalledTimes(1);
+    expect(onMenuToggle).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus();
   });
 
   it('does not react to Escape while closed', () => {
-    const { onMenuToggle } = setup();
+    const { onMenuClose } = setup();
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(onMenuToggle).not.toHaveBeenCalled();
+    expect(onMenuClose).not.toHaveBeenCalled();
   });
 
   it('Return to Site links to the Axis URL with exact casing', () => {

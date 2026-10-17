@@ -1,5 +1,5 @@
 import { getBreadcrumbs } from './breadcrumbs';
-import { routes } from './routes';
+import { findRoute, routes } from './routes';
 
 describe('getBreadcrumbs', () => {
   it('returns just the page for a top-level route', () => {
@@ -29,5 +29,11 @@ describe('getBreadcrumbs', () => {
       { path: '/b', title: 'B', parent: '/a' },
     ];
     expect(getBreadcrumbs('/a', loop)).toHaveLength(2);
+  });
+
+  it('findRoute and getBreadcrumbs agree on trailing slashes', () => {
+    expect(findRoute('/admin/')?.title).toBe('Admin Setup');
+    expect(findRoute('/admin')).toBe(findRoute('/admin/'));
+    expect(findRoute('/nope/')).toBeUndefined();
   });
 });

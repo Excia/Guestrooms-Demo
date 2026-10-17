@@ -31,15 +31,33 @@ describe('theme tokens (Figma variables)', () => {
   });
 
   it('maps button sizes', () => {
-    const o = theme.components?.MuiButton?.styleOverrides as Record<string, Record<string, unknown>>;
-    expect(o.sizeSmall).toMatchObject({ fontSize: `${13 / 16}rem`, fontWeight: 500, letterSpacing: '0.03538em' });
-    expect(o.sizeMedium).toMatchObject({ fontSize: '0.875rem', fontWeight: 500, letterSpacing: '0.02857em' });
-    expect(o.sizeLarge).toMatchObject({ fontSize: `${15 / 16}rem`, fontWeight: 500, letterSpacing: '0.03067em' });
+    const o = theme.components?.MuiButton?.styleOverrides as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(o.sizeSmall).toMatchObject({
+      fontSize: `${13 / 16}rem`,
+      fontWeight: 500,
+      letterSpacing: '0.03538em',
+    });
+    expect(o.sizeMedium).toMatchObject({
+      fontSize: '0.875rem',
+      fontWeight: 500,
+      letterSpacing: '0.02857em',
+    });
+    expect(o.sizeLarge).toMatchObject({
+      fontSize: `${15 / 16}rem`,
+      fontWeight: 500,
+      letterSpacing: '0.03067em',
+    });
   });
 
   it('styles inputs', () => {
     const c = theme.components!;
-    expect(c.MuiInputBase?.styleOverrides?.input).toMatchObject({ fontSize: '1rem', fontWeight: 400 });
+    expect(c.MuiInputBase?.styleOverrides?.input).toMatchObject({
+      fontSize: '1rem',
+      fontWeight: 400,
+    });
     expect(c.MuiOutlinedInput?.styleOverrides?.notchedOutline).toMatchObject({
       borderColor: 'rgba(0, 0, 0, 0.23)',
     });
@@ -64,5 +82,18 @@ describe('theme tokens (Figma variables)', () => {
       </ThemeProvider>,
     );
     expect(screen.getByRole('heading', { level: 4, name: 'Title' })).toBeInTheDocument();
+  });
+
+  it('draws a focus-visible outline on buttons and links', () => {
+    const buttonRoot = theme.components?.MuiButtonBase?.styleOverrides?.root as (a: {
+      theme: typeof theme;
+    }) => Record<string, Record<string, unknown>>;
+    expect(buttonRoot({ theme })['&.Mui-focusVisible']).toMatchObject({
+      outline: `2px solid ${theme.palette.primary.main}`,
+    });
+    const linkRoot = theme.components?.MuiLink?.styleOverrides?.root as typeof buttonRoot;
+    expect(linkRoot({ theme })['&:focus-visible']).toMatchObject({
+      outline: `2px solid ${theme.palette.primary.main}`,
+    });
   });
 });

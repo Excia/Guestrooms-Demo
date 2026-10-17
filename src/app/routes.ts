@@ -1,4 +1,5 @@
 // Route table with breadcrumb metadata. Pages arrive in later tickets; paths follow the menu (Figma 12047:5743).
+// App.tsx generates its <Route>s from this table, so a page registers here only.
 export interface RouteMeta {
   path: string;
   title: string;
@@ -26,3 +27,13 @@ export const routes: RouteMeta[] = [
   { path: '/admin/add-on-items', title: 'Add-On Items', parent: '/admin' },
   { path: '/admin/notifications', title: 'Notifications', parent: '/admin' },
 ];
+
+/** Strips trailing slashes so "/admin/" and "/admin" are the same route. */
+export function normalizePath(pathname: string): string {
+  return pathname.length > 1 ? pathname.replace(/\/+$/, '') || '/' : pathname;
+}
+
+export function findRoute(pathname: string, table: RouteMeta[] = routes): RouteMeta | undefined {
+  const normalized = normalizePath(pathname);
+  return table.find((r) => r.path === normalized);
+}
