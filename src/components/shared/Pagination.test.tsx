@@ -3,19 +3,9 @@ import userEvent from '@testing-library/user-event';
 import Pagination from './Pagination';
 
 function setup(props: Partial<Parameters<typeof Pagination>[0]> = {}) {
-  const onPageChange = vi.fn();
-  const onRowsPerPageChange = vi.fn();
-  render(
-    <Pagination
-      page={2}
-      rowsPerPage={25}
-      total={120}
-      onPageChange={onPageChange}
-      onRowsPerPageChange={onRowsPerPageChange}
-      {...props}
-    />,
-  );
-  return { onPageChange, onRowsPerPageChange };
+  const onChange = vi.fn();
+  render(<Pagination page={2} rowsPerPage={25} total={120} onChange={onChange} {...props} />);
+  return { onChange };
 }
 
 describe('Pagination', () => {
@@ -27,9 +17,9 @@ describe('Pagination', () => {
   });
 
   it('goes to the next page', async () => {
-    const { onPageChange } = setup();
+    const { onChange } = setup();
     await userEvent.click(screen.getByRole('button', { name: 'Go to next page' }));
-    expect(onPageChange).toHaveBeenCalledWith(3);
+    expect(onChange).toHaveBeenCalledWith({ page: 3, rowsPerPage: 25 });
   });
 
   it('disables previous on the first page', () => {
@@ -37,12 +27,31 @@ describe('Pagination', () => {
     expect(screen.getByRole('button', { name: 'Go to previous page' })).toBeDisabled();
   });
 
-  it('changing rows per page keeps the first visible row in view', async () => {
-    const { onRowsPerPageChange, onPageChange } = setup({ page: 3, rowsPerPage: 10 });
+  it('changing rows per page fires ONE change that keeps the first visible row in view', async () => {
+    const { onChange } = setup({ page: 3, rowsPerPage: 10 });
     await userEvent.click(screen.getByRole('combobox', { name: /Rows per page/ }));
     await userEvent.click(await screen.findByRole('option', { name: '25' }));
-    expect(onRowsPerPageChange).toHaveBeenCalledWith(25);
-    expect(onPageChange).toHaveBeenCalledWith(1);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({ page: 1, rowsPerPage: 25 });
+  });
+
+  it('corrects an out-of-range page once', () => {
+    const { onChange } = setup({ page: 9 });
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith({ page: 5, rowsPerPage: 25 });
+  });
+
+  it('does not call onChange for a valid page on mount', () => {
+    const { onChange } = setup();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('shows an unlisted rows-per-page value without a MUI warning', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    setup({ rowsPerPage: 20 });
+    expect(screen.getByRole('combobox', { name: /Rows per page/ })).toHaveTextContent('20');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('shows 0 of 0 when empty', () => {
