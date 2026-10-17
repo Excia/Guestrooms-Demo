@@ -24,30 +24,26 @@ export interface LocationOption {
   name: string;
 }
 
-interface CommonProps {
+interface CtaProps {
+  variant: 'cta';
+  /** The CTA reveals the field variant; the caller swaps `variant`. */
+  onOpen: () => void;
+}
+
+interface FieldProps {
+  variant: 'field';
   locations: readonly LocationOption[];
   /** Selected location ids. Empty means "All Locations". */
   value: readonly string[];
   onChange: (value: string[]) => void;
+  /** The red cancel button next to the field: remove the filter. */
+  onRemove?: () => void;
 }
 
-export type LocationFilterProps = CommonProps &
-  (
-    | {
-        variant: 'cta';
-        /** The CTA reveals the field variant; the caller swaps `variant`. */
-        onOpen: () => void;
-      }
-    | {
-        variant: 'field';
-        /** The red cancel button next to the field: remove the filter. */
-        onRemove?: () => void;
-      }
-  );
+export type LocationFilterProps = CtaProps | FieldProps;
 
 // Location Filter (Figma 120:6825): a text CTA, or a multi-select field with chips and a clear button.
 export default function LocationFilter(props: LocationFilterProps) {
-  const id = useId();
   if (props.variant === 'cta') {
     return (
       <Button size="large" startIcon={<AddCircle />} onClick={props.onOpen}>
@@ -55,17 +51,22 @@ export default function LocationFilter(props: LocationFilterProps) {
       </Button>
     );
   }
-  const { locations, value, onChange, onRemove } = props;
+  return <LocationField {...props} />;
+}
+
+function LocationField({ locations, value, onChange, onRemove }: FieldProps) {
+  const id = useId();
   const allIds = locations.map((l) => l.id);
   const selected = normalizeSelection(value, allIds);
   const nameOf = (locId: string) => locations.find((l) => l.id === locId)?.name ?? locId;
   const labelId = `${id}-label`;
 
   const handleChange = (event: SelectChangeEvent<string[]>) => {
-    // The "All Locations" item has the empty-string value, which clears the selection.
+    // The "All Locations" item has the empty-string value and is "selected" while nothing is, so
+    // picking it clears the selection and picking a location drops it.
     const picked = event.target.value;
     const list = typeof picked === 'string' ? picked.split(',') : picked;
-    onChange(list.includes('') ? [] : list);
+    onChange(selected.length === 0 ? list.filter(Boolean) : list.includes('') ? [] : list);
   };
 
   return (
@@ -81,17 +82,20 @@ export default function LocationFilter(props: LocationFilterProps) {
           labelId={labelId}
           id={id}
           label="Location"
-          value={selected}
+          value={selected.length === 0 ? [''] : selected}
           onChange={handleChange}
-          renderValue={(ids) =>
-            isAllLocations(ids, allIds) ? (
+          renderValue={(picked) =>
+            isAllLocations(picked.filter(Boolean), allIds) ? (
               ALL_LOCATIONS_LABEL
             ) : (
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {ids.map((locId) => (
+                {picked.map((locId) => (
                   <Chip
                     key={locId}
                     size="small"
+                    // Display only: no nested buttons inside the combobox. Removal is via the menu
+                    // and the Clear button; the X is a mouse shortcut.
+                    role="presentation"
                     tabIndex={-1}
                     label={nameOf(locId)}
                     // Deleting a chip must not open the menu behind it.

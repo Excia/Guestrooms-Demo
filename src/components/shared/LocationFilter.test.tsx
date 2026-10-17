@@ -11,15 +11,7 @@ const LOCATIONS = [
 describe('LocationFilter', () => {
   it('CTA is a button that opens the filter', async () => {
     const onOpen = vi.fn();
-    render(
-      <LocationFilter
-        variant="cta"
-        locations={LOCATIONS}
-        value={[]}
-        onChange={vi.fn()}
-        onOpen={onOpen}
-      />,
-    );
+    render(<LocationFilter variant="cta" onOpen={onOpen} />);
     await userEvent.click(screen.getByRole('button', { name: 'Filter by location' }));
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
@@ -28,6 +20,41 @@ describe('LocationFilter', () => {
     render(<LocationFilter variant="field" locations={LOCATIONS} value={[]} onChange={vi.fn()} />);
     expect(screen.getByRole('combobox', { name: /Location/ })).toHaveTextContent('All Locations');
     expect(screen.queryByRole('button', { name: 'Clear locations' })).not.toBeInTheDocument();
+  });
+
+  it('All Locations is the selected option when nothing is picked', async () => {
+    render(<LocationFilter variant="field" locations={LOCATIONS} value={[]} onChange={vi.fn()} />);
+    await userEvent.click(screen.getByRole('combobox'));
+    expect(await screen.findByRole('option', { name: 'All Locations' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: 'Location A' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+  });
+
+  it('picking a location while All is active selects just that location', async () => {
+    const onChange = vi.fn();
+    render(<LocationFilter variant="field" locations={LOCATIONS} value={[]} onChange={onChange} />);
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Location C' }));
+    expect(onChange).toHaveBeenCalledWith(['c']);
+  });
+
+  it('chips are display-only: no buttons nested in the combobox', () => {
+    render(
+      <LocationFilter
+        variant="field"
+        locations={LOCATIONS}
+        value={['a', 'b']}
+        onChange={vi.fn()}
+      />,
+    );
+    const combo = screen.getByRole('combobox');
+    expect(combo).toHaveTextContent('Location A');
+    expect(combo.querySelectorAll('button, [role="button"]')).toHaveLength(0);
   });
 
   it('adds a location from the menu with the keyboard', async () => {

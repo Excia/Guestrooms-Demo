@@ -49,7 +49,9 @@ interface DateFieldProps {
   readOnly?: boolean;
   invalid?: boolean;
   describedBy?: string;
-  /** Half-width field: hides the picker icon so the full date fits (typing still works). */
+  /** Accessible name when it must differ from the visible Figma label. */
+  ariaLabel?: string;
+  /** Half-width field: tighter padding so the full date and the picker icon fit in 105px. */
   compact?: boolean;
 }
 
@@ -61,6 +63,7 @@ function DateField({
   readOnly,
   invalid,
   describedBy,
+  ariaLabel,
   compact,
 }: DateFieldProps) {
   return (
@@ -82,15 +85,20 @@ function DateField({
               fontSize: (t) => t.typography.caption.fontSize,
               height: (t) => t.spacing(3),
               minWidth: 0,
-              // Figma input padding is 12px; the picker icon is tightened so the date is not clipped.
-              px: 1.5,
-              '&::-webkit-calendar-picker-indicator': compact
-                ? { display: 'none' }
-                : { m: 0, ml: 0.5, p: 0 },
+              // Figma input padding is 12px; half-width fields use 8px so the date is not clipped
+              // next to the picker icon (mouse users still get the calendar).
+              px: compact ? 1 : 1.5,
+              '&::-webkit-calendar-picker-indicator': { m: 0, ml: 0.25, p: 0 },
             },
           },
         },
-        htmlInput: { readOnly, 'aria-describedby': invalid ? describedBy : undefined },
+        htmlInput: {
+          readOnly,
+          'aria-label': ariaLabel,
+          'aria-describedby': invalid ? describedBy : undefined,
+          // Derived values are display-only: keep them out of the tab order (three stops each).
+          tabIndex: readOnly ? -1 : undefined,
+        },
       }}
     />
   );
@@ -103,6 +111,7 @@ function RangeFields({
   readOnly,
   invalid,
   describedBy,
+  labelPrefix,
 }: {
   from: IsoDate;
   to: IsoDate;
@@ -110,11 +119,14 @@ function RangeFields({
   readOnly?: boolean;
   invalid?: boolean;
   describedBy?: string;
+  /** Prefix for the accessible names, e.g. "Compare to". */
+  labelPrefix?: string;
 }) {
   return (
     <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start', width: '100%' }}>
       <DateField
         label="From"
+        ariaLabel={labelPrefix ? `${labelPrefix} from` : undefined}
         compact
         value={from}
         readOnly={readOnly}
@@ -124,6 +136,7 @@ function RangeFields({
       />
       <DateField
         label="To"
+        ariaLabel={labelPrefix ? `${labelPrefix} to` : undefined}
         compact
         value={to}
         readOnly={readOnly}
@@ -206,6 +219,7 @@ export default function DateSelection({
         return (
           <Select
             label="Month"
+            fullWidth
             value={period.month}
             options={months(period.month)}
             onChange={(month) => setPeriod({ kind: 'month', month })}
@@ -225,6 +239,8 @@ export default function DateSelection({
           <>
             <Select<RangePreset>
               label="Date Range"
+              ariaLabel="Compare to date range"
+              fullWidth
               value={c.preset}
               options={presetOptions}
               onChange={(preset) => onChange(setRangePreset(value, preset))}
@@ -233,6 +249,7 @@ export default function DateSelection({
               from={c.from}
               to={c.to}
               readOnly={c.preset !== 'custom'}
+              labelPrefix="Compare to"
               invalid={Boolean(errors.comparison)}
               describedBy={compareErrorId}
               onChange={(r) => onChange(updateComparison(value, { ...c, ...r }))}
@@ -244,19 +261,26 @@ export default function DateSelection({
         return (
           <Select
             label="Month"
+            ariaLabel="Compare to month"
+            fullWidth
             value={c.month}
             options={months(c.month)}
-            onChange={(month) => onChange(updateComparison(value, { kind: 'month', month }))}
+            onChange={(month) =>
+              onChange(updateComparison(value, { kind: 'month', month, derived: false }))
+            }
           />
         );
       case 'date':
         return (
           <DateField
             label={period.kind === 'asOf' ? 'As of Date' : 'Date'}
+            ariaLabel={period.kind === 'asOf' ? 'Compare to as of date' : 'Compare to date'}
             value={c.date}
             invalid={Boolean(errors.comparison)}
             describedBy={compareErrorId}
-            onChange={(date) => onChange(updateComparison(value, { kind: 'date', date }))}
+            onChange={(date) =>
+              onChange(updateComparison(value, { kind: 'date', date, derived: false }))
+            }
           />
         );
     }
@@ -277,6 +301,7 @@ export default function DateSelection({
     >
       <Select<PeriodKind>
         label="Date Range"
+        fullWidth
         value={period.kind}
         options={periodOptions}
         onChange={(kind) => onChange(changePeriodKind(value, kind, today, weekStartsOn))}
@@ -294,11 +319,7 @@ export default function DateSelection({
       />
       {comparison ? (
         <>
-          <Typography
-            variant="button"
-            component="p"
-            sx={{ fontSize: (t) => t.typography.pxToRem(13), lineHeight: 22 / 13 }}
-          >
+          <Typography variant="button_small" component="p">
             Compare to:
           </Typography>
           {comparisonFields(comparison)}

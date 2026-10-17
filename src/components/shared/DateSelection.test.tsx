@@ -13,6 +13,12 @@ import DateSelection from './DateSelection';
 
 const TODAY = '2025-02-12';
 
+// Fields are found by their accessible name (aria-label wins over the visible <label>); the
+// period's own fields have no aria-label, so they are the ones without one.
+const named = (name: string) => screen.getByLabelText(name, { selector: `[aria-label="${name}"]` });
+const visible = (label: string) =>
+  screen.getAllByLabelText(label).find((el) => !el.hasAttribute('aria-label')) as HTMLElement;
+
 function Harness({
   initial,
   onValue,
@@ -61,11 +67,52 @@ describe('DateSelection', () => {
     expect(Boolean(within(group).queryByText('Compare to:'))).toBe(compare);
   });
 
-  it('single day and compare variants show their extra fields', () => {
+  it('comparison controls have names distinct from the period controls', () => {
     render(<Harness initial={setCompare(createValue('thisWeek', TODAY), true)} />);
-    expect(screen.getAllByRole('combobox', { name: /Date Range/ })).toHaveLength(2);
-    expect(screen.getByText('Last Week')).toBeInTheDocument();
-    expect(screen.getAllByLabelText('From')).toHaveLength(2);
+    expect(screen.getByRole('combobox', { name: /^Date Range/ })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Compare to date range' })).toHaveTextContent(
+      'Last Week',
+    );
+    expect(visible('From')).toHaveValue('2025-02-09');
+    expect(named('Compare to from')).toHaveValue('2025-02-02');
+    expect(named('Compare to to')).toHaveValue('2025-02-08');
+  });
+
+  it('names the other comparison controls', () => {
+    const { unmount } = render(<Harness initial={setCompare(createValue('month', TODAY), true)} />);
+    expect(screen.getByRole('combobox', { name: 'Compare to month' })).toHaveTextContent(
+      'February 2024',
+    );
+    unmount();
+    const asOf = render(<Harness initial={setCompare(createValue('asOf', TODAY), true)} />);
+    expect(named('Compare to as of date')).toHaveValue('2024-02-12');
+    asOf.unmount();
+    render(<Harness initial={setCompare(createValue('singleDay', TODAY), true)} />);
+    expect(named('Compare to date')).toHaveValue('2025-02-11');
+  });
+
+  it('derived (read-only) dates stay out of the tab order but keep their names', () => {
+    render(<Harness initial={setCompare(createValue('thisWeek', TODAY), true)} />);
+    for (const name of ['From', 'To', 'Compare to from', 'Compare to to']) {
+      expect(name.startsWith('Compare') ? named(name) : visible(name)).toHaveAttribute(
+        'tabindex',
+        '-1',
+      );
+    }
+  });
+
+  it('a derived comparison follows the period when it is edited', async () => {
+    const onValue = vi.fn();
+    render(
+      <Harness initial={setCompare(createValue('singleDay', TODAY), true)} onValue={onValue} />,
+    );
+    const date = visible('Date');
+    await userEvent.clear(date);
+    await userEvent.type(date, '2025-03-01');
+    expect(onValue).toHaveBeenLastCalledWith({
+      period: { kind: 'singleDay', date: '2025-03-01' },
+      comparison: { kind: 'date', date: '2025-02-28', derived: true },
+    });
   });
 
   it('this week dates are read-only', () => {
@@ -94,7 +141,7 @@ describe('DateSelection', () => {
     await userEvent.keyboard(' ');
     expect(onValue).toHaveBeenLastCalledWith({
       period: { kind: 'asOf', date: TODAY },
-      comparison: { kind: 'date', date: '2024-02-12' },
+      comparison: { kind: 'date', date: '2024-02-12', derived: true },
     });
     expect(screen.getByText('Compare to:')).toBeInTheDocument();
     await userEvent.keyboard(' ');
@@ -116,11 +163,9 @@ describe('DateSelection', () => {
 
   it('the compare range switches to custom and becomes editable', async () => {
     render(<Harness initial={setCompare(createValue('thisWeek', TODAY), true)} />);
-    const [, compareFrom] = screen.getAllByLabelText('From');
-    expect(compareFrom).toHaveAttribute('readonly');
-    const selects = screen.getAllByRole('combobox', { name: /Date Range/ });
-    await userEvent.click(selects[1]);
+    expect(named('Compare to from')).toHaveAttribute('readonly');
+    await userEvent.click(screen.getByRole('combobox', { name: 'Compare to date range' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Custom' }));
-    expect(screen.getAllByLabelText('From')[1]).not.toHaveAttribute('readonly');
+    expect(named('Compare to from')).not.toHaveAttribute('readonly');
   });
 });

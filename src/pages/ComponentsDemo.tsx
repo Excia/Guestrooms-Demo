@@ -8,7 +8,6 @@ import {
   createValue,
   setCompare,
   dateSelectionState,
-  type DateSelectionState,
   type DateSelectionValue,
   type PeriodKind,
 } from '../app/dateSelection';
@@ -19,8 +18,6 @@ import NonActionableDialog from '../components/shared/NonActionableDialog';
 import Pagination from '../components/shared/Pagination';
 import SaveToast from '../components/shared/SaveToast';
 import Select from '../components/shared/Select';
-
-export const COMPONENTS_DEMO_PATH = '/dev/components';
 
 // A fixed "today" keeps the states identical to the Figma examples (February 2025).
 const DEMO_TODAY = '2025-02-12';
@@ -37,7 +34,8 @@ const OPTIONS = [
   { value: 'three', label: 'Option three', disabled: true },
 ];
 
-const STATES: ReadonlyArray<{ state: DateSelectionState; kind: PeriodKind; compare: boolean }> = [
+// The first eight are the Figma states; the last two are Compare on kinds Figma does not draw.
+const STATES: ReadonlyArray<{ state: string; kind: PeriodKind; compare: boolean }> = [
   { state: 'Custom', kind: 'custom', compare: false },
   { state: 'This Week', kind: 'thisWeek', compare: false },
   { state: 'Compare', kind: 'thisWeek', compare: true },
@@ -46,6 +44,8 @@ const STATES: ReadonlyArray<{ state: DateSelectionState; kind: PeriodKind; compa
   { state: 'Single Day', kind: 'singleDay', compare: false },
   { state: 'Compare-Month', kind: 'month', compare: true },
   { state: 'Compare-AsOf', kind: 'asOf', compare: true },
+  { state: 'Compare (Custom, not in Figma)', kind: 'custom', compare: true },
+  { state: 'Compare (Single Day, not in Figma)', kind: 'singleDay', compare: true },
 ];
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -78,6 +78,13 @@ function DateStateDemo({ state, kind, compare }: (typeof STATES)[number]) {
   return (
     <Labeled caption={`${state} (renders as ${dateSelectionState(value)})`}>
       <DateSelection value={value} onChange={setValue} today={DEMO_TODAY} />
+      <Typography
+        variant="caption"
+        component="pre"
+        sx={{ mt: 1, whiteSpace: 'pre-wrap', maxWidth: (t) => t.spacing(27.5) }}
+      >
+        {JSON.stringify(value)}
+      </Typography>
     </Labeled>
   );
 }
@@ -85,14 +92,14 @@ function DateStateDemo({ state, kind, compare }: (typeof STATES)[number]) {
 // Dev-only gallery of the shared components (not in the menu): compare each state against Figma.
 export default function ComponentsDemo() {
   const [selectValue, setSelectValue] = useState('');
-  const [page, setPage] = useState(1);
-  const [rows, setRows] = useState(25);
+  const [paging, setPaging] = useState({ page: 1, rowsPerPage: 25 });
   const [fieldLocations, setFieldLocations] = useState<string[]>(['a', 'b']);
   const [allLocations, setAllLocations] = useState<string[]>([]);
   const [ctaOpen, setCtaOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
+  const [saveId, setSaveId] = useState(0);
 
   return (
     <Container maxWidth={false} sx={{ py: 4 }}>
@@ -112,6 +119,7 @@ export default function ComponentsDemo() {
           <Box sx={{ width: (t) => t.spacing(27.5) }}>
             <Labeled caption="Outlined, placeholder">
               <Select
+                fullWidth
                 label="Additional Input"
                 placeholder="[Input Selection]"
                 value={selectValue}
@@ -123,6 +131,7 @@ export default function ComponentsDemo() {
           <Box sx={{ width: (t) => t.spacing(27.5) }}>
             <Labeled caption="With value and helper text">
               <Select
+                fullWidth
                 label="Room type"
                 value="two"
                 options={OPTIONS}
@@ -134,6 +143,7 @@ export default function ComponentsDemo() {
           <Box sx={{ width: (t) => t.spacing(27.5) }}>
             <Labeled caption="Error">
               <Select
+                fullWidth
                 label="Room type"
                 value=""
                 options={OPTIONS}
@@ -147,6 +157,7 @@ export default function ComponentsDemo() {
           <Box sx={{ width: (t) => t.spacing(27.5) }}>
             <Labeled caption="Disabled">
               <Select
+                fullWidth
                 label="Room type"
                 value="one"
                 options={OPTIONS}
@@ -158,6 +169,7 @@ export default function ComponentsDemo() {
           <Box sx={{ width: (t) => t.spacing(27.5) }}>
             <Labeled caption="Filled">
               <Select
+                fullWidth
                 variant="filled"
                 label="Room 1"
                 value="one"
@@ -170,13 +182,14 @@ export default function ComponentsDemo() {
       </Section>
 
       <Section title="Pagination">
-        <Pagination
-          page={page}
-          rowsPerPage={rows}
-          total={120}
-          onPageChange={setPage}
-          onRowsPerPageChange={setRows}
-        />
+        <Stack sx={{ gap: 3 }}>
+          <Labeled caption="120 results">
+            <Pagination {...paging} total={120} onChange={setPaging} />
+          </Labeled>
+          <Labeled caption="0 results">
+            <Pagination page={1} rowsPerPage={25} total={0} onChange={() => undefined} />
+          </Labeled>
+        </Stack>
       </Section>
 
       <Section title="Date Selection (eight states)">
@@ -198,13 +211,7 @@ export default function ComponentsDemo() {
           sx={{ flexWrap: 'wrap', gap: 4, alignItems: 'flex-start' }}
         >
           <Labeled caption="CTA">
-            <LocationFilter
-              variant="cta"
-              locations={LOCATIONS}
-              value={[]}
-              onChange={() => undefined}
-              onOpen={() => setCtaOpen((o) => !o)}
-            />
+            <LocationFilter variant="cta" onOpen={() => setCtaOpen((o) => !o)} />
             {ctaOpen ? (
               <Typography variant="caption" role="status">
                 CTA clicked: the page swaps in the field.
@@ -239,7 +246,13 @@ export default function ComponentsDemo() {
           <Button variant="outlined" onClick={() => setInfoOpen(true)}>
             Open Non-Actionable Dialog
           </Button>
-          <Button variant="outlined" onClick={() => setToastOpen(true)}>
+          <Button
+            variant="outlined"
+            onClick={() => {
+              setSaveId((n) => n + 1);
+              setToastOpen(true);
+            }}
+          >
             Show Save Toast
           </Button>
         </Stack>
@@ -258,7 +271,12 @@ export default function ComponentsDemo() {
       >
         Lorem ipsum dolor sit amet.
       </NonActionableDialog>
-      <SaveToast open={toastOpen} onClose={() => setToastOpen(false)} onUndo={() => undefined} />
+      <SaveToast
+        saveId={saveId}
+        open={toastOpen}
+        onClose={() => setToastOpen(false)}
+        onUndo={() => undefined}
+      />
     </Container>
   );
 }
