@@ -26,6 +26,11 @@ describe('permissionsFromGrant', () => {
   ])('denies everything for %s', (_label, grant) => {
     expect(permissionsFromGrant(grant).can('page.dashboard')).toBe(false);
   });
+  it('drops permission strings the app does not know', () => {
+    const p = permissionsFromGrant({ role: 'x', permissions: ['page.dashboard', 'page.bogus'] });
+    expect(p.can('page.dashboard')).toBe(true);
+    expect(p.can('page.bogus' as never)).toBe(false);
+  });
   it('ignores a malformed role and non-string entries', () => {
     const p = permissionsFromGrant({ role: 42, permissions: ['page.dashboard', 7, null] });
     expect(p.can('page.dashboard')).toBe(true);

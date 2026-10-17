@@ -3,6 +3,7 @@ import { emptyStats, fullGrant, mockReservations, mockStats, noGrant } from './m
 import { queryReservations } from './reservationQuery';
 import type { ApiClient, RequestOptions } from './types';
 import { ApiError } from './types';
+import { assertResourceId } from './validation';
 
 export interface MockOptions {
   scenario?: MockScenario;
@@ -72,6 +73,7 @@ export function createMockClient({
       get: (id, o) =>
         respond(
           () => {
+            assertResourceId(id, 'reservation');
             const found = mockReservations.find((r) => r.id === id);
             if (!found) throw notFound();
             return structuredClone(found);

@@ -3,8 +3,11 @@ import { ApiError } from './types';
 
 const DEFAULT_SORT: ReservationSort = { field: 'arrival', direction: 'asc' };
 
+// Code-unit comparison: deterministic regardless of the runtime's locale.
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 function compare(a: Reservation, b: Reservation, { field, direction }: ReservationSort): number {
-  const result = a[field].localeCompare(b[field]) || a.id.localeCompare(b.id);
+  const result = cmp(a[field], b[field]) || cmp(a.id, b.id);
   return direction === 'desc' ? -result || 0 : result;
 }
 

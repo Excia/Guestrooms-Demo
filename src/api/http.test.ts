@@ -43,7 +43,9 @@ describe('request building', () => {
   });
   it('omits unset params and encodes ids', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ id: 'a/b' }));
-    await make(fetchMock).reservations.get('a/b');
+    await make(fetchMock)
+      .reservations.get('a/b')
+      .catch(() => {});
     expect((fetchMock.mock.calls[0][0] as URL).pathname).toBe('/v1/reservations/a%2Fb');
     await make(fetchMock.mockResolvedValue(json(page))).reservations.list();
     expect((fetchMock.mock.calls[1][0] as URL).search).toBe('');
@@ -52,7 +54,9 @@ describe('request building', () => {
     const fetchMock = vi.fn().mockResolvedValue(json({}));
     await make(fetchMock, {
       getHeaders: async () => ({ Authorization: 'Bearer t' }),
-    }).dashboard.getStats();
+    })
+      .dashboard.getStats()
+      .catch(() => {});
     expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
       Accept: 'application/json',
       Authorization: 'Bearer t',
@@ -140,7 +144,151 @@ describe('errors', () => {
   });
 });
 
+describe('hardening', () => {
+  it.each(['', ' ', '.', '..'])('rejects reservation id %j without a request', async (id) => {
+    const fetchMock = vi.fn();
+    await expect(make(fetchMock).reservations.get(id)).rejects.toMatchObject({
+      status: 400,
+      code: 'invalid-id',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('trims the search term', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json(page));
+    await make(fetchMock).reservations.list({ search: '  ada ' });
+    expect((fetchMock.mock.calls[0][0] as URL).searchParams.get('search')).toBe('ada');
+    await make(fetchMock).reservations.list({ search: '   ' });
+    expect((fetchMock.mock.calls[1][0] as URL).searchParams.has('search')).toBe(false);
+  });
+  it('defaults credentials to same-origin and lets callers opt in to include', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({}));
+    await make(fetchMock)
+      .dashboard.getStats()
+      .catch(() => {});
+    expect(fetchMock.mock.calls[0][1].credentials).toBe('same-origin');
+    await make(fetchMock, { credentials: 'include' })
+      .dashboard.getStats()
+      .catch(() => {});
+    expect(fetchMock.mock.calls[1][1].credentials).toBe('include');
+  });
+  it('reports a failing getHeaders as its own error with the cause', async () => {
+    const boom = new Error('token store down');
+    const fetchMock = vi.fn();
+    const err = await make(fetchMock, {
+      getHeaders: () => Promise.reject(boom),
+    })
+      .dashboard.getStats()
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err).toMatchObject({ status: 0, code: 'headers' });
+    expect(err.cause).toBe(boom);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('keeps the cause on network errors', async () => {
+    const boom = new TypeError('failed');
+    const err = await make(vi.fn().mockRejectedValue(boom))
+      .dashboard.getStats()
+      .catch((e) => e);
+    expect(err.cause).toBe(boom);
+  });
+  it('treats a signal aborted during getHeaders as an abort, without calling fetch', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn();
+    const promise = make(fetchMock, {
+      getHeaders: async () => {
+        controller.abort();
+        return {};
+      },
+    }).dashboard.getStats({ signal: controller.signal });
+    const err = await promise.catch((e) => e);
+    expect(err.name).toBe('AbortError');
+    expect(err).not.toBeInstanceOf(ApiError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('lets the caller abort win when it races the timeout', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const settled = make(
+      vi
+        .fn()
+        .mockImplementation(
+          (_u: URL, init: RequestInit) =>
+            new Promise((_res, rej) =>
+              init.signal?.addEventListener('abort', () =>
+                rej(new DOMException('x', 'AbortError')),
+              ),
+            ),
+        ),
+      { timeoutMs: 50 },
+    )
+      .dashboard.getStats({ signal: controller.signal })
+      .catch((e) => e);
+    await vi.advanceTimersByTimeAsync(0);
+    vi.advanceTimersByTime(50);
+    controller.abort();
+    const err = await settled;
+    expect(err.name).toBe('AbortError');
+    expect(err).not.toBeInstanceOf(ApiError);
+  });
+});
+
 describe('response validation', () => {
+  const reservation = {
+    id: 'r1',
+    confirmationNumber: 'GR-1',
+    guestName: 'Ada',
+    arrival: '2026-10-16',
+    departure: '2026-10-17',
+    status: 'confirmed',
+  };
+  const stats = {
+    arrivalsToday: 1,
+    departuresToday: 1,
+    inHouse: 1,
+    occupancyPercent: 50,
+    unassignedChargesCount: 0,
+    totalRevenue: 100,
+    totalNights: 1,
+    averageRate: 100,
+    rateCategories: [{ id: 'a' }],
+    roomBlocks: [],
+  };
+  const bad = (body: unknown) => vi.fn().mockResolvedValue(json(body));
+  it('accepts well-formed pages, reservations and stats', async () => {
+    expect(
+      (await make(bad({ items: [reservation], total: 1, nextCursor: '1' })).reservations.list())
+        .items,
+    ).toHaveLength(1);
+    expect((await make(bad(reservation)).reservations.get('r1')).id).toBe('r1');
+    expect((await make(bad(stats)).dashboard.getStats()).totalNights).toBe(1);
+  });
+  it.each([
+    ['an item without an id', { items: [{ ...reservation, id: 1 }], total: 1 }],
+    ['an item with an unknown status', { items: [{ ...reservation, status: 'lost' }], total: 1 }],
+    ['a non-object item', { items: [null], total: 1 }],
+    ['a non-numeric total', { items: [], total: '0' }],
+    ['a non-string nextCursor', { items: [], total: 0, nextCursor: 5 }],
+  ])('rejects a page with %s', async (_l, body) => {
+    await expect(make(bad(body)).reservations.list()).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+  });
+  it('rejects a bad reservation and bad stats', async () => {
+    await expect(
+      make(bad({ ...reservation, status: 'x' })).reservations.get('r1'),
+    ).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+    await expect(make(bad({})).dashboard.getStats()).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+    await expect(
+      make(bad({ ...stats, totalNights: 'many' })).dashboard.getStats(),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+    await expect(
+      make(bad({ ...stats, roomBlocks: [1] })).dashboard.getStats(),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
   it('rejects malformed reservation pages', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json([]));
     await expect(make(fetchMock).reservations.list()).rejects.toMatchObject({
@@ -187,7 +335,9 @@ describe('cancellation and timeout', () => {
 
   it('passes a signal to fetch', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({}));
-    await make(fetchMock).dashboard.getStats();
+    await make(fetchMock)
+      .dashboard.getStats()
+      .catch(() => {});
     expect(fetchMock.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
   });
   it('rethrows a caller abort as AbortError, not ApiError', async () => {
@@ -218,7 +368,9 @@ describe('cancellation and timeout', () => {
   it('does not time out once the response arrived', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn().mockResolvedValue(json({}));
-    await make(fetchMock, { timeoutMs: 50 }).dashboard.getStats();
+    await make(fetchMock, { timeoutMs: 50 })
+      .dashboard.getStats()
+      .catch(() => {});
     expect(vi.getTimerCount()).toBe(0);
   });
 });

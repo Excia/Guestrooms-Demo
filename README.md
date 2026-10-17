@@ -22,17 +22,26 @@ Copy `.env.example` to `.env.local` to override.
   A missing or invalid value falls back to `/` (and logs a warning in dev). The real value per
   environment is still to be supplied by the project owner.
 - `VITE_API_URL`: absolute http(s) URL of the backend API (query and hash are dropped; `http` outside
-  localhost logs a warning). Set it and the app uses the fetch client in `src/api/http.ts`, with no
-  code changes. Public configuration only, never secrets.
-  - Unset or invalid in **dev**: the in-memory mock (`src/api/mock.ts`) is used (a warning is logged
-    for an invalid value).
-  - Unset or invalid in a **production build**: no mock data is served. `console.error` is logged and
-    every API call rejects with `ApiError` code `misconfigured`.
+  localhost logs a warning). Set it and every build uses the fetch client in `src/api/http.ts`, with
+  no code changes. Public configuration only, never secrets.
+- `VITE_API_MODE=mock`: opt in to the in-memory mock (`src/api/mock.ts`) in any build, for a hosted
+  demo. It applies only when `VITE_API_URL` is unset; if both are set the URL wins and a console
+  warning says so. Builds using the mock outside dev show a "Demo data" chip. The mock is a
+  separate chunk, loaded only when used.
 - `VITE_MOCK_SCENARIO`: `normal` (default), `loading`, `empty` or `error`; what the mock returns.
-  **Dev only**: production builds ignore it, `?mock=` and `localStorage`. In dev you can switch
-  without restarting: add `?mock=empty` to the URL (kept across the `/` redirect), or run
-  `localStorage.setItem('gr.mock', 'error')` in the console and reload. The query wins over
-  storage, which wins over `VITE_MOCK_SCENARIO`.
+  Honoured in dev, and in a build only together with `VITE_API_MODE=mock`.
+- Dev only: add `?mock=empty` to the URL (kept across the `/` redirect) or run
+  `localStorage.setItem('gr.mock', 'error')` and reload. The query wins over storage, which wins
+  over `VITE_MOCK_SCENARIO`. Production builds ignore both.
+
+| Build      | `VITE_API_URL`   | `VITE_API_MODE`                       | Client                                                                 |
+| ---------- | ---------------- | ------------------------------------- | ---------------------------------------------------------------------- |
+| dev        | unset or invalid | any                                   | mock (invalid URL logs a warning)                                      |
+| dev        | valid            | any                                   | real                                                                   |
+| production | valid            | any (`mock` logs a warning, URL wins) | real                                                                   |
+| production | unset            | `mock`                                | mock + "Demo data" chip                                                |
+| production | unset            | unset                                 | no data: `console.error`, every call rejects with code `misconfigured` |
+| production | invalid          | any                                   | same as above; an invalid URL is never replaced by mock data           |
 
 ## API conventions
 
@@ -42,8 +51,15 @@ Copy `.env.example` to `.env.local` to override.
   response (`network` or `timeout`). Non-JSON or malformed bodies become `invalid-response` errors.
 - Lists return `{ items, total, nextCursor? }`; cursors are opaque. Reservations support
   `status`, `search`, arrival/departure date ranges, `sort` and `limit`.
-- `credentials: 'include'` is a placeholder until auth is designed. `createHttpClient` accepts
-  `getHeaders` and `onUnauthorized` (called on any 401) as hooks; nothing uses them yet.
+- `createHttpClient` sends `credentials: 'same-origin'` by default; pass `credentials: 'include'`
+  for a cross-origin cookie API. That is a placeholder until auth is designed. `getHeaders` (a
+  failure there is an `ApiError` with code `headers`) and `onUnauthorized` (called on any 401) are
+  hooks; nothing uses them yet.
+- Responses get light shape guards on the fields consumers rely on (ids, statuses, counts, list
+  shapes), not full schema validation. A mismatch is an `invalid-response` error.
+- Server `message` and `details` are untrusted text: render them as text, never as HTML.
+- Ids go into URL paths; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400).
+- `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped.
 - Mutations and idempotency keys are deferred to the tickets that need them.
 - The permissions grant `permissions: 'all'` sentinel has to be agreed with the backend. Consumers
   go through `permissionsFromGrant`, which denies anything that is not `'all'` or an array.

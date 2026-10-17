@@ -1,5 +1,3 @@
-import type { Permission } from '../app/permissions';
-
 /** ISO calendar date, `YYYY-MM-DD`. */
 export type IsoDate = string;
 /** Money is always integer cents; the backend owns currency formatting rules. */
@@ -119,7 +117,8 @@ export interface ReservationsApi {
  */
 export interface PermissionGrant {
   role: string;
-  permissions: readonly Permission[] | 'all';
+  /** Plain strings on the wire; `permissionsFromGrant` keeps only known permissions. */
+  permissions: readonly string[] | 'all';
 }
 
 export interface PermissionsApi {
@@ -139,6 +138,7 @@ export interface ApiErrorInit {
   code?: string;
   /** Field-level validation errors, keyed by field name. */
   details?: Record<string, string[]>;
+  cause?: unknown;
 }
 
 /** Status 0 means the request never got a response (network failure or timeout). */
@@ -147,7 +147,7 @@ export class ApiError extends Error {
   readonly code?: string;
   readonly details?: Record<string, string[]>;
   constructor(status: number, message: string, init: ApiErrorInit = {}) {
-    super(message);
+    super(message, init.cause === undefined ? undefined : { cause: init.cause });
     this.name = 'ApiError';
     this.status = status;
     this.code = init.code;

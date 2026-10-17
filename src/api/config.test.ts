@@ -63,3 +63,47 @@ describe('resolveApiConfig scenario', () => {
     );
   });
 });
+
+describe('resolveApiConfig source and demo', () => {
+  const url = 'https://api.test/v1';
+  it.each([
+    ['dev, nothing set', { dev: true }, 'mock', false],
+    ['dev + URL', { dev: true, apiUrl: url }, 'http', false],
+    ['dev + invalid URL', { dev: true, apiUrl: 'nope' }, 'mock', false],
+    ['prod + mock flag', { dev: false, apiMode: 'mock' }, 'mock', true],
+    ['prod + URL', { dev: false, apiUrl: url }, 'http', false],
+    ['prod + flag + URL', { dev: false, apiUrl: url, apiMode: 'mock' }, 'http', false],
+    ['prod, neither', { dev: false }, 'unavailable', false],
+    ['prod + invalid URL', { dev: false, apiUrl: 'nope' }, 'unavailable', false],
+    [
+      'prod + flag + invalid URL',
+      { dev: false, apiUrl: 'nope', apiMode: 'mock' },
+      'unavailable',
+      false,
+    ],
+    ['prod + unknown mode', { dev: false, apiMode: 'demo' }, 'unavailable', false],
+  ] as const)('%s', (_label, input, source, demo) => {
+    const config = resolveApiConfig(input);
+    expect(config.source).toBe(source);
+    expect(config.demo).toBe(demo);
+  });
+  it('warns when the URL overrides the mock flag', () => {
+    const c = resolveApiConfig({ dev: false, apiUrl: url, apiMode: 'mock' });
+    expect(c.warnings.join(' ')).toMatch(/VITE_API_MODE=mock is ignored/);
+  });
+  it('honours VITE_MOCK_SCENARIO outside dev only with the mock flag', () => {
+    expect(resolveApiConfig({ dev: false, apiMode: 'mock', envScenario: 'empty' }).scenario).toBe(
+      'empty',
+    );
+    expect(resolveApiConfig({ dev: false, envScenario: 'empty' }).scenario).toBe('normal');
+    expect(
+      resolveApiConfig({
+        dev: false,
+        apiMode: 'mock',
+        envScenario: 'empty',
+        search: '?mock=error',
+        stored: 'error',
+      }).scenario,
+    ).toBe('empty');
+  });
+});

@@ -8,9 +8,12 @@ import type {
   RequestOptions,
 } from './types';
 import { ApiError } from './types';
+import { assertResourceId } from './validation';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
+  /** Fetch credentials mode. Default "same-origin"; "include" for a cross-origin cookie API. */
+  credentials?: RequestCredentials;
   /** Per-request timeout. Default 15 s. */
   timeoutMs?: number;
   /** Called on any 401, before the ApiError is thrown (e.g. to start a sign-in redirect). */
@@ -30,13 +33,37 @@ function invalid(status: number, what: string): ApiError {
   return new ApiError(status, `Malformed ${what} response`, { code: 'invalid-response' });
 }
 
+const isString = (v: unknown): v is string => typeof v === 'string';
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const STATUSES: readonly string[] = [
+  'pending',
+  'confirmed',
+  'checked-in',
+  'checked-out',
+  'cancelled',
+];
+
+// These are light shape guards on the fields consumers rely on, not full schema validation.
+function isReservation(v: unknown): v is Reservation {
+  return (
+    isObject(v) &&
+    isString(v.id) &&
+    isString(v.confirmationNumber) &&
+    isString(v.guestName) &&
+    isString(v.arrival) &&
+    isString(v.departure) &&
+    isString(v.status) &&
+    STATUSES.includes(v.status)
+  );
+}
+
 function parseGrant(body: unknown, status: number): PermissionGrant {
   if (
     !isObject(body) ||
-    typeof body.role !== 'string' ||
+    !isString(body.role) ||
     !(
       body.permissions === 'all' ||
-      (Array.isArray(body.permissions) && body.permissions.every((p) => typeof p === 'string'))
+      (Array.isArray(body.permissions) && body.permissions.every(isString))
     )
   ) {
     throw invalid(status, 'permissions');
@@ -45,17 +72,45 @@ function parseGrant(body: unknown, status: number): PermissionGrant {
 }
 
 function parsePage(body: unknown, status: number): Page<Reservation> {
-  if (!isObject(body) || !Array.isArray(body.items) || typeof body.total !== 'number') {
+  if (
+    !isObject(body) ||
+    !Array.isArray(body.items) ||
+    !body.items.every(isReservation) ||
+    !isCount(body.total) ||
+    !(body.nextCursor === undefined || isString(body.nextCursor))
+  ) {
     throw invalid(status, 'reservations');
   }
   return body as unknown as Page<Reservation>;
 }
 
-function requireObject<T>(what: string) {
-  return (body: unknown, status: number): T => {
-    if (!isObject(body)) throw invalid(status, what);
-    return body as unknown as T;
-  };
+function parseReservation(body: unknown, status: number): Reservation {
+  if (!isReservation(body)) throw invalid(status, 'reservation');
+  return body;
+}
+
+const STAT_COUNTS = [
+  'arrivalsToday',
+  'departuresToday',
+  'inHouse',
+  'occupancyPercent',
+  'unassignedChargesCount',
+  'totalRevenue',
+  'totalNights',
+  'averageRate',
+] as const;
+
+function parseStats(body: unknown, status: number): DashboardStats {
+  const listOk = (v: unknown) => Array.isArray(v) && v.every((x) => isObject(x) && isString(x.id));
+  if (
+    !isObject(body) ||
+    !STAT_COUNTS.every((k) => isCount(body[k])) ||
+    !listOk(body.rateCategories) ||
+    !listOk(body.roomBlocks)
+  ) {
+    throw invalid(status, 'dashboard stats');
+  }
+  return body as unknown as DashboardStats;
 }
 
 function errorFromBody(status: number, statusText: string, text: string): ApiError {
@@ -82,6 +137,7 @@ function errorFromBody(status: number, statusText: string, text: string): ApiErr
  */
 export function createHttpClient(baseUrl: string, options: HttpClientOptions = {}): ApiClient {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const credentials = options.credentials ?? 'same-origin';
 
   async function request<T>(
     path: string,
@@ -108,26 +164,39 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
 
     let response: Response;
     let text: string;
+    let headersCause: { error: unknown } | undefined;
     try {
-      const extra = (await options.getHeaders?.()) ?? {};
+      let extra: Record<string, string> = {};
+      try {
+        extra = (await options.getHeaders?.()) ?? {};
+      } catch (error) {
+        headersCause = { error };
+        throw error;
+      }
       if (controller.signal.aborted)
         throw new DOMException('The operation was aborted.', 'AbortError');
       response = await (options.fetch ?? fetch)(url, {
         headers: { Accept: 'application/json', ...extra },
-        credentials: 'include',
+        credentials,
         signal: controller.signal,
       });
       text = await response.text();
     } catch (error) {
-      if (timedOut && !callerSignal?.aborted) {
-        throw new ApiError(0, 'Request timed out', { code: 'timeout' });
-      }
-      if (isAbort(error) || callerSignal?.aborted) {
+      // The caller's intent wins over a racing timeout; a failed header hook is not a network error.
+      if (callerSignal?.aborted) {
         throw error instanceof Error && isAbort(error)
           ? error
           : new DOMException('The operation was aborted.', 'AbortError');
       }
-      throw new ApiError(0, 'Network error', { code: 'network' });
+      if (timedOut) throw new ApiError(0, 'Request timed out', { code: 'timeout' });
+      if (headersCause) {
+        throw new ApiError(0, 'Could not build request headers', {
+          code: 'headers',
+          cause: headersCause.error,
+        });
+      }
+      if (isAbort(error)) throw error;
+      throw new ApiError(0, 'Network error', { code: 'network', cause: error });
     } finally {
       clearTimeout(timer);
       callerSignal?.removeEventListener('abort', onCallerAbort);
@@ -152,8 +221,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
 
   return {
     dashboard: {
-      getStats: (o) =>
-        request('/dashboard/stats', {}, o, requireObject<DashboardStats>('dashboard stats')),
+      getStats: (o) => request('/dashboard/stats', {}, o, parseStats),
     },
     reservations: {
       list: (q: ReservationQuery = {}, o) =>
@@ -161,7 +229,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           '/reservations',
           {
             status: q.status,
-            search: q.search,
+            search: q.search?.trim(),
             arrivalFrom: q.arrivalFrom,
             arrivalTo: q.arrivalTo,
             departureFrom: q.departureFrom,
@@ -174,12 +242,10 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           parsePage,
         ),
       get: (id, o) =>
-        request(
-          `/reservations/${encodeURIComponent(id)}`,
-          {},
-          o,
-          requireObject<Reservation>('reservation'),
-        ),
+        Promise.resolve().then(() => {
+          assertResourceId(id, 'reservation');
+          return request(`/reservations/${encodeURIComponent(id)}`, {}, o, parseReservation);
+        }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
   };

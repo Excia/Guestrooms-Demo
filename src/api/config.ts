@@ -5,7 +5,13 @@ export const MOCK_SCENARIOS: readonly MockScenario[] = ['normal', 'loading', 'em
 export const MOCK_PARAM = 'mock';
 export const MOCK_STORAGE_KEY = 'gr.mock';
 
+/** Which client the app runs on. "unavailable" is a misconfigured build that fails every call. */
+export type ApiSource = 'http' | 'mock' | 'unavailable';
+
 export interface ApiConfig {
+  source: ApiSource;
+  /** True when the mock is active in a non-dev build; the UI shows a "Demo data" chip. */
+  demo: boolean;
   /** Set: real fetch client against this URL. Null: no usable URL (see `problem`). */
   baseUrl: string | null;
   /** Why `baseUrl` is null. Absent when it is set. */
@@ -16,7 +22,9 @@ export interface ApiConfig {
 
 export interface ApiConfigInput {
   apiUrl?: string;
-  /** `VITE_MOCK_SCENARIO`. Dev only. */
+  /** `VITE_API_MODE`. Only "mock" is meaningful: opt in to the mock in any build. */
+  apiMode?: string;
+  /** `VITE_MOCK_SCENARIO`. Dev, or any build with `apiMode` "mock". */
   envScenario?: string;
   /** `location.search`. Dev only. */
   search?: string;
@@ -63,17 +71,34 @@ export function parseApiUrl(
 }
 
 /**
- * Resolves client configuration. A real base URL needs only `VITE_API_URL`. The mock scenario is
- * a dev tool: precedence is `?mock=` query, then localStorage, then `VITE_MOCK_SCENARIO`, then
- * "normal"; in production builds it is always "normal".
+ * Resolves client configuration.
+ * - `VITE_API_URL` valid: the real client, in every build. If `VITE_API_MODE=mock` is also set the
+ *   URL wins and a warning says so.
+ * - Otherwise the mock runs in dev, or in any build with `VITE_API_MODE=mock` (a demo; `demo` is
+ *   true outside dev). An invalid URL is never papered over outside dev.
+ * - Otherwise (production, no URL, no flag) the client is "unavailable" and fails loudly.
+ * Mock scenario precedence in dev: `?mock=`, then localStorage, then `VITE_MOCK_SCENARIO`, then
+ * "normal". Outside dev only `VITE_MOCK_SCENARIO` counts, and only together with the mock flag.
  */
 export function resolveApiConfig(input: ApiConfigInput): ApiConfig {
   const url = parseApiUrl(input.apiUrl);
+  const warnings = [...url.warnings];
+  const mockFlag = input.apiMode?.trim() === 'mock';
+  let source: ApiSource;
+  if (url.baseUrl) {
+    source = 'http';
+    if (mockFlag) warnings.push('VITE_API_MODE=mock is ignored because VITE_API_URL is set.');
+  } else if (input.dev || (mockFlag && url.problem === 'missing')) {
+    source = 'mock';
+  } else {
+    source = 'unavailable';
+  }
+  const scenarioFromEnv = input.dev || mockFlag ? asScenario(input.envScenario) : null;
   const scenario = input.dev
     ? (asScenario(new URLSearchParams(input.search ?? '').get(MOCK_PARAM)) ??
       asScenario(input.stored) ??
-      asScenario(input.envScenario) ??
+      scenarioFromEnv ??
       'normal')
-    : 'normal';
-  return { ...url, scenario };
+    : (scenarioFromEnv ?? 'normal');
+  return { ...url, warnings, source, demo: source === 'mock' && !input.dev, scenario };
 }

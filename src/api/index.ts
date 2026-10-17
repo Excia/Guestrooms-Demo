@@ -1,7 +1,7 @@
 import { MOCK_STORAGE_KEY, resolveApiConfig } from './config';
 import type { ApiConfig } from './config';
 import { createHttpClient } from './http';
-import { createMockClient } from './mock';
+import { createLazyClient } from './lazy';
 import { createUnavailableClient } from './unavailable';
 import type { ApiClient } from './types';
 import { ApiError } from './types';
@@ -12,34 +12,47 @@ export { permissionsFromGrant } from './grant';
 
 const MOCK_LATENCY_MS = 300;
 
+type Log = Pick<Console, 'warn' | 'error' | 'info'>;
+
+export interface ApiSetup {
+  client: ApiClient;
+  /** The mock is active in a non-dev build: show the "Demo data" chip. */
+  demo: boolean;
+}
+
 /**
- * Real client when there is a base URL. The mock only when the URL is absent or invalid in dev.
- * In a production build a missing or invalid URL yields a client whose calls all reject, so a
- * misconfigured deploy fails visibly instead of serving mock data.
+ * Picks the client for a resolved config (see `resolveApiConfig` for the rules). The mock and its
+ * data are loaded lazily, so builds pointed at a real URL never fetch that chunk.
  */
-export function createApiClient(
-  config: ApiConfig,
-  { dev, log = console }: { dev: boolean; log?: Pick<Console, 'warn' | 'error' | 'info'> },
-): ApiClient {
+export function createApiClient(config: ApiConfig, log: Log = console): ApiSetup {
   for (const warning of config.warnings) log.warn(`[api] ${warning}`);
-  if (config.baseUrl) return createHttpClient(config.baseUrl);
-  if (dev) {
+  if (config.source === 'http' && config.baseUrl) {
+    return { client: createHttpClient(config.baseUrl), demo: false };
+  }
+  if (config.source === 'mock') {
     log.info(`[api] using the mock client (scenario: ${config.scenario}).`);
-    return createMockClient({ scenario: config.scenario, latencyMs: MOCK_LATENCY_MS });
+    const { scenario } = config;
+    const client = createLazyClient(async () =>
+      (await import('./mock')).createMockClient({ scenario, latencyMs: MOCK_LATENCY_MS }),
+    );
+    return { client, demo: config.demo };
   }
   const message =
     config.problem === 'invalid'
       ? 'VITE_API_URL is invalid; the API is unavailable.'
-      : 'VITE_API_URL is not set; the API is unavailable.';
+      : 'VITE_API_URL is not set and VITE_API_MODE is not "mock"; the API is unavailable.';
   log.error(`[api] ${message}`);
-  return createUnavailableClient(new ApiError(0, message, { code: 'misconfigured' }));
+  return {
+    client: createUnavailableClient(new ApiError(0, message, { code: 'misconfigured' })),
+    demo: false,
+  };
 }
 
 export interface EnvironmentSources {
-  env?: Pick<ImportMetaEnv, 'VITE_API_URL' | 'VITE_MOCK_SCENARIO' | 'DEV'>;
+  env?: Pick<ImportMetaEnv, 'VITE_API_URL' | 'VITE_API_MODE' | 'VITE_MOCK_SCENARIO' | 'DEV'>;
   search?: string;
   storage?: Pick<Storage, 'getItem'>;
-  log?: Pick<Console, 'warn' | 'error' | 'info'>;
+  log?: Log;
 }
 
 /** Builds the app's client from Vite env, the URL and localStorage. */
@@ -48,7 +61,7 @@ export function createApiClientFromEnvironment({
   search = window.location.search,
   storage,
   log,
-}: EnvironmentSources = {}): ApiClient {
+}: EnvironmentSources = {}): ApiSetup {
   let stored: string | null = null;
   if (env.DEV) {
     try {
@@ -59,10 +72,11 @@ export function createApiClientFromEnvironment({
   }
   const config = resolveApiConfig({
     apiUrl: env.VITE_API_URL,
+    apiMode: env.VITE_API_MODE,
     envScenario: env.VITE_MOCK_SCENARIO,
     search,
     stored,
     dev: env.DEV,
   });
-  return createApiClient(config, { dev: env.DEV, log });
+  return createApiClient(config, log);
 }

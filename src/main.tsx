@@ -7,10 +7,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import App from './App';
+import DemoDataChip from './components/DemoDataChip';
 import { ApiProvider, createApiClientFromEnvironment } from './api';
 import { theme } from './theme';
 
-const apiClient = createApiClientFromEnvironment();
+const { client: apiClient, demo } = createApiClientFromEnvironment();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -19,6 +20,7 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <ApiProvider client={apiClient}>
           <App />
+          {demo && <DemoDataChip />}
         </ApiProvider>
       </BrowserRouter>
     </ThemeProvider>

@@ -46,6 +46,10 @@ describe('mock client', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(done).toHaveBeenCalled();
   });
+  it('rejects unusable ids with a 400', async () => {
+    await expect(createMockClient().reservations.get('..')).rejects.toMatchObject({ status: 400 });
+    await expect(createMockClient().reservations.get('')).rejects.toMatchObject({ status: 400 });
+  });
   it('gets a reservation by id and 404s for an unknown id', async () => {
     const c = createMockClient();
     expect((await c.reservations.get('res-1001')).guestName).toBe('Margaret Ellison');
