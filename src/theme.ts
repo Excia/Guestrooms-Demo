@@ -72,6 +72,27 @@ const base = createTheme({
         sizeLarge: font(15, 500, 26 / 15, 0.46),
       },
     },
+    // Visible keyboard focus for every ButtonBase (buttons, icon buttons) and links.
+    MuiButtonBase: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&.Mui-focusVisible': {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: 2,
+          },
+        }),
+      },
+    },
+    MuiLink: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&:focus-visible': {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: 2,
+          },
+        }),
+      },
+    },
     MuiInputBase: {
       styleOverrides: { input: font(16, 400, 1.5, 0.15) },
     },
