@@ -17,12 +17,23 @@ export type Period =
 export type PeriodKind = Period['kind'];
 export type RangePreset = 'lastWeek' | 'previousPeriod' | 'custom';
 
+// Comparison defaults are NOT in the Figma file except "This Week -> Last Week" and
+// "Month -> same month a year earlier" (Compare-Month frame). The rest are invented and need the
+// owner's confirmation: Custom -> previous period of equal length, Single Day -> previous day,
+// As Of -> same date one year earlier.
+// `derived` / preset !== 'custom' means the comparison follows the period; once the user edits it
+// (derived: false, or preset 'custom') it stays independent.
 export type Comparison =
   | { kind: 'range'; preset: RangePreset; from: IsoDate; to: IsoDate }
-  | { kind: 'month'; month: IsoMonth }
-  | { kind: 'date'; date: IsoDate };
+  | { kind: 'month'; month: IsoMonth; derived: boolean }
+  | { kind: 'date'; date: IsoDate; derived: boolean };
 
-/** What <DateSelection> reports. `comparison` is null while "Compare Dates" is off. */
+/**
+ * What <DateSelection> reports. `comparison` is null while "Compare Dates" is off.
+ * onChange may emit an invalid value (empty or inverted dates while typing): consumers must check
+ * isValidValue()/validateValue() before using it. Note: thisWeek and asOf store materialised dates,
+ * so a persisted value goes stale ("this week" is not re-evaluated); revisit when reports persist.
+ */
 export interface DateSelectionValue {
   period: Period;
   comparison: Comparison | null;
@@ -219,11 +230,11 @@ export function defaultComparison(period: Period): Comparison {
       return { kind: 'range', preset, ...presetRange(preset, period.from, period.to) };
     }
     case 'singleDay':
-      return { kind: 'date', date: addDays(period.date, -1) };
+      return { kind: 'date', date: addDays(period.date, -1), derived: true };
     case 'month':
-      return { kind: 'month', month: addMonths(period.month, -12) };
+      return { kind: 'month', month: addMonths(period.month, -12), derived: true };
     case 'asOf':
-      return { kind: 'date', date: addMonthsToDate(period.date, -12) };
+      return { kind: 'date', date: addMonthsToDate(period.date, -12), derived: true };
   }
 }
 
@@ -247,13 +258,19 @@ export function changePeriodKind(
   return { period, comparison: value.comparison ? defaultComparison(period) : null };
 }
 
-/** Replaces the period. Presets that derive from it (last week, previous period) follow along. */
+/**
+ * Replaces the period. A derived comparison (preset or default) follows it; a custom one stays.
+ * While the period itself is invalid the comparison is left untouched, so typing a half-entered
+ * date does not scramble it.
+ */
 export function updatePeriod(value: DateSelectionValue, period: Period): DateSelectionValue {
   const c = value.comparison;
-  if (c?.kind === 'range' && c.preset !== 'custom' && 'from' in period) {
+  if (!c || periodError(period)) return { ...value, period };
+  if (c.kind === 'range') {
+    if (c.preset === 'custom' || !('from' in period)) return { period, comparison: c };
     return { period, comparison: { ...c, ...presetRange(c.preset, period.from, period.to) } };
   }
-  return { ...value, period };
+  return { period, comparison: c.derived ? defaultComparison(period) : c };
 }
 
 export function setCompare(value: DateSelectionValue, on: boolean): DateSelectionValue {
@@ -261,11 +278,15 @@ export function setCompare(value: DateSelectionValue, on: boolean): DateSelectio
   return value.comparison ? value : { ...value, comparison: defaultComparison(value.period) };
 }
 
+/** A user edit: month and date comparisons become independent of the period. */
 export function updateComparison(
   value: DateSelectionValue,
   comparison: Comparison,
 ): DateSelectionValue {
-  return { ...value, comparison };
+  return {
+    ...value,
+    comparison: comparison.kind === 'range' ? comparison : { ...comparison, derived: false },
+  };
 }
 
 /** Selecting a preset recomputes its dates; "custom" keeps the current ones editable. */
@@ -314,30 +335,63 @@ function dateError(date: string): string | undefined {
   return isValidIsoDate(date) ? undefined : 'Enter a valid date.';
 }
 
-/** Empty object when the value is usable. */
+function monthError(month: string): string | undefined {
+  return isValidMonth(month) ? undefined : 'Choose a month.';
+}
+
+function periodError(p: Period): string | undefined {
+  return p.kind === 'custom' || p.kind === 'thisWeek'
+    ? rangeError(p.from, p.to)
+    : p.kind === 'month'
+      ? monthError(p.month)
+      : dateError(p.date);
+}
+
+function comparisonError(c: Comparison): string | undefined {
+  return c.kind === 'range'
+    ? rangeError(c.from, c.to)
+    : c.kind === 'month'
+      ? monthError(c.month)
+      : dateError(c.date);
+}
+
+/**
+ * Empty object when the value is usable. One message per problem: a period mistake is reported at
+ * the period only, and the comparison is not checked until the period is valid.
+ */
 export function validateValue(value: DateSelectionValue): DateSelectionErrors {
-  const p = value.period;
-  const c = value.comparison;
-  const errors: DateSelectionErrors = {};
-  const period =
-    p.kind === 'custom' || p.kind === 'thisWeek'
-      ? rangeError(p.from, p.to)
-      : p.kind === 'month'
-        ? isValidMonth(p.month)
-          ? undefined
-          : 'Choose a month.'
-        : dateError(p.date);
-  if (period) errors.period = period;
-  if (c) {
-    const comparison =
-      c.kind === 'range'
-        ? rangeError(c.from, c.to)
-        : c.kind === 'month'
-          ? isValidMonth(c.month)
-            ? undefined
-            : 'Choose a month.'
-          : dateError(c.date);
-    if (comparison) errors.comparison = comparison;
+  const period = periodError(value.period);
+  if (period) return { period };
+  const comparison = value.comparison ? comparisonError(value.comparison) : undefined;
+  return comparison ? { comparison } : {};
+}
+
+export function isValidValue(value: DateSelectionValue): boolean {
+  const e = validateValue(value);
+  return !e.period && !e.comparison;
+}
+
+/** The concrete inclusive date range of a period (month: first..last day; one day: twice). */
+export function periodRange(period: Period): DateRange {
+  switch (period.kind) {
+    case 'custom':
+    case 'thisWeek':
+      return { from: period.from, to: period.to };
+    case 'month':
+      return monthRange(period.month);
+    case 'singleDay':
+    case 'asOf':
+      return { from: period.date, to: period.date };
   }
-  return errors;
+}
+
+export function comparisonRange(comparison: Comparison): DateRange {
+  switch (comparison.kind) {
+    case 'range':
+      return { from: comparison.from, to: comparison.to };
+    case 'month':
+      return monthRange(comparison.month);
+    case 'date':
+      return { from: comparison.date, to: comparison.date };
+  }
 }

@@ -5,7 +5,10 @@ import {
   changePeriodKind,
   createValue,
   dateSelectionState,
+  comparisonRange,
   daysBetween,
+  isValidValue,
+  periodRange,
   defaultComparison,
   monthLabel,
   monthOptions,
@@ -124,6 +127,7 @@ describe('default values and comparison', () => {
     expect(defaultComparison({ kind: 'month', month: '2025-02' })).toEqual({
       kind: 'month',
       month: '2024-02',
+      derived: true,
     });
   });
 
@@ -131,17 +135,19 @@ describe('default values and comparison', () => {
     expect(defaultComparison({ kind: 'asOf', date: '2025-02-12' })).toEqual({
       kind: 'date',
       date: '2024-02-12',
+      derived: true,
     });
     expect(defaultComparison({ kind: 'singleDay', date: '2025-02-12' })).toEqual({
       kind: 'date',
       date: '2025-02-11',
+      derived: true,
     });
   });
 
   it('turning compare off drops the comparison; turning it on twice keeps edits', () => {
     const on = setCompare(createValue('month', TODAY), true);
     expect(setCompare(on, false).comparison).toBeNull();
-    const edited = updateComparison(on, { kind: 'month', month: '2023-06' });
+    const edited = updateComparison(on, { kind: 'month', month: '2023-06', derived: true });
     expect(setCompare(edited, true)).toBe(edited);
   });
 
@@ -229,9 +235,112 @@ describe('validateValue', () => {
     expect(validateValue(empty).period).toBe('Enter a valid date.');
   });
 
+  it('reports a period mistake once, at the period only', () => {
+    const v = setCompare(createValue('custom', TODAY), true);
+    const bad = updatePeriod(v, { kind: 'custom', from: '2025-03-01', to: '2025-02-01' });
+    expect(validateValue(bad)).toEqual({ period: 'From must be on or before To.' });
+    expect(isValidValue(bad)).toBe(false);
+    expect(isValidValue(v)).toBe(true);
+  });
+
   it('rejects an invalid single date and comparison date', () => {
     const v = setCompare(createValue('asOf', TODAY), true);
-    const bad = updateComparison(v, { kind: 'date', date: '' });
+    const bad = updateComparison(v, { kind: 'date', date: '', derived: false });
     expect(validateValue(bad).comparison).toBe('Enter a valid date.');
+  });
+});
+
+describe('derived comparisons follow the period', () => {
+  const on = (kind: Parameters<typeof createValue>[0], today = TODAY) =>
+    setCompare(createValue(kind, today), true);
+
+  it('single day follows (previous day), including a month boundary', () => {
+    const next = updatePeriod(on('singleDay'), { kind: 'singleDay', date: '2025-03-01' });
+    expect(next.comparison).toEqual({ kind: 'date', date: '2025-02-28', derived: true });
+  });
+
+  it('as of follows (same date a year earlier), clamping Feb 29', () => {
+    const next = updatePeriod(on('asOf'), { kind: 'asOf', date: '2024-02-29' });
+    expect(next.comparison).toEqual({ kind: 'date', date: '2023-02-28', derived: true });
+  });
+
+  it('month follows (same month a year earlier)', () => {
+    const next = updatePeriod(on('month'), { kind: 'month', month: '2024-03' });
+    expect(next.comparison).toEqual({ kind: 'month', month: '2023-03', derived: true });
+  });
+
+  it('range presets follow; month-end lengths are preserved', () => {
+    const next = updatePeriod(on('custom'), {
+      kind: 'custom',
+      from: '2025-03-01',
+      to: '2025-03-31',
+    });
+    expect(next.comparison).toMatchObject({ from: '2025-01-29', to: '2025-02-28' });
+  });
+
+  it('an edited comparison stays independent for every kind', () => {
+    for (const [kind, edited, period] of [
+      [
+        'singleDay',
+        { kind: 'date', date: '2020-01-01', derived: false },
+        { kind: 'singleDay', date: '2025-03-01' },
+      ],
+      [
+        'asOf',
+        { kind: 'date', date: '2020-01-01', derived: false },
+        { kind: 'asOf', date: '2025-03-01' },
+      ],
+      [
+        'month',
+        { kind: 'month', month: '2020-01', derived: false },
+        { kind: 'month', month: '2025-03' },
+      ],
+    ] as const) {
+      const v = updateComparison(on(kind), edited);
+      expect(updatePeriod(v, period).comparison).toEqual(edited);
+    }
+  });
+
+  it('editing a month or date comparison marks it independent', () => {
+    const v = updateComparison(on('month'), { kind: 'month', month: '2020-01', derived: true });
+    expect(v.comparison).toMatchObject({ derived: false });
+  });
+
+  it('does not recompute while the period is invalid', () => {
+    const v = on('custom');
+    const bad = updatePeriod(v, { kind: 'custom', from: '', to: TODAY });
+    expect(bad.comparison).toEqual(v.comparison);
+    const inverted = updatePeriod(on('singleDay'), { kind: 'singleDay', date: '' });
+    expect(inverted.comparison).toEqual(on('singleDay').comparison);
+  });
+});
+
+describe('periodRange and comparisonRange', () => {
+  it('give a concrete range for every kind', () => {
+    expect(periodRange({ kind: 'custom', from: '2025-02-01', to: '2025-02-05' })).toEqual({
+      from: '2025-02-01',
+      to: '2025-02-05',
+    });
+    expect(periodRange({ kind: 'thisWeek', from: '2025-02-09', to: '2025-02-15' }).to).toBe(
+      '2025-02-15',
+    );
+    expect(periodRange({ kind: 'month', month: '2024-02' })).toEqual({
+      from: '2024-02-01',
+      to: '2024-02-29',
+    });
+    expect(periodRange({ kind: 'singleDay', date: TODAY })).toEqual({ from: TODAY, to: TODAY });
+    expect(periodRange({ kind: 'asOf', date: TODAY })).toEqual({ from: TODAY, to: TODAY });
+    expect(comparisonRange({ kind: 'range', preset: 'custom', from: 'a', to: 'b' })).toEqual({
+      from: 'a',
+      to: 'b',
+    });
+    expect(comparisonRange({ kind: 'month', month: '2025-02', derived: true })).toEqual({
+      from: '2025-02-01',
+      to: '2025-02-28',
+    });
+    expect(comparisonRange({ kind: 'date', date: TODAY, derived: true })).toEqual({
+      from: TODAY,
+      to: TODAY,
+    });
   });
 });
