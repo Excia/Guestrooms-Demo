@@ -63,6 +63,8 @@ const base = createTheme({
     fontFamily,
     subtitle1: font(18, 500, 1.4, 0.15),
     subtitle2: font(14, 500, 1.57, 0.1),
+    // Figma typography/h6: 20px Medium, line height 1.6, 0.15px tracking (menu overlay headings).
+    h6: font(20, 500, 1.6, 0.15),
     h4_fixed: font(16, 700, 1.4, 0.15),
     // Menu overlay links (Figma 1302:18023): 22px Medium.
     menu_item: font(22, 500, 1.2, 0),

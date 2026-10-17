@@ -26,6 +26,7 @@ describe('theme tokens (Figma variables)', () => {
     const t = theme.typography;
     expect(t.subtitle1).toMatchObject({ fontSize: '1.125rem', fontWeight: 500 });
     expect(t.subtitle2).toMatchObject({ fontSize: '0.875rem', fontWeight: 500 });
+    expect(t.h6).toMatchObject({ fontSize: '1.25rem', fontWeight: 500, lineHeight: 1.6 });
     expect(t.h4_fixed).toMatchObject({ fontSize: '1rem', fontWeight: 700 });
     expect(t.caption).toMatchObject({ fontSize: '0.75rem', fontWeight: 400 });
   });
