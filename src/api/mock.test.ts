@@ -1,5 +1,9 @@
-import { createMockClient, filterReservations } from './mock';
+import { createMockClient } from './mock';
 import { mockReservations, mockStats } from './mockData';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('mock client', () => {
   it('returns Figma placeholder shapes in the normal scenario', async () => {
@@ -19,7 +23,7 @@ describe('mock client', () => {
     expect(s.rateCategories).toEqual([]);
     expect(s.unassignedChargesCount).toBe(0);
     expect(s.averageRate).toBe(0);
-    expect(await c.reservations.list()).toEqual([]);
+    expect(await c.reservations.list()).toEqual({ items: [], total: 0 });
     expect((await c.permissions.getGrant()).permissions).toEqual([]);
   });
   it('rejects with a 500 ApiError in the error scenario', async () => {
@@ -41,7 +45,6 @@ describe('mock client', () => {
     expect(done).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(done).toHaveBeenCalled();
-    vi.useRealTimers();
   });
   it('gets a reservation by id and 404s for an unknown id', async () => {
     const c = createMockClient();
@@ -50,17 +53,64 @@ describe('mock client', () => {
   });
 });
 
-describe('filterReservations', () => {
-  it('filters by status', () => {
-    expect(filterReservations(mockReservations, { status: 'checked-in' })).toHaveLength(2);
+describe('mock paging', () => {
+  it('uses a small default page so paging is exercisable', async () => {
+    const c = createMockClient();
+    const first = await c.reservations.list();
+    expect(first.items).toHaveLength(4);
+    expect(first.total).toBe(6);
+    const second = await c.reservations.list({ cursor: first.nextCursor });
+    expect(second.items).toHaveLength(2);
+    expect(second.nextCursor).toBeUndefined();
   });
-  it('searches name and confirmation number case-insensitively', () => {
-    expect(filterReservations(mockReservations, { search: 'ELLISON' })).toHaveLength(1);
-    expect(filterReservations(mockReservations, { search: 'gr-48214' })).toHaveLength(1);
+  it('filters and sorts through the query', async () => {
+    const page = await createMockClient().reservations.list({
+      status: 'checked-in',
+      sort: { field: 'arrival', direction: 'desc' },
+    });
+    expect(page.items.map((r) => r.id)).toEqual(['res-1003', 'res-1004']);
   });
-  it('combines filters and returns empty on no match', () => {
-    expect(
-      filterReservations(mockReservations, { status: 'cancelled', search: 'ellison' }),
-    ).toEqual([]);
+});
+
+describe('mock hygiene', () => {
+  it('returns copies that cannot corrupt module data', async () => {
+    const c = createMockClient();
+    (await c.dashboard.getStats()).rateCategories.pop();
+    (await c.reservations.list()).items[0].guestName = 'X';
+    (await c.reservations.get('res-1001')).guestName = 'X';
+    const again = await c.dashboard.getStats();
+    expect(again.rateCategories).toHaveLength(mockStats.rateCategories.length);
+    expect(mockReservations.some((r) => r.guestName === 'X')).toBe(false);
+  });
+});
+
+describe('mock cancellation', () => {
+  it.each(['normal', 'loading', 'empty', 'error'] as const)(
+    'rejects with AbortError when aborted in the %s scenario',
+    async (scenario) => {
+      const controller = new AbortController();
+      const promise = createMockClient({ scenario, latencyMs: 1000 }).dashboard.getStats({
+        signal: controller.signal,
+      });
+      controller.abort();
+      await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+    },
+  );
+  it('rejects immediately for an already-aborted signal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      createMockClient().reservations.list({}, { signal: controller.signal }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+  it('clears its timer on abort', async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const p = createMockClient({ latencyMs: 500 })
+      .dashboard.getStats({ signal: controller.signal })
+      .catch(() => {});
+    controller.abort();
+    await p;
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

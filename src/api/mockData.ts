@@ -9,6 +9,8 @@ import type {
 
 export const MOCK_TODAY = '2026-10-16';
 
+// PLACEHOLDER: verify against Figma. Names and fields below were inferred from the ticket, not read
+// from the dashboard frame (69:3712).
 export const rateCategories: RateCategoryStat[] = [
   { id: 'member', name: 'Member Rate', nights: 18, revenue: 2_880_000 },
   { id: 'reciprocal', name: 'Reciprocal Club', nights: 7, revenue: 1_365_000 },

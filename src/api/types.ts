@@ -5,6 +5,14 @@ export type IsoDate = string;
 /** Money is always integer cents; the backend owns currency formatting rules. */
 export type Cents = number;
 
+/**
+ * Every client method takes these last. Aborting rejects with a DOMException named "AbortError"
+ * (never an ApiError), so callers can ignore it.
+ */
+export interface RequestOptions {
+  signal?: AbortSignal;
+}
+
 // ---- dashboard -------------------------------------------------------------------------------
 
 export interface RateCategoryStat {
@@ -41,7 +49,7 @@ export interface DashboardStats {
 }
 
 export interface DashboardApi {
-  getStats(): Promise<DashboardStats>;
+  getStats(options?: RequestOptions): Promise<DashboardStats>;
 }
 
 // ---- reservations ----------------------------------------------------------------------------
@@ -65,28 +73,57 @@ export interface Reservation {
   hasUnassignedCharges: boolean;
 }
 
+export type ReservationSortField = 'arrival' | 'departure' | 'guestName' | 'confirmationNumber';
+
+export interface ReservationSort {
+  field: ReservationSortField;
+  direction: 'asc' | 'desc';
+}
+
 export interface ReservationQuery {
   status?: ReservationStatus;
   /** Matches guest name or confirmation number, case-insensitive. */
   search?: string;
+  /** Inclusive ISO-date bounds. */
+  arrivalFrom?: IsoDate;
+  arrivalTo?: IsoDate;
+  departureFrom?: IsoDate;
+  departureTo?: IsoDate;
+  /** Default: arrival ascending. The server breaks ties by id so paging is stable. */
+  sort?: ReservationSort;
+  /** Opaque; pass back a previous page's `nextCursor`. */
+  cursor?: string;
+  /** Server default and maximum apply when omitted or too large. */
+  limit?: number;
+}
+
+/** One page of a list. `total` counts all matches, not just this page. */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  /** Absent on the last page. */
+  nextCursor?: string;
 }
 
 export interface ReservationsApi {
-  list(query?: ReservationQuery): Promise<Reservation[]>;
+  list(query?: ReservationQuery, options?: RequestOptions): Promise<Page<Reservation>>;
   /** Rejects with an ApiError of status 404 when the id is unknown. */
-  get(id: string): Promise<Reservation>;
+  get(id: string, options?: RequestOptions): Promise<Reservation>;
 }
 
 // ---- permissions -----------------------------------------------------------------------------
 
-/** What the backend says the current user may do. `'all'` is an unrestricted user. */
+/**
+ * What the backend says the current user may do. `'all'` marks an unrestricted user; the sentinel
+ * still needs agreeing with the backend.
+ */
 export interface PermissionGrant {
   role: string;
   permissions: readonly Permission[] | 'all';
 }
 
 export interface PermissionsApi {
-  getGrant(): Promise<PermissionGrant>;
+  getGrant(options?: RequestOptions): Promise<PermissionGrant>;
 }
 
 // ---- client ----------------------------------------------------------------------------------
@@ -97,11 +134,23 @@ export interface ApiClient {
   permissions: PermissionsApi;
 }
 
+export interface ApiErrorInit {
+  /** Machine-readable code, from the server body or set by the client (e.g. "timeout"). */
+  code?: string;
+  /** Field-level validation errors, keyed by field name. */
+  details?: Record<string, string[]>;
+}
+
+/** Status 0 means the request never got a response (network failure or timeout). */
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly code?: string;
+  readonly details?: Record<string, string[]>;
+  constructor(status: number, message: string, init: ApiErrorInit = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = init.code;
+    this.details = init.details;
   }
 }

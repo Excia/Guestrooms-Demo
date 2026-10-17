@@ -1,16 +1,16 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
-import { createMockClient } from './mock';
 import type { ApiClient } from './types';
 
-// Default is a fast mock so components render in tests without a provider.
-const ApiContext = createContext<ApiClient>(createMockClient());
+// No default: a missing provider must fail loudly rather than serve mock data.
+const ApiContext = createContext<ApiClient | null>(null);
 
 export function ApiProvider({ client, children }: { client: ApiClient; children: ReactNode }) {
-  const [stable] = useState(client);
-  return <ApiContext.Provider value={stable}>{children}</ApiContext.Provider>;
+  return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>;
 }
 
 export function useApi(): ApiClient {
-  return useContext(ApiContext);
+  const client = useContext(ApiContext);
+  if (!client) throw new Error('useApi must be used inside <ApiProvider>.');
+  return client;
 }
