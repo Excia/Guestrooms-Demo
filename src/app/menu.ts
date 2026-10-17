@@ -38,5 +38,3 @@ export function buildMenu(
   const columns = admin.length > 0 ? 2 : 1;
   return { dashboard, reservation, admin, columns, showReturnToSite: columns === 1 };
 }
-
-export { pagePermission };

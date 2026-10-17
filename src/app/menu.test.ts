@@ -1,5 +1,5 @@
-import { buildMenu, pagePermission } from './menu';
-import { createMockPermissions } from './permissions';
+import { buildMenu } from './menu';
+import { createMockPermissions, pagePermission } from './permissions';
 import { routes } from './routes';
 
 const labels = (items: { label: string }[]) => items.map((i) => i.label);

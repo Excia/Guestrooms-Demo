@@ -4,8 +4,12 @@ import { ThemeProvider } from '@mui/material/styles';
 import { useState } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router';
 import App from '../App';
-import { pagePermission } from '../app/menu';
-import { createMockPermissions, PermissionsProvider, type Permission } from '../app/permissions';
+import {
+  createMockPermissions,
+  pagePermission,
+  PermissionsProvider,
+  type Permission,
+} from '../app/permissions';
 import { theme } from '../theme';
 import AppHeader from './AppHeader';
 import MenuOverlay from './MenuOverlay';
@@ -154,7 +158,10 @@ describe('MenuOverlay closing (in the app shell)', () => {
     let reached = false;
     for (let i = 0; i < 40; i++) {
       await user.tab();
-      if (document.activeElement === close) reached = true;
+      if (document.activeElement === close) {
+        reached = true;
+        break;
+      }
       const a = document.activeElement as HTMLElement;
       expect(dialog.contains(a) || screen.getByRole('banner').contains(a)).toBe(true);
     }
@@ -163,12 +170,64 @@ describe('MenuOverlay closing (in the app shell)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('Shift+Tab from the panel wraps backwards within the shell', async () => {
+  it('Tab right after opening enters the panel at its first link', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.tab();
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveFocus();
+  });
+
+  it('Tab after clicking blank panel space continues into the panel', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.click(screen.getByRole('heading', { name: 'Admin Setup' }));
+    await user.tab();
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Close menu' }));
+  });
+
+  it('wraps Tab from the last panel link to the first header control, and back', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    const links = within(screen.getByRole('dialog')).getAllByRole('link');
+    links[links.length - 1].focus();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus();
     await user.tab({ shift: true });
-    const a = document.activeElement as HTMLElement;
-    expect(screen.getByRole('dialog').contains(a)).toBe(true);
+    expect(links[links.length - 1]).toHaveFocus();
+  });
+
+  it('pulls focus into the scope when it starts outside', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    (document.activeElement as HTMLElement).blur();
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus();
+    (document.activeElement as HTMLElement).blur();
+    await user.tab({ shift: true });
+    const links = within(screen.getByRole('dialog')).getAllByRole('link');
+    expect(links[links.length - 1]).toHaveFocus();
+  });
+
+  it('makes main and the skip link inert only while open', async () => {
+    const user = setup();
+    const main = screen.getByRole('main');
+    expect(main).not.toHaveAttribute('inert');
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    expect(main).toHaveAttribute('inert');
+    expect(screen.getByText('Skip to content')).toHaveAttribute('inert');
+    await user.keyboard('{Escape}');
+    expect(main).not.toHaveAttribute('inert');
+    expect(screen.getByText('Skip to content')).not.toHaveAttribute('inert');
+  });
+
+  it('a modified click on a link does not close the menu', async () => {
+    const user = setup();
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.keyboard('{Control>}');
+    await user.click(screen.getByRole('link', { name: 'Waitlist' }));
+    await user.keyboard('{/Control}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('closes on a scrim click but not on a click inside the panel', async () => {

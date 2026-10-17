@@ -25,7 +25,8 @@ import { alpha, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, type ElementType } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router';
-import { HEADER_HEIGHT } from '../app/layout';
+import { getTabbables, isPlainLeftClick, nextFocusTarget } from '../app/focusLoop';
+import { HEADER_HEIGHT, HEADER_ID } from '../app/layout';
 import { buildMenu, type MenuItem } from '../app/menu';
 import { usePermissions } from '../app/permissions';
 import type { MenuRouteId } from '../app/routes';
@@ -68,25 +69,17 @@ const PANEL_WIDTH = { two: 100, one: 60 };
 // Scrim left visible below the panel so a click can always dismiss it, even on narrow screens.
 const SCRIM_STRIP = 4;
 
-const TABBABLE = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-function isShown(el: HTMLElement) {
-  return !el.closest('[hidden]') && getComputedStyle(el).display !== 'none';
-}
-
 interface ColumnProps {
-  id: string;
   heading: string;
   items: MenuItem[];
   currentPath: string;
   onNavigate: () => void;
 }
 
-function MenuColumn({ id, heading, items, currentPath, onNavigate }: ColumnProps) {
+function MenuColumn({ heading, items, currentPath, onNavigate }: ColumnProps) {
   return (
     <div>
       <Typography
-        id={id}
         variant="h6"
         component="h2"
         sx={{
@@ -109,7 +102,9 @@ function MenuColumn({ id, heading, items, currentPath, onNavigate }: ColumnProps
               key={item.id}
               component={RouterLink}
               to={item.path}
-              onClick={onNavigate}
+              onClick={(e) => {
+                if (isPlainLeftClick(e)) onNavigate();
+              }}
               selected={selected}
               aria-current={selected ? 'page' : undefined}
               sx={{
@@ -170,23 +165,13 @@ export default function MenuOverlay({
     if (!open) return;
     panelRef.current?.focus();
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab' || !panelRef.current) return;
-      // The app has a single banner landmark: the header.
-      const scope = [
-        ...(document.querySelector('header')?.querySelectorAll<HTMLElement>(TABBABLE) ?? []),
-        ...panelRef.current.querySelectorAll<HTMLElement>(TABBABLE),
-      ].filter(isShown);
-      const first = scope[0];
-      const last = scope[scope.length - 1];
-      if (!first || !last) return;
-      const active = document.activeElement;
-      const inScope = scope.includes(active as HTMLElement);
-      if (e.shiftKey && (active === first || active === panelRef.current || !inScope)) {
+      const panel = panelRef.current;
+      if (e.key !== 'Tab' || !panel) return;
+      const scope = getTabbables([document.getElementById(HEADER_ID), panel]);
+      const target = nextFocusTarget(scope, panel, document.activeElement, e.shiftKey);
+      if (target) {
         e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && (active === last || !inScope)) {
-        e.preventDefault();
-        first.focus();
+        target.focus();
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -250,7 +235,9 @@ export default function MenuOverlay({
               <Button
                 component={RouterLink}
                 to={menu.dashboard.path}
-                onClick={onClose}
+                onClick={(e) => {
+                  if (isPlainLeftClick(e)) onClose();
+                }}
                 aria-current={pathname === menu.dashboard.path ? 'page' : undefined}
                 variant="contained"
                 size="large"
@@ -289,7 +276,6 @@ export default function MenuOverlay({
         >
           {menu.reservation.length > 0 ? (
             <MenuColumn
-              id={`${id}-reservation`}
               heading="Reservation Management"
               items={menu.reservation}
               currentPath={pathname}
@@ -298,7 +284,6 @@ export default function MenuOverlay({
           ) : null}
           {menu.admin.length > 0 ? (
             <MenuColumn
-              id={`${id}-admin`}
               heading="Admin Setup"
               items={menu.admin}
               currentPath={pathname}

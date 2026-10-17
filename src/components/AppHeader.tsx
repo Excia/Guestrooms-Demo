@@ -11,7 +11,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router';
-import { HEADER_HEIGHT } from '../app/layout';
+import { HEADER_HEIGHT, HEADER_ID } from '../app/layout';
 import { SCHEDULE_PATH } from '../app/routes';
 
 export interface AppHeaderProps {
@@ -60,6 +60,7 @@ export default function AppHeader({
   return (
     <AppBar
       component="header"
+      id={HEADER_ID}
       position="sticky"
       color="inherit"
       elevation={0}

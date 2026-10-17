@@ -17,6 +17,7 @@ export default function AppShell({ children }: { children?: React.ReactNode }) {
     <>
       <Link
         href={`#${MAIN_ID}`}
+        inert={menuOpen}
         sx={{
           position: 'absolute',
           left: (t) => t.spacing(1),
