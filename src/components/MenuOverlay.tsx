@@ -71,8 +71,6 @@ const SECTION_GAP = px(20);
 const ROW_PADDING_X = px(15);
 const ICON_GAP = px(14);
 const PANEL_WIDTH = { two: px(800), one: px(480) };
-// Scrim left visible below the panel so a click can always dismiss it, even on narrow screens.
-const SCRIM_STRIP = 4;
 
 interface ColumnProps {
   heading: string;
@@ -212,18 +210,24 @@ export default function MenuOverlay({
         elevation={1}
         square
         sx={{
-          width: twoColumns ? PANEL_WIDTH.two : PANEL_WIDTH.one,
-          // Never wider than 60% of the window on mid-size screens; full width when stacked.
+          // Attached to the header and the window's left edge (Figma: x=0, y=56). Full width when
+          // stacked (< md); otherwise the Figma width, never wider than 60% of the window. Height
+          // follows the content and fills down to the window bottom (scrolling) when taller.
+          width: { xs: '100%', md: twoColumns ? PANEL_WIDTH.two : PANEL_WIDTH.one },
           maxWidth: { xs: '100%', md: '60vw' },
-          maxHeight: (t) => `calc(100% - ${t.spacing(SCRIM_STRIP)})`,
+          maxHeight: '100%',
           overflowY: 'auto',
           overscrollBehavior: 'contain',
           p: PANEL_PADDING,
           display: 'flex',
           flexDirection: 'column',
           gap: SECTION_GAP,
-          border: 1,
+          // Divider only on the edges that do not touch the window.
+          borderStyle: 'solid',
           borderColor: 'divider',
+          borderWidth: 0,
+          borderBottomWidth: 1,
+          borderRightWidth: { md: 1 },
           outline: 0,
         }}
       >
