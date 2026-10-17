@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box';
 import MuiPagination from '@mui/material/Pagination';
 import Typography from '@mui/material/Typography';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   clampPage,
   DEFAULT_ROWS_PER_PAGE_OPTIONS,
@@ -17,10 +17,15 @@ export interface PaginationChange {
 }
 
 export interface PaginationProps {
-  /** 1-based current page. An out-of-range page is corrected through onChange. */
+  /** 1-based current page. Against a known total, an out-of-range page is corrected via onChange. */
   page: number;
   rowsPerPage: number;
-  total: number;
+  /**
+   * Total rows. Leave it undefined while loading: nothing is clamped and no range text shows.
+   * A total of 0 is treated the same way for clamping (page is left alone, so a first fetch that
+   * is in flight cannot reset the user to page 1); the range text then reads "0 of 0".
+   */
+  total?: number;
   /** One call per user action (or per correction), so a consumer fetches once. */
   onChange: (next: PaginationChange) => void;
   /** A rowsPerPage that is not listed is added to the select so it still shows. */
@@ -38,10 +43,16 @@ export default function Pagination({
   rowsPerPageOptions = DEFAULT_ROWS_PER_PAGE_OPTIONS,
   label = 'Pagination',
 }: PaginationProps) {
-  const current = clampPage(page, total, rowsPerPage);
+  const known = total !== undefined && total > 0;
+  const current = known ? clampPage(page, total, rowsPerPage) : Math.max(1, Math.trunc(page) || 1);
+  // The latest handler lives in a ref so an inline arrow cannot re-fire the correction each render.
+  const onChangeRef = useRef(onChange);
   useEffect(() => {
-    if (current !== page) onChange({ page: current, rowsPerPage });
-  }, [current, page, rowsPerPage, onChange]);
+    onChangeRef.current = onChange;
+  });
+  useEffect(() => {
+    if (current !== page) onChangeRef.current({ page: current, rowsPerPage });
+  }, [current, page, rowsPerPage]);
 
   const listed = rowsPerPageOptions.includes(rowsPerPage)
     ? rowsPerPageOptions
@@ -70,11 +81,11 @@ export default function Pagination({
         />
       </Box>
       <Typography variant="body2" color="text.secondary" aria-live="polite">
-        {formatRange(current, total, rowsPerPage)}
+        {total === undefined ? '' : formatRange(current, total, rowsPerPage)}
       </Typography>
       <MuiPagination
         aria-label={label}
-        count={pageCount(total, rowsPerPage)}
+        count={known ? pageCount(total, rowsPerPage) : current}
         page={current}
         onChange={(_, next) => onChange({ page: next, rowsPerPage })}
         variant="outlined"

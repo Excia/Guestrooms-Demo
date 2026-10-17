@@ -41,6 +41,26 @@ describe('Pagination', () => {
     expect(onChange).toHaveBeenCalledWith({ page: 5, rowsPerPage: 25 });
   });
 
+  it('does not rewrite the page while the total is unknown or 0', () => {
+    const { onChange } = setup({ page: 3, total: undefined });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /page 3/ })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('leaves page 3 alone for a total of 0 (first fetch in flight)', () => {
+    const { onChange } = setup({ page: 3, total: 0 });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('an inline onChange does not re-fire the correction on re-render', () => {
+    const calls: unknown[] = [];
+    const { rerender } = render(
+      <Pagination page={9} rowsPerPage={25} total={120} onChange={(n) => calls.push(n)} />,
+    );
+    rerender(<Pagination page={9} rowsPerPage={25} total={120} onChange={(n) => calls.push(n)} />);
+    expect(calls).toHaveLength(1);
+  });
+
   it('does not call onChange for a valid page on mount', () => {
     const { onChange } = setup();
     expect(onChange).not.toHaveBeenCalled();
