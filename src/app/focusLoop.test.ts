@@ -82,6 +82,13 @@ describe('nextFocusTarget', () => {
     expect(nextFocusTarget(scope, panel, null, true)).toBe(c);
   });
 
+  it('a single control wraps onto itself', () => {
+    const panel = document.createElement('div');
+    const only = document.createElement('button');
+    expect(nextFocusTarget([only], panel, only, false)).toBe(only);
+    expect(nextFocusTarget([only], panel, only, true)).toBe(only);
+  });
+
   it('does nothing without tabbables', () => {
     expect(nextFocusTarget([], document.createElement('div'), null, false)).toBeNull();
   });

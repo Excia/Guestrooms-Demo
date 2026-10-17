@@ -18,6 +18,7 @@ function isShown(el: HTMLElement): boolean {
   return style.display !== 'none' && style.visibility !== 'hidden';
 }
 
+// Not handled: closed <details> content, iframes, audio/video controls and radio groups.
 /** Elements under the roots that a user can reach with Tab, in DOM order. */
 export function getTabbables(roots: Array<HTMLElement | null | undefined>): HTMLElement[] {
   const found: HTMLElement[] = [];

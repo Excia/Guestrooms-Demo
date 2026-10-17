@@ -257,6 +257,18 @@ describe('MenuOverlay closing (in the app shell)', () => {
     expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
   });
 
+  it('the logo closes the menu on /schedule, but not on a modified click', async () => {
+    const user = setup('/schedule');
+    await user.click(screen.getByRole('button', { name: 'Open menu' }));
+    await user.keyboard('{Control>}');
+    await user.click(screen.getByRole('link', { name: 'Guest Rooms' }));
+    await user.keyboard('{/Control}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.click(screen.getByRole('link', { name: 'Guest Rooms' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
+  });
+
   it('the Dashboard button routes to the dashboard', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));

@@ -11,6 +11,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef } from 'react';
 import { Link as RouterLink } from 'react-router';
+import { isPlainLeftClick } from '../app/focusLoop';
 import { HEADER_HEIGHT, HEADER_ID } from '../app/layout';
 import { SCHEDULE_PATH } from '../app/routes';
 
@@ -99,6 +100,10 @@ export default function AppHeader({
         <Link
           component={RouterLink}
           to={SCHEDULE_PATH}
+          // Already on Schedule the route does not change, so close the menu here.
+          onClick={(e) => {
+            if (menuOpen && isPlainLeftClick(e)) onMenuClose();
+          }}
           underline="none"
           color="text.primary"
           sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
