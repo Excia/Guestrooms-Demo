@@ -11,7 +11,8 @@ export default function DemoDataChip() {
         position: 'fixed',
         left: (theme) => theme.spacing(2),
         bottom: (theme) => theme.spacing(2),
-        zIndex: (theme) => theme.zIndex.snackbar,
+        // Above page content, below the menu overlay (zIndex 'drawer') so it never floats over it.
+        zIndex: 'speedDial',
         bgcolor: 'background.paper',
         pointerEvents: 'none',
       }}

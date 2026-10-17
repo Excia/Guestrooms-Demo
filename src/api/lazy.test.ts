@@ -23,4 +23,23 @@ describe('createLazyClient', () => {
     const client = createLazyClient(() => Promise.reject(new Error('chunk failed')));
     await expect(client.dashboard.getStats()).rejects.toThrow('chunk failed');
   });
+  it('retries after a failed load', async () => {
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('chunk failed'))
+      .mockResolvedValueOnce(createMockClient());
+    const client = createLazyClient(load);
+    await expect(client.dashboard.getStats()).rejects.toThrow('chunk failed');
+    expect((await client.dashboard.getStats()).totalNights).toBeGreaterThan(0);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+  it('aborts while the loader is still pending', async () => {
+    let release!: (c: ReturnType<typeof createMockClient>) => void;
+    const client = createLazyClient(() => new Promise((resolve) => (release = resolve)));
+    const controller = new AbortController();
+    const promise = client.dashboard.getStats({ signal: controller.signal });
+    controller.abort();
+    release(createMockClient());
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+  });
 });
