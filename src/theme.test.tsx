@@ -1,3 +1,7 @@
+import { render, screen } from '@testing-library/react';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import { ThemeProvider } from '@mui/material/styles';
 import { theme } from './theme';
 
 describe('theme tokens (Figma variables)', () => {
@@ -36,7 +40,29 @@ describe('theme tokens (Figma variables)', () => {
   it('styles inputs', () => {
     const c = theme.components!;
     expect(c.MuiInputBase?.styleOverrides?.input).toMatchObject({ fontSize: '1rem', fontWeight: 400 });
-    expect(c.MuiInputLabel?.styleOverrides?.root).toMatchObject({ fontSize: '0.75rem', lineHeight: 1 });
-    expect(c.MuiOutlinedInput?.styleOverrides?.notchedOutline).toMatchObject({ borderColor: '#0000003b' });
+    expect(c.MuiOutlinedInput?.styleOverrides?.notchedOutline).toMatchObject({
+      borderColor: 'rgba(0, 0, 0, 0.23)',
+    });
+  });
+
+  it('renders the shrunk input label at 12px (16px root scaled 0.75)', () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <TextField label="Check In" value="01/02/2026" onChange={() => {}} />
+      </ThemeProvider>,
+    );
+    const label = screen.getByText('Check In', { selector: 'label' });
+    const style = getComputedStyle(label);
+    expect(style.fontSize).toBe('1rem');
+    expect(style.transform).toContain('scale(0.75)');
+  });
+
+  it('renders h4_fixed as a heading', () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <Typography variant="h4_fixed">Title</Typography>
+      </ThemeProvider>,
+    );
+    expect(screen.getByRole('heading', { level: 4, name: 'Title' })).toBeInTheDocument();
   });
 });
