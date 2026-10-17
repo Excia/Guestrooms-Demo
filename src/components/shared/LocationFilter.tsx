@@ -16,6 +16,7 @@ import {
   ALL_LOCATIONS_LABEL,
   isAllLocations,
   normalizeSelection,
+  toReported,
   toggleLocation,
 } from '../../app/locationSelection';
 
@@ -54,11 +55,13 @@ export default function LocationFilter(props: LocationFilterProps) {
   return <LocationField {...props} />;
 }
 
-function LocationField({ locations, value, onChange, onRemove }: FieldProps) {
+function LocationField({ locations, value, onChange: onChangeProp, onRemove }: FieldProps) {
   const id = useId();
   const allIds = locations.map((l) => l.id);
   const selected = normalizeSelection(value, allIds);
   const nameOf = (locId: string) => locations.find((l) => l.id === locId)?.name ?? locId;
+  // Every location selected is reported as [] so consumers see a single "All Locations" form.
+  const onChange = (next: string[]) => onChangeProp(toReported(next, allIds));
   const labelId = `${id}-label`;
 
   const handleChange = (event: SelectChangeEvent<string[]>) => {

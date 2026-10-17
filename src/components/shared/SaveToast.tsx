@@ -8,8 +8,8 @@ import SnackbarContent from '@mui/material/SnackbarContent';
 // Visually hidden but still read by screen readers.
 const visuallyHidden = {
   position: 'absolute',
-  width: 1,
-  height: 1,
+  width: '1px',
+  height: '1px',
   m: -0.125,
   p: 0,
   overflow: 'hidden',
@@ -22,7 +22,7 @@ export interface SaveToastProps {
   open: boolean;
   onClose: () => void;
   message?: string;
-  /** Shows the UNDO action when given. A toast with an action does not auto-hide. */
+  /** Shows the UNDO action when given. A toast with Undo never auto-dismisses (autoHideDuration is ignored). */
   onUndo?: () => void;
   /** Milliseconds before a toast without an action dismisses itself; pauses while hovered. */
   autoHideDuration?: number;
@@ -52,8 +52,10 @@ export default function SaveToast({
       <Box role="status" sx={visuallyHidden}>
         {open ? <span key={`${saveId}:${message}`}>{message}</span> : null}
       </Box>
+      {/* Keyed on saveId only: a new message while open updates in place (the live region above
+          re-announces it); a new saveId restarts the timer. */}
       <Snackbar
-        key={`${saveId}:${message}`}
+        key={saveId}
         open={open}
         onClose={handleClose}
         autoHideDuration={onUndo ? null : autoHideDuration}

@@ -38,6 +38,14 @@ describe('SaveToast', () => {
     expect(screen.getByRole('status').firstElementChild).not.toBe(second);
   });
 
+  it('keeps the same toast element when only the message changes', () => {
+    const { rerender } = render(<SaveToast open onClose={vi.fn()} message="One" />);
+    const toast = screen.getByRole('group', { name: 'Notification' });
+    rerender(<SaveToast open onClose={vi.fn()} message="Two" />);
+    expect(screen.getByRole('group', { name: 'Notification' })).toBe(toast);
+    expect(toast).toHaveTextContent('Two');
+  });
+
   it('dismisses itself after the auto-hide time', () => {
     vi.useFakeTimers();
     const onClose = vi.fn();

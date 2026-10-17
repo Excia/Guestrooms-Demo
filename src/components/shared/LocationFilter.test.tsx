@@ -57,6 +57,21 @@ describe('LocationFilter', () => {
     expect(combo.querySelectorAll('button, [role="button"]')).toHaveLength(0);
   });
 
+  it('reports every location selected as the empty (All) selection', async () => {
+    const onChange = vi.fn();
+    render(
+      <LocationFilter
+        variant="field"
+        locations={LOCATIONS}
+        value={['a', 'b']}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.click(screen.getByRole('combobox'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Location C' }));
+    expect(onChange).toHaveBeenCalledWith([]);
+  });
+
   it('adds a location from the menu with the keyboard', async () => {
     const onChange = vi.fn();
     render(<LocationFilter variant="field" locations={LOCATIONS} value={[]} onChange={onChange} />);
