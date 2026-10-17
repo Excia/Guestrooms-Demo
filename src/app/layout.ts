@@ -14,5 +14,8 @@ export const menuPx = (figmaPx: number): number => Math.round(figmaPx * MENU_SCA
 /** A Figma font size scaled for the menu, never below MENU_MIN_FONT_PX. */
 export const menuFontPx = (figmaPx: number): number => Math.max(MENU_MIN_FONT_PX, menuPx(figmaPx));
 
+/** Gap (theme.spacing units, 3 = 24px) between the floating menu panel and the window edges / header. */
+export const MENU_INSET = 3;
+
 /** Id of the app header (banner); the menu overlay's Tab loop includes its controls. */
 export const HEADER_ID = 'app-header';

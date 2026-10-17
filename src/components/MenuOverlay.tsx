@@ -26,7 +26,7 @@ import Typography from '@mui/material/Typography';
 import { useEffect, useRef, type ElementType } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router';
 import { getTabbables, isPlainLeftClick, nextFocusTarget } from '../app/focusLoop';
-import { HEADER_HEIGHT, HEADER_ID, menuFontPx, menuPx } from '../app/layout';
+import { HEADER_HEIGHT, HEADER_ID, MENU_INSET, menuFontPx, menuPx } from '../app/layout';
 import { buildMenu, type MenuItem } from '../app/menu';
 import { usePermissions } from '../app/permissions';
 import type { MenuRouteId } from '../app/routes';
@@ -197,6 +197,10 @@ export default function MenuOverlay({
         bottom: 0,
         left: 0,
         zIndex: 'drawer',
+        // The panel floats MENU_INSET off the window edges and the header; this padding area is
+        // part of the scrim, so a click around the card closes the menu.
+        boxSizing: 'border-box',
+        p: MENU_INSET,
         // Same 50% black as MUI's Backdrop; set as a color, not opacity, so it never hides the panel.
         bgcolor: (t) => alpha(t.palette.common.black, 0.5),
       }}
@@ -208,11 +212,10 @@ export default function MenuOverlay({
         aria-label="Menu"
         tabIndex={-1}
         elevation={1}
-        square
         sx={{
-          // Attached to the header and the window's left edge (Figma: x=0, y=56). Full width when
-          // stacked (< md); otherwise the Figma width, never wider than 60% of the window. Height
-          // follows the content and fills down to the window bottom (scrolling) when taller.
+          // Floating card: inset from the header and window edges (the scrim's padding). Inset on
+          // both sides when stacked (< md); otherwise the Figma width, never wider than 60% of the
+          // window. Height follows the content and stops at the bottom inset (scrolling inside).
           width: { xs: '100%', md: twoColumns ? PANEL_WIDTH.two : PANEL_WIDTH.one },
           maxWidth: { xs: '100%', md: '60vw' },
           maxHeight: '100%',
@@ -222,12 +225,8 @@ export default function MenuOverlay({
           display: 'flex',
           flexDirection: 'column',
           gap: SECTION_GAP,
-          // Divider only on the edges that do not touch the window.
-          borderStyle: 'solid',
+          border: 1,
           borderColor: 'divider',
-          borderWidth: 0,
-          borderBottomWidth: 1,
-          borderRightWidth: { md: 1 },
           outline: 0,
         }}
       >
