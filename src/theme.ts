@@ -77,8 +77,15 @@ const base = createTheme({
     button: font(14, 500, 24 / 14, 0.4),
   },
   components: {
+    // Hover: non-solid buttons, icon buttons, list rows and unstyled links get the light green tint
+    // (palette.primary.tint, the same as the selected row). Solid contained buttons keep MUI's
+    // darker solid hover (primary.dark) so white text stays legible; the tint is never behind it.
     MuiButton: {
       styleOverrides: {
+        root: ({ ownerState, theme }) =>
+          ownerState.variant === 'contained'
+            ? {}
+            : { '&:hover': { backgroundColor: theme.palette.primary.tint } },
         sizeSmall: font(13, 500, 22 / 13, 0.46),
         sizeMedium: font(14, 500, 24 / 14, 0.4),
         sizeLarge: font(15, 500, 26 / 15, 0.46),
@@ -95,9 +102,29 @@ const base = createTheme({
         }),
       },
     },
-    MuiLink: {
+    MuiIconButton: {
+      styleOverrides: {
+        root: ({ theme }) => ({ '&:hover': { backgroundColor: theme.palette.primary.tint } }),
+      },
+    },
+    // Selected rows keep the tint on hover (a darker wash would drop the text below AA).
+    MuiListItemButton: {
       styleOverrides: {
         root: ({ theme }) => ({
+          '&:hover, &.Mui-selected, &.Mui-selected:hover': {
+            backgroundColor: theme.palette.primary.tint,
+          },
+        }),
+      },
+    },
+    MuiLink: {
+      styleOverrides: {
+        root: ({ ownerState, theme }) => ({
+          // Links without an underline (the header logo) are button-like: tint on hover.
+          ...(ownerState.underline === 'none' && {
+            borderRadius: theme.shape.borderRadius,
+            '&:hover': { backgroundColor: theme.palette.primary.tint },
+          }),
           '&:focus-visible': {
             outline: `2px solid ${theme.palette.primary.main}`,
             outlineOffset: 2,

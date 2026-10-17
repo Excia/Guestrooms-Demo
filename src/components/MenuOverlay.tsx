@@ -120,7 +120,6 @@ function MenuColumn({ heading, items, currentPath, onNavigate }: ColumnProps) {
                 borderColor: 'divider',
                 color: 'primary.main',
                 '&:last-of-type': { borderBottom: 0 },
-                '&.Mui-selected, &.Mui-selected:hover': { bgcolor: 'primary.tint' },
               }}
             >
               <ListItemIcon sx={{ minWidth: 0, color: 'inherit' }}>
