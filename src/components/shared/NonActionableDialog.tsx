@@ -4,7 +4,8 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import IconButton from '@mui/material/IconButton';
-import { useId, useRef, type ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
+import { focusOnMount } from './focusOnMount';
 
 export interface NonActionableDialogProps {
   open: boolean;
@@ -23,7 +24,6 @@ export default function NonActionableDialog({
   closeLabel = 'Close',
 }: NonActionableDialogProps) {
   const id = useId();
-  const closeRef = useRef<HTMLButtonElement>(null);
   return (
     <Dialog
       open={open}
@@ -31,14 +31,12 @@ export default function NonActionableDialog({
       // Figma paper width is 444px; the default margin keeps it inside narrow viewports.
       slotProps={{
         paper: { sx: { width: (t) => t.spacing(55.5) } },
-        // Focus the close button after the transition (autoFocus loses to the trap in StrictMode).
-        transition: { onEntered: () => closeRef.current?.focus() },
       }}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-body`}
     >
       <DialogActions sx={{ pb: 0 }}>
-        <IconButton ref={closeRef} color="primary" aria-label={closeLabel} onClick={onClose}>
+        <IconButton ref={focusOnMount} color="primary" aria-label={closeLabel} onClick={onClose}>
           <Close />
         </IconButton>
       </DialogActions>

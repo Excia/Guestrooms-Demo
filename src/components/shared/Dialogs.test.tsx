@@ -46,6 +46,23 @@ describe.each(WRAPPERS)('ConfirmDialog (Confirm Leaving), %s', (_name, Wrapper) 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save now' })).toHaveFocus());
   });
 
+  it('has the primary action focused synchronously when the dialog appears', async () => {
+    render(<ConfirmHarness />, { wrapper: Wrapper });
+    await userEvent.click(screen.getByRole('button', { name: 'Leave page' }));
+    // No waitFor: there must be no window where focus sits on the container.
+    expect(screen.getByRole('button', { name: 'Save now' })).toHaveFocus();
+  });
+
+  it('Enter right after open saves; discard needs an explicit Tab first', async () => {
+    const onDiscard = vi.fn();
+    const onConfirm = vi.fn();
+    render(<ConfirmHarness onDiscard={onDiscard} onConfirm={onConfirm} />, { wrapper: Wrapper });
+    await userEvent.click(screen.getByRole('button', { name: 'Leave page' }));
+    await userEvent.keyboard('{Enter}');
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onDiscard).not.toHaveBeenCalled();
+  });
+
   it('keeps Tab inside the dialog', async () => {
     render(<ConfirmHarness />, { wrapper: Wrapper });
     await userEvent.click(screen.getByRole('button', { name: 'Leave page' }));
@@ -107,6 +124,12 @@ describe.each(WRAPPERS)('NonActionableDialog, %s', (_name, Wrapper) => {
     const dialog = await screen.findByRole('dialog', { name: 'FYI' });
     expect(dialog).toHaveAccessibleDescription('Some information.');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus());
+  });
+
+  it('has the close button focused synchronously when the dialog appears', async () => {
+    render(<InfoHarness />, { wrapper: Wrapper });
+    await userEvent.click(screen.getByRole('button', { name: 'Details' }));
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus();
   });
 
   it('closes with the button and restores focus', async () => {
