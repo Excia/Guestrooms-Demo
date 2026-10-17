@@ -1,7 +1,7 @@
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { Navigate, Route, Routes } from 'react-router';
-import { findRoute, routes, SCHEDULE_PATH } from './app/routes';
+import { routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
 
 function PagePlaceholder({ title }: { title: string }) {
@@ -20,11 +20,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to={SCHEDULE_PATH} replace />} />
         {routes.map((r) => (
-          <Route
-            key={r.path}
-            path={r.path}
-            element={<PagePlaceholder title={findRoute(r.path)!.title} />}
-          />
+          <Route key={r.path} path={r.path} element={<PagePlaceholder title={r.title} />} />
         ))}
         {/* A real 404 page is a later ticket. */}
         <Route path="*" element={<PagePlaceholder title="Not found" />} />

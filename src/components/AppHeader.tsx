@@ -28,6 +28,9 @@ export interface AppHeaderProps {
   menuId?: string;
 }
 
+// Header height in theme.spacing units (7 x 8px = 56px, Figma 12047:5668); the Toolbar's py: 1 sits inside it.
+const HEADER_HEIGHT = 7;
+
 const RETURN_LABEL = 'Return to Site';
 
 export default function AppHeader({
@@ -43,7 +46,8 @@ export default function AppHeader({
   useEffect(() => {
     if (!menuOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // A nested popover/select/dialog that already handled Escape keeps the menu open.
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         onMenuClose();
         menuButtonRef.current?.focus();
       }
@@ -70,7 +74,10 @@ export default function AppHeader({
           py: 1,
           gap: 2,
           // Doubled selector beats Toolbar's responsive min-height (48/56/64) so the header stays 56px.
-          '&&': { height: (t) => t.spacing(7), minHeight: (t) => t.spacing(7) },
+          '&&': {
+            height: (t) => t.spacing(HEADER_HEIGHT),
+            minHeight: (t) => t.spacing(HEADER_HEIGHT),
+          },
         }}
       >
         <IconButton

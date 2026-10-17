@@ -23,12 +23,17 @@ export function getAxisUrl(
     warnOnce('is not set', value);
     return FALLBACK;
   }
+  // Browsers treat "\\" as "/" and drop tabs/newlines, so "/\\evil.example" would leave the site.
+  if (/[\\\t\r\n]/.test(trimmed)) {
+    warnOnce('contains a backslash or control character', value);
+    return FALLBACK;
+  }
   try {
     const url = new URL(trimmed, origin);
     const isRelativePath = trimmed.startsWith('/') && !trimmed.startsWith('//');
     if (
       (url.protocol === 'http:' || url.protocol === 'https:') &&
-      (isRelativePath || /^https?:\/\//i.test(trimmed))
+      ((isRelativePath && url.origin === new URL(origin).origin) || /^https?:\/\//i.test(trimmed))
     ) {
       return trimmed;
     }

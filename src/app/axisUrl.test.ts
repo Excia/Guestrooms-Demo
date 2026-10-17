@@ -25,6 +25,9 @@ describe('getAxisUrl', () => {
     'axis.example.com',
     '//evil.example',
     'ftp://x.test',
+    '/\\evil.example',
+    '/\t/evil.example',
+    '/ok\n/evil.example',
   ])('rejects %s', (bad) => {
     expect(getAxisUrl(bad, origin)).toBe('/');
   });

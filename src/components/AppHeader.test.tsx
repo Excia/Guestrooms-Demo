@@ -71,6 +71,14 @@ describe('AppHeader', () => {
     expect(screen.getByRole('button', { name: 'Close menu' })).toHaveFocus();
   });
 
+  it('ignores an Escape that was already handled', () => {
+    const { onMenuClose } = setup({ menuOpen: true });
+    const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+    event.preventDefault();
+    document.dispatchEvent(event);
+    expect(onMenuClose).not.toHaveBeenCalled();
+  });
+
   it('does not react to Escape while closed', () => {
     const { onMenuClose } = setup();
     fireEvent.keyDown(document, { key: 'Escape' });
