@@ -53,7 +53,7 @@ describe('theme tokens (Figma variables)', () => {
     );
     const label = screen.getByText('Check In', { selector: 'label' });
     const style = getComputedStyle(label);
-    expect(style.fontSize).toBe('1rem');
+    expect(style.fontSize).toBe('16px');
     expect(style.transform).toContain('scale(0.75)');
   });
 

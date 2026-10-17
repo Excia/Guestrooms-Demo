@@ -21,7 +21,7 @@ export default tseslint.config(
       'no-restricted-syntax': [
         'error',
         {
-          selector: 'Literal[value=/^#[0-9a-fA-F]{3,8}$/]',
+          selector: 'Literal[value=/#[0-9a-fA-F]{3,8}\\b/]',
           message: 'Use theme palette tokens instead of hex colors.',
         },
         {
