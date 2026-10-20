@@ -258,3 +258,58 @@ export function clampShift(startIndex: number, shift: number, days: number): num
   const max = Math.max(0, days - 1 - startIndex);
   return clamp(shift, min, max);
 }
+
+// ---- move failures -------------------------------------------------------------------------------
+
+export interface MoveFailure {
+  /** Put the optimistic move back. False when the server may have applied it (unknown outcome). */
+  revert: boolean;
+  /** Reload the schedule so the grid shows what is really booked. */
+  refetch: boolean;
+  message: string;
+}
+
+const UNKNOWN_OUTCOME = 'Could not confirm the move. Showing the latest schedule.';
+
+const MOVE_ERROR_COPY: Record<string, string> = {
+  conflict: 'That room is no longer free on those dates. The schedule has been refreshed.',
+  'not-movable': 'This reservation cannot be moved that way.',
+  stale: 'This reservation was changed by someone else. The schedule has been refreshed.',
+  'not-found': 'That reservation or room no longer exists. The schedule has been refreshed.',
+  'invalid-id': 'The move was not valid. Nothing was changed.',
+  'invalid-query': 'The move was not valid. Nothing was changed.',
+  'idempotency-conflict': 'The move could not be completed. Try again.',
+};
+
+/** Server text is only shown as extra detail when it is short plain text (never markup or links). */
+export function safeDetail(message: string | undefined): string | null {
+  const text = message?.trim();
+  if (!text || text.length > 120) return null;
+  return /^[\p{L}\p{N} .,'’:;!?()/-]+$/u.test(text) && !/https?:|www\./i.test(text) ? text : null;
+}
+
+/**
+ * What to do when a move request failed. A response of 400 to 499 says nothing was applied: revert,
+ * and for 404 and 409 also reload (the booking that blocked the move is now visible). No response
+ * (status 0: timeout, network) or a 5xx is an unknown outcome: the move may have been applied, so
+ * the optimistic state is not trusted: reload and say so neutrally. Known codes map to our own copy;
+ * the server message is only a fallback detail.
+ */
+export function moveFailure(error: unknown): MoveFailure {
+  const status =
+    typeof (error as { status?: unknown })?.status === 'number'
+      ? (error as { status: number }).status
+      : 0;
+  const code = (error as { code?: unknown })?.code;
+  const detail = safeDetail((error as { message?: string })?.message);
+  if (status === 0 || status >= 500) {
+    return { revert: false, refetch: true, message: UNKNOWN_OUTCOME };
+  }
+  const known = typeof code === 'string' ? MOVE_ERROR_COPY[code] : undefined;
+  const fallback = status === 404 ? MOVE_ERROR_COPY['not-found'] : undefined;
+  const message =
+    known ??
+    fallback ??
+    (detail ? `The move could not be completed: ${detail}` : 'The move could not be completed.');
+  return { revert: true, refetch: status === 404 || status === 409, message };
+}

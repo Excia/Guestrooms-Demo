@@ -26,6 +26,11 @@ describe('parseScheduleView', () => {
     expect(parseScheduleView('?types=').roomTypeIds).toEqual([]);
     expect(parseScheduleView('').locationIds).toBeNull();
   });
+  it('treats only separators as unset, not as none', () => {
+    expect(parseScheduleView('?types=,,&locations=,').roomTypeIds).toBeNull();
+    expect(parseScheduleView('?types=,,&locations=,').locationIds).toBeNull();
+    expect(parseScheduleView('?types= , ').roomTypeIds).toBeNull();
+  });
   it('is tolerant of bad input', () => {
     const v = parseScheduleView('?start=2026-02-30&view=9&rooms=everything&locations=a,,a, b ');
     expect(v.start).toBeNull();

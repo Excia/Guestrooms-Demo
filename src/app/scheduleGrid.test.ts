@@ -9,6 +9,7 @@ import {
   itemAtColumn,
   mergeChangedBlocks,
   moveCursor,
+  moveFailure,
   moveDialogCopy,
   refusalMessage,
   revertMoves,
@@ -196,5 +197,45 @@ describe('copy', () => {
   it('labels the corner with the year or both years', () => {
     expect(yearLabel(['2026-10-20', '2026-10-21'])).toBe('2026');
     expect(yearLabel(['2026-12-30', '2027-01-02'])).toBe('2026/2027');
+  });
+});
+
+describe('moveFailure', () => {
+  const err = (status: number, code?: string, message = 'x') => ({ status, code, message });
+  it('treats no response and 5xx as an unknown outcome: no revert, reload, neutral copy', () => {
+    for (const e of [err(0, 'timeout'), err(0, 'network'), err(503)]) {
+      expect(moveFailure(e)).toEqual({
+        revert: false,
+        refetch: true,
+        message: 'Could not confirm the move. Showing the latest schedule.',
+      });
+    }
+  });
+  it('reverts and reloads for 409 and 404', () => {
+    for (const e of [err(409, 'conflict'), err(409, 'stale'), err(409, 'not-movable'), err(404)]) {
+      expect(moveFailure(e)).toMatchObject({ revert: true, refetch: true });
+    }
+  });
+  it('reverts without a reload for invalid requests', () => {
+    expect(moveFailure(err(400, 'invalid-query'))).toMatchObject({ revert: true, refetch: false });
+  });
+  it('maps known codes to our own copy', () => {
+    expect(moveFailure(err(409, 'conflict', 'Room 5 taken')).message).toMatch(/no longer free/);
+    expect(moveFailure(err(409, 'not-movable')).message).toMatch(/cannot be moved that way/);
+    expect(moveFailure(err(409, 'stale')).message).toMatch(/changed by someone else/);
+    expect(moveFailure(err(404)).message).toMatch(/no longer exists/);
+    expect(moveFailure(err(400, 'invalid-id')).message).toMatch(/not valid/);
+  });
+  it('uses safe plain server text only as a fallback detail', () => {
+    expect(moveFailure(err(422, 'weird', 'Rate plan closed.')).message).toBe(
+      'The move could not be completed: Rate plan closed.',
+    );
+    expect(moveFailure(err(422, 'weird', '<img src=x onerror=1>')).message).toBe(
+      'The move could not be completed.',
+    );
+    expect(moveFailure(err(422, 'weird', 'see https://evil.example')).message).toBe(
+      'The move could not be completed.',
+    );
+    expect(moveFailure(new Error('boom')).message).toMatch(/Could not confirm/);
   });
 });

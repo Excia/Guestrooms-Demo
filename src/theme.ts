@@ -69,6 +69,7 @@ declare module '@mui/material/Typography' {
 // text.disabled. Figma has one unnamed "Secondary" #545454; add it once its role is confirmed.
 const fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
 const primaryMain = '#2e7d32';
+const errorMain = '#d32f2f';
 
 // Figma letter spacing is in px; MUI expects em.
 const font = (sizePx: number, weight: number, lineHeight: number, letterSpacingPx: number) => ({
@@ -89,7 +90,7 @@ const base = createTheme({
       outlinedBorder: alpha(primaryMain, 0.5),
     },
     warning: { main: '#c24e00' },
-    error: { main: '#d32f2f' },
+    error: { main: errorMain },
     text: { primary: '#000000de', secondary: '#00000099' },
     action: { active: '#0000008f' },
     background: { default: '#f1f1f1', paper: '#ffffff' },
@@ -105,7 +106,7 @@ const base = createTheme({
       memberText: '#16491a',
       today: alpha(primaryMain, 0.07),
       dropAllowed: alpha(primaryMain, 0.22),
-      dropRefused: alpha('#d32f2f', 0.2),
+      dropRefused: alpha(errorMain, 0.2),
     },
   },
   shape: { borderRadius: 4 },

@@ -176,6 +176,8 @@ export default function ScheduleControls({
           {AVAILABILITY.map((a) => (
             <MenuItem
               key={a}
+              role="menuitemradio"
+              aria-checked={a === availability}
               selected={a === availability}
               onClick={() => {
                 onAvailability(a);

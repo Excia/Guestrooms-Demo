@@ -31,17 +31,22 @@ const PARAMS = {
 };
 const AVAILABILITY: readonly ScheduleAvailability[] = ['all', 'available', 'booked'];
 
-/** Absent: all. Present but empty: none. Duplicates and blanks are dropped. */
+/**
+ * Absent: all. Present but empty (`?types=`): none. Only separators or blanks (`?types=,,`) is
+ * noise, not a choice: all. Duplicates and blanks are dropped.
+ */
 function parseList(value: string | null): string[] | null {
   if (value === null) return null;
-  return [
+  if (value === '') return [];
+  const ids = [
     ...new Set(
       value
         .split(',')
-        .map((s) => s.trim())
+        .map((x) => x.trim())
         .filter(Boolean),
     ),
   ];
+  return ids.length > 0 ? ids : null;
 }
 
 export function parseScheduleView(source: string | URLSearchParams): ScheduleViewState {

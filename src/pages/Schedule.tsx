@@ -4,13 +4,12 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
-import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router';
-import { ApiError, useApi } from '../api';
-import type { ScheduleBlock, ScheduleDays } from '../api';
+import { useApi } from '../api';
+import type { ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
 import { HEADER_HEIGHT } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
@@ -19,7 +18,7 @@ import {
   shiftScheduleStart,
   type ScheduleStep,
 } from '../app/schedule';
-import { applyMoves, mergeChangedBlocks, revertMoves } from '../app/scheduleGrid';
+import { applyMoves, mergeChangedBlocks, moveFailure, revertMoves } from '../app/scheduleGrid';
 import { toMoveDatesRequest, toMoveRoomRequest, type DropResult } from '../app/scheduleDrag';
 import {
   activeFilterCount,
@@ -28,9 +27,11 @@ import {
   type ScheduleViewState,
 } from '../app/scheduleUrl';
 import { todayIso, type IsoDate } from '../lib/dates';
+import { newRequestId } from '../lib/requestId';
 import MoveConfirmDialog from '../components/schedule/MoveConfirmDialog';
 import ScheduleControls from '../components/schedule/ScheduleControls';
 import ScheduleFilterPanel from '../components/schedule/ScheduleFilterPanel';
+import ScheduleSkeleton from '../components/schedule/ScheduleSkeleton';
 import ScheduleGrid from '../components/schedule/ScheduleGrid';
 import { useSchedule } from '../components/schedule/useSchedule';
 import SaveToast from '../components/shared/SaveToast';
@@ -52,21 +53,6 @@ interface Toast {
   message: string;
 }
 
-function GridSkeleton() {
-  return (
-    <Box role="status" aria-label="Loading schedule" sx={{ p: 2, display: 'grid', gap: 1 }}>
-      {Array.from({ length: 8 }, (_, i) => (
-        <Skeleton key={i} variant="rounded" height={60} />
-      ))}
-    </Box>
-  );
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof ApiError && error.message) return error.message;
-  return 'The reservation could not be moved. Try again.';
-}
-
 /**
  * Schedule (Figma 15967:188321): rooms down the side, dates across the top, reservations placed on
  * the grid. The view (start date, length, filters) lives in the URL. Desktop-first: the controls
@@ -79,10 +65,21 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const view = useMemo(() => parseScheduleView(params), [params]);
   const start = view.start ?? today;
   const schedule = useSchedule(start, view.days);
-  const { setBlocks } = schedule;
+  const { setBlocks, retry } = schedule;
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  // A move is in flight: the grid takes no new drags until its answer has been applied.
+  const [moving, setMoving] = useState(false);
+  // The rows as they were when a block was dropped: filters must not remove the row it came from
+  // or went to while the move is being confirmed.
+  const [frozenRooms, setFrozenRooms] = useState<ScheduleRoom[] | null>(null);
+  const [note, setNote] = useState('');
+  // The range the user is looking at now, for answers that arrive after they moved on.
+  const currentRange = useRef({ startDate: start, days: view.days });
+  useEffect(() => {
+    currentRange.current = { startDate: start, days: view.days };
+  }, [start, view.days]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [toastOpen, setToastOpen] = useState(false);
 
@@ -97,7 +94,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   }, []);
 
   const data = schedule.status === 'success' ? schedule.data : null;
-  const rooms = useMemo(
+  const liveRooms = useMemo(
     () =>
       data
         ? applyScheduleFilters(data, {
@@ -108,34 +105,49 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         : [],
     [data, view.locationIds, view.roomTypeIds, view.availability],
   );
+  const rooms = frozenRooms ?? liveRooms;
+
+  const settle = useCallback(() => {
+    setMoving(false);
+    setFrozenRooms(null);
+  }, []);
 
   const confirm = (scope: 'all-rooms' | 'this-room') => {
-    if (!pending) return;
+    if (!pending || !data) return;
     const { block, result } = pending;
     setPending(null);
     const moves = scope === 'this-room' ? result.splitMoves : result.moves;
     if (!moves) return;
-    // Optimistic: show the move now, roll back if the API refuses it.
-    setBlocks((blocks) => applyMoves(blocks, moves));
+    const range = { startDate: data.startDate, days: data.days };
+    // The range the move was made in is still the one on screen (and loaded).
+    const inRange = () =>
+      currentRange.current.startDate === range.startDate &&
+      currentRange.current.days === range.days;
+    // Optimistic: show the move now.
+    setMoving(true);
+    setBlocks(range, (blocks) => applyMoves(blocks, moves));
+    const requestId = newRequestId();
     const request =
       result.dialog === 'room-change'
-        ? api.schedule.moveRoom(toMoveRoomRequest(result))
-        : api.schedule.moveDates(toMoveDatesRequest(result, scope));
+        ? api.schedule.moveRoom(toMoveRoomRequest(result, block, requestId))
+        : api.schedule.moveDates(toMoveDatesRequest(result, block, requestId, scope));
     request.then(
       (answer) => {
-        setBlocks((blocks) =>
-          data
-            ? mergeChangedBlocks(
-                { startDate: data.startDate, days: data.days, blocks },
-                answer.blocks,
-              )
-            : blocks,
-        );
+        if (inRange()) {
+          setBlocks(range, (blocks) => mergeChangedBlocks({ ...range, blocks }, answer.blocks));
+        } else {
+          // The user moved to another window meanwhile; what it loaded may predate the move.
+          retry();
+        }
         notify(`Reservation ${block.confirmationNumber} moved.`);
+        settle();
       },
       (error: unknown) => {
-        setBlocks((blocks) => revertMoves(blocks, moves));
-        notify(errorMessage(error));
+        const failure = moveFailure(error);
+        if (failure.revert && inRange()) setBlocks(range, (blocks) => revertMoves(blocks, moves));
+        if (failure.refetch || !inRange()) retry();
+        notify(failure.message);
+        settle();
       },
     );
   };
@@ -153,7 +165,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
     : undefined;
 
   let body;
-  if (schedule.status === 'loading') body = <GridSkeleton />;
+  if (schedule.status === 'loading') body = <ScheduleSkeleton />;
   else if (schedule.status === 'error') {
     body = (
       <Box sx={{ p: 2 }}>
@@ -197,7 +209,11 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         rooms={rooms}
         today={today}
         busy={schedule.refreshing}
-        onDrop={(block, result) => setPending({ block, result })}
+        locked={schedule.refreshing || moving}
+        onDrop={(block, result) => {
+          setFrozenRooms(liveRooms);
+          setPending({ block, result });
+        }}
         onRefuse={notify}
       />
     );
@@ -300,11 +316,18 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           block={pending.block}
           result={pending.result}
           toRoomNumber={toRoom?.number ?? ''}
-          onCancel={() => setPending(null)}
+          onCancel={() => {
+            setPending(null);
+            setFrozenRooms(null);
+            setNote('Move cancelled.');
+          }}
           onConfirm={() => confirm('all-rooms')}
           onSplit={() => confirm('this-room')}
         />
       ) : null}
+      <Box role="status" sx={visuallyHidden}>
+        {note}
+      </Box>
       <SaveToast
         open={toastOpen}
         onClose={() => setToastOpen(false)}

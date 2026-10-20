@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from '../../api';
 import type { ScheduleBlock, ScheduleData, ScheduleDays } from '../../api';
 import type { IsoDate } from '../../lib/dates';
@@ -28,7 +28,14 @@ export function useSchedule(
   days: ScheduleDays,
 ): ScheduleState & {
   retry: () => void;
-  setBlocks: (update: (blocks: ScheduleBlock[]) => ScheduleBlock[]) => void;
+  /**
+   * Edits the loaded blocks, but only while the loaded range is still `range`: a late answer for a
+   * range the user has left is ignored (returns false) instead of being merged into another window.
+   */
+  setBlocks: (
+    range: { startDate: IsoDate; days: ScheduleDays },
+    update: (blocks: ScheduleBlock[]) => ScheduleBlock[],
+  ) => boolean;
 } {
   const api = useApi();
   const [attempt, setAttempt] = useState(0);
@@ -53,9 +60,28 @@ export function useSchedule(
   }, [api, startDate, days, key]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  // The range of the data on screen, readable from event handlers that outlive a render.
+  const loaded = useRef<{ startDate: IsoDate; days: ScheduleDays } | null>(null);
+  useEffect(() => {
+    loaded.current = data ? { startDate: data.startDate, days: data.days } : null;
+  }, [data]);
   const setBlocks = useCallback(
-    (update: (blocks: ScheduleBlock[]) => ScheduleBlock[]) =>
-      setData((d) => (d ? { ...d, blocks: update(d.blocks) } : d)),
+    (
+      range: { startDate: IsoDate; days: ScheduleDays },
+      update: (blocks: ScheduleBlock[]) => ScheduleBlock[],
+    ) => {
+      const current = loaded.current;
+      if (!current || current.startDate !== range.startDate || current.days !== range.days) {
+        return false;
+      }
+      // Re-checked against the latest state, in case the range changed within this batch.
+      setData((d) =>
+        d && d.startDate === range.startDate && d.days === range.days
+          ? { ...d, blocks: update(d.blocks) }
+          : d,
+      );
+      return true;
+    },
     [],
   );
 

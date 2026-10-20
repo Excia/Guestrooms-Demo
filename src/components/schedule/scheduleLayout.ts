@@ -3,6 +3,11 @@
 export const ROW_HEIGHT = 7.5;
 /** Room header column: 130px. */
 export const LABEL_WIDTH = 16.25;
+/** Figma sets the "location | room type" caption in the room header at 10px (no typography token is that small). */
+export const ROOM_CAPTION_PX = 10;
+/** Guest-type icon in a block: 16px (Figma), 2 spacing units. */
+export const BLOCK_ICON_SPACING = 2;
+
 /** Reservation block height (48px) and its offset in the row (6px). */
 export const BLOCK_HEIGHT = 6;
 export const BLOCK_TOP = 0.75;

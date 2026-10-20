@@ -24,7 +24,7 @@ function spied(options: Parameters<typeof createMockClient>[0] = {}) {
   const moveRoom = vi.fn(base.schedule.moveRoom);
   const moveDates = vi.fn(base.schedule.moveDates);
   const client: ApiClient = { ...base, schedule: { get, moveRoom, moveDates } };
-  return { client, get, moveRoom, moveDates };
+  return { client, base, get, moveRoom, moveDates };
 }
 
 function setup(url = '/schedule', client: ApiClient = createMockClient({ today: TODAY })) {
@@ -259,12 +259,12 @@ describe('filters', () => {
     const user = await loaded();
     const all = rows().length;
     await user.click(screen.getByRole('button', { name: /all rooms/i }));
-    await user.click(screen.getByRole('menuitem', { name: 'Booked only' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Booked only' }));
     await waitFor(() => expect(rows().length).toBeLessThan(all));
     const booked = rows().length;
     expect(url()).toContain('rooms=booked');
     await user.click(screen.getByRole('button', { name: /booked only/i }));
-    await user.click(screen.getByRole('menuitem', { name: 'Available only' }));
+    await user.click(screen.getByRole('menuitemradio', { name: 'Available only' }));
     await waitFor(() => expect(url()).toContain('rooms=available'));
     const available = rows().length;
     // every room is booked, closed or free: booked + available never exceed all (header row counted once each)
@@ -368,7 +368,9 @@ describe('keyboard navigation and move', () => {
     expect(within(dialog).getByRole('button', { name: 'Move to New Room' })).toHaveFocus();
     await user.keyboard('{Enter}');
     await waitFor(() =>
-      expect(moveRoom).toHaveBeenCalledWith({ reservationRoomId: 'rr-5', toRoomId: 'rm-207' }),
+      expect(moveRoom).toHaveBeenCalledWith(
+        expect.objectContaining({ reservationRoomId: 'rr-5', toRoomId: 'rm-207' }),
+      ),
     );
     await waitFor(() =>
       expect(
@@ -476,12 +478,14 @@ describe('keyboard navigation and move', () => {
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Move to New Dates' }));
     await waitFor(() =>
-      expect(moveDates).toHaveBeenCalledWith({
-        reservationRoomId: 'rr-7',
-        toStartDate: '2026-10-19',
-        scope: 'all-rooms',
-        toRoomId: undefined,
-      }),
+      expect(moveDates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reservationRoomId: 'rr-7',
+          toStartDate: '2026-10-19',
+          scope: 'all-rooms',
+          toRoomId: undefined,
+        }),
+      ),
     );
     for (const room of ['204', '209', '205']) {
       await waitFor(() =>
@@ -503,12 +507,14 @@ describe('keyboard navigation and move', () => {
       await screen.findByRole('button', { name: 'split the room from reservation' }),
     );
     await waitFor(() =>
-      expect(moveDates).toHaveBeenCalledWith({
-        reservationRoomId: 'rr-7',
-        toStartDate: '2026-10-19',
-        scope: 'this-room',
-        toRoomId: undefined,
-      }),
+      expect(moveDates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reservationRoomId: 'rr-7',
+          toStartDate: '2026-10-19',
+          scope: 'this-room',
+          toRoomId: undefined,
+        }),
+      ),
     );
     await waitFor(() =>
       expect(
@@ -540,7 +546,7 @@ describe('keyboard navigation and move', () => {
     await cursorTo(user, 1, 0);
     await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
     await user.click(await screen.findByRole('button', { name: 'Move to New Room' }));
-    expect(await toast('Room 207 was just booked.')).toBeGreaterThan(0);
+    expect(await toast(/no longer free on those dates/)).toBeGreaterThan(0);
     expect(
       within(rowOf('202')).getByRole('gridcell', { name: /Thomas Okafor/ }),
     ).toBeInTheDocument();
@@ -614,7 +620,9 @@ describe('pointer drag', () => {
     expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Move to New Room' }));
     await waitFor(() =>
-      expect(moveRoom).toHaveBeenCalledWith({ reservationRoomId: 'rr-5', toRoomId: 'rm-207' }),
+      expect(moveRoom).toHaveBeenCalledWith(
+        expect.objectContaining({ reservationRoomId: 'rr-5', toRoomId: 'rm-207' }),
+      ),
     );
     await waitFor(() =>
       expect(
@@ -632,12 +640,14 @@ describe('pointer drag', () => {
     expect(dialog).toHaveTextContent('Room 202 for dates 10/18/2026 to 10/21/2026');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Move to New Dates' }));
     await waitFor(() =>
-      expect(moveDates).toHaveBeenCalledWith({
-        reservationRoomId: 'rr-5',
-        toStartDate: '2026-10-18',
-        scope: 'all-rooms',
-        toRoomId: undefined,
-      }),
+      expect(moveDates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reservationRoomId: 'rr-5',
+          toStartDate: '2026-10-18',
+          scope: 'all-rooms',
+          toRoomId: undefined,
+        }),
+      ),
     );
   });
 
@@ -649,12 +659,14 @@ describe('pointer drag', () => {
     await screen.findByRole('dialog', { name: /Date Change/ });
     await userEvent.click(screen.getByRole('button', { name: 'Move to New Dates' }));
     await waitFor(() =>
-      expect(moveDates).toHaveBeenCalledWith({
-        reservationRoomId: 'rr-5',
-        toStartDate: '2026-10-17',
-        scope: 'all-rooms',
-        toRoomId: 'rm-206',
-      }),
+      expect(moveDates).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reservationRoomId: 'rr-5',
+          toStartDate: '2026-10-17',
+          scope: 'all-rooms',
+          toRoomId: 'rm-206',
+        }),
+      ),
     );
   });
 
@@ -719,5 +731,339 @@ describe('pointer drag', () => {
     fireEvent.click(el);
     expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument();
     expect(grid()).toHaveFocus();
+  });
+});
+
+// ---- races, unknown outcomes and the rest of round one's review ------------------------------
+
+/** moveRoom that settles when `release` is called, applying the move to the mock first if asked. */
+function gatedMove(options: Parameters<typeof createMockClient>[0] = {}) {
+  const s = spied(options);
+  const real = s.base.schedule.moveRoom;
+  let release: ((outcome: 'apply' | 'fail-after-apply' | 'fail') => void) | undefined;
+  s.moveRoom.mockImplementation(
+    (req, o) =>
+      new Promise((resolve, reject) => {
+        release = (outcome) => {
+          if (outcome === 'fail') return reject(new ApiError(409, 'x', { code: 'stale' }));
+          real(req, o).then((answer) => {
+            if (outcome === 'apply') resolve(answer);
+            else reject(new ApiError(0, 'Request timed out', { code: 'timeout' }));
+          }, reject);
+        };
+      }),
+  );
+  return { ...s, release: (o: 'apply' | 'fail-after-apply' | 'fail') => release?.(o) };
+}
+
+/** Pick up Thomas Okafor (room 202) and drop him on 207, confirming the dialog. */
+async function confirmThomasTo207(user: ReturnType<typeof userEvent.setup>) {
+  await cursorTo(user, 1, 0);
+  await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+  await user.click(await screen.findByRole('button', { name: 'Move to New Room' }));
+}
+
+describe('a move racing with navigation', () => {
+  it('ignores the answer for a range the user left and reloads the range on screen', async () => {
+    const { client, get, release } = gatedMove();
+    const user = await loaded('/schedule', client);
+    await confirmThomasTo207(user); // in flight, optimistic
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Next day' }));
+    await screen.findByRole('columnheader', { name: 'Saturday 10/17' });
+    const callsBefore = get.mock.calls.length;
+    await act(async () => release('apply'));
+    // the late answer is not merged into the new window; the window is loaded again instead
+    await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(callsBefore));
+    expect(get).toHaveBeenLastCalledWith({ startDate: '2026-10-17', days: 7 }, expect.anything());
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      within(rowOf('202')).queryByRole('gridcell', { name: /Thomas Okafor/ }),
+    ).not.toBeInTheDocument();
+    expect(await toast('Reservation GR-50310 moved.')).toBeGreaterThan(0);
+  });
+
+  it('takes no new pick-up while a move is in flight or the grid is refreshing', async () => {
+    const { client, release } = gatedMove();
+    const user = await loaded('/schedule', client);
+    await confirmThomasTo207(user);
+    // the cursor followed Thomas to 207; walk it to Annika in 204
+    await user.keyboard('{Home}' + '{ArrowUp}'.repeat(5) + '{ArrowRight}'.repeat(2));
+    await user.keyboard('{Enter}');
+    expect(liveText()).toMatch(/schedule is updating/i);
+    expect(liveText()).not.toMatch(/Picked up Annika/);
+    await act(async () => release('apply'));
+    await waitFor(() => expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument());
+    // unlocked again
+    await user.keyboard('{Enter}');
+    expect(liveText()).toMatch(/Picked up Annika/);
+  });
+
+  it('is locked while the next range loads, and a pointer drag does not start', async () => {
+    const base = createMockClient({ today: TODAY });
+    let calls = 0;
+    const client: ApiClient = {
+      ...base,
+      schedule: {
+        ...base.schedule,
+        get: (q, o) => (++calls === 1 ? base.schedule.get(q, o) : new Promise(() => undefined)),
+      },
+    };
+    const user = await loaded('/schedule', client);
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(grid()).toHaveAttribute('aria-busy', 'true'));
+    mockGeometry();
+    dragItem(item('Thomas Okafor'), { y: rowY(8) }, { release: false });
+    expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument();
+    await cursorTo(user, 1, 0);
+    await user.keyboard('{Enter}');
+    expect(liveText()).toMatch(/schedule is updating/i);
+  });
+});
+
+describe('a move that fails', () => {
+  it('unknown outcome (timeout): keeps out of the optimistic state, reloads and says so neutrally', async () => {
+    // the server applied the move but the answer was lost
+    const { client, get, release } = gatedMove();
+    const user = await loaded('/schedule', client);
+    await confirmThomasTo207(user);
+    const callsBefore = get.mock.calls.length;
+    await act(async () => release('fail-after-apply'));
+    expect(await toast('Could not confirm the move. Showing the latest schedule.')).toBeGreaterThan(
+      0,
+    );
+    await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(callsBefore));
+    // the reload shows what the server really holds: the move was applied
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('unknown outcome where nothing was applied: the reload shows the block back in its room', async () => {
+    const { client, moveRoom, get } = spied();
+    moveRoom.mockRejectedValueOnce(new ApiError(0, 'Network error', { code: 'network' }));
+    const user = await loaded('/schedule', client);
+    const callsBefore = get.mock.calls.length;
+    await confirmThomasTo207(user);
+    expect(await toast('Could not confirm the move. Showing the latest schedule.')).toBeGreaterThan(
+      0,
+    );
+    await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(callsBefore));
+    await waitFor(() =>
+      expect(
+        within(rowOf('202')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    );
+  });
+
+  it('409 stale: reverts, reloads so the blocking booking shows, and uses our copy', async () => {
+    const { client, moveRoom, get } = spied();
+    moveRoom.mockRejectedValueOnce(
+      new ApiError(409, '<b>Reservation edited by x@y.z</b>', { code: 'stale' }),
+    );
+    const user = await loaded('/schedule', client);
+    const callsBefore = get.mock.calls.length;
+    await confirmThomasTo207(user);
+    expect(await toast(/changed by someone else/)).toBeGreaterThan(0);
+    expect(screen.queryByText(/<b>/)).not.toBeInTheDocument(); // server text is not shown verbatim
+    await waitFor(() => expect(get.mock.calls.length).toBeGreaterThan(callsBefore));
+    expect(
+      within(rowOf('202')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('409 conflict from the real mock: the reload shows the booking that blocked the move', async () => {
+    const s = spied();
+    const user = await loaded('/schedule', s.client);
+    // someone books Room 207 for those nights behind our back
+    const d = await s.client.schedule.get({ startDate: TODAY, days: 7 });
+    const other = d.blocks.find((b) => b.id === 'rr-6')!; // Henry Lowell, 203
+    await s.client.schedule.moveRoom({
+      requestId: 'req-other-0001',
+      reservationRoomId: other.id,
+      fromRoomId: other.roomId,
+      version: other.version,
+      toRoomId: 'rm-207',
+    });
+    const callsBefore = s.get.mock.calls.length;
+    await confirmThomasTo207(user); // the UI did not know: its rules allowed 207
+    expect(await toast(/no longer free on those dates/)).toBeGreaterThan(0);
+    await waitFor(() => expect(s.get.mock.calls.length).toBeGreaterThan(callsBefore));
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Henry Lowell/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      within(rowOf('202')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('sends the version, the expected room and an idempotency key', async () => {
+    const { client, moveRoom } = spied();
+    const user = await loaded('/schedule', client);
+    await confirmThomasTo207(user);
+    await waitFor(() => expect(moveRoom).toHaveBeenCalled());
+    const request = moveRoom.mock.calls[0][0];
+    expect(request).toMatchObject({ fromRoomId: 'rm-202', version: expect.any(String) });
+    expect(request.requestId).toMatch(/^[A-Za-z0-9_-]{8,128}$/);
+  });
+});
+
+describe('rows stay while a move is confirmed', () => {
+  it('"Booked only" keeps the source row until the move has settled', async () => {
+    const { client, release } = gatedMove();
+    const user = await loaded('/schedule?rooms=booked', client);
+    const rowsNow = () => rows().map((r) => r.textContent?.slice(0, 3));
+    expect(rowsNow()).toContain('203');
+    await cursorTo(user, 2, 0); // Henry Lowell, the only booking in 203
+    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(6) + '{Enter}'); // to 207
+    const dialog = await screen.findByRole('dialog', { name: /Room Change/ });
+    expect(rowsNow()).toContain('203'); // dialog open
+    await user.click(within(dialog).getByRole('button', { name: 'Move to New Room' }));
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Henry Lowell/ }),
+      ).toBeInTheDocument(),
+    );
+    expect(rowsNow()).toContain('203'); // optimistic move applied, answer pending
+    await act(async () => release('apply'));
+    await waitFor(() => expect(rowsNow()).not.toContain('203')); // settled: filters apply again
+  });
+});
+
+describe('cancelled drags', () => {
+  it('a pointer drag is cancelled when the window loses focus, and its listeners are gone', async () => {
+    const { client, moveRoom } = spied();
+    await loaded('/schedule', client);
+    mockGeometry();
+    dragItem(item('Thomas Okafor'), { y: rowY(8) }, { release: false });
+    expect(screen.getByTestId('drag-ghost')).toBeInTheDocument();
+    fireEvent.blur(window);
+    await waitFor(() => expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument());
+    expect(liveText()).toMatch(/Move cancelled/);
+    fireEvent.pointerUp(window, { clientX: 700, clientY: rowY(8), pointerType: 'mouse' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(moveRoom).not.toHaveBeenCalled();
+  });
+
+  it('a pointer drag is cancelled when the tab is hidden', async () => {
+    await loaded();
+    mockGeometry();
+    dragItem(item('Thomas Okafor'), { y: rowY(8) }, { release: false });
+    const state = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument());
+    state.mockRestore();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('a keyboard pick-up is cancelled when focus leaves the grid', async () => {
+    const user = await loaded();
+    await cursorTo(user, 1, 0);
+    await user.keyboard('{Enter}{ArrowDown}');
+    expect(screen.getByTestId('drop-indicator')).toBeInTheDocument();
+    await user.tab();
+    await waitFor(() => expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument());
+    expect(liveText()).toMatch(/Move cancelled/);
+  });
+
+  it('a drop released over the room header column cancels instead of opening a dialog', async () => {
+    const { client, moveRoom } = spied();
+    await loaded('/schedule', client);
+    mockGeometry();
+    dragItem(item('Thomas Okafor'), { dx: -620, y: rowY(8) }); // x = 80: over the 130px header column
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(liveText()).toMatch(/Move cancelled/);
+    expect(moveRoom).not.toHaveBeenCalled();
+  });
+
+  it('Cancel and Escape in the confirm dialog announce that the move was cancelled', async () => {
+    const user = await loaded();
+    await cursorTo(user, 1, 0);
+    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+    await screen.findByRole('dialog');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(liveText()).toMatch(/Move cancelled/));
+  });
+});
+
+describe('keyboard cursor and accessibility details', () => {
+  it('the cursor follows a block moved with the keyboard', async () => {
+    const user = await loaded();
+    await confirmThomasTo207(user);
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    );
+    const active = () => document.getElementById(grid().getAttribute('aria-activedescendant')!);
+    await waitFor(() => expect(active()).toHaveAccessibleName(/Thomas Okafor.*Room 207/));
+  });
+
+  it('gives the header cells a column index and the long names to the column headers', async () => {
+    await loaded('/schedule?view=30');
+    expect(within(rowOf('201')).getByRole('rowheader')).toHaveAttribute('aria-colindex', '1');
+    expect(screen.getByRole('columnheader', { name: '2026' })).toHaveAttribute(
+      'aria-colindex',
+      '1',
+    );
+    // shortened visible text, full accessible name on the header itself
+    const h = header('Friday 10/16');
+    expect(h).toHaveAttribute('aria-label', 'Friday 10/16');
+    expect(h).toHaveTextContent('Fri10/16');
+  });
+
+  it('renders every 14-day header on two lines, weekday over date', async () => {
+    await loaded('/schedule?view=14');
+    expect(header('Friday 10/16')).toHaveTextContent('Friday10/16');
+  });
+
+  it('exposes the selected availability as a radio menu item', async () => {
+    const user = await loaded('/schedule?rooms=booked');
+    await user.click(screen.getByRole('button', { name: /booked only/i }));
+    expect(screen.getByRole('menuitemradio', { name: 'Booked only' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    );
+    expect(screen.getByRole('menuitemradio', { name: 'All Rooms' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+
+  it('keeps rows in document order when the cursor row is outside the rendered window', async () => {
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => 600,
+    });
+    try {
+      const user = await loaded(
+        '/schedule',
+        createMockClient({ today: TODAY, scheduleSize: 'large' }),
+      );
+      grid().focus();
+      await user.keyboard('{PageDown}'.repeat(20));
+      const indexes = within(grid())
+        .getAllByRole('row')
+        .map((r) => Number(r.getAttribute('aria-rowindex')));
+      expect(indexes).toEqual([...indexes].sort((a, b) => a - b));
+      expect(Math.max(...indexes)).toBeGreaterThan(100);
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+        configurable: true,
+        get: () => 3000,
+      });
+    }
   });
 });

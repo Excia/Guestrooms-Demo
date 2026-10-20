@@ -10,7 +10,13 @@ import type { IsoDate } from '../../lib/dates';
 import { blockSpan } from '../../app/scheduleGrid';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
-import { BLOCK_HEIGHT, BLOCK_TOP, dateAreaWidth, dateAreaX } from './scheduleLayout';
+import {
+  BLOCK_HEIGHT,
+  BLOCK_ICON_SPACING,
+  BLOCK_TOP,
+  dateAreaWidth,
+  dateAreaX,
+} from './scheduleLayout';
 
 export interface ScheduleItemViewProps {
   item: ScheduleItem;
@@ -50,7 +56,7 @@ const NAME_COLOR = (t: Theme, item: ScheduleBlock) =>
       : t.palette.text.primary;
 
 function TypeIcon({ type }: { type: ScheduleBlock['guestType'] }) {
-  const sx = { fontSize: 16, flexShrink: 0 };
+  const sx = { fontSize: (t: Theme) => t.spacing(BLOCK_ICON_SPACING), flexShrink: 0 };
   if (type === 'owner') return <HistoryEdu aria-hidden sx={sx} />;
   if (type === 'member') return <Badge aria-hidden sx={sx} />;
   if (type === 'guest') return <PersonSearch aria-hidden sx={sx} />;

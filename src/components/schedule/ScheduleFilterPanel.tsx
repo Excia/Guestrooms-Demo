@@ -108,8 +108,8 @@ export default function ScheduleFilterPanel({
       open={open}
       anchorEl={anchorEl}
       onClose={onClose}
-      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'center' }}
       slotProps={{
         paper: {
           role: 'dialog',

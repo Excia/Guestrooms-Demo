@@ -51,6 +51,7 @@ import {
   LABEL_VAR,
   LABEL_WIDTH,
   MIN_DAY_WIDTH,
+  ROOM_CAPTION_PX,
   ROW_HEIGHT,
   ROW_VAR,
   rowTop,
@@ -66,6 +67,8 @@ export interface ScheduleGridProps {
   today: IsoDate;
   /** A new range is loading: the grid stays, dimmed. */
   busy?: boolean;
+  /** No new moves while the grid is refreshing or a move is in flight: its answer could overwrite them. */
+  locked?: boolean;
   /** An allowed drop (pointer or keyboard). The page opens the matching confirm dialog. */
   onDrop: (block: ScheduleBlock, result: Accepted) => void;
   /** A refused drop: the reservation stays where it is. */
@@ -150,6 +153,7 @@ const ScheduleRow = memo(function ScheduleRow({
     >
       <Box
         role="rowheader"
+        aria-colindex={1}
         sx={(t) => ({
           position: 'sticky',
           left: 0,
@@ -173,7 +177,7 @@ const ScheduleRow = memo(function ScheduleRow({
         <Typography
           variant="caption"
           component="span"
-          sx={(t) => ({ fontSize: t.typography.pxToRem(10), lineHeight: 1.2 })}
+          sx={(t) => ({ fontSize: t.typography.pxToRem(ROOM_CAPTION_PX), lineHeight: 1.2 })}
         >
           {label.label}
         </Typography>
@@ -226,6 +230,7 @@ export default function ScheduleGrid({
   rooms,
   today,
   busy,
+  locked,
   onDrop,
   onRefuse,
 }: ScheduleGridProps) {
@@ -266,7 +271,8 @@ export default function ScheduleGrid({
     for (let i = range.start; i < range.end; i++) list.push(i);
     if (rooms.length > 0 && (cursorRow < range.start || cursorRow >= range.end))
       list.push(cursorRow);
-    return list;
+    // Document order follows row order, also for the cursor row outside the window.
+    return list.sort((a, b) => a - b);
   }, [range, cursorRow, rooms.length]);
 
   useLayoutEffect(() => {
@@ -284,9 +290,9 @@ export default function ScheduleGrid({
 
   // ---- drag target (pointer and keyboard share it) -------------------------------------------
 
-  const latest = useRef({ rooms, rules, days, startDate, dates, onDrop, onRefuse });
+  const latest = useRef({ rooms, rules, days, startDate, dates, onDrop, onRefuse, locked });
   useLayoutEffect(() => {
-    latest.current = { rooms, rules, days, startDate, dates, onDrop, onRefuse };
+    latest.current = { rooms, rules, days, startDate, dates, onDrop, onRefuse, locked };
   });
 
   const evaluate = useCallback(
@@ -324,7 +330,9 @@ export default function ScheduleGrid({
         shiftFromDistance(x - origin.x + (scroller.scrollLeft - origin.scrollLeft), dayWidth),
         latest.current.days,
       );
-      const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      // Over the room header column (or outside the grid) there is no date: the drop is cancelled.
+      const inside =
+        x >= rect.left + labelPx && x <= rect.right && y >= rect.top && y <= rect.bottom;
       const row = inside
         ? rowIndexAt(y - rect.top + scroller.scrollTop - rowPx, rowPx, latest.current.rooms.length)
         : null;
@@ -343,6 +351,7 @@ export default function ScheduleGrid({
     stop: () => void;
   } | null>(null);
   const suppressClick = useRef(false);
+  const followRef = useRef<{ id: string; roomId: string; startDate: IsoDate } | null>(null);
 
   const updatePointerDrag = useCallback(
     (x: number, y: number) => {
@@ -400,7 +409,7 @@ export default function ScheduleGrid({
 
   const onItemPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => {
-      if (event.button !== 0 || event.pointerType === 'touch') return;
+      if (event.button !== 0 || event.pointerType === 'touch' || latest.current.locked) return;
       pointerRef.current?.stop();
       const scroller = scrollRef.current;
       const move = (e: PointerEvent) => updatePointerDrag(e.clientX, e.clientY);
@@ -430,7 +439,13 @@ export default function ScheduleGrid({
       const key = (e: globalThis.KeyboardEvent) => {
         if (e.key === 'Escape' && pointerRef.current?.started) cancel();
       };
+      // Losing the window or the tab must not leave a drag hanging.
+      const hidden = () => {
+        if (document.visibilityState === 'hidden') cancel();
+      };
       function stop() {
+        window.removeEventListener('blur', cancel);
+        document.removeEventListener('visibilitychange', hidden);
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
         window.removeEventListener('pointercancel', cancel);
@@ -450,10 +465,21 @@ export default function ScheduleGrid({
       window.addEventListener('pointerup', up);
       window.addEventListener('pointercancel', cancel);
       window.addEventListener('keydown', key);
+      window.addEventListener('blur', cancel);
+      document.addEventListener('visibilitychange', hidden);
     },
     [updatePointerDrag, pointerTarget, evaluate, finishDrop],
   );
   useEffect(() => () => pointerRef.current?.stop(), []);
+  // A refresh or an in-flight move starts: a drag in progress is abandoned.
+  useEffect(() => {
+    if (locked) pointerRef.current?.stop();
+  }, [locked]);
+  const [wasLocked, setWasLocked] = useState(false);
+  if (Boolean(locked) !== wasLocked) {
+    setWasLocked(Boolean(locked));
+    if (locked && drag) setDrag(null);
+  }
 
   // A click that ends a drag must not also select the block under the pointer.
   const onClickCapture = (event: React.MouseEvent) => {
@@ -499,7 +525,25 @@ export default function ScheduleGrid({
     [rowPx, labelPx, days],
   );
 
+  // Keyboard move: once the block has changed room or date, the cursor follows it.
+  useEffect(() => {
+    const f = followRef.current;
+    if (!f) return;
+    const moved = data.blocks.find((b) => b.id === f.id);
+    if (!moved || (moved.roomId === f.roomId && moved.startDate === f.startDate)) return;
+    followRef.current = null;
+    const row = rooms.findIndex((r) => r.id === moved.roomId);
+    const layout = blockLayout(moved, startDate, days);
+    if (row < 0 || !layout) return;
+    setCursor({ row, col: layout.column });
+    ensureVisible(row, layout.column);
+  }, [data.blocks, rooms, startDate, days, ensureVisible]);
+
   const pickUp = (item: ScheduleItem, row: number) => {
+    if (latest.current.locked) {
+      setAnnouncement('The schedule is updating. Try again in a moment.');
+      return;
+    }
     if (item.kind !== 'reservation') {
       setAnnouncement(refusalMessage('closure'));
       return;
@@ -545,6 +589,8 @@ export default function ScheduleGrid({
         const { item, result } = drag;
         if (result?.ok) {
           setDrag(null);
+          // After the move is applied the keyboard cursor goes to where the block ended up.
+          followRef.current = { id: item.id, roomId: item.roomId, startDate: item.startDate };
           finishDrop(item, result);
         } else if (result) {
           // Refused: the item stays picked up so another target can be chosen.
@@ -571,6 +617,7 @@ export default function ScheduleGrid({
       ].includes(key)
     ) {
       event.preventDefault();
+      followRef.current = null; // the user is steering now
       const pageRows = Math.max(Math.floor(viewportHeight / rowPx) - 1, 1);
       const next = moveCursor(
         { ...cursor, row: cursorRow },
@@ -652,6 +699,13 @@ export default function ScheduleGrid({
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
+        onBlur={(e) => {
+          // Leaving the grid abandons a keyboard pick-up.
+          if (drag?.mode === 'keyboard' && !e.currentTarget.contains(e.relatedTarget)) {
+            setDrag(null);
+            setAnnouncement('Move cancelled.');
+          }
+        }}
         onScroll={onScroll}
         onClickCapture={onClickCapture}
         onClick={selectItemFromEvent}
@@ -703,6 +757,7 @@ export default function ScheduleGrid({
           >
             <Box
               role="columnheader"
+              aria-colindex={1}
               sx={(t) => ({
                 position: 'sticky',
                 left: 0,
@@ -726,6 +781,7 @@ export default function ScheduleGrid({
                 key={date}
                 role="columnheader"
                 aria-colindex={i + 2}
+                aria-label={days === 7 ? undefined : dayHeader(date)}
                 aria-current={i === todayIndex ? 'date' : undefined}
                 sx={(t) => ({
                   flex: '1 1 0',
@@ -742,18 +798,20 @@ export default function ScheduleGrid({
                 <Typography
                   variant="subtitle2"
                   component="span"
-                  aria-label={dayHeader(date)}
                   sx={{ fontWeight: i === todayIndex ? 700 : 500, textAlign: 'center' }}
                 >
-                  {days >= 30 ? (
-                    // Narrow 30-day columns: weekday abbreviation over the date.
+                  {days === 7 ? (
+                    dayHeader(date)
+                  ) : (
+                    // 14 and 30 days: weekday over date, the same in every column (30 days:
+                    // abbreviated weekday). The full name is the column header's aria-label.
                     <>
-                      <span aria-hidden>{dayHeader(date).slice(0, 3)}</span>
+                      <span aria-hidden>
+                        {days === 14 ? dayHeader(date).split(' ')[0] : dayHeader(date).slice(0, 3)}
+                      </span>
                       <br aria-hidden />
                       <span aria-hidden>{dayHeader(date).split(' ')[1]}</span>
                     </>
-                  ) : (
-                    dayHeader(date)
                   )}
                 </Typography>
               </Box>
