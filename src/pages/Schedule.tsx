@@ -179,7 +179,11 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const onCreated = useCallback(
     (detail: ReservationDetail) => {
       retry();
-      notify(`Reservation ${detail.confirmationNumber} created.`);
+      notify(
+        detail.rooms.every((r) => r.roomId !== null)
+          ? `Reservation ${detail.confirmationNumber} created.`
+          : `Reservation ${detail.confirmationNumber} created without a room. It will not appear on the schedule until a room is assigned.`,
+      );
       const next = applyPanel(latestParams.current, {
         kind: 'details',
         reservationId: detail.id,
@@ -339,6 +343,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         }}
         onRefuse={notify}
         onOpen={openDetails}
+        onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
       />
     );
   }

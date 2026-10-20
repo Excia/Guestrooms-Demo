@@ -2,6 +2,7 @@ import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import { useCallback, useId, useRef, useState } from 'react';
 import type { ReservationDetail, ScheduleData } from '../../api';
+import { RESERVATION_PANEL_SIDE, type PanelSide } from '../../app/layout';
 import type { EarlyLateValues } from '../../app/earlyLate';
 import type { PanelState } from '../../app/panelUrl';
 import type { IsoDate } from '../../lib/dates';
@@ -25,12 +26,14 @@ export interface ReservationPanelProps {
   onExited?: () => void;
   /** The reservation just created: its heading takes focus once loaded (the form that had it is gone). */
   focusTitleFor?: string;
+  /** Which edge the panel flies out from; defaults to the one setting in src/app/layout.ts. */
+  side?: PanelSide;
   now?: () => number;
 }
 
 /**
- * The reservation side panel (Figma 2623:9046 and 11905:17751): a 400px panel on the right of the
- * schedule; full width below 1200px. It is a modal drawer, so focus moves into it, Tab stays inside,
+ * The reservation side panel (Figma 2623:9046 and 11905:17751): a 400px panel on one side of the
+ * schedule (RESERVATION_PANEL_SIDE); full width below 1200px. It is a modal drawer, so focus moves into it, Tab stays inside,
  * Escape and a click outside close it, and focus returns to what opened it (the grid or the New
  * Reservation button). Its state lives in the URL (see panelUrl.ts); this component only shows it.
  */
@@ -46,6 +49,7 @@ export default function ReservationPanel({
   onEarlyLateSaved,
   onExited,
   focusTitleFor,
+  side = RESERVATION_PANEL_SIDE,
   now,
 }: ReservationPanelProps) {
   const titleId = useId();
@@ -61,7 +65,7 @@ export default function ReservationPanel({
 
   return (
     <Drawer
-      anchor="right"
+      anchor={side}
       open={panel !== null}
       onClose={() => {
         if (!guarded.current) onClose();
@@ -104,6 +108,13 @@ export default function ReservationPanel({
             onUnknownOutcome={onUnknownOutcome}
             onGuardChange={onGuardChange}
             active={panel !== null}
+            prefill={
+              shown.roomId || shown.arrival
+                ? { roomId: shown.roomId, arrival: shown.arrival }
+                : undefined
+            }
+            // A different prefill is a different opening: start the form over.
+            key={`${shown.roomId ?? ''}|${shown.arrival ?? ''}`}
             now={now}
           />
         ) : null}

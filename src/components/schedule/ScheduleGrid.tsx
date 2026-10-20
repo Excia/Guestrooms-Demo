@@ -29,6 +29,8 @@ import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../
 import {
   blockAriaLabel,
   blockSpan,
+  columnAtX,
+  emptyCellAction,
   cellAriaLabel,
   clamp,
   clampShift,
@@ -75,6 +77,8 @@ export interface ScheduleGridProps {
   onRefuse: (message: string) => void;
   /** A reservation block was clicked (not dragged) or Enter was pressed on it: open its details. */
   onOpen: (block: ScheduleBlock) => void;
+  /** A free night in a room row was clicked (or Enter was pressed on it): start a reservation there. */
+  onOpenCell: (room: ScheduleRoom, date: IsoDate) => void;
 }
 
 interface DragState {
@@ -92,7 +96,7 @@ interface DragState {
 const DRAG_THRESHOLD_PX = 4;
 
 const HELP =
-  'Use the arrow keys to move between rooms and dates. Press Enter on a reservation to open its details. ' +
+  'Use the arrow keys to move between rooms and dates. Press Enter on a reservation to open its details, or on an empty date to start a new reservation there. ' +
   'Press Space or M to pick it up, the arrow keys to choose a new room or date, Enter or Space to drop it ' +
   'and Escape to cancel. Reservations can also be dragged with a mouse.';
 
@@ -236,6 +240,7 @@ export default function ScheduleGrid({
   onDrop,
   onRefuse,
   onOpen,
+  onOpenCell,
 }: ScheduleGridProps) {
   const theme = useTheme();
   const idPrefix = useId().replace(/:/g, '');
@@ -293,9 +298,31 @@ export default function ScheduleGrid({
 
   // ---- drag target (pointer and keyboard share it) -------------------------------------------
 
-  const latest = useRef({ rooms, rules, days, startDate, dates, onDrop, onRefuse, onOpen, locked });
+  const latest = useRef({
+    rooms,
+    rules,
+    days,
+    startDate,
+    dates,
+    onDrop,
+    onRefuse,
+    onOpen,
+    onOpenCell,
+    locked,
+  });
   useLayoutEffect(() => {
-    latest.current = { rooms, rules, days, startDate, dates, onDrop, onRefuse, onOpen, locked };
+    latest.current = {
+      rooms,
+      rules,
+      days,
+      startDate,
+      dates,
+      onDrop,
+      onRefuse,
+      onOpen,
+      onOpenCell,
+      locked,
+    };
   });
 
   const evaluate = useCallback(
@@ -492,18 +519,52 @@ export default function ScheduleGrid({
     }
   };
 
+  // A free date cell: start a reservation there. A closure says so; a block's own column does nothing.
+  const activateCell = (room: ScheduleRoom, col: number) => {
+    const action = emptyCellAction(
+      blocksByRoom.get(room.id),
+      closuresByRoom.get(room.id),
+      startDate,
+      days,
+      col,
+    );
+    if (action.kind === 'closed') {
+      setAnnouncement('Room closed.');
+    } else if (action.kind === 'free') {
+      const date = addDays(startDate, col);
+      setAnnouncement(`Starting a new reservation in Room ${room.number} on ${dayHeader(date)}.`);
+      latest.current.onOpenCell(room, date);
+    }
+  };
+
   const selectItemFromEvent = (event: React.MouseEvent<HTMLElement>) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-item-id]');
-    const rowEl = (event.target as HTMLElement).closest<HTMLElement>('[role="row"]');
-    if (!target || !rowEl) return;
+    const element = event.target as HTMLElement;
+    const rowEl = element.closest<HTMLElement>('[role="row"]');
+    if (!rowEl) return;
     const index = Number(rowEl.getAttribute('aria-rowindex')) - 2;
+    if (index < 0) return;
+    const target = element.closest<HTMLElement>('[data-item-id]');
+    if (!target) {
+      // The empty part of a room row: which date column was clicked?
+      const content = contentRef.current;
+      const room = latest.current.rooms[index];
+      if (!content || !room || element.closest('[role="rowheader"]')) return;
+      const rect = content.getBoundingClientRect();
+      const col = columnAtX(event.clientX, rect.left, rect.width, labelPx, days);
+      if (col === null) return;
+      setCursor({ row: index, col });
+      scrollRef.current?.focus({ preventScroll: true });
+      activateCell(room, col);
+      return;
+    }
     const item = [...data.blocks, ...data.closures].find((i) => i.id === target.dataset.itemId);
-    if (!item || index < 0) return;
+    if (!item) return;
     const layout = blockLayout(item, startDate, days);
     setCursor({ row: index, col: layout?.column ?? 0 });
     scrollRef.current?.focus({ preventScroll: true });
     // A plain click (a drag's click was swallowed in the capture phase) opens the details.
     if (item.kind === 'reservation') latest.current.onOpen(item);
+    else setAnnouncement('Room closed.');
   };
 
   // ---- keyboard ----------------------------------------------------------------------------
@@ -650,8 +711,11 @@ export default function ScheduleGrid({
         // Enter opens the details; Space and M pick the block up to move it.
         if (key === 'Enter') {
           if (item.kind === 'reservation') latest.current.onOpen(item);
-          else setAnnouncement('Closures have no details.');
+          else setAnnouncement('Room closed. Closures have no details.');
         } else pickUp(item, cursorRow);
+      } else if (key === 'Enter' && rooms[cursorRow]) {
+        event.preventDefault();
+        activateCell(rooms[cursorRow], cursor.col);
       }
     }
   };

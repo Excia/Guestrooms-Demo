@@ -272,6 +272,7 @@ export default function ReservationDetails({
   const closeButton = (
     <IconButton
       aria-label="Close reservation details"
+      color="primary"
       onClick={onClose}
       sx={{ ml: 'auto', mr: -1, mt: -0.5 }}
     >
@@ -444,6 +445,11 @@ function Loaded({
             />
           )}
         </Box>
+        {detail.rooms.some((r) => r.roomId === null) ? (
+          <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
+            Not shown on the schedule until a room is assigned.
+          </Typography>
+        ) : null}
         <Box sx={{ mt: 2.5, pb: 2.5 }}>
           <Typography
             variant="subtitle1"

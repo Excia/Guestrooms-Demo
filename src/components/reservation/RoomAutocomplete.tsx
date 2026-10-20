@@ -48,7 +48,6 @@ export default function RoomAutocomplete({
         <TextField
           {...params}
           label="Room"
-          required
           error={Boolean(error)}
           helperText={unavailable ? 'Rooms could not be loaded.' : error}
           slotProps={{
@@ -56,7 +55,7 @@ export default function RoomAutocomplete({
             inputLabel: { ...params.slotProps?.inputLabel, shrink: true },
           }}
           inputRef={inputRef}
-          placeholder="Search by number, location or type"
+          placeholder="Unassigned"
         />
       )}
     />

@@ -1,6 +1,5 @@
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import Close from '@mui/icons-material/Close';
-import Search from '@mui/icons-material/Search';
 import Timer from '@mui/icons-material/Timer';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -12,7 +11,6 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import IconButton from '@mui/material/IconButton';
-import InputAdornment from '@mui/material/InputAdornment';
 import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import Tab from '@mui/material/Tab';
@@ -32,7 +30,7 @@ import { stayLimits } from '../../app/dateRange';
 import { ADMIN_HOLD_AUDIENCE, describeHold, formatHold, holdMinutes } from '../../app/holdTimer';
 import {
   createFailure,
-  defaultNewReservation,
+  prefilledNewReservation,
   estimateTotal,
   stayNights,
   toCreateRequest,
@@ -43,10 +41,20 @@ import { RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
 import { formatMoney } from '../../app/quickStats';
 import { MAX_ADVANCE_DAYS, MAX_STAY_NIGHTS } from '../../app/reservationSearch';
 import { buildRoomOptions } from '../../app/roomOptions';
+import {
+  roomChoices,
+  selectLocation,
+  selectRoom,
+  selectRoomType,
+  type RoomSelection,
+} from '../../app/roomCascade';
 import { useAccess } from '../../app/useAccess';
 import { addDays, type IsoDate } from '../../lib/dates';
 import { newRequestId } from '../../lib/requestId';
 import { MAX_NOTES_LENGTH, MAX_PARTY } from '../../api/validation';
+import Select from '../shared/Select';
+import AddGuestDialog from './AddGuestDialog';
+import GuestAutocomplete from './GuestAutocomplete';
 import DateField, { type DateFieldRange } from '../shared/DateField';
 import { focusOnMount } from '../shared/focusOnMount';
 import { DETAILS_SECTIONS } from './DetailsAccordion';
@@ -69,6 +77,8 @@ export interface NewReservationPanelProps {
   onUnknownOutcome: () => void;
   /** A dialog of the panel is open (the hold expired): Escape and outside clicks must not close the panel. */
   onGuardChange: (guarded: boolean) => void;
+  /** Opened from an empty grid cell: the room and Check In to start with. */
+  prefill?: { roomId?: string; arrival?: IsoDate };
   /** False while the drawer is closing: the hold stops and its expiry dialog never shows. */
   active?: boolean;
   /** Injectable clock (epoch ms) for the hold timer; Date.now by default. */
@@ -85,6 +95,7 @@ export default function NewReservationPanel({
   onCreated,
   onUnknownOutcome,
   onGuardChange,
+  prefill,
   active = true,
   now,
 }: NewReservationPanelProps) {
@@ -92,9 +103,19 @@ export default function NewReservationPanel({
   const { can } = useAccess();
   const canCreate = can(RESERVATION_EDIT_PERMISSION);
   const rootRef = useRef<HTMLDivElement>(null);
-  const [form, setForm] = useState<NewReservationForm>(() =>
-    defaultNewReservation(today, addDays(today, 1)),
-  );
+  const [initial] = useState(() => prefilledNewReservation(today, addDays(today, 1), prefill));
+  const [form, setForm] = useState<NewReservationForm>(initial.form);
+  // Opened from a past day: Check In was set to today, and the panel says so until it is edited.
+  const [pastNote, setPastNote] = useState(initial.pastDate);
+  const [tab, setTab] = useState(0);
+  const [addFor, setAddFor] = useState<'booking' | 'lead' | null>(null);
+  // The room of a clicked cell is applied once the rooms have loaded (a reload opens the panel first).
+  const [roomApplied, setRoomApplied] = useState(!prefill?.roomId);
+  if (!roomApplied && data) {
+    setRoomApplied(true);
+    const room = data.rooms.find((r) => r.id === prefill?.roomId);
+    if (room) setForm((f) => ({ ...f, ...selectRoom(data.rooms, f, room.id) }));
+  }
   const [notes, setNotes] = useState({ publicNotes: '', privateNotes: '' });
   const [submitted, setSubmitted] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -109,16 +130,47 @@ export default function NewReservationPanel({
   const [openSection, setOpenSection] = useState<string | null>(null);
   const set = <K extends keyof NewReservationForm>(key: K, value: NewReservationForm[K]) => {
     if (key === 'roomId' || key === 'arrival' || key === 'departure') setRoomError(null);
+    if (key === 'arrival' || key === 'departure') setPastNote(false);
     setForm((f) => ({ ...f, [key]: value }));
   };
 
   // ---- rooms: every room, whatever the schedule is filtered to ----
-  const options = useMemo(
-    () => (data ? buildRoomOptions(data.rooms, data.locations, data.roomTypes) : []),
-    [data],
+  const allRooms = useMemo(() => data?.rooms ?? [], [data]);
+  const selection: RoomSelection = {
+    locationId: form.locationId,
+    roomTypeId: form.roomTypeId,
+    roomId: form.roomId,
+  };
+  const choices = useMemo(
+    () => roomChoices(allRooms, selection),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRooms, form.locationId, form.roomTypeId, form.roomId],
   );
-  const chosen = options.find((o) => o.id === form.roomId);
-  const roomType = data?.roomTypes.find((t) => t.id === chosen?.roomTypeId);
+  const options = useMemo(
+    () => (data ? buildRoomOptions(choices.rooms, data.locations, data.roomTypes) : []),
+    [data, choices.rooms],
+  );
+  const unassigned = { value: '', label: 'Unassigned' };
+  const locationOptions = [
+    unassigned,
+    ...(data?.locations ?? [])
+      .filter((l) => choices.locationIds.has(l.id))
+      .map((l) => ({ value: l.id, label: l.name })),
+  ];
+  const roomTypeOptions = [
+    unassigned,
+    ...(data?.roomTypes ?? [])
+      .filter((t) => choices.roomTypeIds.has(t.id))
+      .map((t) => ({ value: t.id, label: t.name })),
+  ];
+  const chosenRoom = allRooms.find((r) => r.id === form.roomId);
+  const roomType = data?.roomTypes.find(
+    (t) => t.id === (chosenRoom?.roomTypeId ?? form.roomTypeId),
+  );
+  const pick = (next: RoomSelection) => {
+    setRoomError(null);
+    setForm((f) => ({ ...f, ...next }));
+  };
   const nights = stayNights(form.arrival, form.departure);
   const total = estimateTotal(nights, roomType);
 
@@ -198,6 +250,7 @@ export default function NewReservationPanel({
     endNames: ['check-in', 'check-out'],
     onChange: (r) => {
       setRoomError(null);
+      setPastNote(false);
       setForm((f) => ({ ...f, arrival: r.from, departure: r.to }));
     },
   });
@@ -211,7 +264,8 @@ export default function NewReservationPanel({
       <Box sx={{ px: 2.5, pt: 2.5, flex: '1 1 auto', overflow: 'auto', minHeight: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Tabs
-            value={0}
+            value={tab}
+            onChange={(_, v: number) => setTab(v)}
             aria-label="Create"
             variant="scrollable"
             scrollButtons={false}
@@ -222,11 +276,23 @@ export default function NewReservationPanel({
               '& .MuiTab-root': { px: 1, minWidth: 0, typography: 'button_small' },
             }}
           >
-            <Tab label="New Reservation" id={`${titleId}-tab`} />
-            {/* Room closures arrive with Room Blocks (not built yet). */}
-            <Tab label="New Room Closure" disabled />
+            <Tab
+              label="New Reservation"
+              id={`${titleId}-tab-0`}
+              aria-controls={`${titleId}-panel-0`}
+            />
+            <Tab
+              label="New Room Closure"
+              id={`${titleId}-tab-1`}
+              aria-controls={`${titleId}-panel-1`}
+            />
           </Tabs>
-          <IconButton aria-label="Close new reservation" onClick={onBack} sx={{ mr: -1 }}>
+          <IconButton
+            aria-label="Close new reservation"
+            color="primary"
+            onClick={onBack}
+            sx={{ mr: -1 }}
+          >
             <Close fontSize="large" />
           </IconButton>
         </Box>
@@ -234,7 +300,7 @@ export default function NewReservationPanel({
           Back to schedule
         </Button>
         <Typography id={titleId} variant="h6" component="h2" sx={{ mt: 1 }}>
-          New Reservation
+          {tab === 0 ? 'New Reservation' : 'New Room Closure'}
         </Typography>
 
         {!canCreate ? (
@@ -283,7 +349,31 @@ export default function NewReservationPanel({
           {announcement}
         </Box>
 
-        <Box component="form" noValidate onSubmit={(e) => e.preventDefault()} sx={{ mt: 2 }}>
+        <Box
+          role="tabpanel"
+          id={`${titleId}-panel-1`}
+          aria-labelledby={`${titleId}-tab-1`}
+          hidden={tab !== 1}
+          sx={{ mt: 2 }}
+        >
+          {/* Room closures arrive with Room Blocks (not built yet): a placeholder, no form. */}
+          <Alert severity="info">Room closures arrive with Room Blocks.</Alert>
+        </Box>
+        <Box
+          component="form"
+          role="tabpanel"
+          id={`${titleId}-panel-0`}
+          aria-labelledby={`${titleId}-tab-0`}
+          hidden={tab !== 0}
+          noValidate
+          onSubmit={(e) => e.preventDefault()}
+          sx={{ mt: 2 }}
+        >
+          {pastNote ? (
+            <Alert severity="info" role="status" sx={{ mb: 1.5 }}>
+              Check In was set to today because the day you clicked has passed.
+            </Alert>
+          ) : null}
           <Typography
             variant="subtitle2"
             component="h3"
@@ -345,7 +435,14 @@ export default function NewReservationPanel({
               row
               aria-labelledby={`${hintId}-guest`}
               value={form.role}
-              onChange={(_, v) => set('role', v as NewReservationForm['role'])}
+              onChange={(_, v) =>
+                setForm((f) => ({
+                  ...f,
+                  role: v as NewReservationForm['role'],
+                  // The lead occupant is the booking guest for an occupant: nothing to keep.
+                  leadOccupant: v === 'reserver' ? f.leadOccupant : null,
+                }))
+              }
             >
               <FormControlLabel
                 value="occupant"
@@ -359,30 +456,35 @@ export default function NewReservationPanel({
               />
             </RadioGroup>
           </Box>
-          <TextField
-            label="Booking guest"
-            required
-            fullWidth
-            value={form.guestName}
-            onChange={(e) => set('guestName', e.target.value)}
-            error={Boolean(shown.guestName)}
-            helperText={
-              shown.guestName ??
-              'PLACEHOLDER: type the name. Member search arrives with the Member Directory.'
-            }
-            sx={{ mt: 1 }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              htmlInput: { maxLength: 200 },
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Search aria-hidden />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
+          <Box sx={{ mt: 1 }}>
+            <GuestAutocomplete
+              label="Booking guest"
+              value={form.guest}
+              onChange={(m) => set('guest', m)}
+              onAdd={() => setAddFor('booking')}
+              addLabel="Add booking guest"
+            />
+          </Box>
+          {form.role === 'reserver' ? (
+            <Box sx={{ mt: 2 }}>
+              <Typography
+                variant="subtitle2"
+                component="h3"
+                id={`${hintId}-lead`}
+                sx={{ fontWeight: 700, color: 'text.secondary', mb: 1 }}
+              >
+                Lead Occupant
+              </Typography>
+              <GuestAutocomplete
+                label="Lead occupant"
+                value={form.leadOccupant}
+                onChange={(m) => set('leadOccupant', m)}
+                onAdd={() => setAddFor('lead')}
+                addLabel="Add lead occupant"
+                clearLabel="Clear lead occupant"
+              />
+            </Box>
+          ) : null}
 
           <Typography
             variant="subtitle2"
@@ -392,35 +494,31 @@ export default function NewReservationPanel({
             Room Details
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            <TextField
+            <Select
               label="Location"
+              placeholder="Unassigned"
               size="small"
-              value={chosen?.locationName ?? ''}
-              placeholder="Set by the room"
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: { readOnly: true },
-                htmlInput: { tabIndex: -1 },
-              }}
+              fullWidth
+              value={form.locationId}
+              options={locationOptions}
+              onChange={(v) => pick(selectLocation(allRooms, selection, v))}
             />
-            <TextField
+            <Select
               label="Room Type"
+              placeholder="Unassigned"
               size="small"
-              value={chosen?.roomTypeName ?? ''}
-              placeholder="Set by the room"
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: { readOnly: true },
-                htmlInput: { tabIndex: -1 },
-              }}
+              fullWidth
+              value={form.roomTypeId}
+              options={roomTypeOptions}
+              onChange={(v) => pick(selectRoomType(allRooms, selection, v))}
             />
             <RoomAutocomplete
               options={options}
               value={form.roomId}
-              onChange={(id) => set('roomId', id)}
+              onChange={(id) => pick(selectRoom(allRooms, selection, id))}
               loading={!data && !dataFailed}
               unavailable={dataFailed}
-              error={shown.roomId ?? roomError ?? undefined}
+              error={roomError ?? undefined}
             />
             {dataFailed ? (
               <Button size="small" onClick={onRetryData} sx={{ alignSelf: 'flex-start' }}>
@@ -510,27 +608,40 @@ export default function NewReservationPanel({
         </Box>
       </Box>
 
-      <Box sx={{ bgcolor: 'primary.tint', px: 3.75, py: 2, flex: 'none' }}>
-        {failure ? (
-          <Alert severity="error" role="alert" sx={{ mb: 1.5 }}>
-            {failure}
-          </Alert>
-        ) : null}
-        <Typography variant="body2" sx={{ mb: 1.5 }}>
-          Estimated Reservation Total: {total === null ? 'to be calculated' : formatMoney(total)}
-        </Typography>
-        <Button
-          variant="contained"
-          fullWidth
-          size="large"
-          onClick={submit}
-          aria-disabled={saving || expired || !canCreate || undefined}
-          className={saving || expired || !canCreate ? 'Mui-disabled' : undefined}
-          sx={{ '&.Mui-disabled': { pointerEvents: 'auto' } }}
-        >
-          {saving ? 'Creating…' : 'Create New Reservation'}
-        </Button>
-      </Box>
+      {tab === 0 ? (
+        <Box sx={{ bgcolor: 'primary.tint', px: 3.75, py: 2, flex: 'none' }}>
+          {failure ? (
+            <Alert severity="error" role="alert" sx={{ mb: 1.5 }}>
+              {failure}
+            </Alert>
+          ) : null}
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
+            Estimated Reservation Total: {total === null ? 'to be calculated' : formatMoney(total)}
+          </Typography>
+          <Button
+            variant="contained"
+            fullWidth
+            size="large"
+            onClick={submit}
+            aria-disabled={saving || expired || !canCreate || undefined}
+            className={saving || expired || !canCreate ? 'Mui-disabled' : undefined}
+            sx={{ '&.Mui-disabled': { pointerEvents: 'auto' } }}
+          >
+            {saving ? 'Creating…' : 'Create New Reservation'}
+          </Button>
+        </Box>
+      ) : null}
+
+      <AddGuestDialog
+        open={addFor !== null}
+        forLabel={addFor === 'lead' ? 'lead occupant' : 'booking guest'}
+        onClose={() => setAddFor(null)}
+        onAdded={(member) => {
+          if (addFor === 'lead') set('leadOccupant', member);
+          else set('guest', member);
+          setAddFor(null);
+        }}
+      />
 
       <Dialog
         open={expired}

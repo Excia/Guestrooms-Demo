@@ -463,7 +463,7 @@ describe('New Reservation panel', () => {
     ).toBe(true);
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
-    const room = within(dialog).getByRole('combobox', { name: /Room/ });
+    const room = within(dialog).getByRole('combobox', { name: 'Room' });
     await user.click(room);
     const list = await screen.findByRole('listbox');
     const labels = within(list)
@@ -482,7 +482,7 @@ describe('New Reservation panel', () => {
     const user = await loaded();
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
-    await user.click(within(dialog).getByRole('combobox', { name: /Room/ }));
+    await user.click(within(dialog).getByRole('combobox', { name: 'Room' }));
     await screen.findByRole('listbox');
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -495,26 +495,23 @@ describe('New Reservation panel', () => {
     const user = await loaded();
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
-    await user.type(within(dialog).getByRole('combobox', { name: /Room/ }), 'north suite');
+    await user.type(within(dialog).getByRole('combobox', { name: 'Room' }), 'north suite');
     const options = within(await screen.findByRole('listbox')).getAllByRole('option');
     expect(options.map((o) => o.textContent)).toEqual(['Room 109', 'Room 110']);
     await user.click(options[0]);
-    expect(within(dialog).getByLabelText('Location')).toHaveValue('North Lodge');
-    expect(within(dialog).getByLabelText('Room Type')).toHaveValue('Suite');
+    expect(within(dialog).getByRole('combobox', { name: /Location/ })).toHaveTextContent(
+      'North Lodge',
+    );
+    expect(within(dialog).getByRole('combobox', { name: /Room Type/ })).toHaveTextContent('Suite');
   });
 
-  it('validates, then creates the reservation, shows it on the grid and opens its details', async () => {
+  it('creates the reservation, shows it on the grid and opens its details', async () => {
     const base = createMockClient({ today: TODAY });
     const user = await loaded('/schedule', base);
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
-    await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
-    expect(
-      await within(dialog).findByText('Choose or enter the booking guest.'),
-    ).toBeInTheDocument();
-    expect(within(dialog).getByText('Choose a room.')).toBeInTheDocument();
-    await user.type(within(dialog).getByRole('textbox', { name: /Booking guest/ }), 'Ann Lee');
-    await user.click(within(dialog).getByRole('combobox', { name: /Room/ }));
+    await chooseGuest(user, dialog, 'Booking guest', 'grace', /Grace Nakamura/);
+    await user.click(within(dialog).getByRole('combobox', { name: 'Room' }));
     await user.click(await screen.findByRole('option', { name: 'Room 203' }));
     expect(within(dialog).getByText(/Estimated Reservation Total: \$249\.00/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
@@ -522,18 +519,15 @@ describe('New Reservation panel', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'That room is booked or closed on those dates.',
     );
-    // 108 is free tonight.
-    await user.click(within(dialog).getByRole('combobox', { name: /Room/ }));
-    await user.click(await screen.findByRole('option', { name: 'Room 108' }));
+    // 204 (same location and type: choosing 203 narrowed the list) is free tonight.
+    await user.click(within(dialog).getByRole('combobox', { name: 'Room' }));
+    await user.click(await screen.findByRole('option', { name: 'Room 204' }));
     await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
     const created = await panel(/Reservation #GR-7000\d/);
-    expect(
-      await within(created)
-        .findByText('Ann Lee (' + '', { exact: false })
-        .catch(() => null),
-    ).toBeDefined();
+    expect(await within(created).findByText('Room 204')).toBeInTheDocument();
+    expect(within(created).getAllByText(/Grace Nakamura \(MEM-0005\)/).length).toBeGreaterThan(0);
     expect(url()).toMatch(/\?res=rs-new-1&rr=rr-new-1$/);
-    await waitFor(() => expect(block('Ann Lee')).toBeInTheDocument());
+    await waitFor(() => expect(block('Grace Nakamura')).toBeInTheDocument());
   });
 
   it('the permission gate: without reservation.edit the create button is inactive and says why', async () => {
@@ -544,7 +538,10 @@ describe('New Reservation panel', () => {
       within(dialog).getByText('You do not have permission to create reservations.'),
     ).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
-    expect(within(dialog).queryByText('Choose a room.')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Create New Reservation' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 });
 
@@ -634,13 +631,26 @@ describe('hold timer', () => {
 
 // ---- round 1 review ----------------------------------------------------------------------------
 
+/** Pick a person in a Booking Guest / Lead Occupant field: open it, search, choose the option. */
+async function chooseGuest(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+  field: string,
+  search: string,
+  option: RegExp,
+) {
+  await user.click(within(dialog).getByRole('combobox', { name: field }));
+  await user.type(within(dialog).getByRole('combobox', { name: field }), search);
+  await user.click(await screen.findByRole('option', { name: option }));
+}
+
 async function fillNewReservation(
   user: ReturnType<typeof userEvent.setup>,
   dialog: HTMLElement,
   room = 'Room 108',
 ) {
-  await user.type(within(dialog).getByRole('textbox', { name: /Booking guest/ }), 'Ann Lee');
-  await user.click(within(dialog).getByRole('combobox', { name: /Room/ }));
+  await chooseGuest(user, dialog, 'Booking guest', 'grace', /Grace Nakamura/);
+  await user.click(within(dialog).getByRole('combobox', { name: 'Room' }));
   await user.click(await screen.findByRole('option', { name: room }));
 }
 
@@ -675,7 +685,7 @@ describe('create is idempotent across a retry', () => {
     expect(ids).toHaveLength(2);
     expect(ids[1]).toBe(ids[0]);
     const found = await base.schedule.get({ startDate: TODAY, days: 14 });
-    expect(found.blocks.filter((b) => b.guestName === 'Ann Lee')).toHaveLength(1);
+    expect(found.blocks.filter((b) => b.guestName === 'Grace Nakamura')).toHaveLength(1);
   });
 
   it('keeps the id while the form is unchanged and takes a new one when a field changes', async () => {
@@ -726,7 +736,7 @@ describe('create is idempotent across a retry', () => {
     await fillNewReservation(user, dialog, 'Room 203'); // taken today
     const create = () => within(dialog).getByRole('button', { name: 'Create New Reservation' });
     await user.click(create());
-    const room = within(dialog).getByRole('combobox', { name: /Room/ });
+    const room = within(dialog).getByRole('combobox', { name: 'Room' });
     await waitFor(() => expect(room).toBeInvalid());
     const described = room.getAttribute('aria-describedby')!;
     expect(document.getElementById(described)).toHaveTextContent(
