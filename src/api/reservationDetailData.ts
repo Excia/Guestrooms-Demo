@@ -1,12 +1,14 @@
 // Mock reservation details, early/late saves and reservation creation, on the schedule's
 // in-memory state. Replaced by the backend later.
 import { addDays, daysBetween } from '../lib/dates';
+import { expectedLeadOccupantName } from './createRules';
 import { assertFree, bump, findRoom } from './scheduleData';
 import type { ReservationExtras, ScheduleState } from './scheduleData';
 import type {
   CreateReservationRequest,
   EarlyLateRequest,
   EarlyLateResult,
+  Member,
   ReservationDetail,
   ReservationRoomDetail,
   ReservationStatus,
@@ -43,8 +45,12 @@ function reservationStatus(rooms: ReservationRoomDetail[]): ReservationStatus {
   return 'confirmed';
 }
 
+/** The reservation's rooms: on the grid, or (created without a room) in the unassigned list. */
+const stayBlocks = (state: ScheduleState, reservationId: string): ScheduleBlock[] =>
+  [...state.blocks, ...state.unassigned].filter((b) => b.reservationId === reservationId);
+
 export function buildDetail(state: ScheduleState, reservationId: string): ReservationDetail {
-  const group = state.blocks.filter((b) => b.reservationId === reservationId);
+  const group = stayBlocks(state, reservationId);
   if (group.length === 0) throw notFound();
   const extras = extrasFor(state, reservationId);
   const lead = group[0];
@@ -83,14 +89,16 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
     nights: daysBetween(arrival, departure),
     adults: extras.adults,
     children: extras.children,
-    leadOccupant: {
-      name: lead.guestName,
-      memberNumber:
-        lead.guestType === 'member' || lead.guestType === 'owner'
-          ? `MEM-${lead.confirmationNumber.replace(/\D/g, '').slice(-4)}`
-          : null,
-      guestType: lead.guestType,
-    },
+    leadOccupant: extras.leadOccupant
+      ? { ...extras.leadOccupant, guestType: lead.guestType }
+      : {
+          name: lead.guestName,
+          memberNumber:
+            lead.guestType === 'member' || lead.guestType === 'owner'
+              ? `MEM-${lead.confirmationNumber.replace(/\D/g, '').slice(-4)}`
+              : null,
+          guestType: lead.guestType,
+        },
     rooms,
     earlyCheckIn: extras.earlyCheckIn,
     lateCheckOut: extras.lateCheckOut,
@@ -104,7 +112,7 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
 
 /** Applies the flags if the version is current; nothing changes when it throws. */
 export function setEarlyLate(state: ScheduleState, request: EarlyLateRequest): EarlyLateResult {
-  const group = state.blocks.filter((b) => b.reservationId === request.reservationId);
+  const group = stayBlocks(state, request.reservationId);
   if (group.length === 0) throw notFound();
   const extras = extrasFor(state, request.reservationId);
   if (extras.version !== request.version) {
@@ -132,20 +140,24 @@ export function setEarlyLate(state: ScheduleState, request: EarlyLateRequest): E
 export function createReservation(
   state: ScheduleState,
   request: CreateReservationRequest,
+  /** Looks a directory person up by id (the booking guest and the lead occupant). */
+  member: (id: string | undefined) => Member | undefined,
 ): ReservationDetail {
-  findRoom(state, request.roomId);
+  const roomId = request.roomId ?? null;
+  if (roomId !== null) findRoom(state, roomId);
   if (request.arrival < state.today) {
     throw new ApiError(400, 'Arrival cannot be in the past', { code: 'invalid-query' });
   }
   const seq = ++state.createdSeq;
+  const guest = member(request.bookingGuestId);
   const block: ScheduleBlock = {
     kind: 'reservation',
     id: `rr-new-${seq}`,
     reservationId: `rs-new-${seq}`,
     confirmationNumber: `GR-${70000 + seq}`,
     guestName: request.guestName.trim(),
-    guestType: 'guest',
-    roomId: request.roomId,
+    guestType: guest ? 'member' : 'guest',
+    roomId: roomId ?? '',
     startDate: request.arrival,
     endDate: request.departure,
     status: request.arrival === state.today ? 'nyci' : 'confirmed',
@@ -153,22 +165,29 @@ export function createReservation(
     roomTypeLocked: false,
     version: 'v1',
   };
-  try {
-    assertFree(state, [
-      { block, roomId: block.roomId, startDate: block.startDate, endDate: block.endDate },
-    ]);
-  } catch (error) {
-    state.createdSeq--; // nothing was created
-    throw error;
+  if (roomId !== null) {
+    // Availability is only checked when a room is chosen.
+    try {
+      assertFree(state, [
+        { block, roomId: block.roomId, startDate: block.startDate, endDate: block.endDate },
+      ]);
+    } catch (error) {
+      state.createdSeq--; // nothing was created
+      throw error;
+    }
   }
   bump(state, block);
-  state.blocks.push(block);
+  (roomId === null ? state.unassigned : state.blocks).push(block);
+  const leadName = expectedLeadOccupantName(request);
+  const lead =
+    request.bookingGuestRole === 'occupant' ? guest : member(request.leadOccupant?.memberId);
   state.extras[block.reservationId] = {
     ...extrasFor(state, block.reservationId),
     adults: request.adults,
     children: request.children,
     publicNotes: request.publicNotes ?? '',
     privateNotes: request.privateNotes ?? '',
+    leadOccupant: { name: leadName, memberNumber: lead?.memberNumber ?? null },
   };
   return buildDetail(state, block.reservationId);
 }

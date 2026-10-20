@@ -270,21 +270,30 @@ export interface EarlyLateResult {
   version: string;
 }
 
+/** TBD: the booking guest (or lead occupant) is not known yet. */
+export const GUEST_TBD = 'TBD';
+
 /**
  * Create a one-room reservation from the New Reservation panel. Idempotent on `requestId`. Errors:
  * 400 `invalid-query`; 404 unknown room; 409 `conflict` (the room is booked or closed on those
- * nights); 409 `idempotency-conflict`. Answers the new reservation's detail.
+ * nights; only checked when a room is given); 409 `idempotency-conflict`. Answers the new
+ * reservation's detail. `roomId` null or absent creates an UNASSIGNED reservation: it has no lane
+ * on the schedule grid until a room is assigned (a future schedule ticket). `guestName` is the
+ * booking guest, "TBD" when not chosen yet. The lead occupant is the booking guest when the role is
+ * 'occupant'; for 'reserver' it is `leadOccupant`, or "TBD" when absent.
  */
 export interface CreateReservationRequest {
   requestId: string;
-  roomId: string;
+  roomId?: string | null;
   arrival: IsoDate;
   departure: IsoDate;
   adults: number;
   children: number;
   guestName: string;
-  /** 'occupant' stays with the booking guest; 'reserver' books for someone else (same name for now). */
+  /** The booking guest's directory id, when they were picked from the member directory. */
+  bookingGuestId?: string;
   bookingGuestRole: 'occupant' | 'reserver';
+  leadOccupant?: { name: string; memberId?: string };
   publicNotes?: string;
   privateNotes?: string;
 }
@@ -297,6 +306,41 @@ export interface ReservationsApi {
   getDetail(id: string, options?: RequestOptions): Promise<ReservationDetail>;
   setEarlyLate(request: EarlyLateRequest, options?: RequestOptions): Promise<EarlyLateResult>;
   create(request: CreateReservationRequest, options?: RequestOptions): Promise<ReservationDetail>;
+}
+
+// ---- members (guest directory; placeholder until the Member Directory ticket) ------------------
+
+/** A person in the guest directory: a member, or a guest added from the New Reservation panel. */
+export interface Member {
+  id: string;
+  /** "MEM-0001". */
+  memberNumber: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export interface MemberQuery {
+  /** Matches name, member number or email, case-insensitive; empty gives the first members. */
+  q?: string;
+  /** Server default and maximum apply when omitted or too large. */
+  limit?: number;
+}
+
+/**
+ * Add a person to the directory (idempotent on `requestId`, like the other creates). Errors: 400
+ * `invalid-query`; 409 `idempotency-conflict`.
+ */
+export interface CreateMemberRequest {
+  requestId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+}
+
+export interface MembersApi {
+  search(query?: MemberQuery, options?: RequestOptions): Promise<Page<Member>>;
+  create(request: CreateMemberRequest, options?: RequestOptions): Promise<Member>;
 }
 
 // ---- settings (Booking Rules, ticket 7.5; read-only here) --------------------------------------
@@ -511,6 +555,7 @@ export interface ApiClient {
   permissions: PermissionsApi;
   schedule: ScheduleApi;
   settings: SettingsApi;
+  members: MembersApi;
 }
 
 export interface ApiErrorInit {

@@ -3,6 +3,29 @@ import { applyScheduleView, parseScheduleView } from './scheduleUrl';
 
 const p = (s: string) => new URLSearchParams(s);
 
+describe('panel URL state: prefilled New Reservation', () => {
+  it('parses the room and the arrival tolerantly', () => {
+    expect(parsePanel(p('panel=new&room=rm-203&arrival=2026-10-20'))).toEqual({
+      kind: 'new',
+      roomId: 'rm-203',
+      arrival: '2026-10-20',
+    });
+    expect(parsePanel(p('panel=new&room=..&arrival=nonsense'))).toEqual({ kind: 'new' });
+    expect(parsePanel(p('panel=new&arrival=2026-02-31'))).toEqual({ kind: 'new' });
+    // without panel=new they mean nothing
+    expect(parsePanel(p('room=rm-203&arrival=2026-10-20'))).toBeNull();
+  });
+
+  it('applies them, drops them when switching panel, and Back to schedule restores the view', () => {
+    const view = p('start=2026-11-02&view=14&locations=lakeside');
+    const open = applyPanel(view, { kind: 'new', roomId: 'rm-203', arrival: '2026-11-03' });
+    expect(open.get('room')).toBe('rm-203');
+    expect(open.get('arrival')).toBe('2026-11-03');
+    expect(applyPanel(open, { kind: 'details', reservationId: 'rs-1' }).get('room')).toBeNull();
+    expect(closePanel(open).toString()).toBe(view.toString());
+  });
+});
+
 describe('panel URL state', () => {
   it('parses details, details with a room, and the new reservation panel', () => {
     expect(parsePanel(p('res=rs-2'))).toEqual({ kind: 'details', reservationId: 'rs-2' });

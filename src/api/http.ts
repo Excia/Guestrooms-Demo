@@ -1,6 +1,9 @@
 import type {
   ApiClient,
   BookingHold,
+  CreateMemberRequest,
+  Member,
+  MemberQuery,
   CreateReservationRequest,
   DashboardStats,
   EarlyLateRequest,
@@ -20,9 +23,12 @@ import type {
   ScheduleMoveResult,
   ScheduleQuery,
 } from './types';
+import { expectedLeadOccupantName } from './createRules';
 import { ApiError } from './types';
 import {
+  assertCreateMemberRequest,
   assertCreateReservationRequest,
+  assertMemberQuery,
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
@@ -205,15 +211,44 @@ const parseCreated =
     if (
       detail.adults !== request.adults ||
       detail.children !== request.children ||
-      detail.leadOccupant.name !== request.guestName.trim() ||
+      detail.leadOccupant.name !== expectedLeadOccupantName(request) ||
       detail.rooms.length !== 1 ||
-      detail.rooms[0].roomId !== request.roomId ||
+      detail.rooms[0].roomId !== (request.roomId ?? null) ||
       detail.arrival !== request.arrival ||
       detail.departure !== request.departure
     ) {
       throw invalid(status, 'created reservation');
     }
     return detail;
+  };
+
+const isMember = (v: unknown): v is Member =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.memberNumber) &&
+  isString(v.name) &&
+  isString(v.email) &&
+  isString(v.phone);
+
+function parseMembers(body: unknown, status: number): Page<Member> {
+  if (
+    !isObject(body) ||
+    !Array.isArray(body.items) ||
+    !body.items.every(isMember) ||
+    !isCount(body.total) ||
+    !(body.nextCursor === undefined || isString(body.nextCursor))
+  ) {
+    throw invalid(status, 'members');
+  }
+  return body as unknown as Page<Member>;
+}
+
+// The answer must be the person that was asked for.
+const parseCreatedMember =
+  (request: CreateMemberRequest) =>
+  (body: unknown, status: number): Member => {
+    if (!isMember(body) || body.name !== request.name.trim()) throw invalid(status, 'member');
+    return body;
   };
 
 const isHoldMinutes = (v: unknown): v is number =>
@@ -628,6 +663,27 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             ),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
+        }),
+    },
+    members: {
+      search: (q: MemberQuery = {}, o) =>
+        Promise.resolve().then(() => {
+          assertMemberQuery(q);
+          return request(
+            '/members',
+            { q: q.q?.trim(), limit: q.limit === undefined ? undefined : String(q.limit) },
+            o,
+            parseMembers,
+          );
+        }),
+      create: (r: CreateMemberRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCreateMemberRequest(r);
+          return request('/members', {}, o, parseCreatedMember(r), {
+            method: 'POST',
+            body: r,
+            headers: { 'Idempotency-Key': r.requestId },
+          });
         }),
     },
     settings: {

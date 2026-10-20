@@ -1,5 +1,6 @@
 // Rules of the New Reservation panel: stay length, form checks, the estimate and the request.
-import type { Cents, CreateReservationRequest, ScheduleRoomType } from '../api/types';
+import type { Cents, CreateReservationRequest, Member, ScheduleRoomType } from '../api/types';
+import { GUEST_TBD } from '../api/types';
 import { daysBetween, isValidIsoDate, type IsoDate } from '../lib/dates';
 import { MAX_PARTY } from '../api/validation';
 
@@ -9,13 +10,17 @@ export interface NewReservationForm {
   adults: number;
   children: number;
   role: 'occupant' | 'reserver';
-  guestName: string;
+  /** The booking guest; null shows TBD (a valid choice: the guest is not known yet). */
+  guest: Member | null;
+  /** Only with role 'reserver'; optional, null shows TBD. */
+  leadOccupant: Member | null;
+  /** "" is Unassigned for all three. */
+  locationId: string;
+  roomTypeId: string;
   roomId: string;
 }
 
-export type NewReservationErrors = Partial<
-  Record<'arrival' | 'departure' | 'guestName' | 'roomId', string>
->;
+export type NewReservationErrors = Partial<Record<'arrival' | 'departure', string>>;
 
 export const MIN_ADULTS = 1;
 export { MAX_PARTY };
@@ -27,8 +32,30 @@ export function defaultNewReservation(today: IsoDate, tomorrow: IsoDate): NewRes
     adults: 2,
     children: 0,
     role: 'occupant',
-    guestName: '',
+    guest: null,
+    leadOccupant: null,
+    locationId: '',
+    roomTypeId: '',
     roomId: '',
+  };
+}
+
+/**
+ * The form when opened from an empty grid cell: Check In is the clicked date (today when that day
+ * has passed, flagged by `pastDate` so the panel can say so) and Check Out is left for the user.
+ * The room is applied once the rooms have loaded.
+ */
+export function prefilledNewReservation(
+  today: IsoDate,
+  tomorrow: IsoDate,
+  prefill: { arrival?: IsoDate } | undefined,
+): { form: NewReservationForm; pastDate: boolean } {
+  const base = defaultNewReservation(today, tomorrow);
+  if (!prefill?.arrival) return { form: base, pastDate: false };
+  const pastDate = prefill.arrival < today;
+  return {
+    form: { ...base, arrival: pastDate ? today : prefill.arrival, departure: '' },
+    pastDate,
   };
 }
 
@@ -38,6 +65,7 @@ export function stayNights(arrival: string, departure: string): number | null {
   return daysBetween(arrival, departure);
 }
 
+/** The booking guest, the lead occupant and the room are all optional (TBD, Unassigned). */
 export function validateNewReservation(
   form: NewReservationForm,
   today: IsoDate,
@@ -49,8 +77,6 @@ export function validateNewReservation(
   else if (isValidIsoDate(form.arrival) && form.departure <= form.arrival) {
     errors.departure = 'Check-out must be after check-in.';
   }
-  if (form.guestName.trim() === '') errors.guestName = 'Choose or enter the booking guest.';
-  if (form.roomId === '') errors.roomId = 'Choose a room.';
   return errors;
 }
 
@@ -67,15 +93,18 @@ export function toCreateRequest(
   form: NewReservationForm,
   requestId: string,
 ): CreateReservationRequest {
+  const lead = form.role === 'reserver' ? form.leadOccupant : null;
   return {
     requestId,
-    roomId: form.roomId,
+    roomId: form.roomId === '' ? null : form.roomId,
     arrival: form.arrival,
     departure: form.departure,
     adults: form.adults,
     children: form.children,
-    guestName: form.guestName.trim(),
+    guestName: form.guest?.name ?? GUEST_TBD,
+    ...(form.guest ? { bookingGuestId: form.guest.id } : {}),
     bookingGuestRole: form.role,
+    ...(lead ? { leadOccupant: { name: lead.name, memberId: lead.id } } : {}),
   };
 }
 

@@ -1,5 +1,6 @@
 import { isValidMonth, parseIsoDate } from '../lib/dates';
 import type {
+  CreateMemberRequest,
   CreateReservationRequest,
   EarlyLateRequest,
   MoveDatesRequest,
@@ -100,12 +101,16 @@ export function assertEarlyLateRequest(request: EarlyLateRequest): void {
   }
 }
 
+const shortId = (v: unknown) => typeof v === 'string' && v.trim() !== '' && v.length <= 128;
+
 export const MAX_PARTY = 20;
 export const MAX_NOTES_LENGTH = 2000;
 
 export function assertCreateReservationRequest(request: CreateReservationRequest): void {
   assertRequestId(request.requestId);
-  assertResourceId(request.roomId, 'room');
+  if (request.roomId !== undefined && request.roomId !== null) {
+    assertResourceId(request.roomId, 'room');
+  }
   const count = (n: unknown, min: number) =>
     typeof n === 'number' && Number.isInteger(n) && n >= min && n <= MAX_PARTY;
   const text = (v: unknown) =>
@@ -120,9 +125,46 @@ export function assertCreateReservationRequest(request: CreateReservationRequest
     request.guestName.trim() === '' ||
     request.guestName.length > 200 ||
     (request.bookingGuestRole !== 'occupant' && request.bookingGuestRole !== 'reserver') ||
+    (request.bookingGuestId !== undefined && !shortId(request.bookingGuestId)) ||
+    (request.leadOccupant !== undefined &&
+      (typeof request.leadOccupant.name !== 'string' ||
+        request.leadOccupant.name.trim() === '' ||
+        request.leadOccupant.name.length > 200 ||
+        (request.leadOccupant.memberId !== undefined &&
+          !shortId(request.leadOccupant.memberId)))) ||
     !text(request.publicNotes) ||
     !text(request.privateNotes)
   ) {
     throw invalidQuery('reservation');
+  }
+}
+
+export const MAX_NAME_LENGTH = 200;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const isEmail = (v: string) => EMAIL.test(v);
+
+export function assertCreateMemberRequest(request: CreateMemberRequest): void {
+  assertRequestId(request.requestId);
+  const optional = (v: unknown, max: number) =>
+    v === undefined || (typeof v === 'string' && v.length <= max);
+  if (
+    typeof request.name !== 'string' ||
+    request.name.trim() === '' ||
+    request.name.length > MAX_NAME_LENGTH ||
+    !optional(request.email, 200) ||
+    (request.email !== undefined && request.email !== '' && !isEmail(request.email)) ||
+    !optional(request.phone, 40)
+  ) {
+    throw invalidQuery('member');
+  }
+}
+
+export function assertMemberQuery(query: { q?: string; limit?: number }): void {
+  if (
+    (query.q !== undefined && (typeof query.q !== 'string' || query.q.length > 200)) ||
+    (query.limit !== undefined &&
+      (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 50))
+  ) {
+    throw invalidQuery('member query');
   }
 }

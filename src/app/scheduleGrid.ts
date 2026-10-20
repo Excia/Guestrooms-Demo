@@ -96,6 +96,47 @@ export function itemAtColumn<T extends { startDate: IsoDate; endDate: IsoDate }>
   });
 }
 
+/**
+ * The date column under a horizontal position in the grid, or null over the room header column or
+ * outside the dates. `contentLeft` is the left edge of the (scrolled) content, `labelPx` the room
+ * header width.
+ */
+export function columnAtX(
+  x: number,
+  contentLeft: number,
+  contentWidth: number,
+  labelPx: number,
+  days: number,
+): number | null {
+  const dayWidth = (contentWidth - labelPx) / days;
+  if (!(dayWidth > 0)) return null;
+  const offset = x - contentLeft - labelPx;
+  if (offset < 0) return null;
+  const col = Math.floor(offset / dayWidth);
+  return col < days ? col : null;
+}
+
+export type EmptyCellAction =
+  /** A free night: a reservation can start here. */
+  | { kind: 'free' }
+  /** A closure covers the night. */
+  | { kind: 'closed' }
+  /** A reservation covers the column (its click or Enter opens details instead). */
+  | { kind: 'occupied' };
+
+/** What a click or Enter on a date cell of a room row means, from the row's blocks and closures. */
+export function emptyCellAction(
+  blocks: readonly { startDate: IsoDate; endDate: IsoDate }[] | undefined,
+  closures: readonly { startDate: IsoDate; endDate: IsoDate }[] | undefined,
+  rangeStart: IsoDate,
+  days: Parameters<typeof blockLayout>[2],
+  col: number,
+): EmptyCellAction {
+  if (itemAtColumn(closures, rangeStart, days, col)) return { kind: 'closed' };
+  if (itemAtColumn(blocks, rangeStart, days, col)) return { kind: 'occupied' };
+  return { kind: 'free' };
+}
+
 // ---- optimistic updates ------------------------------------------------------------------------
 
 /** The blocks with the given moves applied (arrival, departure and room). */

@@ -49,6 +49,8 @@ export interface ScheduleState {
   extras: Record<string, ReservationExtras>;
   /** Source of ids for reservations created through the API. */
   createdSeq: number;
+  /** Reservations created without a room: no lane on the grid, so never in `blocks`. */
+  unassigned: ScheduleBlock[];
 }
 
 /** Details-panel data of one reservation (the mock's stand-in for the reservation record). */
@@ -62,6 +64,8 @@ export interface ReservationExtras {
   addOns: { id: string; name: string; quantity: number; priceCents: number }[];
   publicNotes: string;
   privateNotes: string;
+  /** Set when it differs from the booking guest (a created reservation with a reserver). */
+  leadOccupant?: { name: string; memberNumber: string | null };
 }
 
 const room = (
@@ -493,6 +497,7 @@ function defaultState(today: IsoDate): ScheduleState {
     versionSeq: 1,
     extras: seedExtras(),
     createdSeq: 0,
+    unassigned: [],
   };
 }
 
@@ -590,6 +595,7 @@ function largeState(today: IsoDate): ScheduleState {
     versionSeq: 1,
     extras: {},
     createdSeq: 0,
+    unassigned: [],
   };
 }
 

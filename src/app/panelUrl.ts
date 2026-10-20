@@ -1,12 +1,23 @@
+import { isValidIsoDate, type IsoDate } from '../lib/dates';
+
 // The reservation panel's state in the schedule's URL, next to the schedule's own parameters
 // (start, view, locations, types, rooms), so reload, Back/Forward and links reopen it and closing
 // it leaves the view (date range, length, filters) exactly as it was.
 //   ?res=<reservationId>[&rr=<reservationRoomId>]   details of a reservation (and one of its rooms)
-//   ?panel=new                                      the New Reservation panel
+//   ?panel=new[&room=<roomId>&arrival=<date>]       the New Reservation panel (room and Check In prefilled)
 export type PanelState =
-  { kind: 'details'; reservationId: string; reservationRoomId?: string } | { kind: 'new' } | null;
+  | { kind: 'details'; reservationId: string; reservationRoomId?: string }
+  /** `roomId` and `arrival` prefill the form when opened from an empty grid cell. */
+  | { kind: 'new'; roomId?: string; arrival?: IsoDate }
+  | null;
 
-const KEYS = { reservation: 'res', room: 'rr', panel: 'panel' } as const;
+const KEYS = {
+  reservation: 'res',
+  room: 'rr',
+  panel: 'panel',
+  newRoom: 'room',
+  newArrival: 'arrival',
+} as const;
 
 /** Ids end up in API paths: keep them short and free of path tricks. */
 function cleanId(value: string | null): string | null {
@@ -16,7 +27,15 @@ function cleanId(value: string | null): string | null {
 }
 
 export function parsePanel(params: URLSearchParams): PanelState {
-  if (params.get(KEYS.panel) === 'new') return { kind: 'new' };
+  if (params.get(KEYS.panel) === 'new') {
+    const roomId = cleanId(params.get(KEYS.newRoom));
+    const arrival = params.get(KEYS.newArrival);
+    return {
+      kind: 'new',
+      ...(roomId ? { roomId } : {}),
+      ...(arrival && isValidIsoDate(arrival) ? { arrival } : {}),
+    };
+  }
   const reservationId = cleanId(params.get(KEYS.reservation));
   if (!reservationId) return null;
   const reservationRoomId = cleanId(params.get(KEYS.room));
@@ -31,7 +50,13 @@ export function applyPanel(params: URLSearchParams, panel: PanelState): URLSearc
   next.delete(KEYS.reservation);
   next.delete(KEYS.room);
   next.delete(KEYS.panel);
-  if (panel?.kind === 'new') next.set(KEYS.panel, 'new');
+  next.delete(KEYS.newRoom);
+  next.delete(KEYS.newArrival);
+  if (panel?.kind === 'new') {
+    next.set(KEYS.panel, 'new');
+    if (panel.roomId) next.set(KEYS.newRoom, panel.roomId);
+    if (panel.arrival) next.set(KEYS.newArrival, panel.arrival);
+  }
   if (panel?.kind === 'details') {
     next.set(KEYS.reservation, panel.reservationId);
     if (panel.reservationRoomId) next.set(KEYS.room, panel.reservationRoomId);

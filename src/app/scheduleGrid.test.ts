@@ -6,6 +6,8 @@ import {
   blockAriaLabel,
   blockSpan,
   clampShift,
+  columnAtX,
+  emptyCellAction,
   itemAtColumn,
   mergeChangedBlocks,
   moveCursor,
@@ -243,5 +245,29 @@ describe('moveFailure', () => {
       'The move could not be completed.',
     );
     expect(moveFailure(new Error('boom')).message).toMatch(/Could not confirm/);
+  });
+});
+
+describe('empty cells', () => {
+  const start = '2026-10-16';
+  const stay = { startDate: '2026-10-17', endDate: '2026-10-19' };
+
+  it('columnAtX maps a position to a date column, null over the room header or outside', () => {
+    // content starts at x=100, 130px room header, 7 columns of 100px
+    expect(columnAtX(200, 100, 130 + 700, 130, 7)).toBeNull(); // over the header
+    expect(columnAtX(231, 100, 830, 130, 7)).toBe(0);
+    expect(columnAtX(330, 100, 830, 130, 7)).toBe(1);
+    expect(columnAtX(929, 100, 830, 130, 7)).toBe(6);
+    expect(columnAtX(931, 100, 830, 130, 7)).toBeNull();
+    expect(columnAtX(300, 100, 100, 130, 7)).toBeNull(); // no room for the dates
+  });
+
+  it('a column is free, closed or occupied', () => {
+    expect(emptyCellAction([stay], [], start, 7, 0)).toEqual({ kind: 'free' });
+    expect(emptyCellAction([stay], [], start, 7, 1)).toEqual({ kind: 'occupied' });
+    expect(emptyCellAction([], [stay], start, 7, 1)).toEqual({ kind: 'closed' });
+    expect(emptyCellAction(undefined, undefined, start, 7, 3)).toEqual({ kind: 'free' });
+    // a closure wins when both cover the column
+    expect(emptyCellAction([stay], [stay], start, 7, 1)).toEqual({ kind: 'closed' });
   });
 });

@@ -8,6 +8,7 @@ import {
   mockStats,
   noGrant,
 } from './mockData';
+import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { queryReservations } from './reservationQuery';
@@ -17,7 +18,9 @@ import { queryScheduleData } from './scheduleQuery';
 import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
 import { ApiError } from './types';
 import {
+  assertCreateMemberRequest,
   assertCreateReservationRequest,
+  assertMemberQuery,
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
@@ -59,6 +62,7 @@ export function createMockClient({
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
+  const members = seedMembers();
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {
@@ -172,7 +176,9 @@ export function createMockClient({
         respond(
           () => {
             assertCreateReservationRequest(request);
-            return replayable(request, () => createReservation(schedule, request));
+            return replayable(request, () =>
+              createReservation(schedule, request, (id) => members.find((m) => m.id === id)),
+            );
           },
           () => {
             assertCreateReservationRequest(request);
@@ -223,6 +229,30 @@ export function createMockClient({
           () => {
             assertMoveDatesRequest(request);
             throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
+    },
+    members: {
+      search: (query, o) =>
+        respond(
+          () => {
+            assertMemberQuery(query ?? {});
+            return searchMembers(members, query);
+          },
+          () => ({ items: [], total: 0 }),
+          o,
+        ),
+      // Creating a person works in every scenario but "error": the directory is not "empty data".
+      create: (request, o) =>
+        respond(
+          () => {
+            assertCreateMemberRequest(request);
+            return replayable(request, () => addMember(members, request));
+          },
+          () => {
+            assertCreateMemberRequest(request);
+            return replayable(request, () => addMember(members, request));
           },
           o,
         ),
