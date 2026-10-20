@@ -138,6 +138,25 @@ const base = createTheme({
         }),
       },
     },
+    // Menu options (Select, LocationFilter, pagination rows-per-page, month select, user switcher):
+    // hover, keyboard focus and selected are the light green tint, never MUI's grey or dark-green
+    // wash. Selected stays distinct from hover with bold text and a primary bar on the left edge.
+    MuiMenuItem: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&:hover, &.Mui-focusVisible, &.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible':
+            { backgroundColor: theme.palette.primary.tint },
+          '&.Mui-selected': {
+            fontWeight: 700,
+            boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
+          },
+          '&.Mui-focusVisible': {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: -2,
+          },
+        }),
+      },
+    },
     // Page items follow the same rule as list rows: hover and selected are the light green tint
     // (MUI's default selected wash is a darker alpha of the primary).
     MuiPaginationItem: {
