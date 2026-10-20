@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { useState } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router';
 import App from '../App';
+import { renderWithApi } from '../api/testing';
 import {
   createMockPermissions,
   pagePermission,
@@ -123,7 +124,7 @@ describe('MenuOverlay layouts', () => {
 
 describe('MenuOverlay closing (in the app shell)', () => {
   function setup(path = '/reservations') {
-    render(
+    renderWithApi(
       <ThemeProvider theme={theme}>
         <MemoryRouter initialEntries={[path]}>
           <App />

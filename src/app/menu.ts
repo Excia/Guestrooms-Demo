@@ -24,7 +24,10 @@ function itemsFor(
   table: readonly RouteMeta[],
 ): MenuItem[] {
   return table
-    .filter((r) => r.section === section && can(pagePermission(r.id as MenuRouteId)))
+    .filter(
+      (r) =>
+        r.section === section && r.showInMenu !== false && can(pagePermission(r.id as MenuRouteId)),
+    )
     .map((r) => ({ id: r.id as MenuRouteId, label: r.menuLabel ?? r.title, path: r.path }));
 }
 
