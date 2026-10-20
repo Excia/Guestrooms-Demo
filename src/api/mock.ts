@@ -1,9 +1,10 @@
 import type { MockScenario } from './config';
 import { emptyStats, fullGrant, mockReservations, mockStats, noGrant } from './mockData';
+import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { queryReservations } from './reservationQuery';
 import type { ApiClient, RequestOptions } from './types';
 import { ApiError } from './types';
-import { assertResourceId } from './validation';
+import { assertQuickStatsQuery, assertResourceId } from './validation';
 
 export interface MockOptions {
   scenario?: MockScenario;
@@ -60,6 +61,18 @@ export function createMockClient({
         respond(
           () => structuredClone(mockStats),
           () => structuredClone(emptyStats),
+          o,
+        ),
+      getQuickStats: (query, o) =>
+        respond(
+          () => {
+            assertQuickStatsQuery(query);
+            return buildQuickStats(query);
+          },
+          () => {
+            assertQuickStatsQuery(query);
+            return emptyQuickStats(query);
+          },
           o,
         ),
     },

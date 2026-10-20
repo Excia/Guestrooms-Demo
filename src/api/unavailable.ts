@@ -5,7 +5,7 @@ import { ApiError } from './types';
 export function createUnavailableClient(error: ApiError): ApiClient {
   const fail = () => Promise.reject(error);
   return {
-    dashboard: { getStats: fail },
+    dashboard: { getStats: fail, getQuickStats: fail },
     reservations: { list: fail, get: fail },
     permissions: { getGrant: fail },
   };

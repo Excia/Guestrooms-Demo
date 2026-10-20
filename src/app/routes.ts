@@ -16,6 +16,7 @@ export interface RouteMeta {
 
 export const SCHEDULE_PATH = '/schedule';
 export const DASHBOARD_PATH = '/dashboard';
+export const ROOM_BLOCKS_PATH = '/room-blocks';
 
 // Note: '/admin' (Admin Setup landing) is not a menu link, so it has no menu permission yet;
 // gate it on "any admin page" when the real permissions (0.8) arrive.
@@ -43,7 +44,7 @@ export const routes = [
     title: 'Add-On Countdown',
     section: 'reservation',
   },
-  { id: 'room-blocks', path: '/room-blocks', title: 'Room Blocks', section: 'reservation' },
+  { id: 'room-blocks', path: ROOM_BLOCKS_PATH, title: 'Room Blocks', section: 'reservation' },
   {
     id: 'member-directory',
     path: '/member-directory',

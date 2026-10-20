@@ -46,8 +46,80 @@ export interface DashboardStats {
   averageRate: Cents;
 }
 
+// ---- quick stats (dashboard column, report landing page) -----------------------------------------
+
+export type QuickStatsView = 'day' | 'week' | 'month';
+
+/** What to fetch: one day, the 7 days from `startDate`, or a calendar month (`yyyy-mm`). */
+export type QuickStatsQuery =
+  | { view: 'day'; date: IsoDate }
+  | { view: 'week'; startDate: IsoDate }
+  | { view: 'month'; month: string };
+
+/** Booked and available rooms; `percent` is 0 to 100 with one decimal at most. */
+export interface OccupancyCounts {
+  booked: number;
+  available: number;
+  percent: number;
+}
+
+export interface QuickStatsRevenue {
+  /** One row per rate category in the data (not a fixed list). */
+  rows: RateCategoryStat[];
+  totalRevenue: Cents;
+  totalNights: number;
+  /** Weighted: totalRevenue / totalNights. Null when there are no nights. */
+  averageRate: Cents | null;
+}
+
+export interface QuickStatsRoomBlock {
+  id: string;
+  name: string;
+  nights: number;
+  startDate: IsoDate;
+  counts: OccupancyCounts;
+}
+
+export interface QuickStatsDayOccupancy {
+  date: IsoDate;
+  counts: OccupancyCounts;
+}
+
+interface QuickStatsBase {
+  /** The summary bar above the tables. */
+  occupancy: OccupancyCounts;
+  revenue: QuickStatsRevenue;
+}
+
+export interface DayQuickStats extends QuickStatsBase {
+  view: 'day';
+  date: IsoDate;
+  roomBlocks: QuickStatsRoomBlock[];
+  /** Sums of booked and available; percent is the average of the block percents. */
+  roomBlocksTotal: OccupancyCounts;
+}
+
+export interface WeekQuickStats extends QuickStatsBase {
+  view: 'week';
+  startDate: IsoDate;
+  days: QuickStatsDayOccupancy[];
+  /** Sums of booked and available; percent is the average of the daily percents. */
+  daysTotal: OccupancyCounts;
+}
+
+export interface MonthQuickStats extends QuickStatsBase {
+  view: 'month';
+  month: string;
+  roomBlocks: QuickStatsRoomBlock[];
+  roomBlocksTotal: OccupancyCounts;
+}
+
+export type QuickStats = DayQuickStats | WeekQuickStats | MonthQuickStats;
+
 export interface DashboardApi {
   getStats(options?: RequestOptions): Promise<DashboardStats>;
+  /** Quick Stats for one view; the result's `view` matches the query's. */
+  getQuickStats(query: QuickStatsQuery, options?: RequestOptions): Promise<QuickStats>;
 }
 
 // ---- reservations ----------------------------------------------------------------------------

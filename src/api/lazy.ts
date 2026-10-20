@@ -12,7 +12,10 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       throw error;
     }));
   return {
-    dashboard: { getStats: (o) => client().then((c) => c.dashboard.getStats(o)) },
+    dashboard: {
+      getStats: (o) => client().then((c) => c.dashboard.getStats(o)),
+      getQuickStats: (q, o) => client().then((c) => c.dashboard.getQuickStats(q, o)),
+    },
     reservations: {
       list: (q, o) => client().then((c) => c.reservations.list(q, o)),
       get: (id, o) => client().then((c) => c.reservations.get(id, o)),
