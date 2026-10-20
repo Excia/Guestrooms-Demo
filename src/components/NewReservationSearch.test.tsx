@@ -215,4 +215,17 @@ describe('NewReservationSearch', () => {
     expect(add).toBeDisabled();
     expect(add).toHaveAccessibleDescription('Maximum of 5 rooms');
   });
+
+  it('keeps focus and the value when a stepper button at its limit is clicked', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    const dec = screen.getByRole('button', { name: 'Decrease Adults, Room 1' });
+    await user.click(dec); // 2 -> 1
+    await user.click(dec); // at the minimum
+    expect(document.activeElement).toBe(dec);
+    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent(
+      '1 adults, Room 1',
+    );
+    expect(getComputedStyle(dec).pointerEvents).toBe('auto');
+  });
 });

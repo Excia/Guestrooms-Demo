@@ -41,6 +41,9 @@ export interface NewReservationSearchProps {
   today?: string;
 }
 
+// Limit buttons keep the disabled look but must still take mouse focus, so a click does not drop it.
+const limitSx = { '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'default' } } as const;
+
 interface StepperProps {
   label: string; // e.g. "Adults, Room 2"
   title: string; // visible heading, e.g. "Adults"
@@ -84,6 +87,7 @@ function Stepper({
           aria-label={`Decrease ${label}`}
           aria-disabled={atMin || undefined}
           className={atMin ? 'Mui-disabled' : undefined}
+          sx={atMin ? limitSx : undefined}
           onClick={() => {
             if (!atMin) onChange(value - 1);
           }}
@@ -115,6 +119,7 @@ function Stepper({
           aria-label={`Increase ${label}`}
           aria-disabled={atMax || undefined}
           className={atMax ? 'Mui-disabled' : undefined}
+          sx={atMax ? limitSx : undefined}
           onClick={() => {
             if (!atMax) onChange(value + 1);
           }}
