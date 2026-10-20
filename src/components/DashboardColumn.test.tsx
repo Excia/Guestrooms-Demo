@@ -31,7 +31,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const scrollArea = () => screen.getByText('content').parentElement!.parentElement!;
+const scrollArea = () => screen.getByText('content').parentElement!;
 
 describe('DashboardColumn', () => {
   it('is not a region or focusable while the content fits', () => {
