@@ -22,7 +22,7 @@ export default function NewReservationResults() {
       <Typography variant="h4" component="h1" gutterBottom>
         Search Results
       </Typography>
-      <Typography color="text.secondary" gutterBottom>
+      <Typography sx={{ color: 'text.secondary' }} gutterBottom>
         Results arrive in a later ticket. Criteria from the URL:
       </Typography>
       <dl>

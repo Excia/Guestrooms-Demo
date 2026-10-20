@@ -62,7 +62,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 function Labeled({ caption, children }: { caption: string; children: ReactNode }) {
   return (
     <Box>
-      <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 1 }}>
+      <Typography variant="caption" component="p" sx={{ mb: 1, color: 'text.secondary' }}>
         {caption}
       </Typography>
       {children}
@@ -106,7 +106,7 @@ export default function ComponentsDemo() {
       <Typography variant="h4" component="h1" sx={{ mb: 1 }}>
         Shared components
       </Typography>
-      <Typography color="text.secondary" sx={{ mb: 4 }}>
+      <Typography sx={{ mb: 4, color: 'text.secondary' }}>
         Every shared component and state, for visual comparison with the Reporting page in Figma.
       </Typography>
 

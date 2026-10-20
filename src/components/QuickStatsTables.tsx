@@ -138,7 +138,7 @@ export function OccupancySummary({ counts, sx }: { counts: OccupancyCounts; sx?:
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}
     >
-      <Typography id={labelId} variant="body2" color="text.primary">
+      <Typography id={labelId} variant="body2">
         OCCUPANCY
       </Typography>
       <IconValue kind="booked">{formatCount(counts.booked)}</IconValue>

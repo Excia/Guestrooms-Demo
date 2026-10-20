@@ -95,7 +95,11 @@ const base = createTheme({
         root: ({ ownerState, theme }) =>
           ownerState.variant === 'contained'
             ? {}
-            : { '&:hover': { backgroundColor: theme.palette.primary.tint } },
+            : {
+                '&:hover': { backgroundColor: theme.palette.primary.tint },
+                // Limit buttons stay hoverable (they keep focus) but must not look interactive.
+                '&.Mui-disabled:hover': { backgroundColor: 'transparent' },
+              },
         sizeSmall: font(13, 500, 22 / 13, 0.46),
         sizeMedium: font(14, 500, 24 / 14, 0.4),
         sizeLarge: font(15, 500, 26 / 15, 0.46),
@@ -125,7 +129,10 @@ const base = createTheme({
     },
     MuiIconButton: {
       styleOverrides: {
-        root: ({ theme }) => ({ '&:hover': { backgroundColor: theme.palette.primary.tint } }),
+        root: ({ theme }) => ({
+          '&:hover': { backgroundColor: theme.palette.primary.tint },
+          '&.Mui-disabled:hover': { backgroundColor: 'transparent' },
+        }),
       },
     },
     // Selected rows keep the tint on hover (a darker wash would drop the text below AA).
@@ -134,6 +141,25 @@ const base = createTheme({
         root: ({ theme }) => ({
           '&:hover, &.Mui-selected, &.Mui-selected:hover': {
             backgroundColor: theme.palette.primary.tint,
+          },
+        }),
+      },
+    },
+    // Menu options (Select, LocationFilter, pagination rows-per-page, month select, user switcher):
+    // hover, keyboard focus and selected are the light green tint, never MUI's grey or dark-green
+    // wash. Selected stays distinct from hover with bold text and a primary bar on the left edge.
+    MuiMenuItem: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&:hover, &.Mui-focusVisible, &.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible':
+            { backgroundColor: theme.palette.primary.tint },
+          '&.Mui-selected': {
+            fontWeight: theme.typography.fontWeightBold,
+            boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
+          },
+          '&.Mui-focusVisible': {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: -2,
           },
         }),
       },

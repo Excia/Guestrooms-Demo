@@ -4,7 +4,6 @@ import Button from '@mui/material/Button';
 import Skeleton from '@mui/material/Skeleton';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
-import TextField from '@mui/material/TextField';
 import type { Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
@@ -23,6 +22,7 @@ import {
   monthChoices,
 } from '../app/quickStats';
 import type { QuickStats as QuickStatsData, QuickStatsView } from '../api';
+import DateField from './shared/DateField';
 import Select from './shared/Select';
 import {
   AllRoomBlocksLink,
@@ -67,20 +67,19 @@ function DateControl({
 }) {
   const [draft, setDraft] = useState(value);
   return (
-    <TextField
-      type="date"
+    <DateField
       label={label}
       value={draft}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        if (isValidIsoDate(e.target.value)) onCommit(e.target.value);
+      fullWidth={false}
+      onChange={(next) => {
+        setDraft(next);
+        if (isValidIsoDate(next)) onCommit(next);
       }}
       // A cleared or incomplete date goes back to the last valid one when the field loses focus.
       onBlur={() => {
         if (!isValidIsoDate(draft)) setDraft(value);
       }}
       error={!isValidIsoDate(draft)}
-      slotProps={{ inputLabel: { shrink: true } }}
       sx={{ width: (t) => t.spacing(DATE_FIELD_WIDTH), maxWidth: '100%' }}
     />
   );
@@ -135,10 +134,14 @@ function Sections({ stats, landing }: { stats: QuickStatsData; landing: boolean 
           {b.name}
           <Typography
             variant="caption"
-            color="text.secondary"
             component="span"
             // Figma sets the block subtitle at 10px: 10/14 of the 14px row text.
-            sx={{ display: 'block', fontSize: '0.714em', lineHeight: 1.43 }}
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              fontSize: '0.714em',
+              lineHeight: 1.43,
+            }}
           >
             {blockSubtitle(b.nights, b.startDate)}
           </Typography>
@@ -242,7 +245,7 @@ function Panel({
         </Alert>
       ) : null}
       {stats && empty ? (
-        <Typography color="text.secondary">No stats for this period.</Typography>
+        <Typography sx={{ color: 'text.secondary' }}>No stats for this period.</Typography>
       ) : null}
       {stats && !empty ? (
         <Box sx={dim(refreshing)}>

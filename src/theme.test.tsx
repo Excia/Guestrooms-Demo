@@ -121,7 +121,13 @@ describe('hover tint', () => {
     [key: string]: unknown;
   };
   const root = (
-    name: 'MuiButton' | 'MuiIconButton' | 'MuiListItemButton' | 'MuiLink' | 'MuiPaginationItem',
+    name:
+      | 'MuiButton'
+      | 'MuiIconButton'
+      | 'MuiListItemButton'
+      | 'MuiLink'
+      | 'MuiPaginationItem'
+      | 'MuiMenuItem',
   ) => (theme.components?.[name]?.styleOverrides as { root: Root }).root;
 
   it('tints text and outlined buttons on hover', () => {
@@ -151,6 +157,15 @@ describe('hover tint', () => {
         backgroundColor: tint,
       },
     });
+  });
+
+  it('tints menu options on hover, focus and when selected', () => {
+    const styles = root('MuiMenuItem')({ ownerState: {}, theme });
+    const keys = Object.keys(styles).find((k) => k.includes('&:hover'))!;
+    expect(styles[keys]).toEqual({ backgroundColor: tint });
+    expect(keys).toContain('&.Mui-focusVisible');
+    expect(keys).toContain('&.Mui-selected:hover');
+    expect(styles['&.Mui-selected']).toMatchObject({ fontWeight: 700 });
   });
 
   it('has a button_small typography token (Figma button/small)', () => {

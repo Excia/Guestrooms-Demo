@@ -3,12 +3,13 @@ import RemoveCircle from '@mui/icons-material/RemoveCircle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { stayLimits } from '../app/dateRange';
 import { addDays, todayIso } from '../app/dateSelection';
+import type { WeekStartDay } from '../lib/calendar';
 import { PLACEHOLDER_LOCATIONS, type SearchLocation } from '../app/placeholderLocations';
 import {
   ALL_LOCATIONS_VALUE,
@@ -21,6 +22,7 @@ import {
   MIN_CHILDREN,
   canAddRoom,
   dateHint,
+  hintRepeatsFieldError,
   datesAreValid,
   formatCount,
   initialRooms,
@@ -29,8 +31,10 @@ import {
   searchLabel,
   searchUrl,
   validateDates,
+  visibleDateErrors,
   type SearchCriteria,
 } from '../app/reservationSearch';
+import DateField, { type DateFieldRange } from './shared/DateField';
 import Select from './shared/Select';
 
 export interface NewReservationSearchProps {
@@ -39,6 +43,8 @@ export interface NewReservationSearchProps {
   locations?: readonly SearchLocation[];
   /** Local calendar date treated as "today"; injectable for tests. */
   today?: string;
+  /** First day of the week in the calendars (Sunday until club settings supply it). */
+  weekStartsOn?: WeekStartDay;
 }
 
 // Limit buttons keep the disabled look but must still take mouse focus, so a click does not drop it.
@@ -73,12 +79,7 @@ function Stepper({
   const atMax = value >= max;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-      <Typography
-        variant="body2"
-        component="span"
-        color="text.secondary"
-        sx={{ fontWeight: 'bold' }}
-      >
+      <Typography variant="body2" component="span" sx={{ fontWeight: 'bold' }}>
         {title}
       </Typography>
       <ButtonGroup role="group" aria-label={label} variant="outlined" color="primary">
@@ -87,7 +88,18 @@ function Stepper({
           aria-label={`Decrease ${label}`}
           aria-disabled={atMin || undefined}
           className={atMin ? 'Mui-disabled' : undefined}
-          sx={atMin ? limitSx : undefined}
+          sx={
+            atMin
+              ? // The value cell draws the divider; the disabled look must not add a second line.
+                {
+                  ...limitSx,
+                  '&.Mui-disabled': {
+                    ...limitSx['&.Mui-disabled'],
+                    borderRightColor: 'transparent',
+                  },
+                }
+              : undefined
+          }
           onClick={() => {
             if (!atMin) onChange(value - 1);
           }}
@@ -106,6 +118,9 @@ function Stepper({
             justifyContent: 'center',
             minWidth: t.spacing(5.5),
             px: 2,
+            // ButtonGroup makes the minus button's right border transparent; this left border is
+            // the divider (the plus button keeps its own left border).
+            borderLeft: `1px solid ${t.palette.primary.outlinedBorder}`,
             borderTop: `1px solid ${t.palette.primary.outlinedBorder}`,
             borderBottom: `1px solid ${t.palette.primary.outlinedBorder}`,
           })}
@@ -140,6 +155,7 @@ export default function NewReservationSearch({
   onSearch,
   locations = PLACEHOLDER_LOCATIONS,
   today: todayProp,
+  weekStartsOn,
 }: NewReservationSearchProps) {
   const navigate = useNavigate();
   const today = todayProp ?? todayIso();
@@ -152,8 +168,20 @@ export default function NewReservationSearch({
   const errors = validateDates(checkIn, checkOut, today);
   const valid = datesAreValid(checkIn, checkOut, today);
   const hint = dateHint(checkIn, checkOut, today);
-  const showError = (key: 'checkIn' | 'checkOut', value: string) =>
-    (touched[key] || value !== '') && errors[key];
+  const shown = visibleDateErrors(checkIn, checkOut, touched, today);
+  const hintRepeated = hintRepeatsFieldError(checkIn, checkOut, touched, today);
+  // One calendar serves both fields; the first click is the check-in, the second the check-out.
+  const range = (role: 'from' | 'to'): DateFieldRange => ({
+    role,
+    from: checkIn,
+    to: checkOut,
+    limits: stayLimits(today, MAX_ADVANCE_DAYS, MAX_STAY_NIGHTS),
+    endNames: ['check-in', 'check-out'],
+    onChange: (r) => {
+      setCheckIn(r.from);
+      setCheckOut(r.to);
+    },
+  });
   const hintId = useId();
   const maxRoomsId = useId();
 
@@ -220,45 +248,35 @@ export default function NewReservationSearch({
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.875 }}>
         <Box sx={{ display: 'flex', gap: 1.875, alignItems: 'flex-start' }}>
-          <TextField
-            type="date"
+          <DateField
             label="Check In"
+            today={today}
             inputRef={checkInRef}
             value={checkIn}
-            onChange={(e) => setCheckIn(e.target.value)}
+            onChange={setCheckIn}
             onBlur={() => setTouched((t) => ({ ...t, checkIn: true }))}
-            error={Boolean(showError('checkIn', checkIn))}
-            helperText={showError('checkIn', checkIn) || undefined}
-            fullWidth
-            sx={{ minWidth: 0 }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              htmlInput: {
-                min: today,
-                max: addDays(today, MAX_ADVANCE_DAYS),
-                'aria-required': true,
-              },
-            }}
+            error={Boolean(shown.checkIn)}
+            helperText={shown.checkIn || undefined}
+            required
+            min={today}
+            max={addDays(today, MAX_ADVANCE_DAYS)}
+            range={range('from')}
+            weekStartsOn={weekStartsOn}
           />
-          <TextField
-            type="date"
+          <DateField
             label="Check Out"
+            today={today}
             inputRef={checkOutRef}
             value={checkOut}
-            onChange={(e) => setCheckOut(e.target.value)}
+            onChange={setCheckOut}
             onBlur={() => setTouched((t) => ({ ...t, checkOut: true }))}
-            error={Boolean(showError('checkOut', checkOut))}
-            helperText={showError('checkOut', checkOut) || undefined}
-            fullWidth
-            sx={{ minWidth: 0 }}
-            slotProps={{
-              inputLabel: { shrink: true },
-              htmlInput: {
-                min: addDays(errors.checkIn ? today : checkIn || today, 1),
-                max: errors.checkIn || !checkIn ? undefined : addDays(checkIn, MAX_STAY_NIGHTS),
-                'aria-required': true,
-              },
-            }}
+            error={Boolean(shown.checkOut)}
+            helperText={shown.checkOut || undefined}
+            required
+            min={addDays(errors.checkIn ? today : checkIn || today, 1)}
+            max={errors.checkIn || !checkIn ? undefined : addDays(checkIn, MAX_STAY_NIGHTS)}
+            range={range('to')}
+            weekStartsOn={weekStartsOn}
           />
         </Box>
 
@@ -372,7 +390,7 @@ export default function NewReservationSearch({
       </Button>
 
       {canAddRoom(rooms) ? null : (
-        <Typography id={maxRoomsId} variant="caption" color="text.secondary">
+        <Typography id={maxRoomsId} variant="caption" sx={{ color: 'text.secondary' }}>
           Maximum of {MAX_ROOMS} rooms
         </Typography>
       )}
@@ -389,7 +407,12 @@ export default function NewReservationSearch({
           {searchLabel(valid ? nightsBetween(checkIn, checkOut) : NaN)}
         </Button>
         {valid ? null : (
-          <Typography id={hintId} variant="caption" color="text.secondary">
+          <Typography
+            id={hintId}
+            variant="caption"
+            // Guidance only; a message a field already shows as an error is not repeated visibly.
+            sx={[{ color: 'text.secondary' }, hintRepeated && visuallyHidden]}
+          >
             {hint}
           </Typography>
         )}

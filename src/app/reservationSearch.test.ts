@@ -4,6 +4,8 @@ import {
   MAX_ADVANCE_DAYS,
   MAX_STAY_NIGHTS,
   dateHint,
+  hintRepeatsFieldError,
+  visibleDateErrors,
   MAX_ROOMS,
   datesAreValid,
   formatCount,
@@ -162,5 +164,30 @@ describe('URL round trip', () => {
     expect(fromSearchParams(new URLSearchParams('rooms=1.0,1.0,1.0,1.0,1.0,1.0')).rooms).toEqual(
       one,
     );
+  });
+});
+
+describe('visible date errors and the CTA hint', () => {
+  const none = { checkIn: false, checkOut: false };
+  it('shows nothing before a field is touched or has a value', () => {
+    expect(visibleDateErrors('', '', none, '2026-10-20')).toEqual({
+      checkIn: undefined,
+      checkOut: undefined,
+    });
+    expect(hintRepeatsFieldError('', '', none, '2026-10-20')).toBe(false);
+    expect(hintRepeatsFieldError('2026-10-22', '', none, '2026-10-20')).toBe(false);
+  });
+  it('shows a touched empty field as an error that the hint then repeats', () => {
+    expect(visibleDateErrors('', '', { ...none, checkIn: true }, '2026-10-20').checkIn).toBe(
+      'Enter a check-in date.',
+    );
+    // With both empty the CTA hint is the general guidance, a different text, so it stays visible.
+    expect(hintRepeatsFieldError('', '', { ...none, checkIn: true }, '2026-10-20')).toBe(false);
+    expect(hintRepeatsFieldError('', '2026-10-25', { ...none, checkIn: true }, '2026-10-20')).toBe(
+      true,
+    );
+  });
+  it('a typed bad value is shown under its field', () => {
+    expect(hintRepeatsFieldError('2026-10-22', '2026-10-22', none, '2026-10-20')).toBe(true);
   });
 });

@@ -78,8 +78,7 @@ export default function DashboardColumn({
         id={headingId}
         variant="subtitle1"
         component="h2"
-        color="text.secondary"
-        sx={{ textTransform: 'uppercase', mb: 0.5 }}
+        sx={{ color: 'text.secondary', textTransform: 'uppercase', mb: 0.5 }}
       >
         {title}
       </Typography>
