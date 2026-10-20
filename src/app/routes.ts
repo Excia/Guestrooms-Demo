@@ -19,6 +19,10 @@ export interface RouteMeta {
 export const SCHEDULE_PATH = '/schedule';
 export const DASHBOARD_PATH = '/dashboard';
 export const ROOM_BLOCKS_PATH = '/room-blocks';
+/** Reservation List (ticket 3.1): the list side of the schedule's list/calendar toggle. */
+export const RESERVATIONS_PATH = '/reservations';
+/** Night Audit History; the schedule's Night Audit button opens it until the run screen exists. */
+export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -33,7 +37,7 @@ export const routes = [
     menuLabel: 'Schedule | Home',
     section: 'reservation',
   },
-  { id: 'reservations', path: '/reservations', title: 'Reservations', section: 'reservation' },
+  { id: 'reservations', path: RESERVATIONS_PATH, title: 'Reservations', section: 'reservation' },
   // FLAG: no permission mapping yet. When role-based access (ticket 9) gives every route its own
   // `page.<id>` permission, the owner must decide; recommended: gate on the reservations permission.
   {
@@ -52,7 +56,7 @@ export const routes = [
   { id: 'waitlist', path: '/waitlist', title: 'Waitlist', section: 'reservation' },
   {
     id: 'night-audit-history',
-    path: '/night-audit-history',
+    path: NIGHT_AUDIT_HISTORY_PATH,
     title: 'Night Audit History',
     section: 'reservation',
   },
