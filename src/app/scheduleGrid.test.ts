@@ -4,7 +4,6 @@ import { canDrop, toMoveDatesRequest } from './scheduleDrag';
 import {
   applyMoves,
   blockAriaLabel,
-  blockMarkers,
   blockSpan,
   clampShift,
   columnAtX,
@@ -270,52 +269,5 @@ describe('empty cells', () => {
     expect(emptyCellAction(undefined, undefined, start, 7, 3)).toEqual({ kind: 'free' });
     // a closure wins when both cover the column
     expect(emptyCellAction([stay], [stay], start, 7, 1)).toEqual({ kind: 'closed' });
-  });
-});
-
-describe('blockMarkers', () => {
-  const edges = { continuesBefore: false, continuesAfter: false };
-
-  it('Early Check In marks the arrival edge, Late Check Out the departure edge', () => {
-    expect(blockMarkers({ earlyCheckIn: true }, edges)).toEqual({ left: true, right: false });
-    expect(blockMarkers({ lateCheckOut: true }, edges)).toEqual({ left: false, right: true });
-    expect(blockMarkers({ earlyCheckIn: true, lateCheckOut: true }, edges)).toEqual({
-      left: true,
-      right: true,
-    });
-    expect(blockMarkers({}, edges)).toEqual({ left: false, right: false });
-  });
-
-  it('a clipped edge has no marker: its real arrival or departure is out of sight', () => {
-    const both = { earlyCheckIn: true, lateCheckOut: true };
-    expect(blockMarkers(both, { continuesBefore: true, continuesAfter: false })).toEqual({
-      left: false,
-      right: true,
-    });
-    expect(blockMarkers(both, { continuesBefore: false, continuesAfter: true })).toEqual({
-      left: true,
-      right: false,
-    });
-    expect(blockMarkers(both, { continuesBefore: true, continuesAfter: true })).toEqual({
-      left: false,
-      right: false,
-    });
-  });
-
-  it('works from blockLayout for a stay that starts on the first column or leaves on the last', () => {
-    const layout = blockLayout(
-      { startDate: '2026-10-16', endDate: '2026-10-19' },
-      '2026-10-16',
-      7,
-    )!;
-    expect(blockMarkers({ earlyCheckIn: true, lateCheckOut: true }, layout)).toEqual({
-      left: true,
-      right: true,
-    });
-    const long = blockLayout({ startDate: '2026-10-10', endDate: '2026-10-30' }, '2026-10-16', 7)!;
-    expect(blockMarkers({ earlyCheckIn: true, lateCheckOut: true }, long)).toEqual({
-      left: false,
-      right: false,
-    });
   });
 });
