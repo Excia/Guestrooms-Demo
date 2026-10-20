@@ -31,7 +31,7 @@ import {
   RevenueTable,
   type OccupancyRow,
 } from './QuickStatsTables';
-import { useQuickStats } from './useQuickStats';
+import { useQuickStats, type QuickStatsState } from './useQuickStats';
 
 export interface QuickStatsProps {
   /**
@@ -75,12 +75,19 @@ function DateControl({
         setDraft(e.target.value);
         if (isValidIsoDate(e.target.value)) onCommit(e.target.value);
       }}
-      error={draft !== '' && !isValidIsoDate(draft)}
+      // A cleared or incomplete date goes back to the last valid one when the field loses focus.
+      onBlur={() => {
+        if (!isValidIsoDate(draft)) setDraft(value);
+      }}
+      error={!isValidIsoDate(draft)}
       slotProps={{ inputLabel: { shrink: true } }}
       sx={{ width: (t) => t.spacing(DATE_FIELD_WIDTH), maxWidth: '100%' }}
     />
   );
 }
+
+/** The previous answer stays while a new period loads, dimmed. */
+const dim = (on: boolean) => (on ? { opacity: 0.5, transition: 'opacity 150ms' } : {});
 
 function QuickStatsSkeleton({ landing }: { landing: boolean }) {
   const table = (
@@ -172,14 +179,15 @@ function Panel({
   onPeriodChange,
   today,
   landing,
+  state,
 }: {
   view: QuickStatsView;
   period: string;
   onPeriodChange: (value: string) => void;
   today: IsoDate;
   landing: boolean;
+  state: QuickStatsState & { retry: () => void };
 }) {
-  const state = useQuickStats(view, period);
   const control =
     view === 'month' ? (
       <Select
@@ -194,10 +202,11 @@ function Panel({
     );
   const stats = state.status === 'success' ? state.data : null;
   const empty = stats ? isQuickStatsEmpty(stats) : false;
+  const refreshing = state.status === 'success' && state.refreshing;
 
   return (
     <Box
-      aria-busy={state.status === 'loading'}
+      aria-busy={state.status === 'loading' || refreshing}
       sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}
     >
       <Box
@@ -215,18 +224,11 @@ function Panel({
         {stats && !empty ? (
           <OccupancySummary
             counts={stats.occupancy}
-            sx={{ alignSelf: 'stretch', flex: landing ? 1 : undefined }}
+            sx={{ alignSelf: 'stretch', flex: landing ? 1 : undefined, ...dim(refreshing) }}
           />
         ) : null}
       </Box>
-      {state.status === 'loading' ? (
-        <>
-          <Box role="status" sx={visuallyHidden}>
-            Loading quick stats
-          </Box>
-          <QuickStatsSkeleton landing={landing} />
-        </>
-      ) : null}
+      {state.status === 'loading' ? <QuickStatsSkeleton landing={landing} /> : null}
       {state.status === 'error' ? (
         <Alert
           severity="error"
@@ -240,11 +242,13 @@ function Panel({
         </Alert>
       ) : null}
       {stats && empty ? (
-        <Typography role="status" color="text.secondary">
-          No stats for this period.
-        </Typography>
+        <Typography color="text.secondary">No stats for this period.</Typography>
       ) : null}
-      {stats && !empty ? <Sections stats={stats} landing={landing} /> : null}
+      {stats && !empty ? (
+        <Box sx={dim(refreshing)}>
+          <Sections stats={stats} landing={landing} />
+        </Box>
+      ) : null}
     </Box>
   );
 }
@@ -260,11 +264,19 @@ export default function QuickStats({
   today: todayProp,
   weekStartsOn = 0,
 }: QuickStatsProps) {
+  // Frozen at mount: a dashboard left open past midnight keeps yesterday's defaults until reloaded.
   const [today] = useState(() => todayProp ?? todayIso());
   const id = useId();
   const [view, setView] = useState<QuickStatsView>(DEFAULT_VIEW);
   const [periods, setPeriods] = useState(() => defaultPeriods(today, weekStartsOn));
   const landing = placement === 'landing';
+  const state = useQuickStats(view, periods[view]);
+  const announcement =
+    state.status === 'loading' || (state.status === 'success' && state.refreshing)
+      ? 'Loading quick stats'
+      : state.status === 'success' && isQuickStatsEmpty(state.data)
+        ? 'No stats for this period.'
+        : '';
   const tabId = (v: QuickStatsView) => `${id}-tab-${v}`;
   const panelId = (v: QuickStatsView) => `${id}-panel-${v}`;
 
@@ -290,6 +302,10 @@ export default function QuickStats({
           <Tab key={v} value={v} label={VIEW_LABELS[v]} id={tabId(v)} aria-controls={panelId(v)} />
         ))}
       </Tabs>
+      {/* Always mounted, so changes in its text are announced. */}
+      <Box role="status" sx={visuallyHidden}>
+        {announcement}
+      </Box>
       {QUICK_STATS_VIEWS.map((v) => (
         <Box key={v} role="tabpanel" id={panelId(v)} aria-labelledby={tabId(v)} hidden={v !== view}>
           {v === view ? (
@@ -299,6 +315,7 @@ export default function QuickStats({
               onPeriodChange={(value) => setPeriods((p) => ({ ...p, [v]: value }))}
               today={today}
               landing={landing}
+              state={state}
             />
           ) : null}
         </Box>

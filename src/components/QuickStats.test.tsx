@@ -253,15 +253,18 @@ describe('QuickStats refetching', () => {
 describe('QuickStats states', () => {
   it('shows a loading skeleton and keeps the control while loading', async () => {
     setup({}, createMockClient({ scenario: 'loading' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Loading quick stats');
-    expect(screen.getByRole('status').closest('[aria-busy="true"]')).not.toBeNull();
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Loading quick stats'),
+    );
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
     expect(screen.getByLabelText('Start Date')).toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
   it('shows an empty state', async () => {
     setup({}, createMockClient({ scenario: 'empty' }));
-    expect(await screen.findByText('No stats for this period.')).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('No stats for this period.');
+    expect(screen.getAllByText('No stats for this period.').length).toBeGreaterThan(0);
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Start Date')).toBeInTheDocument();
   });
@@ -287,5 +290,132 @@ describe('QuickStats placement', () => {
     expect(await screen.findByRole('heading', { name: 'Weekly Revenue' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Occupancy' })).toBeInTheDocument();
     expect(screen.getByRole('tablist')).toBeInTheDocument();
+  });
+});
+
+/** A getQuickStats whose answers the test settles by hand, per request. */
+function deferred() {
+  const pending: Array<{
+    query: QuickStatsQuery;
+    resolve: (s: QuickStatsData) => void;
+    signal?: AbortSignal;
+  }> = [];
+  const { client, getQuickStats } = clientWith(
+    (query, o) =>
+      new Promise<QuickStatsData>((resolve) => {
+        pending.push({ query, resolve, signal: o?.signal });
+      }),
+  );
+  return { client, getQuickStats, pending };
+}
+
+/** Day stats whose booked count tells which date they answer. */
+const dayFor = (date: string, booked: number): QuickStatsData => ({
+  ...(buildQuickStats({ view: 'day', date }) as Extract<QuickStatsData, { view: 'day' }>),
+  occupancy: { booked, available: 24 - booked, percent: 0 },
+});
+
+describe('QuickStats stale-while-revalidate', () => {
+  it('keeps the last answer, dimmed and busy, while a new period loads', async () => {
+    const { client, pending } = deferred();
+    setup({}, client);
+    await userEvent.click(tab(/day view/i));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    pending[1].resolve(dayFor(TODAY, 11));
+    const group = await screen.findByRole('group', { name: 'OCCUPANCY' });
+    expect(group).toHaveTextContent('Booked rooms: 11');
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-12-10' } });
+    await waitFor(() => expect(pending).toHaveLength(3));
+    // Still showing the old numbers, no skeleton, marked busy.
+    expect(screen.getByRole('group', { name: 'OCCUPANCY' })).toHaveTextContent('Booked rooms: 11');
+    expect(screen.getByRole('table', { name: 'Daily Revenue' })).toBeInTheDocument();
+    expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading quick stats');
+
+    pending[2].resolve(dayFor('2026-12-10', 17));
+    await waitFor(() =>
+      expect(screen.getByRole('group', { name: 'OCCUPANCY' })).toHaveTextContent(
+        'Booked rooms: 17',
+      ),
+    );
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  it("shows a tab's previous answer when returning to it, a skeleton only on first load", async () => {
+    const { client, pending } = deferred();
+    setup({}, client);
+    await waitFor(() => expect(pending).toHaveLength(1));
+    pending[0].resolve(buildQuickStats(pending[0].query));
+    await screen.findByRole('table', { name: 'Weekly Revenue' });
+
+    await userEvent.click(tab(/day view/i));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    expect(screen.queryByRole('table')).not.toBeInTheDocument(); // first load of Day: skeleton
+    pending[1].resolve(buildQuickStats(pending[1].query));
+    await screen.findByRole('table', { name: 'Daily Revenue' });
+
+    await userEvent.click(tab(/week view/i));
+    await waitFor(() => expect(pending).toHaveLength(3));
+    expect(screen.getByRole('table', { name: 'Weekly Revenue' })).toBeInTheDocument(); // stale
+  });
+
+  it('drops a late answer for a period that was replaced (A then B, A answers last)', async () => {
+    const { client, pending } = deferred();
+    setup({}, client);
+    await userEvent.click(tab(/day view/i));
+    await waitFor(() => expect(pending).toHaveLength(2));
+    pending[1].resolve(dayFor(TODAY, 5));
+    await screen.findByRole('group', { name: 'OCCUPANCY' });
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-12-10' } }); // A
+    await waitFor(() => expect(pending).toHaveLength(3));
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-12-11' } }); // B
+    await waitFor(() => expect(pending).toHaveLength(4));
+    expect(pending[2].signal?.aborted).toBe(true);
+
+    pending[3].resolve(dayFor('2026-12-11', 20));
+    await waitFor(() =>
+      expect(screen.getByRole('group', { name: 'OCCUPANCY' })).toHaveTextContent(
+        'Booked rooms: 20',
+      ),
+    );
+    pending[2].resolve(dayFor('2026-12-10', 9)); // A answers late
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole('group', { name: 'OCCUPANCY' })).toHaveTextContent('Booked rooms: 20');
+  });
+
+  it('shows the alert with Retry when a refresh fails', async () => {
+    let calls = 0;
+    const { client } = clientWith(async (q) => {
+      calls += 1;
+      if (calls === 2) throw new ApiError(500, 'boom');
+      return buildQuickStats(q);
+    });
+    setup({}, client);
+    await screen.findByRole('table', { name: 'Weekly Revenue' });
+    fireEvent.change(screen.getByLabelText('Start Date'), { target: { value: '2026-12-13' } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be loaded');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('keeps one persistent live region', async () => {
+    setup({}, createMockClient({ scenario: 'empty' }));
+    const region = screen.getByRole('status');
+    await waitFor(() => expect(region).toHaveTextContent('No stats for this period.'));
+    expect(screen.getByRole('status')).toBe(region);
+  });
+});
+
+describe('QuickStats date field', () => {
+  it('reverts a cleared date to the last valid one on blur', async () => {
+    setup();
+    await screen.findByRole('table', { name: 'Weekly Revenue' });
+    const input = screen.getByLabelText('Start Date');
+    fireEvent.change(input, { target: { value: '' } });
+    expect(input).toHaveValue('');
+    fireEvent.blur(input);
+    expect(input).toHaveValue('2026-12-06');
   });
 });

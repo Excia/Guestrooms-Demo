@@ -1,12 +1,7 @@
 // Pure rules for the Quick Stats panel (Figma component set 78:3760): formatting, occupancy math,
 // per-tab defaults and the month choices. Money is integer cents; revenue excludes taxes and
 // service charges, and the average rate is weighted (total revenue / total nights).
-import type {
-  Cents,
-  QuickStats,
-  QuickStatsQuery,
-  QuickStatsView,
-} from '../api/types';
+import type { Cents, QuickStats, QuickStatsQuery, QuickStatsView } from '../api/types';
 import { occupancyCounts, occupancyPercent, summarizeOccupancy } from '../api/occupancy';
 import { weightedAverageRateOrNull } from '../api/stats';
 import {

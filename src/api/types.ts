@@ -56,7 +56,12 @@ export type QuickStatsQuery =
   | { view: 'week'; startDate: IsoDate }
   | { view: 'month'; month: string };
 
-/** Booked and available rooms; `percent` is 0 to 100 with one decimal at most. */
+/**
+ * Booked and available rooms; `percent` is 0 to 100 with one decimal at most. The backend owns the
+ * rounding (the mock rounds booked / (booked + available) to one decimal; the UI never recomputes
+ * a percent). In every TOTAL row the percent is the mean of the row percents, not total booked over
+ * total rooms: this is what Figma's "(avg)" shows.
+ */
 export interface OccupancyCounts {
   booked: number;
   available: number;
@@ -114,6 +119,14 @@ export interface MonthQuickStats extends QuickStatsBase {
   roomBlocksTotal: OccupancyCounts;
 }
 
+/**
+ * "Empty" (the UI shows "No stats for this period."): `revenue.rows` is empty AND there are no
+ * `roomBlocks` (day, month) or `days` (week). A period that has rows or days but all zeros is not
+ * empty: the tables render with zeros, and a zero-night average rate is `null`. So a week with no
+ * data should answer `days: []`, not seven zero days. See `isQuickStatsEmpty`.
+ * The echoed `date`, `startDate` or `month` must equal the query; the HTTP client rejects a
+ * mismatch as `invalid-response`.
+ */
 export type QuickStats = DayQuickStats | WeekQuickStats | MonthQuickStats;
 
 export interface DashboardApi {

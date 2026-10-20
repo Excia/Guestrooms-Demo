@@ -24,13 +24,12 @@ import {
 } from '../app/quickStats';
 import { ROOM_BLOCKS_PATH } from '../app/routes';
 
-/** First column width in theme spacing: 15 x 8px = 120px (Figma: 119px). */
-const LABEL_COLUMN = 15;
-
 const cellBase: SxProps<Theme> = { border: 0, px: 0, py: 1.25 };
 const numeric: SxProps<Theme> = {
   ...cellBase,
-  pl: 2,
+  // Numbers hug their content (width 1%); the label column takes the remaining width.
+  width: '1%',
+  pl: 1,
   textAlign: 'right',
   whiteSpace: 'nowrap',
   fontVariantNumeric: 'tabular-nums',
@@ -42,7 +41,6 @@ const numeric: SxProps<Theme> = {
 const rowValue: SxProps<Theme> = { ...numeric, pl: 0, pr: 1.25, width: '1%' };
 const labelCell: SxProps<Theme> = {
   ...cellBase,
-  width: (t: Theme) => t.spacing(LABEL_COLUMN),
   color: 'text.primary',
   overflowWrap: 'anywhere',
 };
@@ -50,7 +48,8 @@ const columnHeader: SxProps<Theme> = {
   ...cellBase,
   pt: 0,
   pb: 1.25,
-  pl: 2,
+  pl: 1,
+  width: '1%',
   textAlign: 'right',
   color: 'text.secondary',
   textTransform: 'uppercase',
@@ -92,7 +91,14 @@ function IconValue({ kind, children }: { kind: keyof typeof OCCUPANCY_ICON; chil
   return (
     <Box
       component="span"
-      sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.625, p: 1.25 }}
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.625,
+        px: 0.75,
+        py: 1.25,
+        whiteSpace: 'nowrap',
+      }}
     >
       <Icon aria-hidden="true" sx={{ color: 'action.active' }} />
       <Typography
@@ -122,8 +128,8 @@ export function OccupancySummary({ counts, sx }: { counts: OccupancyCounts; sx?:
         (t) => ({
           display: 'flex',
           alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 1.5,
+          flexWrap: 'nowrap',
+          gap: 0.5,
           px: 1.5,
           py: 1,
           borderRadius: 2.5,
@@ -146,7 +152,7 @@ export function OccupancySummary({ counts, sx }: { counts: OccupancyCounts; sx?:
 export function RevenueTable({ title, revenue }: { title: string; revenue: QuickStatsRevenue }) {
   const titleId = useId();
   return (
-    <Box component="section" aria-labelledby={titleId}>
+    <Box component="div">
       <SectionTitle id={titleId}>{title}</SectionTitle>
       <Table size="small" aria-labelledby={titleId} sx={{ mt: 1.5 }}>
         <TableHead>
@@ -223,7 +229,7 @@ export function OccupancyTable({
 }) {
   const titleId = useId();
   return (
-    <Box component="section" aria-labelledby={titleId}>
+    <Box component="div">
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
         <SectionTitle id={titleId}>{title}</SectionTitle>
         {action}
