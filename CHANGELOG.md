@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.2.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.1.0...guestrooms-v1.2.0) (2026-10-20)
+
+
+### Features
+
+* add dashboard layout and new reservation search panel ([#115](https://github.com/Excia/Guestrooms-Demo/issues/115)) ([a71e10d](https://github.com/Excia/Guestrooms-Demo/commit/a71e10ddae7cf88c369aeb0dc92a19cf1000af84))
+* add quick stats panel with day, week and month views ([#113](https://github.com/Excia/Guestrooms-Demo/issues/113)) ([d912869](https://github.com/Excia/Guestrooms-Demo/commit/d912869f2373c71b7e5d1554ef673e84dca3b41e))
+* add reservation management shortcut list with unassigned charges badge ([#111](https://github.com/Excia/Guestrooms-Demo/issues/111)) ([f4d91c2](https://github.com/Excia/Guestrooms-Demo/commit/f4d91c2985e2dfc2cf179b5af3439533e061398b))
+* add role-based access with a route guard and dev user switcher ([#110](https://github.com/Excia/Guestrooms-Demo/issues/110)) ([5fa7e4e](https://github.com/Excia/Guestrooms-Demo/commit/5fa7e4ed8d9e8964798e03642482b1153a85c79b))
+* add shared Select, Pagination, DateSelection, LocationFilter, dialogs and toast ([#108](https://github.com/Excia/Guestrooms-Demo/issues/108)) ([d995cad](https://github.com/Excia/Guestrooms-Demo/commit/d995cad0b0ad273fbdc2f5bca7609350e0d09c62))
+
 ## [1.1.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.0.0...guestrooms-v1.1.0) (2026-10-20)
 
 
