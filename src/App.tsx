@@ -1,11 +1,13 @@
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
-import { lazy, Suspense, type ReactElement } from 'react';
+import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { DASHBOARD_PATH, routes, SCHEDULE_PATH } from './app/routes';
+import { DASHBOARD_PATH, NEW_RESERVATION_RESULTS_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
+import Dashboard from './pages/Dashboard';
+import NewReservationResults from './pages/NewReservationResults';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
@@ -22,14 +24,17 @@ function PagePlaceholder({ title }: { title: string }) {
   );
 }
 
-// Built pages, keyed by route path; anything missing shows a placeholder.
-const pages: Partial<Record<string, ReactElement>> = {};
-
 /** Keeps the query string, so dev switches like ?mock=empty survive the redirect. */
 function RedirectToSchedule() {
   const { search } = useLocation();
   return <Navigate to={{ pathname: SCHEDULE_PATH, search }} replace />;
 }
+
+// Real pages by route path; routes without an entry show the placeholder. Page tickets add theirs here.
+const pages: Partial<Record<string, ReactElement>> = {
+  [DASHBOARD_PATH]: <Dashboard />,
+  [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
+};
 
 export default function App() {
   return (
