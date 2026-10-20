@@ -757,6 +757,33 @@ describe('guest field controls', () => {
     }
   });
 
+  it('the dropdown arrow and the + are siblings in one adornment row (no stacking), arrow first', async () => {
+    const { user, dialog } = await open();
+    for (const [show, add] of [
+      ['Show booking guests', 'Add booking guest'],
+      ['Show lead occupants', 'Add lead occupant'],
+    ]) {
+      const popup = within(dialog).getByRole('button', { name: show });
+      const plus = within(dialog).getByRole('button', { name: add });
+      const row = plus.parentElement!;
+      expect(row.contains(popup)).toBe(true);
+      expect(plus.closest('.MuiAutocomplete-endAdornment')).toBeNull(); // not inside MUI's absolute box
+      const kids = [...row.querySelectorAll<HTMLElement>('button')];
+      expect(kids.indexOf(popup)).toBeLessThan(kids.indexOf(plus));
+      expect(getComputedStyle(plus).position).not.toBe('absolute');
+    }
+    // the + opens the dialog without opening the list; the arrow opens the list
+    await user.click(within(dialog).getByRole('button', { name: 'Add booking guest' }));
+    expect(await screen.findByRole('dialog', { name: 'Add guest' })).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Add guest' })).not.toBeInTheDocument(),
+    );
+    await user.click(await within(dialog).findByRole('button', { name: 'Show booking guests' }));
+    expect(await screen.findByRole('listbox')).toBeInTheDocument();
+  });
+
   it('keyboard order after the lead field: its + then the X', async () => {
     const { dialog } = await open();
     // (the disabled X is still in the DOM order; it becomes tabbable once a lead occupant is chosen)

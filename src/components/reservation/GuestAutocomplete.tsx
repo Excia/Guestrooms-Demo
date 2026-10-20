@@ -55,12 +55,12 @@ export default function GuestAutocomplete({
         sx={{
           flex: 1,
           minWidth: 0,
+          // MUI overlaps the clear and dropdown buttons by 2px; keep them apart.
+          '& .MuiAutocomplete-clearIndicator': { marginRight: (t: Theme) => t.spacing(0.5) },
           ...(clearLabel && { '& .MuiAutocomplete-clearIndicator': { display: 'none' } }),
-          // Room for the clear, dropdown and "+" buttons inside the field (one more than the default).
-          '& .MuiOutlinedInput-root, & .MuiAutocomplete-hasPopupIcon .MuiOutlinedInput-root': {
-            pr: (t: Theme) => `${t.spacing(12)} !important`,
-          },
-          '& .MuiAutocomplete-endAdornment': { right: (t: Theme) => t.spacing(4.5) },
+          // The input's right padding reserves room for the clear, dropdown and "+" buttons, so the
+          // text never runs under them. !important: MUI's own padding rules are more specific.
+          '& .MuiOutlinedInput-root': { pr: (t: Theme) => `${t.spacing(15)} !important` },
         }}
         options={members}
         value={value}
@@ -130,8 +130,27 @@ export default function GuestAutocomplete({
               ...params.slotProps,
               input: {
                 ...params.slotProps.input,
+                // One flex row inside the field: MUI's own buttons (clear, dropdown), then "+". They are
+                // siblings, not stacked absolutely, so they cannot overlap.
                 endAdornment: (
-                  <>
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      right: (t) => t.spacing(1),
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1,
+                      // MUI positions its own adornment absolutely; here it is a flex item.
+                      '&& .MuiAutocomplete-endAdornment': {
+                        position: 'static !important',
+                        transform: 'none !important',
+                        right: 'auto !important',
+                        top: 'auto !important',
+                      },
+                    }}
+                  >
                     {params.slotProps.input.endAdornment}
                     <IconButton
                       size="small"
@@ -144,16 +163,10 @@ export default function GuestAutocomplete({
                         e.stopPropagation();
                         onAdd();
                       }}
-                      sx={{
-                        position: 'absolute',
-                        right: (t) => t.spacing(0.5),
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                      }}
                     >
                       <Add />
                     </IconButton>
-                  </>
+                  </Box>
                 ),
               },
               htmlInput: { ...params.slotProps.htmlInput, 'aria-label': label },
