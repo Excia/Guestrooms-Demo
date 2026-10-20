@@ -1,4 +1,9 @@
-import { pagePermission, type PermissionPageId } from '../app/permissions';
+import {
+  pagePermission,
+  RESERVATION_EDIT_PERMISSION,
+  type Permission,
+  type PermissionPageId,
+} from '../app/permissions';
 import { routes, type RouteMeta } from '../app/routes';
 import type { PermissionGrant } from './types';
 
@@ -26,7 +31,10 @@ export const MOCK_USERS: readonly MockUser[] = [
     label: 'Non-admin (no admin pages)',
     grant: {
       role: 'Staff',
-      permissions: nonAdminPages.map((r) => pagePermission(r.id as PermissionPageId)),
+      permissions: [
+        ...nonAdminPages.map((r) => pagePermission(r.id as PermissionPageId)),
+        RESERVATION_EDIT_PERMISSION,
+      ] satisfies Permission[],
     },
   },
   {
@@ -37,7 +45,9 @@ export const MOCK_USERS: readonly MockUser[] = [
       permissions: [
         ...nonAdminPages,
         ...routes.filter((r) => r.id === 'rooms' || r.id === 'room-types'),
-      ].map((r) => pagePermission(r.id as PermissionPageId)),
+      ]
+        .flatMap((r): Permission[] => [pagePermission(r.id as PermissionPageId)])
+        .concat(RESERVATION_EDIT_PERMISSION),
     },
   },
 ];

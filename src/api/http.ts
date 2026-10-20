@@ -1,6 +1,11 @@
 import type {
   ApiClient,
+  BookingHold,
+  CreateReservationRequest,
   DashboardStats,
+  EarlyLateRequest,
+  EarlyLateResult,
+  ReservationDetail,
   Page,
   PermissionGrant,
   QuickStats,
@@ -17,6 +22,8 @@ import type {
 } from './types';
 import { ApiError } from './types';
 import {
+  assertCreateReservationRequest,
+  assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
   assertQuickStatsQuery,
@@ -101,6 +108,114 @@ function parsePage(body: unknown, status: number): Page<Reservation> {
 function parseReservation(body: unknown, status: number): Reservation {
   if (!isReservation(body)) throw invalid(status, 'reservation');
   return body;
+}
+
+const isFlag = (v: unknown): v is boolean => typeof v === 'boolean';
+const ROOM_STATUSES: readonly string[] = ['nyci', 'checked-in', 'checked-out'];
+
+// Light shape guard on what the details panel reads. A mismatch is an invalid-response error.
+function isReservationDetail(v: unknown): v is ReservationDetail {
+  return (
+    isObject(v) &&
+    isString(v.id) &&
+    isString(v.confirmationNumber) &&
+    isString(v.status) &&
+    STATUSES.includes(v.status) &&
+    isString(v.arrival) &&
+    isString(v.departure) &&
+    isCount(v.nights) &&
+    isCount(v.adults) &&
+    isCount(v.children) &&
+    isObject(v.leadOccupant) &&
+    isString(v.leadOccupant.name) &&
+    (v.leadOccupant.memberNumber === null || isString(v.leadOccupant.memberNumber)) &&
+    listOf(
+      v.rooms,
+      (r) =>
+        isObject(r) &&
+        isString(r.id) &&
+        (r.roomId === null || isString(r.roomId)) &&
+        (r.roomNumber === null || isString(r.roomNumber)) &&
+        isString(r.status) &&
+        ROOM_STATUSES.includes(r.status),
+    ) &&
+    (v.rooms as unknown[]).length >= 1 &&
+    isFlag(v.earlyCheckIn) &&
+    isFlag(v.lateCheckOut) &&
+    listOf(
+      v.addOns,
+      (a) =>
+        isObject(a) &&
+        isString(a.id) &&
+        isString(a.name) &&
+        isCount(a.quantity) &&
+        isCount(a.priceCents),
+    ) &&
+    isString(v.publicNotes) &&
+    isString(v.privateNotes) &&
+    isObject(v.stay) &&
+    isCount(v.stay.folioTotalCents) &&
+    listOf(
+      v.stay.lines,
+      (l) => isObject(l) && isString(l.roomType) && isString(l.date) && isCount(l.amountCents),
+    ) &&
+    isString(v.version) &&
+    v.version !== ''
+  );
+}
+
+const parseDetail = (body: unknown, status: number): ReservationDetail => {
+  if (!isReservationDetail(body)) throw invalid(status, 'reservation detail');
+  return body;
+};
+
+// The answer must carry the flags the request asked for (a changed flag that did not stick is a
+// failed save, not a success) and a new version.
+const parseEarlyLate =
+  (request: EarlyLateRequest) =>
+  (body: unknown, status: number): EarlyLateResult => {
+    if (
+      !isObject(body) ||
+      !isFlag(body.earlyCheckIn) ||
+      !isFlag(body.lateCheckOut) ||
+      !isString(body.version) ||
+      body.version === '' ||
+      (request.earlyCheckIn !== undefined && body.earlyCheckIn !== request.earlyCheckIn) ||
+      (request.lateCheckOut !== undefined && body.lateCheckOut !== request.lateCheckOut)
+    ) {
+      throw invalid(status, 'early/late');
+    }
+    return body as unknown as EarlyLateResult;
+  };
+
+const parseCreated =
+  (request: CreateReservationRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    const detail = parseDetail(body, status);
+    if (
+      detail.rooms.length !== 1 ||
+      detail.rooms[0].roomId !== request.roomId ||
+      detail.arrival !== request.arrival ||
+      detail.departure !== request.departure
+    ) {
+      throw invalid(status, 'created reservation');
+    }
+    return detail;
+  };
+
+const isHoldMinutes = (v: unknown): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 99;
+
+function parseBookingHold(body: unknown, status: number): BookingHold {
+  if (
+    !isObject(body) ||
+    !isHoldMinutes(body.employee) ||
+    !isHoldMinutes(body.member) ||
+    !isHoldMinutes(body.nonMember)
+  ) {
+    throw invalid(status, 'booking hold');
+  }
+  return body as unknown as BookingHold;
 }
 
 const STAT_COUNTS = [
@@ -438,6 +553,31 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           assertResourceId(id, 'reservation');
           return request(`/reservations/${encodeURIComponent(id)}`, {}, o, parseReservation);
         }),
+      getDetail: (id, o) =>
+        Promise.resolve().then(() => {
+          assertResourceId(id, 'reservation');
+          return request(`/reservations/${encodeURIComponent(id)}/detail`, {}, o, parseDetail);
+        }),
+      setEarlyLate: (r: EarlyLateRequest, o) =>
+        Promise.resolve().then(() => {
+          assertEarlyLateRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/early-late`,
+            {},
+            o,
+            parseEarlyLate(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      create: (r: CreateReservationRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCreateReservationRequest(r);
+          return request('/reservations', {}, o, parseCreated(r), {
+            method: 'POST',
+            body: r,
+            headers: { 'Idempotency-Key': r.requestId },
+          });
+        }),
     },
     schedule: {
       get: (q, o) =>
@@ -476,6 +616,9 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
+    },
+    settings: {
+      getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
   };

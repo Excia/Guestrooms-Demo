@@ -188,10 +188,132 @@ export interface Page<T> {
   nextCursor?: string;
 }
 
+/** One room of a reservation as the details panel shows it. */
+export interface ReservationRoomDetail {
+  /** The reservation-room id (the schedule block id). */
+  id: string;
+  /** Null while no room is assigned ("UNASSIGNED"). */
+  roomId: string | null;
+  roomNumber: string | null;
+  locationName: string | null;
+  roomTypeName: string | null;
+  status: 'nyci' | 'checked-in' | 'checked-out';
+  arrival: IsoDate;
+  /** Departure, exclusive. */
+  departure: IsoDate;
+}
+
+export interface ReservationAddOn {
+  id: string;
+  name: string;
+  quantity: number;
+  /** Per unit, excluding taxes and service charges. */
+  priceCents: Cents;
+}
+
+export interface ReservationStayLine {
+  roomType: string;
+  date: IsoDate;
+  amountCents: Cents;
+}
+
+/**
+ * Everything the reservation details panel shows (Figma "Res Details Panel"). `status` is the
+ * reservation's: 'checked-in' while any room is in house, 'checked-out' once every room has left,
+ * 'cancelled' for a cancelled one, else 'confirmed'/'pending'. `version` is the opaque revision
+ * the early/late mutation echoes back (409 `stale` when it is out of date); it is separate from the
+ * schedule block versions.
+ */
+export interface ReservationDetail {
+  id: string;
+  confirmationNumber: string;
+  status: ReservationStatus;
+  arrival: IsoDate;
+  /** Departure, exclusive. */
+  departure: IsoDate;
+  nights: number;
+  adults: number;
+  children: number;
+  leadOccupant: { name: string; memberNumber: string | null; guestType: ScheduleGuestType };
+  rooms: ReservationRoomDetail[];
+  earlyCheckIn: boolean;
+  lateCheckOut: boolean;
+  addOns: ReservationAddOn[];
+  publicNotes: string;
+  privateNotes: string;
+  /** Excludes taxes and service charges. */
+  stay: { lines: ReservationStayLine[]; folioTotalCents: Cents };
+  version: string;
+}
+
+/**
+ * Early Check In / Late Check Out, saved as the user ticks them (no Save button). Send only the
+ * flag(s) that changed. `requestId` is the idempotency key (body and `Idempotency-Key` header,
+ * like the schedule moves); `version` is the `ReservationDetail.version` the user saw.
+ */
+export interface EarlyLateRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+  earlyCheckIn?: boolean;
+  lateCheckOut?: boolean;
+}
+
+/**
+ * The reservation's flags after the change and its new `version`. Errors: 400 `invalid-id` /
+ * `invalid-query`; 404; 409 `stale` (the version is out of date; nothing applied); 409
+ * `not-editable` (checked out or cancelled); 409 `idempotency-conflict`.
+ */
+export interface EarlyLateResult {
+  earlyCheckIn: boolean;
+  lateCheckOut: boolean;
+  version: string;
+}
+
+/**
+ * Create a one-room reservation from the New Reservation panel. Idempotent on `requestId`. Errors:
+ * 400 `invalid-query`; 404 unknown room; 409 `conflict` (the room is booked or closed on those
+ * nights); 409 `idempotency-conflict`. Answers the new reservation's detail.
+ */
+export interface CreateReservationRequest {
+  requestId: string;
+  roomId: string;
+  arrival: IsoDate;
+  departure: IsoDate;
+  adults: number;
+  children: number;
+  guestName: string;
+  /** 'occupant' stays with the booking guest; 'reserver' books for someone else (same name for now). */
+  bookingGuestRole: 'occupant' | 'reserver';
+  publicNotes?: string;
+  privateNotes?: string;
+}
+
 export interface ReservationsApi {
   list(query?: ReservationQuery, options?: RequestOptions): Promise<Page<Reservation>>;
   /** Rejects with an ApiError of status 404 when the id is unknown. */
   get(id: string, options?: RequestOptions): Promise<Reservation>;
+  /** The details panel's data. 404 when the id is unknown. */
+  getDetail(id: string, options?: RequestOptions): Promise<ReservationDetail>;
+  setEarlyLate(request: EarlyLateRequest, options?: RequestOptions): Promise<EarlyLateResult>;
+  create(request: CreateReservationRequest, options?: RequestOptions): Promise<ReservationDetail>;
+}
+
+// ---- settings (Booking Rules, ticket 7.5; read-only here) --------------------------------------
+
+/**
+ * "Reservation Hold" minutes (1 to 99) per audience, from Booking Rules (ticket 7.5). Staff create
+ * reservations in the admin UI, so the panel uses `employee`; `member` and `nonMember` are the
+ * online booking audiences.
+ */
+export interface BookingHold {
+  employee: number;
+  member: number;
+  nonMember: number;
+}
+
+export interface SettingsApi {
+  getBookingHold(options?: RequestOptions): Promise<BookingHold>;
 }
 
 // ---- permissions -----------------------------------------------------------------------------
@@ -238,6 +360,8 @@ export interface ScheduleLocation {
 export interface ScheduleRoomType {
   id: string;
   name: string;
+  /** Per night, excluding taxes. PLACEHOLDER until Rate Categories (admin) provide rates. */
+  nightlyRate?: Cents;
 }
 
 /** Row header: "location | room type" and the room number. */
@@ -286,6 +410,9 @@ export interface ScheduleBlock {
    * can refuse a move made from out-of-date data (409 `stale`). Never parse or compare it.
    */
   version: string;
+  /** Early Check In / Late Check Out were requested: the orange edge markers (Figma). */
+  earlyCheckIn?: boolean;
+  lateCheckOut?: boolean;
 }
 
 /** A gray closure block (e.g. "Reserved: Fixed Loss"). Same half-open dates as `ScheduleBlock`. */
@@ -383,6 +510,7 @@ export interface ApiClient {
   reservations: ReservationsApi;
   permissions: PermissionsApi;
   schedule: ScheduleApi;
+  settings: SettingsApi;
 }
 
 export interface ApiErrorInit {

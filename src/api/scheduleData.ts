@@ -24,10 +24,11 @@ export const SCHEDULE_LOCATIONS: ScheduleLocation[] = [
 ];
 
 export const SCHEDULE_ROOM_TYPES: ScheduleRoomType[] = [
-  { id: 'king-deluxe', name: 'King Deluxe' },
-  { id: 'queen-standard', name: 'Queen Standard' },
-  { id: 'suite', name: 'Suite' },
-  { id: 'cottage', name: 'Two-Bedroom Cottage' },
+  // PLACEHOLDER nightly rates (cents, excluding taxes) until Rate Categories provide real ones.
+  { id: 'king-deluxe', name: 'King Deluxe', nightlyRate: 24900 },
+  { id: 'queen-standard', name: 'Queen Standard', nightlyRate: 19900 },
+  { id: 'suite', name: 'Suite', nightlyRate: 34900 },
+  { id: 'cottage', name: 'Two-Bedroom Cottage', nightlyRate: 42900 },
 ];
 
 /** Mock inventory size: `default` is about 30 rooms; `large` is 200 rooms with 60+ days of stays. */
@@ -44,6 +45,23 @@ export interface ScheduleState {
   closures: ScheduleClosure[];
   /** Source of the next block `version` (the mock's revision counter). */
   versionSeq: number;
+  /** Reservation-level data the grid does not show, created on first use. */
+  extras: Record<string, ReservationExtras>;
+  /** Source of ids for reservations created through the API. */
+  createdSeq: number;
+}
+
+/** Details-panel data of one reservation (the mock's stand-in for the reservation record). */
+export interface ReservationExtras {
+  adults: number;
+  children: number;
+  earlyCheckIn: boolean;
+  lateCheckOut: boolean;
+  /** Opaque; changes with every early/late save. */
+  version: string;
+  addOns: { id: string; name: string; quantity: number; priceCents: number }[];
+  publicNotes: string;
+  privateNotes: string;
 }
 
 const room = (
@@ -418,6 +436,29 @@ const CLOSURE_SEEDS: ClosureSeed[] = [
   { id: 'cl-4', room: 'rm-302', from: 5, to: 9, reason: 'Member event hold', marker: false },
 ];
 
+function seedExtras(): Record<string, ReservationExtras> {
+  const base = { adults: 2, children: 0, earlyCheckIn: false, lateCheckOut: false, version: 'r1' };
+  return {
+    'rs-2': {
+      ...base,
+      children: 2,
+      earlyCheckIn: true,
+      addOns: [{ id: 'ao-1', name: 'Late Dinner Reservation', quantity: 1, priceCents: 6500 }],
+      publicNotes: 'Guest is celebrating a birthday!',
+      privateNotes: 'Guest likes soft pillows.',
+    },
+    'rs-7': {
+      ...base,
+      adults: 4,
+      children: 2,
+      lateCheckOut: true,
+      addOns: [{ id: 'ao-2', name: 'Golf Cart Rental', quantity: 2, priceCents: 4000 }],
+      publicNotes: 'Family reunion, please keep the three rooms close together.',
+      privateNotes: '',
+    },
+  };
+}
+
 function defaultState(today: IsoDate): ScheduleState {
   const at = (n: number) => addDays(today, n);
   return {
@@ -450,6 +491,8 @@ function defaultState(today: IsoDate): ScheduleState {
       endMarker: c.marker,
     })),
     versionSeq: 1,
+    extras: seedExtras(),
+    createdSeq: 0,
   };
 }
 
@@ -545,11 +588,20 @@ function largeState(today: IsoDate): ScheduleState {
     blocks,
     closures,
     versionSeq: 1,
+    extras: {},
+    createdSeq: 0,
   };
 }
 
 export function createScheduleState(today: IsoDate, size: ScheduleSize = 'default'): ScheduleState {
-  return size === 'large' ? largeState(today) : defaultState(today);
+  const state = size === 'large' ? largeState(today) : defaultState(today);
+  // The grid's edge markers mirror the reservation's early/late flags.
+  for (const block of state.blocks) {
+    const extras = state.extras[block.reservationId];
+    if (extras?.earlyCheckIn) block.earlyCheckIn = true;
+    if (extras?.lateCheckOut) block.lateCheckOut = true;
+  }
+  return state;
 }
 
 // ---- mutations ----------------------------------------------------------------------------------
@@ -557,7 +609,7 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
 const notFound = (what: string) => new ApiError(404, `${what} not found`);
 const notMovable = (message: string) => new ApiError(409, message, { code: 'not-movable' });
 
-function conflictError(roomIds: string[]): ApiError {
+export function conflictError(roomIds: string[]): ApiError {
   return new ApiError(409, 'A target room is already booked or closed on those dates', {
     code: 'conflict',
     details: { roomId: [...new Set(roomIds)] },
@@ -572,7 +624,7 @@ interface Placement {
 }
 
 /** Throws 409 `conflict` if a placement overlaps a closure, a block that stays put, or another placement. */
-function assertFree(state: ScheduleState, placements: Placement[]): void {
+export function assertFree(state: ScheduleState, placements: Placement[]): void {
   const moving = new Set(placements.map((p) => p.block.id));
   const clashes: string[] = [];
   placements.forEach((p, i) => {
@@ -598,13 +650,13 @@ function assertFree(state: ScheduleState, placements: Placement[]): void {
   if (clashes.length) throw conflictError(clashes);
 }
 
-function findBlock(state: ScheduleState, id: string): ScheduleBlock {
+export function findBlock(state: ScheduleState, id: string): ScheduleBlock {
   const block = state.blocks.find((b) => b.id === id);
   if (!block) throw notFound('Reservation room');
   return block;
 }
 
-function findRoom(state: ScheduleState, id: string): ScheduleRoom {
+export function findRoom(state: ScheduleState, id: string): ScheduleRoom {
   const found = state.rooms.find((r) => r.id === id);
   if (!found) throw notFound('Room');
   return found;
@@ -636,7 +688,7 @@ function assertCurrent(
 }
 
 /** A changed block gets a new version. */
-function bump(state: ScheduleState, block: ScheduleBlock): void {
+export function bump(state: ScheduleState, block: ScheduleBlock): void {
   block.version = `v${++state.versionSeq}`;
 }
 

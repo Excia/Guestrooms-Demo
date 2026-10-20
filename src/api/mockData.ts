@@ -155,3 +155,9 @@ export const mockReservations: Reservation[] = [
 
 export const fullGrant: PermissionGrant = { role: 'Club Manager', permissions: 'all' };
 export const noGrant: PermissionGrant = { role: 'No access', permissions: [] };
+
+/**
+ * PLACEHOLDER until Booking Rules (ticket 7.5) exists: "Reservation Hold" minutes per audience
+ * (the setting accepts 1 to 99).
+ */
+export const MOCK_BOOKING_HOLD = { employee: 15, member: 10, nonMember: 10 } as const;

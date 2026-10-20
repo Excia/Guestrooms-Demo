@@ -2,27 +2,23 @@ import type { MockScenario } from './config';
 import {
   emptyStats,
   fullGrant,
+  MOCK_BOOKING_HOLD,
   MOCK_TODAY,
   mockReservations,
   mockStats,
   noGrant,
 } from './mockData';
+import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { queryReservations } from './reservationQuery';
 import { createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
-import type {
-  ApiClient,
-  IsoDate,
-  MoveDatesRequest,
-  MoveRoomRequest,
-  PermissionGrant,
-  RequestOptions,
-  ScheduleBlock,
-} from './types';
+import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
 import { ApiError } from './types';
 import {
+  assertCreateReservationRequest,
+  assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
   assertQuickStatsQuery,
@@ -64,11 +60,8 @@ export function createMockClient({
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
-  const replays = new Map<string, { fingerprint: string; blocks: ScheduleBlock[] }>();
-  function replayable(
-    request: MoveRoomRequest | MoveDatesRequest,
-    apply: () => ScheduleBlock[],
-  ): ScheduleBlock[] {
+  const replays = new Map<string, { fingerprint: string; result: unknown }>();
+  function replayable<T>(request: { requestId: string }, apply: () => T): T {
     const fingerprint = JSON.stringify({ ...request, requestId: undefined });
     const previous = replays.get(request.requestId);
     if (previous) {
@@ -77,11 +70,11 @@ export function createMockClient({
           code: 'idempotency-conflict',
         });
       }
-      return structuredClone(previous.blocks);
+      return structuredClone(previous.result) as T;
     }
-    const blocks = apply();
-    replays.set(request.requestId, { fingerprint, blocks: structuredClone(blocks) });
-    return blocks;
+    const result = apply();
+    replays.set(request.requestId, { fingerprint, result: structuredClone(result) });
+    return result;
   }
 
   function respond<T>(normal: () => T, empty: () => T, options?: RequestOptions): Promise<T> {
@@ -152,6 +145,41 @@ export function createMockClient({
           },
           o,
         ),
+      getDetail: (id, o) =>
+        respond(
+          () => {
+            assertResourceId(id, 'reservation');
+            return buildDetail(schedule, id);
+          },
+          () => {
+            throw notFound();
+          },
+          o,
+        ),
+      setEarlyLate: (request, o) =>
+        respond(
+          () => {
+            assertEarlyLateRequest(request);
+            return replayable(request, () => setEarlyLate(schedule, request));
+          },
+          () => {
+            assertEarlyLateRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      create: (request, o) =>
+        respond(
+          () => {
+            assertCreateReservationRequest(request);
+            return replayable(request, () => createReservation(schedule, request));
+          },
+          () => {
+            assertCreateReservationRequest(request);
+            throw new ApiError(404, 'Room not found');
+          },
+          o,
+        ),
     },
     schedule: {
       get: (query, o) =>
@@ -196,6 +224,14 @@ export function createMockClient({
             assertMoveDatesRequest(request);
             throw new ApiError(404, 'Reservation room not found');
           },
+          o,
+        ),
+    },
+    settings: {
+      getBookingHold: (o) =>
+        respond(
+          () => ({ ...MOCK_BOOKING_HOLD }),
+          () => ({ ...MOCK_BOOKING_HOLD }),
           o,
         ),
     },
