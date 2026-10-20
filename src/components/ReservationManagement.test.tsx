@@ -3,13 +3,16 @@ import { MemoryRouter } from 'react-router';
 import { createMockClient } from '../api/mock';
 import { renderWithApi } from '../api/testing';
 import type { ApiClient } from '../api/types';
+import { GrantedAccess } from '../app/testing';
 import ReservationManagement from './ReservationManagement';
 
 function renderList(client: ApiClient) {
   return renderWithApi(
-    <MemoryRouter>
-      <ReservationManagement />
-    </MemoryRouter>,
+    <GrantedAccess>
+      <MemoryRouter>
+        <ReservationManagement />
+      </MemoryRouter>
+    </GrantedAccess>,
     { client },
   );
 }

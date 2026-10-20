@@ -18,9 +18,11 @@ export interface RouteMeta {
 
 export const SCHEDULE_PATH = '/schedule';
 export const DASHBOARD_PATH = '/dashboard';
+/** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
+export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
-// Note: '/admin' (Admin Setup landing) is not a menu link, so it has no menu permission yet;
-// gate it on "any admin page" when the real permissions (0.8) arrive.
+// Note: '/admin' (Admin Setup landing) is not a menu link; it opens for anyone who can open an
+// Admin Setup page (see src/app/access.ts).
 export const routes = [
   { id: 'dashboard', path: DASHBOARD_PATH, title: 'Dashboard', section: 'dashboard' },
   {
@@ -31,6 +33,13 @@ export const routes = [
     section: 'reservation',
   },
   { id: 'reservations', path: '/reservations', title: 'Reservations', section: 'reservation' },
+  // FLAG: no permission mapping yet. When role-based access (ticket 9) gives every route its own
+  // `page.<id>` permission, the owner must decide; recommended: gate on the reservations permission.
+  {
+    id: 'new-reservation-results',
+    path: NEW_RESERVATION_RESULTS_PATH,
+    title: 'Search Results',
+  },
   { id: 'open-folios', path: '/open-folios', title: 'Open Folios', section: 'reservation' },
   {
     id: 'unassigned-charges',

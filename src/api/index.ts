@@ -2,6 +2,7 @@ import { MOCK_STORAGE_KEY, resolveApiConfig } from './config';
 import type { ApiConfig } from './config';
 import { createHttpClient } from './http';
 import { createLazyClient } from './lazy';
+import { DEMO_MOCK_USER, MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
 import { createUnavailableClient } from './unavailable';
 import type { ApiClient } from './types';
 import { ApiError } from './types';
@@ -18,24 +19,32 @@ export interface ApiSetup {
   client: ApiClient;
   /** The mock is active in a non-dev build: show the "Demo data" chip. */
   demo: boolean;
+  /** Dev build on the mock client: the mock user switcher applies. */
+  devMock: boolean;
 }
 
 /**
  * Picks the client for a resolved config (see `resolveApiConfig` for the rules). The mock and its
  * data are loaded lazily, so builds pointed at a real URL never fetch that chunk.
  */
-export function createApiClient(config: ApiConfig, log: Log = console): ApiSetup {
+export function createApiClient(
+  config: ApiConfig,
+  log: Log = console,
+  /** `mockUser`: stored mock user id (dev only); unknown or absent means the non-admin user. */
+  { mockUser }: { mockUser?: string | null } = {},
+): ApiSetup {
   for (const warning of config.warnings) log.warn(`[api] ${warning}`);
   if (config.source === 'http' && config.baseUrl) {
-    return { client: createHttpClient(config.baseUrl), demo: false };
+    return { client: createHttpClient(config.baseUrl), demo: false, devMock: false };
   }
   if (config.source === 'mock') {
     log.info(`[api] using the mock client (scenario: ${config.scenario}).`);
     const { scenario } = config;
+    const { grant } = config.demo ? DEMO_MOCK_USER : resolveMockUser(mockUser);
     const client = createLazyClient(async () =>
-      (await import('./mock')).createMockClient({ scenario, latencyMs: MOCK_LATENCY_MS }),
+      (await import('./mock')).createMockClient({ scenario, latencyMs: MOCK_LATENCY_MS, grant }),
     );
-    return { client, demo: config.demo };
+    return { client, demo: config.demo, devMock: !config.demo };
   }
   const message =
     config.problem === 'invalid'
@@ -45,6 +54,7 @@ export function createApiClient(config: ApiConfig, log: Log = console): ApiSetup
   return {
     client: createUnavailableClient(new ApiError(0, message, { code: 'misconfigured' })),
     demo: false,
+    devMock: false,
   };
 }
 
@@ -63,9 +73,11 @@ export function createApiClientFromEnvironment({
   log,
 }: EnvironmentSources = {}): ApiSetup {
   let stored: string | null = null;
+  let storedUser: string | null = null;
   if (env.DEV) {
     try {
       stored = (storage ?? window.localStorage).getItem(MOCK_STORAGE_KEY);
+      storedUser = (storage ?? window.localStorage).getItem(MOCK_USER_STORAGE_KEY);
     } catch {
       // storage unavailable (private mode); ignore
     }
@@ -78,5 +90,5 @@ export function createApiClientFromEnvironment({
     stored,
     dev: env.DEV,
   });
-  return createApiClient(config, log);
+  return createApiClient(config, log, { mockUser: storedUser });
 }

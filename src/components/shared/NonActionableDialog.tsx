@@ -13,6 +13,8 @@ export interface NonActionableDialogProps {
   title: string;
   children: ReactNode;
   closeLabel?: string;
+  /** Called once the close transition has finished (e.g. to place focus). */
+  onExited?: () => void;
 }
 
 // Non-Actionable Dialog (Figma 441:13871): information only, dismissed by the close icon or Escape.
@@ -22,6 +24,7 @@ export default function NonActionableDialog({
   title,
   children,
   closeLabel = 'Close',
+  onExited,
 }: NonActionableDialogProps) {
   const id = useId();
   return (
@@ -31,6 +34,7 @@ export default function NonActionableDialog({
       // Figma paper width is 444px; the default margin keeps it inside narrow viewports.
       slotProps={{
         paper: { sx: { width: (t) => t.spacing(55.5) } },
+        transition: { onExited },
       }}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-body`}

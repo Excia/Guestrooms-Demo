@@ -1,4 +1,5 @@
-import { pagePermission, type Permissions } from './permissions';
+import { canAccessPage } from './access';
+import type { Permissions } from './permissions';
 import { routes, type MenuRouteId, type RouteMeta, type RouteSection } from './routes';
 
 export interface MenuItem {
@@ -25,8 +26,7 @@ function itemsFor(
 ): MenuItem[] {
   return table
     .filter(
-      (r) =>
-        r.section === section && r.showInMenu !== false && can(pagePermission(r.id as MenuRouteId)),
+      (r) => r.section === section && r.showInMenu !== false && canAccessPage(can, r.id, table),
     )
     .map((r) => ({ id: r.id as MenuRouteId, label: r.menuLabel ?? r.title, path: r.path }));
 }

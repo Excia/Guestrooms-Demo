@@ -1,4 +1,5 @@
-import { pagePermission, type Permissions } from './permissions';
+import { canAccessPage } from './access';
+import type { Permissions } from './permissions';
 import { routes, type RouteMeta, type ReservationRouteId } from './routes';
 
 export interface ShortcutItem {
@@ -8,22 +9,16 @@ export interface ShortcutItem {
 }
 
 /**
- * Keep this gate identical to the menu's (`canAccessPage` from #9 once merged) so the two lists
- * cannot drift.
- *
  * Dashboard Reservation Management list (Figma 69:3790): the 'reservation' section of the route
- * table in table order, filtered with the same `can(page.<id>)` check the menu uses. Admin Setup
- * routes belong to another section and never appear.
+ * table in table order, filtered with the same `canAccessPage` gate as the menu so the two lists
+ * cannot drift. Admin Setup routes belong to another section and never appear.
  */
 export function buildShortcuts(
   permissions: Permissions,
   table: readonly RouteMeta[] = routes,
 ): ShortcutItem[] {
   return table
-    .filter(
-      (r) =>
-        r.section === 'reservation' && permissions.can(pagePermission(r.id as ReservationRouteId)),
-    )
+    .filter((r) => r.section === 'reservation' && canAccessPage(permissions.can, r.id, table))
     .map((r) => ({ id: r.id as ReservationRouteId, label: r.menuLabel ?? r.title, path: r.path }));
 }
 
