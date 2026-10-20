@@ -4,6 +4,7 @@ import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { DASHBOARD_PATH, NEW_RESERVATION_RESULTS_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
+import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
@@ -50,7 +51,10 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RedirectToSchedule />} />
         {routes.map((r) => {
-          const page = pages[r.path] ?? <PagePlaceholder title={r.title} />;
+          // A page that fails (e.g. its lazy chunk does not load) must not blank the whole app.
+          const page = (
+            <ErrorBoundary>{pages[r.path] ?? <PagePlaceholder title={r.title} />}</ErrorBoundary>
+          );
           return (
             <Route
               key={r.path}
@@ -70,9 +74,11 @@ export default function App() {
           <Route
             path={COMPONENTS_DEMO_PATH}
             element={
-              <Suspense fallback={null}>
-                <ComponentsDemo />
-              </Suspense>
+              <ErrorBoundary>
+                <Suspense fallback={null}>
+                  <ComponentsDemo />
+                </Suspense>
+              </ErrorBoundary>
             }
           />
         ) : null}
