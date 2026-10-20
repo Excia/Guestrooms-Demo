@@ -1067,3 +1067,134 @@ describe('keyboard cursor and accessibility details', () => {
     }
   });
 });
+
+// ---- round two -------------------------------------------------------------------------------
+
+describe('failures that may have applied the move', () => {
+  it('a malformed 2xx answer (invalid-response) is an unknown outcome: no revert before the reload', async () => {
+    const s = spied();
+    s.moveRoom.mockRejectedValueOnce(
+      new ApiError(200, 'Unexpected answer', { code: 'invalid-response' }),
+    );
+    // hold the reload so the state in between is visible
+    let releaseGet: (() => void) | undefined;
+    const realGet = s.get.getMockImplementation()!;
+    const user = await loaded('/schedule', s.client);
+    s.get.mockImplementationOnce(
+      (q, o) => new Promise((resolve) => (releaseGet = () => resolve(realGet(q, o)))),
+    );
+    await confirmThomasTo207(user);
+    expect(await toast('Could not confirm the move. Showing the latest schedule.')).toBeGreaterThan(
+      0,
+    );
+    await waitFor(() => expect(releaseGet).toBeDefined());
+    // still the optimistic state: the move may have been applied
+    expect(
+      within(rowOf('207')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+    ).toBeInTheDocument();
+    await act(async () => releaseGet?.());
+    await waitFor(() =>
+      expect(
+        within(rowOf('202')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    ); // the reload shows the truth (here: not applied)
+  });
+
+  it('a 408 is treated the same way', async () => {
+    const s = spied();
+    s.moveRoom.mockRejectedValueOnce(new ApiError(408, 'Request Timeout'));
+    const user = await loaded('/schedule', s.client);
+    const before = s.get.mock.calls.length;
+    await confirmThomasTo207(user);
+    expect(await toast('Could not confirm the move. Showing the latest schedule.')).toBeGreaterThan(
+      0,
+    );
+    await waitFor(() => expect(s.get.mock.calls.length).toBeGreaterThan(before));
+  });
+});
+
+describe('a move, a trip to another range and back', () => {
+  it('reloads the range on screen when the data shown is still for the other range', async () => {
+    const s = gatedMove();
+    const realGet = s.get.getMockImplementation()!;
+    const user = await loaded('/schedule', s.client);
+    await confirmThomasTo207(user); // in flight
+    await user.click(screen.getByRole('button', { name: 'Next day' }));
+    await screen.findByRole('columnheader', { name: 'Saturday 10/17' });
+    // back to the first range, but its fetch stays pending: the data on screen is the other range's
+    let releaseGet: (() => void) | undefined;
+    s.get.mockImplementationOnce(
+      (q, o) => new Promise((resolve) => (releaseGet = () => resolve(realGet(q, o)))),
+    );
+    await user.click(screen.getByRole('button', { name: 'Previous day' }));
+    await waitFor(() => expect(releaseGet).toBeDefined());
+    const calls = s.get.mock.calls.length;
+    await act(async () => s.release('apply'));
+    // the in-flight fetch may predate the move: the range is requested again
+    await waitFor(() => expect(s.get.mock.calls.length).toBeGreaterThan(calls));
+    expect(s.get).toHaveBeenLastCalledWith({ startDate: TODAY, days: 7 }, expect.anything());
+    await act(async () => releaseGet?.());
+    await waitFor(() =>
+      expect(
+        within(rowOf('207')).getByRole('gridcell', { name: /Thomas Okafor/ }),
+      ).toBeInTheDocument(),
+    );
+  });
+});
+
+describe('submit and navigation guards', () => {
+  it('five same-tick clicks on the primary button send one request', async () => {
+    const s = spied();
+    const user = await loaded('/schedule', s.client);
+    await cursorTo(user, 1, 0);
+    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+    const button = await screen.findByRole('button', { name: 'Move to New Room' });
+    act(() => {
+      for (let i = 0; i < 5; i++) button.click();
+    });
+    await waitFor(() => expect(s.moveRoom).toHaveBeenCalledTimes(1));
+    expect(await toast(/moved\./)).toBeGreaterThan(0);
+    expect(s.moveRoom).toHaveBeenCalledTimes(1);
+  });
+
+  it('two clicks on a date arrow in the same tick advance two steps', async () => {
+    await loaded();
+    const next = screen.getByRole('button', { name: 'Next day' });
+    act(() => {
+      next.click();
+      next.click();
+    });
+    await screen.findByRole('columnheader', { name: 'Sunday 10/18' });
+    expect(url()).toContain('start=2026-10-18');
+  });
+
+  it('announces a repeated Cancel again, and clears the note afterwards', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      await loaded();
+      const status = () =>
+        screen.getAllByRole('status').find((s) => s.textContent === 'Move cancelled.');
+      const cancelOnce = async () => {
+        await cursorTo(user, 1, 0);
+        await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+        await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      };
+      await cancelOnce();
+      const first = screen.getAllByText('Move cancelled.').find((n) => n.tagName === 'SPAN')!;
+      expect(status()).toBeDefined();
+      grid().blur();
+      await cancelOnce();
+      const second = screen.getAllByText('Move cancelled.').find((n) => n.tagName === 'SPAN');
+      expect(second).toBeDefined();
+      expect(second).not.toBe(first); // a new node: read again
+      await act(async () => vi.advanceTimersByTime(2500));
+      expect(
+        screen.queryAllByText('Move cancelled.').filter((n) => n.tagName === 'SPAN'),
+      ).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

@@ -74,7 +74,18 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   // The rows as they were when a block was dropped: filters must not remove the row it came from
   // or went to while the move is being confirmed.
   const [frozenRooms, setFrozenRooms] = useState<ScheduleRoom[] | null>(null);
-  const [note, setNote] = useState('');
+  // Screen-reader note ("Move cancelled."): a fresh element per announcement so repeats are read,
+  // cleared after a moment so stale text is not left to browse.
+  const [note, setNote] = useState<{ id: number; text: string } | null>(null);
+  const noteTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const announce = useCallback((text: string) => {
+    clearTimeout(noteTimer.current);
+    setNote((n) => ({ id: (n?.id ?? 0) + 1, text }));
+    noteTimer.current = setTimeout(() => setNote(null), 2000);
+  }, []);
+  useEffect(() => () => clearTimeout(noteTimer.current), []);
+  // Set synchronously: React state alone lets same-tick repeat clicks submit again.
+  const submitted = useRef(false);
   // The range the user is looking at now, for answers that arrive after they moved on.
   const currentRange = useRef({ startDate: start, days: view.days });
   useEffect(() => {
@@ -83,10 +94,26 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const [toast, setToast] = useState<Toast | null>(null);
   const [toastOpen, setToastOpen] = useState(false);
 
+  // Two quick clicks must both count: each update builds on the latest URL state, not on the
+  // render the handler was created in.
+  const latestParams = useRef(params);
+  useEffect(() => {
+    latestParams.current = params;
+  }, [params]);
   const update = useCallback(
-    (patch: Partial<ScheduleViewState>) =>
-      setParams(applyScheduleView(params, { ...view, ...patch })),
-    [params, setParams, view],
+    (
+      patch:
+        Partial<ScheduleViewState> | ((current: ScheduleViewState) => Partial<ScheduleViewState>),
+    ) => {
+      const current = parseScheduleView(latestParams.current);
+      const next = applyScheduleView(latestParams.current, {
+        ...current,
+        ...(typeof patch === 'function' ? patch(current) : patch),
+      });
+      latestParams.current = next;
+      setParams(next);
+    },
+    [setParams],
   );
   const notify = useCallback((message: string) => {
     setToast((t) => ({ id: (t?.id ?? 0) + 1, message }));
@@ -108,16 +135,21 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const rooms = frozenRooms ?? liveRooms;
 
   const settle = useCallback(() => {
+    submitted.current = false;
     setMoving(false);
     setFrozenRooms(null);
   }, []);
 
   const confirm = (scope: 'all-rooms' | 'this-room') => {
-    if (!pending || !data) return;
+    if (submitted.current || !pending || !data) return;
     const { block, result } = pending;
     setPending(null);
     const moves = scope === 'this-room' ? result.splitMoves : result.moves;
-    if (!moves) return;
+    if (!moves) {
+      setFrozenRooms(null);
+      return;
+    }
+    submitted.current = true;
     const range = { startDate: data.startDate, days: data.days };
     // The range the move was made in is still the one on screen (and loaded).
     const inRange = () =>
@@ -133,19 +165,20 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         : api.schedule.moveDates(toMoveDatesRequest(result, block, requestId, scope));
     request.then(
       (answer) => {
-        if (inRange()) {
+        // If the data on screen is not this range (the user left and came back, and its fetch is
+        // still running), that fetch may predate the move: load it again.
+        const merged =
+          inRange() &&
           setBlocks(range, (blocks) => mergeChangedBlocks({ ...range, blocks }, answer.blocks));
-        } else {
-          // The user moved to another window meanwhile; what it loaded may predate the move.
-          retry();
-        }
+        if (!merged) retry();
         notify(`Reservation ${block.confirmationNumber} moved.`);
         settle();
       },
       (error: unknown) => {
         const failure = moveFailure(error);
-        if (failure.revert && inRange()) setBlocks(range, (blocks) => revertMoves(blocks, moves));
-        if (failure.refetch || !inRange()) retry();
+        const reverted =
+          failure.revert && inRange() && setBlocks(range, (blocks) => revertMoves(blocks, moves));
+        if (failure.refetch || (failure.revert && !reverted)) retry();
         notify(failure.message);
         settle();
       },
@@ -282,7 +315,9 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           filtersOpen={filterAnchor !== null}
           onDays={(days: ScheduleDays) => update({ days })}
           onShift={(direction, step: ScheduleStep) =>
-            update({ start: shiftScheduleStart(start, view.days, direction, step) })
+            update((v) => ({
+              start: shiftScheduleStart(v.start ?? today, v.days, direction, step),
+            }))
           }
           onStart={(date) => update({ start: date })}
           onToday={() => update({ start: null })}
@@ -319,14 +354,14 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           onCancel={() => {
             setPending(null);
             setFrozenRooms(null);
-            setNote('Move cancelled.');
+            announce('Move cancelled.');
           }}
           onConfirm={() => confirm('all-rooms')}
           onSplit={() => confirm('this-room')}
         />
       ) : null}
       <Box role="status" sx={visuallyHidden}>
-        {note}
+        {note ? <span key={note.id}>{note.text}</span> : null}
       </Box>
       <SaveToast
         open={toastOpen}

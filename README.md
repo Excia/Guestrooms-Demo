@@ -79,9 +79,17 @@ Copy `.env.example` to `.env.local` to override.
   `stale` and applies nothing. **Idempotency:** every move carries a client-generated `requestId`
   (UUID; `crypto.randomUUID` with a fallback), sent in the body and as the `Idempotency-Key` header.
   The same id with the same body replays the first result without applying again; the same id with
-  another body is 409 `idempotency-conflict`. A timeout or network error (status 0) is an *unknown
-  outcome*: the move may have been applied, so the client refetches instead of rolling back.
+  another body is 409 `idempotency-conflict`. A timeout or network error (status 0) is an _unknown
+  outcome_: the move may have been applied, so the client refetches instead of rolling back.
   CSRF protection and credentials are the auth layer's job (`getHeaders`, `credentials`).
+  Backend requirements that follow from this: idempotency records need a TTL (long enough to cover
+  client retries, e.g. 24 h); only a failure that applied nothing (a clear 4xx) may be retried with
+  the same `requestId`, an unknown outcome is resolved by reloading, not by blind retry; the
+  `Idempotency-Key` header is authoritative and a body `requestId` that differs from it is a 400;
+  for `all-rooms` only the named block's `version` is checked (a reservation-level version would be
+  safer and is the recommended follow-up); ids must be unique across blocks AND closures, because the
+  grid looks items up by id. The client treats status 0, 408, 5xx and an unusable 2xx answer as an
+  unknown outcome (no revert, reload, neutral message); only 4xx other than 408 means nothing applied.
 - Schedule mutations return the changed blocks and apply nothing on error: 400 `invalid-id` /
   `invalid-query`, 404 unknown reservation room or room, 409 `conflict` (a target room is booked or
   closed on those nights; `details.roomId` lists the rooms), 409 `not-movable` (checked out, locked
