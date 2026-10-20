@@ -870,6 +870,37 @@ describe('small review items', () => {
   });
 });
 
+describe('early and late markers on the grid', () => {
+  it('GR-50240 (arrived before today, early check in) shows its sliver at the visible left edge, body inset', async () => {
+    await loaded('/schedule');
+    const daniel = block('Daniel Whitfield');
+    expect(daniel.getAttribute('aria-label')).toMatch(/early check in/);
+    expect(daniel.querySelector(':scope > [data-marker="left-clipped"]')).not.toBeNull();
+    expect(daniel.querySelector('[data-marker="left"]')).toBeNull();
+    // the gridcell itself keeps its role and label; the painted body is a separate element
+    expect(daniel).toHaveAttribute('role', 'gridcell');
+    expect(daniel.querySelector('[data-body]')).not.toBeNull();
+  });
+
+  it('a stay arriving in view keeps its early sliver at the arrival edge, inside the block; late at the departure edge', async () => {
+    const user = await loaded('/schedule');
+    await user.click(block('Henry Lowell'));
+    const dialog = await panel(/Reservation #GR-50312/);
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'Early Check In' }));
+    await within(dialog).findByText('Saved');
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Late Check Out' }));
+    await waitFor(() =>
+      expect(block('Henry Lowell').querySelector('[data-marker="right"]')).not.toBeNull(),
+    );
+    await user.keyboard('{Escape}');
+    await panelGone();
+    const henry = block('Henry Lowell');
+    expect(henry.querySelector('[data-body] > [data-marker="left"]')).not.toBeNull();
+    expect(henry.querySelector('[data-body] > [data-marker="right"]')).not.toBeNull();
+    expect(henry.querySelector('[data-marker="left-clipped"]')).toBeNull();
+  });
+});
+
 describe('the time limit stops with the panel', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });

@@ -4,6 +4,7 @@ import { canDrop, toMoveDatesRequest } from './scheduleDrag';
 import {
   applyMoves,
   blockAriaLabel,
+  blockMarkers,
   blockSpan,
   clampShift,
   columnAtX,
@@ -269,5 +270,75 @@ describe('empty cells', () => {
     expect(emptyCellAction(undefined, undefined, start, 7, 3)).toEqual({ kind: 'free' });
     // a closure wins when both cover the column
     expect(emptyCellAction([stay], [stay], start, 7, 1)).toEqual({ kind: 'closed' });
+  });
+});
+
+describe('blockMarkers', () => {
+  const inView = { continuesBefore: false, continuesAfter: false };
+  const clippedLeft = { continuesBefore: true, continuesAfter: false };
+  const both = { earlyCheckIn: true, lateCheckOut: true };
+
+  it('a real arrival edge gets the early sliver, a real departure edge the late one', () => {
+    expect(blockMarkers({ earlyCheckIn: true }, inView)).toEqual({
+      left: true,
+      right: false,
+      leftClipped: false,
+    });
+    expect(blockMarkers({ lateCheckOut: true }, inView)).toEqual({
+      left: false,
+      right: true,
+      leftClipped: false,
+    });
+    expect(blockMarkers(both, inView)).toEqual({ left: true, right: true, leftClipped: false });
+    expect(blockMarkers({}, inView)).toEqual({ left: false, right: false, leftClipped: false });
+  });
+
+  it('an in-house stay that arrived before the range still shows its early sliver, at the visible left edge', () => {
+    expect(blockMarkers({ earlyCheckIn: true }, clippedLeft)).toEqual({
+      left: false,
+      right: false,
+      leftClipped: true,
+    });
+    expect(blockMarkers(both, clippedLeft)).toEqual({
+      left: false,
+      right: true,
+      leftClipped: true,
+    });
+  });
+
+  it('a clipped left edge without an early check in has no marker', () => {
+    expect(blockMarkers({}, clippedLeft)).toEqual({
+      left: false,
+      right: false,
+      leftClipped: false,
+    });
+    expect(blockMarkers({ lateCheckOut: true }, clippedLeft)).toEqual({
+      left: false,
+      right: true,
+      leftClipped: false,
+    });
+  });
+
+  it('a clipped right edge has no late marker (its departure is out of sight); the arrival edge keeps its early one', () => {
+    const clippedRight = { continuesBefore: false, continuesAfter: true };
+    expect(blockMarkers(both, clippedRight)).toEqual({
+      left: true,
+      right: false,
+      leftClipped: false,
+    });
+    expect(blockMarkers(both, { continuesBefore: true, continuesAfter: true })).toEqual({
+      left: false,
+      right: false,
+      leftClipped: true,
+    });
+  });
+
+  it('follows blockLayout for a stay that arrived yesterday', () => {
+    const layout = blockLayout(
+      { startDate: '2026-10-15', endDate: '2026-10-18' },
+      '2026-10-16',
+      7,
+    )!;
+    expect(blockMarkers({ earlyCheckIn: true }, layout).leftClipped).toBe(true);
   });
 });
