@@ -2,9 +2,10 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { DASHBOARD_PATH, routes, SCHEDULE_PATH } from './app/routes';
+import { DASHBOARD_PATH, NEW_RESERVATION_RESULTS_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
 import Dashboard from './pages/Dashboard';
+import NewReservationResults from './pages/NewReservationResults';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
@@ -30,6 +31,7 @@ function RedirectToSchedule() {
 // Real pages by route path; routes without an entry show the placeholder. Page tickets add theirs here.
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
+  [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
 };
 
 export default function App() {

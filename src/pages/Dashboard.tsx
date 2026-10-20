@@ -2,6 +2,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { HEADER_HEIGHT } from '../app/layout';
+import NewReservationSearch from '../components/NewReservationSearch';
 import DashboardColumn, { COLUMN_MAX_WIDTH_SPACING } from '../components/DashboardColumn';
 
 /**
@@ -31,7 +32,7 @@ function Placeholder({ name }: { name: string }) {
 export default function Dashboard({
   reservationManagement = <Placeholder name="Reservation Management" />,
   quickStats = <Placeholder name="Quick Stats" />,
-  newReservation = <Placeholder name="New Reservation" />,
+  newReservation = <NewReservationSearch />,
 }: DashboardProps) {
   return (
     <Box
