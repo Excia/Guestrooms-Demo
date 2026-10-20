@@ -3,6 +3,7 @@ import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { HEADER_HEIGHT } from '../app/layout';
 import NewReservationSearch from '../components/NewReservationSearch';
+import ReservationManagement from '../components/ReservationManagement';
 import DashboardColumn, { COLUMN_MAX_WIDTH_SPACING } from '../components/DashboardColumn';
 
 /**
@@ -30,7 +31,7 @@ function Placeholder({ name }: { name: string }) {
  * columns stack in the same order and the page scrolls.
  */
 export default function Dashboard({
-  reservationManagement = <Placeholder name="Reservation Management" />,
+  reservationManagement = <ReservationManagement />,
   quickStats = <Placeholder name="Quick Stats" />,
   newReservation = <NewReservationSearch />,
 }: DashboardProps) {
@@ -64,7 +65,9 @@ export default function Dashboard({
       <Typography variant="h1" sx={visuallyHidden}>
         Dashboard
       </Typography>
-      <DashboardColumn title="Reservation Management">{reservationManagement}</DashboardColumn>
+      <DashboardColumn title="Reservation Management" disablePadding>
+        {reservationManagement}
+      </DashboardColumn>
       <DashboardColumn title="Quick Stats">{quickStats}</DashboardColumn>
       <DashboardColumn title="New Reservation">{newReservation}</DashboardColumn>
     </Box>

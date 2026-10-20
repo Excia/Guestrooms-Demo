@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { renderWithApi } from '../api/testing';
@@ -48,7 +48,7 @@ describe('Dashboard', () => {
   });
 
   it('is served at /dashboard inside the shell', () => {
-    render(
+    renderWithApi(
       <MemoryRouter initialEntries={['/dashboard']}>
         <App />
       </MemoryRouter>,

@@ -12,6 +12,8 @@ export interface RouteMeta {
   section?: RouteSection;
   /** Menu label when it differs from the page title. */
   menuLabel?: string;
+  /** Set to false for routes that appear on the dashboard shortcut list but not in the menu. */
+  showInMenu?: false;
 }
 
 export const SCHEDULE_PATH = '/schedule';
@@ -39,6 +41,13 @@ export const routes = [
     title: 'Search Results',
   },
   { id: 'open-folios', path: '/open-folios', title: 'Open Folios', section: 'reservation' },
+  {
+    id: 'unassigned-charges',
+    path: '/unassigned-charges',
+    title: 'Unassigned Charges',
+    section: 'reservation',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the dashboard list (69:3790) has it.
+  },
   { id: 'waitlist', path: '/waitlist', title: 'Waitlist', section: 'reservation' },
   {
     id: 'night-audit-history',
@@ -81,4 +90,9 @@ export const routes = [
 
 export type PageId = (typeof routes)[number]['id'];
 /** Ids of routes listed in the menu; the overlay keys its icons to these. */
-export type MenuRouteId = Extract<(typeof routes)[number], { section: RouteSection }>['id'];
+export type MenuRouteId = Exclude<
+  Extract<(typeof routes)[number], { section: RouteSection }>,
+  { showInMenu: false }
+>['id'];
+/** Ids of the reservation section: the dashboard shortcut list (the menu's minus none, plus Unassigned Charges). */
+export type ReservationRouteId = Extract<(typeof routes)[number], { section: 'reservation' }>['id'];
