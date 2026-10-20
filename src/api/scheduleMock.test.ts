@@ -1,12 +1,38 @@
 import { createMockClient } from './mock';
 import { createScheduleState } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
-import type { ScheduleQuery } from './types';
+import type { ApiClient, MoveDatesRequest, MoveRoomRequest, ScheduleQuery } from './types';
 import { nightsOverlap } from '../lib/dates';
 
 const T = '2026-10-16';
 const mk = (o = {}) => createMockClient({ today: T, ...o });
 const week: ScheduleQuery = { startDate: T, days: 7 };
+
+// A move request made from the block's current state, as the UI would build it.
+let serial = 0;
+async function guard(c: ApiClient, id: string) {
+  const d = await c.schedule.get({ startDate: '2026-10-06', days: 30 }).catch(() => null);
+  const b = d?.blocks.find((x) => x.id === id);
+  return {
+    requestId: `req-${++serial}-test`,
+    version: b?.version ?? 'v1',
+    fromRoomId: b?.roomId ?? 'rm-201',
+    fromStartDate: b?.startDate ?? T,
+  };
+}
+type Rest<R> = Omit<R, 'requestId' | 'version' | 'fromRoomId' | 'fromStartDate'> &
+  Partial<Pick<R, Extract<keyof R, 'requestId' | 'version' | 'fromRoomId'>>> & {
+    fromStartDate?: string;
+  };
+async function room(c: ApiClient, r: Rest<MoveRoomRequest>, o?: { signal?: AbortSignal }) {
+  const { fromStartDate: _unused, ...g } = await guard(c, r.reservationRoomId);
+  void _unused;
+  return c.schedule.moveRoom({ ...g, ...r } as MoveRoomRequest, o);
+}
+async function dates(c: ApiClient, r: Rest<MoveDatesRequest>, o?: { signal?: AbortSignal }) {
+  const g = await guard(c, r.reservationRoomId);
+  return c.schedule.moveDates({ ...g, ...r } as MoveDatesRequest, o);
+}
 
 describe('mock schedule.get', () => {
   it('returns a realistic default inventory', async () => {
@@ -53,16 +79,6 @@ describe('mock schedule.get', () => {
       expect(s.blocks.filter((x) => x.reservationId === b.reservationId)).toHaveLength(b.roomCount);
     }
   });
-  it('applies filters like the backend would', async () => {
-    const d = await mk().schedule.get({
-      ...week,
-      locationIds: ['lakeside'],
-      availability: 'booked',
-    });
-    expect(d.rooms.every((r) => r.locationId === 'lakeside')).toBe(true);
-    expect(d.rooms.length).toBeGreaterThan(0);
-    expect(d.locations).toHaveLength(3);
-  });
   it('answers 7, 14 and 30 day views', async () => {
     const c = mk();
     const counts = [];
@@ -85,10 +101,6 @@ describe('mock schedule.get', () => {
     const bad: unknown[] = [
       { startDate: 'tomorrow', days: 7 },
       { startDate: T, days: 10 },
-      { startDate: T, days: 7, locationIds: [] },
-      { startDate: T, days: 7, locationIds: ['a,b'] },
-      { startDate: T, days: 7, roomTypeIds: [''] },
-      { startDate: T, days: 7, availability: 'some' },
     ];
     for (const q of bad) {
       await expect(c.schedule.get(q as ScheduleQuery)).rejects.toMatchObject({
@@ -130,8 +142,7 @@ describe('large inventory', () => {
   it('queries quickly', () => {
     const s = createScheduleState(T, 'large');
     const t0 = performance.now();
-    for (let i = 0; i < 20; i++)
-      queryScheduleData(s, { startDate: T, days: 30, availability: 'booked' });
+    for (let i = 0; i < 20; i++) queryScheduleData(s, { startDate: T, days: 30 });
     expect((performance.now() - t0) / 20).toBeLessThan(50);
   });
 });
@@ -139,7 +150,7 @@ describe('large inventory', () => {
 describe('mock schedule.moveRoom', () => {
   it('moves a room and the change is visible on the next get', async () => {
     const c = mk();
-    const res = await c.schedule.moveRoom({ reservationRoomId: 'rr-3', toRoomId: 'rm-203' });
+    const res = await room(c, { reservationRoomId: 'rr-3', toRoomId: 'rm-203' });
     expect(res.blocks).toHaveLength(1);
     expect(res.blocks[0].roomId).toBe('rm-203');
     const d = await c.schedule.get({ startDate: T, days: 7 });
@@ -147,54 +158,54 @@ describe('mock schedule.moveRoom', () => {
   });
   it('409 conflict names the room and applies nothing', async () => {
     const c = mk();
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-3', toRoomId: 'rm-202' }),
-    ).rejects.toMatchObject({
+    await expect(room(c, { reservationRoomId: 'rr-3', toRoomId: 'rm-202' })).rejects.toMatchObject({
       status: 409,
       code: 'conflict',
       details: { roomId: ['rm-202'] },
     });
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-12', toRoomId: 'rm-C7' }),
-    ).rejects.toMatchObject({ code: 'not-movable' });
+    await expect(room(c, { reservationRoomId: 'rr-12', toRoomId: 'rm-C7' })).rejects.toMatchObject({
+      code: 'not-movable',
+    });
     const d = await c.schedule.get(week);
     expect(d.blocks.find((b) => b.id === 'rr-3')?.roomId).toBe('rm-201');
   });
   it('409 on a closure, a checked-out room, and a locked room type', async () => {
     const c = mk();
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-3', toRoomId: 'rm-208' }),
-    ).rejects.toMatchObject({ code: 'conflict' });
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-1', toRoomId: 'rm-203' }),
-    ).rejects.toMatchObject({ status: 409, code: 'not-movable' });
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-12', toRoomId: 'rm-203' }),
-    ).rejects.toMatchObject({ code: 'not-movable' });
+    await expect(room(c, { reservationRoomId: 'rr-3', toRoomId: 'rm-208' })).rejects.toMatchObject({
+      code: 'conflict',
+    });
+    await expect(room(c, { reservationRoomId: 'rr-1', toRoomId: 'rm-203' })).rejects.toMatchObject({
+      status: 409,
+      code: 'not-movable',
+    });
+    await expect(room(c, { reservationRoomId: 'rr-12', toRoomId: 'rm-203' })).rejects.toMatchObject(
+      { code: 'not-movable' },
+    );
     // Within its room type a locked reservation can move.
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-12', toRoomId: 'rm-208' }),
-    ).rejects.toMatchObject({ code: 'conflict' });
+    await expect(room(c, { reservationRoomId: 'rr-12', toRoomId: 'rm-208' })).rejects.toMatchObject(
+      { code: 'conflict' },
+    );
   });
   it('404s for unknown ids and 400s for unusable ones', async () => {
     const c = mk();
+    await expect(room(c, { reservationRoomId: 'nope', toRoomId: 'rm-203' })).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(room(c, { reservationRoomId: 'rr-3', toRoomId: 'nope' })).rejects.toMatchObject({
+      status: 404,
+    });
+    await expect(room(c, { reservationRoomId: '..', toRoomId: 'rm-203' })).rejects.toMatchObject({
+      status: 400,
+      code: 'invalid-id',
+    });
     await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'nope', toRoomId: 'rm-203' }),
-    ).rejects.toMatchObject({ status: 404 });
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: 'rr-3', toRoomId: 'nope' }),
-    ).rejects.toMatchObject({ status: 404 });
-    await expect(
-      c.schedule.moveRoom({ reservationRoomId: '..', toRoomId: 'rm-203' }),
-    ).rejects.toMatchObject({ status: 400, code: 'invalid-id' });
-    await expect(
-      mk({ scenario: 'empty' }).schedule.moveRoom({
+      room(mk({ scenario: 'empty' }), {
         reservationRoomId: 'rr-3',
         toRoomId: 'rm-203',
       }),
     ).rejects.toMatchObject({ status: 404 });
     await expect(
-      mk({ scenario: 'error' }).schedule.moveRoom({
+      room(mk({ scenario: 'error' }), {
         reservationRoomId: 'rr-3',
         toRoomId: 'rm-203',
       }),
@@ -203,7 +214,8 @@ describe('mock schedule.moveRoom', () => {
   it('does not apply a move that was aborted', async () => {
     const c = mk({ latencyMs: 10 });
     const controller = new AbortController();
-    const p = c.schedule.moveRoom(
+    const p = room(
+      c,
       { reservationRoomId: 'rr-3', toRoomId: 'rm-203' },
       { signal: controller.signal },
     );
@@ -217,7 +229,7 @@ describe('mock schedule.moveRoom', () => {
 describe('mock schedule.moveDates', () => {
   it('moves every room of a multi-room reservation (all-rooms)', async () => {
     const c = mk();
-    const res = await c.schedule.moveDates({
+    const res = await dates(c, {
       reservationRoomId: 'rr-7',
       toStartDate: '2026-10-25',
       scope: 'all-rooms',
@@ -229,7 +241,7 @@ describe('mock schedule.moveDates', () => {
   });
   it('splits one room off (this-room): other rooms keep their dates and count', async () => {
     const c = mk();
-    const res = await c.schedule.moveDates({
+    const res = await dates(c, {
       reservationRoomId: 'rr-7',
       toStartDate: '2026-10-25',
       scope: 'this-room',
@@ -248,7 +260,7 @@ describe('mock schedule.moveDates', () => {
     const c = mk();
     // The trio shifts a day earlier and rr-9 also wants rm-302, where GR-50344 arrives that day.
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-9',
         toStartDate: '2026-10-17',
         scope: 'all-rooms',
@@ -264,7 +276,7 @@ describe('mock schedule.moveDates', () => {
   it('conflict lists every clashing room', async () => {
     const c = mk();
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-9',
         toStartDate: '2026-10-17',
         scope: 'this-room',
@@ -273,7 +285,7 @@ describe('mock schedule.moveDates', () => {
     ).rejects.toMatchObject({ code: 'conflict', details: { roomId: ['rm-208'] } });
   });
   it('changes the room together with the dates', async () => {
-    const res = await mk().schedule.moveDates({
+    const res = await dates(mk(), {
       reservationRoomId: 'rr-3',
       toStartDate: '2026-10-30',
       scope: 'all-rooms',
@@ -288,28 +300,28 @@ describe('mock schedule.moveDates', () => {
   it('refuses the past, checked-in and checked-out rooms, and locked types', async () => {
     const c = mk();
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-3',
         toStartDate: '2026-10-10',
         scope: 'all-rooms',
       }),
     ).rejects.toMatchObject({ status: 409, code: 'not-movable' });
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-2',
         toStartDate: '2026-10-30',
         scope: 'all-rooms',
       }),
     ).rejects.toMatchObject({ code: 'not-movable' });
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-1',
         toStartDate: '2026-10-30',
         scope: 'all-rooms',
       }),
     ).rejects.toMatchObject({ code: 'not-movable' });
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-12',
         toStartDate: '2026-10-30',
         scope: 'all-rooms',
@@ -321,14 +333,14 @@ describe('mock schedule.moveDates', () => {
     const c = mk();
     // rr-3 (rm-201, +2..+5) one night earlier: starts the day rr-2 departs (+2)... rr-2 ends +2, so +2 is fine; +1 would clash.
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-3',
         toStartDate: '2026-10-18',
         scope: 'all-rooms',
       }),
     ).resolves.toBeDefined();
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-3',
         toStartDate: '2026-10-17',
         scope: 'all-rooms',
@@ -338,21 +350,131 @@ describe('mock schedule.moveDates', () => {
   it('rejects malformed requests with 400', async () => {
     const c = mk();
     await expect(
-      c.schedule.moveDates({ reservationRoomId: 'rr-3', toStartDate: 'x', scope: 'all-rooms' }),
+      dates(c, { reservationRoomId: 'rr-3', toStartDate: 'x', scope: 'all-rooms' }),
     ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: 'rr-3',
         toStartDate: '2026-10-30',
         scope: 'both' as never,
       }),
     ).rejects.toMatchObject({ status: 400 });
     await expect(
-      c.schedule.moveDates({
+      dates(c, {
         reservationRoomId: '',
         toStartDate: '2026-10-30',
         scope: 'all-rooms',
       }),
     ).rejects.toMatchObject({ code: 'invalid-id' });
+  });
+});
+
+describe('mock move safety: versions, stale state and idempotency', () => {
+  it('gives every block a version and bumps it when the block moves', async () => {
+    const c = mk();
+    const before = (await c.schedule.get(week)).blocks.find((b) => b.id === 'rr-3')!;
+    expect(before.version).toBeTruthy();
+    const res = await room(c, { reservationRoomId: 'rr-3', toRoomId: 'rm-203' });
+    expect(res.blocks[0].version).not.toBe(before.version);
+  });
+  it('bumps siblings that change with an all-rooms move', async () => {
+    const c = mk();
+    const before = (await c.schedule.get(week)).blocks.filter((b) => b.reservationId === 'rs-7');
+    const res = await dates(c, {
+      reservationRoomId: 'rr-7',
+      toStartDate: '2026-10-25',
+      scope: 'all-rooms',
+    });
+    for (const b of res.blocks) {
+      expect(b.version).not.toBe(before.find((x) => x.id === b.id)!.version);
+    }
+  });
+  it('409 stale for an out-of-date version, room or arrival; nothing is applied', async () => {
+    const c = mk();
+    await room(c, { reservationRoomId: 'rr-3', toRoomId: 'rm-203' }); // the block moved on
+    await expect(
+      room(c, {
+        reservationRoomId: 'rr-3',
+        toRoomId: 'rm-205',
+        version: 'v1',
+        fromRoomId: 'rm-201',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'stale' });
+    await expect(
+      room(c, { reservationRoomId: 'rr-3', toRoomId: 'rm-205', fromRoomId: 'rm-201' }),
+    ).rejects.toMatchObject({ status: 409, code: 'stale' });
+    await expect(
+      dates(c, {
+        reservationRoomId: 'rr-3',
+        toStartDate: '2026-10-30',
+        scope: 'all-rooms',
+        fromStartDate: '2026-10-01',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'stale' });
+    const d = await c.schedule.get(week);
+    expect(d.blocks.find((b) => b.id === 'rr-3')?.roomId).toBe('rm-203');
+  });
+  it('replays the stored result for a repeated requestId instead of applying twice', async () => {
+    const c = mk();
+    const g = await guard(c, 'rr-3');
+    const request = {
+      reservationRoomId: 'rr-3',
+      toStartDate: '2026-10-30',
+      scope: 'all-rooms' as const,
+      ...g,
+    };
+    const first = await c.schedule.moveDates(request);
+    const again = await c.schedule.moveDates(request); // would be stale / a second shift without the key
+    expect(again).toEqual(first);
+    const d = await c.schedule.get({ startDate: '2026-10-25', days: 14 });
+    expect(d.blocks.find((b) => b.id === 'rr-3')).toMatchObject({ startDate: '2026-10-30' });
+  });
+  it('409 idempotency-conflict when a requestId is reused for another request', async () => {
+    const c = mk();
+    const g = await guard(c, 'rr-3');
+    await c.schedule.moveRoom({ ...g, reservationRoomId: 'rr-3', toRoomId: 'rm-203' });
+    await expect(
+      c.schedule.moveRoom({ ...g, reservationRoomId: 'rr-3', toRoomId: 'rm-205' }),
+    ).rejects.toMatchObject({ status: 409, code: 'idempotency-conflict' });
+  });
+  it('rejects a missing or malformed guard with 400', async () => {
+    const c = mk();
+    const g = await guard(c, 'rr-3');
+    for (const bad of [{ requestId: 'x' }, { requestId: 'has spaces here' }, { version: '' }]) {
+      await expect(
+        c.schedule.moveRoom({ ...g, reservationRoomId: 'rr-3', toRoomId: 'rm-203', ...bad }),
+      ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
+    }
+  });
+});
+
+describe('mock move fidelity', () => {
+  it('moveDates without a date change is a room change: allowed for a checked-in room', async () => {
+    const c = mk();
+    const res = await dates(c, {
+      reservationRoomId: 'rr-2', // checked in
+      toStartDate: (await c.schedule.get({ startDate: '2026-10-10', days: 14 })).blocks.find(
+        (b) => b.id === 'rr-2',
+      )!.startDate,
+      scope: 'all-rooms',
+      toRoomId: 'rm-209',
+    });
+    expect(res.blocks[0].roomId).toBe('rm-209');
+    // ...and checked-out ones are refused, like moveRoom.
+    await expect(
+      dates(c, {
+        reservationRoomId: 'rr-1',
+        toStartDate: '2026-10-10',
+        scope: 'all-rooms',
+        toRoomId: 'rm-203',
+      }),
+    ).rejects.toMatchObject({ code: 'not-movable' });
+  });
+  it('refuses a shift that puts any moving sibling in the past', async () => {
+    const c = mk();
+    // rr-7..9 arrive on +2 (10/18): shifting 3 days earlier is 10/15 for all of them.
+    await expect(
+      dates(c, { reservationRoomId: 'rr-7', toStartDate: '2026-10-15', scope: 'all-rooms' }),
+    ).rejects.toMatchObject({ code: 'not-movable' });
   });
 });

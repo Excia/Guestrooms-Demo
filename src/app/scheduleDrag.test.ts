@@ -30,6 +30,7 @@ const block = (over: Partial<ScheduleBlock> & { roomId: string }): ScheduleBlock
   status: 'confirmed',
   roomCount: 1,
   roomTypeLocked: false,
+  version: 'v1',
   ...over,
 });
 const closure = (over: Partial<ScheduleClosure> & { roomId: string }): ScheduleClosure => ({
@@ -312,29 +313,64 @@ describe('canDrop: multi-room reservations', () => {
 });
 
 describe('request builders', () => {
-  it('maps a room change to moveRoom', () => {
-    const src = block({ roomId: 'a1' });
+  const REQ = 'req-12345678';
+  it('maps a room change to moveRoom with the guard and idempotency key', () => {
+    const src = block({ roomId: 'a1', version: 'v7' });
     const r = ok(canDrop(src, { roomId: 'a2', startDate: src.startDate }, state([src])));
-    expect(toMoveRoomRequest(r)).toEqual({ reservationRoomId: src.id, toRoomId: 'a2' });
+    expect(toMoveRoomRequest(r, src, REQ)).toEqual({
+      reservationRoomId: src.id,
+      toRoomId: 'a2',
+      fromRoomId: 'a1',
+      version: 'v7',
+      requestId: REQ,
+    });
   });
   it('maps dates to moveDates, with scope this-room for the split link', () => {
-    const a = block({ roomId: 'a1', reservationId: 'rs', roomCount: 2 });
+    const a = block({ roomId: 'a1', reservationId: 'rs', roomCount: 2, version: 'v3' });
     const b = block({ roomId: 'a2', reservationId: 'rs', roomCount: 2 });
     const r = ok(canDrop(a, { roomId: 'a1', startDate: day(9) }, state([a, b])));
-    expect(toMoveDatesRequest(r)).toEqual({
+    expect(toMoveDatesRequest(r, a, REQ)).toEqual({
       reservationRoomId: a.id,
+      fromRoomId: 'a1',
+      fromStartDate: a.startDate,
       toStartDate: day(9),
       scope: 'all-rooms',
       toRoomId: undefined,
+      version: 'v3',
+      requestId: REQ,
     });
-    expect(toMoveDatesRequest(r, 'this-room').scope).toBe('this-room');
+    expect(toMoveDatesRequest(r, a, REQ, 'this-room').scope).toBe('this-room');
     const combined = ok(canDrop(a, { roomId: 'a3', startDate: day(9) }, state([a, b])));
-    expect(toMoveDatesRequest(combined).toRoomId).toBe('a3');
+    expect(toMoveDatesRequest(combined, a, REQ).toRoomId).toBe('a3');
   });
   it('throws when the split is not offered', () => {
     const src = block({ roomId: 'a1' });
     const r = ok(canDrop(src, { roomId: 'a1', startDate: day(9) }, state([src])));
-    expect(() => toMoveDatesRequest(r, 'this-room')).toThrow();
+    expect(() => toMoveDatesRequest(r, src, REQ, 'this-room')).toThrow();
+  });
+});
+
+describe('past arrivals for every moving room', () => {
+  it('refuses a shift that puts a sibling in the past even if the dragged room is fine', () => {
+    // Dragged room arrives day 5, its sibling day 1: moving 2 days earlier puts the sibling before today.
+    const a = block({
+      roomId: 'a1',
+      reservationId: 'rs',
+      roomCount: 2,
+      startDate: day(5),
+      endDate: day(7),
+    });
+    const b = block({
+      roomId: 'a2',
+      reservationId: 'rs',
+      roomCount: 2,
+      startDate: day(1),
+      endDate: day(3),
+    });
+    const r = canDrop(a, { roomId: 'a1', startDate: day(3) }, state([a, b]));
+    expect(r).toMatchObject({ ok: false, reason: 'past' });
+    // The split alternative (this room only) stays offered.
+    expect(r.ok === false && r.splitMoves).not.toBeNull();
   });
 });
 

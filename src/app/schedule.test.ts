@@ -189,22 +189,19 @@ describe('applyScheduleFilters', () => {
     expect(ids(applyScheduleFilters(base, { availability: 'booked' }))).not.toContain('rm-208');
   });
   it('decides by the selected range: a longer view books more rooms', () => {
-    const week = queryScheduleData(createScheduleState(T), {
-      startDate: T,
-      days: 7,
-      availability: 'booked',
-    });
-    const month = queryScheduleData(createScheduleState(T), {
-      startDate: T,
-      days: 30,
-      availability: 'booked',
-    });
+    const week = applyScheduleFilters(
+      queryScheduleData(createScheduleState(T), { startDate: T, days: 7 }),
+      { availability: 'booked' },
+    );
+    const month = applyScheduleFilters(
+      queryScheduleData(createScheduleState(T), { startDate: T, days: 30 }),
+      { availability: 'booked' },
+    );
     expect(month.rooms.length).toBeGreaterThanOrEqual(week.rooms.length);
-    const later = queryScheduleData(createScheduleState(T), {
-      startDate: '2026-12-20',
-      days: 7,
-      availability: 'booked',
-    });
+    const later = applyScheduleFilters(
+      queryScheduleData(createScheduleState(T), { startDate: '2026-12-20', days: 7 }),
+      { availability: 'booked' },
+    );
     expect(later.rooms).toEqual([]);
   });
   it('does not count a departure on the first day of the range as booked', () => {

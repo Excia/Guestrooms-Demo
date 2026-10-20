@@ -1,18 +1,16 @@
 // Pure rules for the schedule grid's view: the visible date range, navigation, headers, filtering
 // and where a block sits in the columns. Dates are ISO "yyyy-mm-dd" strings; arithmetic goes
 // through src/lib/dates.ts so DST never shifts a day.
-import { addDays, daysBetween, parseIsoDate, type IsoDate } from '../lib/dates';
+import { addDays, daysBetween, nightsOverlap, parseIsoDate, type IsoDate } from '../lib/dates';
 import { SCHEDULE_DAYS } from '../api/types';
 import type {
+  ScheduleAvailability,
   ScheduleData,
   ScheduleDays,
   ScheduleLocation,
   ScheduleRoom,
   ScheduleRoomType,
 } from '../api/types';
-
-export { applyScheduleFilters } from '../api/scheduleQuery';
-export type { ScheduleFilters } from '../api/scheduleQuery';
 
 export const DEFAULT_SCHEDULE_DAYS: ScheduleDays = 7;
 
@@ -148,3 +146,55 @@ export function visibleRowRange(
 /** True when the data has no rooms, i.e. nothing to draw (the empty state). */
 export const isScheduleEmpty = (data: Pick<ScheduleData, 'rooms'>): boolean =>
   data.rooms.length === 0;
+
+// ---- filters (client-side) -----------------------------------------------------------------------
+// The product fetches every room and filters here: the drag rules need the sibling rooms of a
+// multi-room reservation, which a server-side filter would leave out.
+
+export interface ScheduleFilters {
+  /** Absent: every location. An empty list ("Select None") matches nothing. */
+  locationIds?: readonly string[];
+  roomTypeIds?: readonly string[];
+  availability?: ScheduleAvailability;
+}
+
+/**
+ * Keeps the rooms that match the filters, and only their blocks and closures.
+ * - Locations and room types: a room must be in a selected location AND a selected room type.
+ * - 'booked': at least one reservation overlaps the data's range.
+ * - 'available': no reservation and no closure overlaps the range (a room that is free all range).
+ *   A room with only a closure is therefore neither available nor booked.
+ */
+export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilters): ScheduleData {
+  const { startDate, days } = data;
+  const end = addDays(startDate, days);
+  const locations = filters.locationIds && new Set(filters.locationIds);
+  const types = filters.roomTypeIds && new Set(filters.roomTypeIds);
+  const availability = filters.availability ?? 'all';
+
+  const booked = new Set<string>();
+  const closed = new Set<string>();
+  if (availability !== 'all') {
+    for (const b of data.blocks) {
+      if (nightsOverlap(b.startDate, b.endDate, startDate, end)) booked.add(b.roomId);
+    }
+    for (const c of data.closures) {
+      if (nightsOverlap(c.startDate, c.endDate, startDate, end)) closed.add(c.roomId);
+    }
+  }
+
+  const rooms = data.rooms.filter(
+    (r) =>
+      (!locations || locations.has(r.locationId)) &&
+      (!types || types.has(r.roomTypeId)) &&
+      (availability === 'all' ||
+        (availability === 'booked' ? booked.has(r.id) : !booked.has(r.id) && !closed.has(r.id))),
+  );
+  const ids = new Set(rooms.map((r) => r.id));
+  return {
+    ...data,
+    rooms,
+    blocks: data.blocks.filter((b) => ids.has(b.roomId)),
+    closures: data.closures.filter((c) => ids.has(c.roomId)),
+  };
+}

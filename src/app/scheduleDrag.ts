@@ -201,9 +201,10 @@ export function canDrop(
 
   // New dates.
   if (source.status === 'checked-in') return refuse('checked-in-dates');
-  if (target.startDate < state.today) return refuse('past');
 
   const own = [moveFor(source, target.roomId, shift)];
+  // Arrivals before today are the past: the dragged room, and below every room that moves along.
+  if (own[0].toStart < state.today) return refuse('past');
   const kind: DropKind = roomChanged ? 'room-and-date-change' : 'date-change';
   if (source.roomCount <= 1) {
     return (
@@ -228,6 +229,7 @@ export function canDrop(
     return refuse('linked-room-locked', [], split);
   }
   const moves = [...own, ...siblings.map((b) => moveFor(b, b.roomId, shift))];
+  if (moves.some((m) => m.toStart < state.today)) return refuse('past', [], split);
   return (
     conflictRefusal(findConflicts(state, moves), split) ?? {
       ok: true,
@@ -241,10 +243,24 @@ export function canDrop(
 
 type Accepted = Extract<DropResult, { ok: true }>;
 
-/** API request for a 'room-change' result ("Move to New Room"). */
-export function toMoveRoomRequest(result: Accepted): MoveRoomRequest {
+/**
+ * API request for a 'room-change' result ("Move to New Room"). `block` is the dragged reservation
+ * room as the user saw it (its `version` and room guard against a concurrent change); `requestId`
+ * is the idempotency key, generated once per user action.
+ */
+export function toMoveRoomRequest(
+  result: Accepted,
+  block: Pick<ScheduleBlock, 'version' | 'roomId'>,
+  requestId: string,
+): MoveRoomRequest {
   const m = result.moves[0];
-  return { reservationRoomId: m.blockId, toRoomId: m.toRoomId };
+  return {
+    reservationRoomId: m.blockId,
+    toRoomId: m.toRoomId,
+    fromRoomId: block.roomId,
+    version: block.version,
+    requestId,
+  };
 }
 
 /**
@@ -253,6 +269,8 @@ export function toMoveRoomRequest(result: Accepted): MoveRoomRequest {
  */
 export function toMoveDatesRequest(
   result: Accepted,
+  block: Pick<ScheduleBlock, 'version' | 'roomId' | 'startDate'>,
+  requestId: string,
   scope: 'all-rooms' | 'this-room' = 'all-rooms',
 ): MoveDatesRequest {
   const moves = scope === 'this-room' ? result.splitMoves : result.moves;
@@ -260,8 +278,12 @@ export function toMoveDatesRequest(
   const m = moves[0];
   return {
     reservationRoomId: m.blockId,
+    fromRoomId: block.roomId,
+    fromStartDate: block.startDate,
     toStartDate: m.toStart,
     scope,
     toRoomId: m.toRoomId === m.fromRoomId ? undefined : m.toRoomId,
+    version: block.version,
+    requestId,
   };
 }

@@ -1,5 +1,11 @@
 import { isValidMonth, parseIsoDate } from '../lib/dates';
-import type { MoveDatesRequest, MoveRoomRequest, QuickStatsQuery, ScheduleQuery } from './types';
+import type {
+  MoveDatesRequest,
+  MoveGuard,
+  MoveRoomRequest,
+  QuickStatsQuery,
+  ScheduleQuery,
+} from './types';
 import { SCHEDULE_DAYS } from './types';
 import { ApiError } from './types';
 
@@ -23,38 +29,45 @@ export function assertQuickStatsQuery(query: QuickStatsQuery): void {
   if (!ok) throw new ApiError(400, 'Invalid quick stats query', { code: 'invalid-query' });
 }
 
-const AVAILABILITIES: readonly unknown[] = ['all', 'available', 'booked'];
-
 const invalidQuery = (what: string) =>
   new ApiError(400, `Invalid ${what}`, { code: 'invalid-query' });
 
-/** Filter ids travel as a comma-separated query value: non-empty lists of non-empty, comma-free ids. */
-const validIdList = (ids: unknown) =>
-  ids === undefined ||
-  (Array.isArray(ids) &&
-    ids.length > 0 &&
-    ids.every((id) => typeof id === 'string' && id.trim() !== '' && !id.includes(',')));
-
 export function assertScheduleQuery(query: ScheduleQuery): void {
-  const ok =
-    parseIsoDate(query.startDate) !== null &&
-    SCHEDULE_DAYS.includes(query.days) &&
-    validIdList(query.locationIds) &&
-    validIdList(query.roomTypeIds) &&
-    (query.availability === undefined || AVAILABILITIES.includes(query.availability));
-  if (!ok) throw invalidQuery('schedule query');
+  if (parseIsoDate(query.startDate) === null || !SCHEDULE_DAYS.includes(query.days)) {
+    throw invalidQuery('schedule query');
+  }
+}
+
+/** Idempotency keys: 8 to 128 URL-safe characters (a UUID fits). */
+const REQUEST_ID = /^[A-Za-z0-9_-]{8,128}$/;
+
+function assertMoveGuard(request: MoveGuard): void {
+  if (typeof request.requestId !== 'string' || !REQUEST_ID.test(request.requestId)) {
+    throw invalidQuery('move request id');
+  }
+  if (
+    typeof request.version !== 'string' ||
+    request.version === '' ||
+    request.version.length > 128
+  ) {
+    throw invalidQuery('move version');
+  }
+  assertResourceId(request.fromRoomId, 'room');
 }
 
 export function assertMoveRoomRequest(request: MoveRoomRequest): void {
+  assertMoveGuard(request);
   assertResourceId(request.reservationRoomId, 'reservation room');
   assertResourceId(request.toRoomId, 'room');
 }
 
 export function assertMoveDatesRequest(request: MoveDatesRequest): void {
+  assertMoveGuard(request);
   assertResourceId(request.reservationRoomId, 'reservation room');
   if (request.toRoomId !== undefined) assertResourceId(request.toRoomId, 'room');
   if (
     parseIsoDate(request.toStartDate) === null ||
+    parseIsoDate(request.fromStartDate) === null ||
     (request.scope !== 'all-rooms' && request.scope !== 'this-room')
   ) {
     throw invalidQuery('move dates request');

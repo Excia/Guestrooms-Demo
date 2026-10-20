@@ -12,7 +12,15 @@ import { queryReservations } from './reservationQuery';
 import { createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
-import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
+import type {
+  ApiClient,
+  IsoDate,
+  MoveDatesRequest,
+  MoveRoomRequest,
+  PermissionGrant,
+  RequestOptions,
+  ScheduleBlock,
+} from './types';
 import { ApiError } from './types';
 import {
   assertMoveDatesRequest,
@@ -55,6 +63,27 @@ export function createMockClient({
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
+  // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
+  const replays = new Map<string, { fingerprint: string; blocks: ScheduleBlock[] }>();
+  function replayable(
+    request: MoveRoomRequest | MoveDatesRequest,
+    apply: () => ScheduleBlock[],
+  ): ScheduleBlock[] {
+    const fingerprint = JSON.stringify({ ...request, requestId: undefined });
+    const previous = replays.get(request.requestId);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        throw new ApiError(409, 'This request id was already used for a different request', {
+          code: 'idempotency-conflict',
+        });
+      }
+      return structuredClone(previous.blocks);
+    }
+    const blocks = apply();
+    replays.set(request.requestId, { fingerprint, blocks: structuredClone(blocks) });
+    return blocks;
+  }
+
   function respond<T>(normal: () => T, empty: () => T, options?: RequestOptions): Promise<T> {
     const signal = options?.signal;
     return new Promise<T>((resolve, reject) => {
@@ -149,7 +178,7 @@ export function createMockClient({
         respond(
           () => {
             assertMoveRoomRequest(request);
-            return { blocks: moveRoom(schedule, request) };
+            return { blocks: replayable(request, () => moveRoom(schedule, request)) };
           },
           () => {
             assertMoveRoomRequest(request);
@@ -161,7 +190,7 @@ export function createMockClient({
         respond(
           () => {
             assertMoveDatesRequest(request);
-            return { blocks: moveDates(schedule, request) };
+            return { blocks: replayable(request, () => moveDates(schedule, request)) };
           },
           () => {
             assertMoveDatesRequest(request);

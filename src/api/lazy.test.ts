@@ -22,12 +22,25 @@ describe('createLazyClient', () => {
   });
   it('forwards schedule moves to the loaded client', async () => {
     const client = createLazyClient(async () => createMockClient({ today: '2026-10-16' }));
-    const room = await client.schedule.moveRoom({ reservationRoomId: 'rr-3', toRoomId: 'rm-203' });
+    const current = (await client.schedule.get({ startDate: '2026-10-16', days: 7 })).blocks.find(
+      (b) => b.id === 'rr-3',
+    )!;
+    const room = await client.schedule.moveRoom({
+      reservationRoomId: 'rr-3',
+      toRoomId: 'rm-203',
+      fromRoomId: current.roomId,
+      version: current.version,
+      requestId: 'req-lazy-0001',
+    });
     expect(room.blocks[0].roomId).toBe('rm-203');
     const dates = await client.schedule.moveDates({
       reservationRoomId: 'rr-3',
       toStartDate: '2026-10-30',
       scope: 'all-rooms',
+      fromRoomId: 'rm-203',
+      fromStartDate: current.startDate,
+      version: room.blocks[0].version,
+      requestId: 'req-lazy-0002',
     });
     expect(dates.blocks[0].startDate).toBe('2026-10-30');
   });

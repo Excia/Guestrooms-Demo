@@ -30,6 +30,7 @@ const block = (over: Partial<ScheduleBlock> = {}): ScheduleBlock => ({
   status: 'confirmed',
   roomCount: 1,
   roomTypeLocked: false,
+  version: 'v1',
   ...over,
 });
 
@@ -182,7 +183,7 @@ describe('copy', () => {
     expect(copy.body).toMatch(
       /will change the check in and check out dates for all rooms on the reservation and will change the total rate/,
     );
-    expect(toMoveDatesRequest(multi, 'this-room').scope).toBe('this-room');
+    expect(toMoveDatesRequest(multi, b1, 'req-12345678', 'this-room').scope).toBe('this-room');
   });
   it('names a block with guest, confirmation, status, room and dates', () => {
     expect(blockAriaLabel(block({ status: 'nyci' }), { number: '202' })).toBe(

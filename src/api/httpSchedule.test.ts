@@ -1,7 +1,7 @@
 import { createHttpClient } from './http';
 import { createScheduleState } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
-import type { ScheduleQuery } from './types';
+import type { ScheduleBlock, ScheduleQuery } from './types';
 
 const T = '2026-10-16';
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -13,22 +13,11 @@ const good = () => queryScheduleData(createScheduleState(T), query);
 describe('http schedule.get', () => {
   it('sends the query as parameters and accepts a well-formed answer', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json(good()));
-    const data = await make(fetchMock).schedule.get({
-      ...query,
-      locationIds: ['lakeside', 'north-lodge'],
-      roomTypeIds: ['suite'],
-      availability: 'booked',
-    });
+    const data = await make(fetchMock).schedule.get(query);
     expect(data.rooms.length).toBeGreaterThan(0);
     const url = fetchMock.mock.calls[0][0] as URL;
     expect(url.pathname).toBe('/v1/schedule');
-    expect(Object.fromEntries(url.searchParams)).toEqual({
-      startDate: T,
-      days: '7',
-      locationIds: 'lakeside,north-lodge',
-      roomTypeIds: 'suite',
-      availability: 'booked',
-    });
+    expect(Object.fromEntries(url.searchParams)).toEqual({ startDate: T, days: '7' });
   });
   it('rejects a malformed query before fetching', async () => {
     const fetchMock = vi.fn();
@@ -38,11 +27,6 @@ describe('http schedule.get', () => {
       status: 400,
       code: 'invalid-query',
     });
-    await expect(make(fetchMock).schedule.get({ ...query, locationIds: [] })).rejects.toMatchObject(
-      {
-        code: 'invalid-query',
-      },
-    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it('rejects a malformed response', async () => {
@@ -91,43 +75,46 @@ describe('http schedule.get', () => {
 
 describe('http schedule moves', () => {
   const block = good().blocks[0];
+  const guard = {
+    requestId: 'req-12345678',
+    version: block.version,
+    fromRoomId: block.roomId,
+  };
+  const roomRequest = { ...guard, reservationRoomId: block.id, toRoomId: 'rm-203' };
 
-  it('POSTs moveRoom as JSON and checks the moved block', async () => {
+  it('POSTs moveRoom as JSON with the idempotency key and checks the moved block', async () => {
     const moved = { blocks: [{ ...block, roomId: 'rm-203' }] };
     const fetchMock = vi.fn().mockResolvedValue(json(moved));
-    const res = await make(fetchMock).schedule.moveRoom({
-      reservationRoomId: block.id,
-      toRoomId: 'rm-203',
-    });
+    const res = await make(fetchMock).schedule.moveRoom(roomRequest);
     expect(res.blocks[0].roomId).toBe('rm-203');
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(url.pathname).toBe('/v1/schedule/move-room');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({
-      reservationRoomId: block.id,
-      toRoomId: 'rm-203',
-    });
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect(JSON.parse(init.body as string)).toEqual(roomRequest);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(headers['Idempotency-Key']).toBe('req-12345678');
   });
   it('rejects an answer where the block is not where it was sent', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json({ blocks: [block] }));
     await expect(
-      make(fetchMock).schedule.moveRoom({ reservationRoomId: block.id, toRoomId: 'rm-203' }),
+      make(vi.fn().mockResolvedValue(json({ blocks: [block] }))).schedule.moveRoom(roomRequest),
     ).rejects.toMatchObject({ code: 'invalid-response' });
     await expect(
       make(vi.fn().mockResolvedValue(json({ blocks: [] }))).schedule.moveRoom({
-        reservationRoomId: block.id,
+        ...roomRequest,
         toRoomId: block.roomId,
       }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
-  it('POSTs moveDates with scope and optional room', async () => {
+  it('POSTs moveDates with scope, guard and optional room', async () => {
     const moved = {
       blocks: [{ ...block, startDate: '2026-10-30', endDate: '2026-11-02', roomId: 'rm-203' }],
     };
     const fetchMock = vi.fn().mockResolvedValue(json(moved));
     const request = {
+      ...guard,
       reservationRoomId: block.id,
+      fromStartDate: block.startDate,
       toStartDate: '2026-10-30',
       scope: 'this-room',
       toRoomId: 'rm-203',
@@ -136,8 +123,59 @@ describe('http schedule moves', () => {
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
     expect(url.pathname).toBe('/v1/schedule/move-dates');
     expect(JSON.parse(init.body as string)).toEqual(request);
+    expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(request.requestId);
     await expect(
       make(vi.fn().mockResolvedValue(json({ blocks: [block] }))).schedule.moveDates(request),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+  const datesRequest = (scope: 'all-rooms' | 'this-room') =>
+    ({
+      ...guard,
+      reservationRoomId: 'a',
+      fromStartDate: '2026-10-18',
+      toStartDate: '2026-10-25',
+      scope,
+    }) as const;
+  const trio = (over: Partial<ScheduleBlock> = {}) =>
+    ['a', 'b', 'c'].map((id) => ({
+      ...block,
+      id,
+      reservationId: 'rs',
+      roomCount: 3,
+      startDate: '2026-10-25',
+      endDate: '2026-10-28',
+      ...over,
+    }));
+  it("checks that an 'all-rooms' answer carries every room of the reservation", async () => {
+    const ok = make(vi.fn().mockResolvedValue(json({ blocks: trio() })));
+    await expect(ok.schedule.moveDates(datesRequest('all-rooms'))).resolves.toBeDefined();
+    for (const blocks of [
+      trio().slice(0, 2),
+      [...trio().slice(0, 2), { ...trio()[2], roomCount: 2 }],
+    ]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json({ blocks }))).schedule.moveDates(
+          datesRequest('all-rooms'),
+        ),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
+  it('checks that a split room left the reservation', async () => {
+    const split = [
+      { ...trio()[0], reservationId: 'rs-split', roomCount: 1 },
+      ...trio()
+        .slice(1)
+        .map((b) => ({ ...b, roomCount: 2 })),
+    ];
+    await expect(
+      make(vi.fn().mockResolvedValue(json({ blocks: split }))).schedule.moveDates(
+        datesRequest('this-room'),
+      ),
+    ).resolves.toBeDefined();
+    await expect(
+      make(vi.fn().mockResolvedValue(json({ blocks: trio() }))).schedule.moveDates(
+        datesRequest('this-room'),
+      ),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
   it('surfaces a 409 conflict with its code and details', async () => {
@@ -146,19 +184,27 @@ describe('http schedule moves', () => {
       .mockResolvedValue(
         json({ message: 'Room taken', code: 'conflict', details: { roomId: ['rm-203'] } }, 409),
       );
-    await expect(
-      make(fetchMock).schedule.moveRoom({ reservationRoomId: block.id, toRoomId: 'rm-203' }),
-    ).rejects.toMatchObject({ status: 409, code: 'conflict', details: { roomId: ['rm-203'] } });
+    await expect(make(fetchMock).schedule.moveRoom(roomRequest)).rejects.toMatchObject({
+      status: 409,
+      code: 'conflict',
+      details: { roomId: ['rm-203'] },
+    });
   });
   it('validates requests before fetching', async () => {
     const fetchMock = vi.fn();
     const c = make(fetchMock);
     await expect(
-      c.schedule.moveRoom({ reservationRoomId: '..', toRoomId: 'a' }),
+      c.schedule.moveRoom({ ...roomRequest, reservationRoomId: '..' }),
     ).rejects.toMatchObject({ code: 'invalid-id' });
     await expect(
-      c.schedule.moveDates({ reservationRoomId: 'a', toStartDate: 'x', scope: 'all-rooms' }),
+      c.schedule.moveDates({ ...datesRequest('all-rooms'), toStartDate: 'x' }),
     ).rejects.toMatchObject({ code: 'invalid-query' });
+    await expect(c.schedule.moveRoom({ ...roomRequest, requestId: 'short' })).rejects.toMatchObject(
+      { code: 'invalid-query' },
+    );
+    await expect(c.schedule.moveRoom({ ...roomRequest, version: '' })).rejects.toMatchObject({
+      code: 'invalid-query',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it('aborts a move', async () => {
@@ -169,12 +215,28 @@ describe('http schedule moves', () => {
           init.signal?.addEventListener('abort', () => reject(new DOMException('x', 'AbortError')));
         }),
     );
-    const p = make(fetchMock as never).schedule.moveRoom(
-      { reservationRoomId: 'a', toRoomId: 'b' },
-      { signal: controller.signal },
-    );
+    const p = make(fetchMock as never).schedule.moveRoom(roomRequest, {
+      signal: controller.signal,
+    });
     await Promise.resolve();
     controller.abort();
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('http schedule.get rejects duplicate ids', () => {
+  it('duplicate room, block or closure ids', async () => {
+    const d = good();
+    const bodies = [
+      { ...d, rooms: [...d.rooms, d.rooms[0]] },
+      { ...d, blocks: [...d.blocks, d.blocks[0]] },
+      { ...d, closures: [...d.closures, d.closures[0]] },
+      { ...d, closures: [{ ...d.closures[0], id: d.blocks[0].id }] },
+    ];
+    for (const body of bodies) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).schedule.get(query),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
   });
 });

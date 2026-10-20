@@ -195,7 +195,9 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     BLOCK_STATUSES.includes(v.status) &&
     isCount(v.roomCount) &&
     v.roomCount >= 1 &&
-    typeof v.roomTypeLocked === 'boolean'
+    typeof v.roomTypeLocked === 'boolean' &&
+    isString(v.version) &&
+    v.version !== ''
   );
 }
 
@@ -235,7 +237,11 @@ const parseSchedule =
     if (!ok) throw invalid(status, 'schedule');
     const data = body as unknown as ScheduleData;
     const roomIds = new Set(data.rooms.map((r) => r.id));
+    // The grid indexes by id: duplicates would draw or move the wrong thing.
+    const unique = (ids: string[]) => new Set(ids).size === ids.length;
     if (
+      !unique(data.rooms.map((r) => r.id)) ||
+      !unique([...data.blocks.map((b) => b.id), ...data.closures.map((c) => c.id)]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {
@@ -244,14 +250,34 @@ const parseSchedule =
     return data;
   };
 
-// A move answers with the changed blocks, and the moved block must be where the request put it.
+// A move answers with the changed blocks. The moved block must be where the request put it. For
+// 'all-rooms' the answer must carry every room of the reservation, consistently counted; for a
+// split ('this-room' with new dates) the moved room must have left the reservation (roomCount 1).
 const parseMove =
-  (reservationRoomId: string, expect: (moved: ScheduleBlock) => boolean) =>
+  (
+    reservationRoomId: string,
+    expect: (moved: ScheduleBlock) => boolean,
+    rule?: { scope: 'all-rooms' | 'this-room'; shifted: boolean },
+  ) =>
   (body: unknown, status: number): ScheduleMoveResult => {
     if (!isObject(body) || !listOf(body.blocks, isScheduleBlock)) throw invalid(status, 'move');
     const result = body as unknown as ScheduleMoveResult;
     const moved = result.blocks.find((b) => b.id === reservationRoomId);
     if (!moved || !expect(moved)) throw invalid(status, 'move');
+    if (new Set(result.blocks.map((b) => b.id)).size !== result.blocks.length) {
+      throw invalid(status, 'move');
+    }
+    if (rule) {
+      const group = result.blocks.filter((b) => b.reservationId === moved.reservationId);
+      const consistent = group.every((b) => b.roomCount === moved.roomCount);
+      if (!consistent) throw invalid(status, 'move');
+      if (rule.scope === 'all-rooms' && group.length !== moved.roomCount) {
+        throw invalid(status, 'move');
+      }
+      if (rule.scope === 'this-room' && rule.shifted && moved.roomCount !== 1) {
+        throw invalid(status, 'move');
+      }
+    }
     return result;
   };
 
@@ -286,7 +312,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     params: Record<string, string | undefined>,
     requestOptions: RequestOptions | undefined,
     parse: (body: unknown, status: number) => T,
-    send?: { method: 'POST'; body: unknown },
+    send?: { method: 'POST'; body: unknown; headers?: Record<string, string> },
   ): Promise<T> {
     const url = new URL(baseUrl + path, globalThis.location?.origin);
     for (const [key, value] of Object.entries(params)) {
@@ -324,6 +350,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         headers: {
           Accept: 'application/json',
           ...(send ? { 'Content-Type': 'application/json' } : {}),
+          ...send?.headers,
           ...extra,
         },
         credentials,
@@ -417,13 +444,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           assertScheduleQuery(q);
           return request(
             '/schedule',
-            {
-              startDate: q.startDate,
-              days: String(q.days),
-              locationIds: q.locationIds?.join(','),
-              roomTypeIds: q.roomTypeIds?.join(','),
-              availability: q.availability,
-            },
+            { startDate: q.startDate, days: String(q.days) },
             o,
             parseSchedule(q),
           );
@@ -436,7 +457,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             {},
             o,
             parseMove(r.reservationRoomId, (b) => b.roomId === r.toRoomId),
-            { method: 'POST', body: r },
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
       moveDates: (r: MoveDatesRequest, o) =>
@@ -449,8 +470,9 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             parseMove(
               r.reservationRoomId,
               (b) => b.startDate === r.toStartDate && (!r.toRoomId || b.roomId === r.toRoomId),
+              { scope: r.scope, shifted: r.toStartDate !== r.fromStartDate },
             ),
-            { method: 'POST', body: r },
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
     },

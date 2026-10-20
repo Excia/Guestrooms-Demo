@@ -42,6 +42,8 @@ export interface ScheduleState {
   rooms: ScheduleRoom[];
   blocks: ScheduleBlock[];
   closures: ScheduleClosure[];
+  /** Source of the next block `version` (the mock's revision counter). */
+  versionSeq: number;
 }
 
 const room = (
@@ -436,6 +438,7 @@ function defaultState(today: IsoDate): ScheduleState {
       status: s.status,
       roomCount: s.rooms ?? 1,
       roomTypeLocked: s.locked ?? false,
+      version: 'v1',
     })),
     closures: CLOSURE_SEEDS.map((c) => ({
       kind: 'closure',
@@ -446,6 +449,7 @@ function defaultState(today: IsoDate): ScheduleState {
       reason: c.reason,
       endMarker: c.marker,
     })),
+    versionSeq: 1,
   };
 }
 
@@ -526,6 +530,7 @@ function largeState(today: IsoDate): ScheduleState {
           status,
           roomCount: 1,
           roomTypeLocked: random() < 0.1,
+          version: 'v1',
         });
       }
       // Sometimes a gap night, sometimes same-day turnover.
@@ -539,6 +544,7 @@ function largeState(today: IsoDate): ScheduleState {
     rooms,
     blocks,
     closures,
+    versionSeq: 1,
   };
 }
 
@@ -612,30 +618,68 @@ function assertRoomTypeAllowed(state: ScheduleState, block: ScheduleBlock, toRoo
   }
 }
 
+const stale = () =>
+  new ApiError(409, 'This reservation changed since it was loaded', { code: 'stale' });
+
+/** 409 `stale` unless the block is still what the request was made from. */
+function assertCurrent(
+  block: ScheduleBlock,
+  expected: { version: string; fromRoomId: string; fromStartDate?: IsoDate },
+): void {
+  if (
+    block.version !== expected.version ||
+    block.roomId !== expected.fromRoomId ||
+    (expected.fromStartDate !== undefined && block.startDate !== expected.fromStartDate)
+  ) {
+    throw stale();
+  }
+}
+
+/** A changed block gets a new version. */
+function bump(state: ScheduleState, block: ScheduleBlock): void {
+  block.version = `v${++state.versionSeq}`;
+}
+
+/** Room change only (same dates). Allowed for checked-in rooms, refused for checked-out ones. */
+function relocate(state: ScheduleState, block: ScheduleBlock, toRoomId: string): ScheduleBlock[] {
+  findRoom(state, toRoomId);
+  if (block.status === 'checked-out') throw notMovable('A checked-out room cannot be moved');
+  assertRoomTypeAllowed(state, block, toRoomId);
+  if (toRoomId === block.roomId) return [structuredClone(block)];
+  assertFree(state, [
+    { block, roomId: toRoomId, startDate: block.startDate, endDate: block.endDate },
+  ]);
+  block.roomId = toRoomId;
+  bump(state, block);
+  return [structuredClone(block)];
+}
+
 /** Validates then applies; nothing changes when it throws. Returns the changed blocks (copies). */
 export function moveRoom(state: ScheduleState, request: MoveRoomRequest): ScheduleBlock[] {
   const block = findBlock(state, request.reservationRoomId);
   findRoom(state, request.toRoomId);
-  if (block.status === 'checked-out') throw notMovable('A checked-out room cannot be moved');
-  assertRoomTypeAllowed(state, block, request.toRoomId);
-  if (request.toRoomId === block.roomId) return [structuredClone(block)];
-  assertFree(state, [
-    { block, roomId: request.toRoomId, startDate: block.startDate, endDate: block.endDate },
-  ]);
-  block.roomId = request.toRoomId;
-  return [structuredClone(block)];
+  assertCurrent(block, request);
+  return relocate(state, block, request.toRoomId);
 }
 
 export function moveDates(state: ScheduleState, request: MoveDatesRequest): ScheduleBlock[] {
   const block = findBlock(state, request.reservationRoomId);
   if (request.toRoomId !== undefined) findRoom(state, request.toRoomId);
+  assertCurrent(block, request);
   const shift = daysBetween(block.startDate, request.toStartDate);
+  // No date change: this is a room change, with the same rules as moveRoom.
+  if (shift === 0) {
+    return request.toRoomId === undefined
+      ? [structuredClone(block)]
+      : relocate(state, block, request.toRoomId);
+  }
   const group = state.blocks.filter((b) => b.reservationId === block.reservationId);
   const moved = request.scope === 'all-rooms' ? group : [block];
   if (moved.some((b) => b.status === 'checked-out' || b.status === 'checked-in')) {
     throw notMovable('Only rooms not yet checked in can change dates');
   }
-  if (shift !== 0 && request.toStartDate < state.today) {
+  // Every room that moves must arrive today or later, not only the one that was dragged.
+  if (moved.some((b) => addDays(b.startDate, shift) < state.today)) {
     throw notMovable('Arrival cannot be moved into the past');
   }
   if (request.toRoomId !== undefined) assertRoomTypeAllowed(state, block, request.toRoomId);
@@ -653,15 +697,17 @@ export function moveDates(state: ScheduleState, request: MoveDatesRequest): Sche
     p.block.roomId = p.roomId;
     p.block.startDate = p.startDate;
     p.block.endDate = p.endDate;
+    bump(state, p.block);
     changed.add(p.block);
   }
-  if (request.scope === 'this-room' && shift !== 0 && group.length > 1) {
+  if (request.scope === 'this-room' && group.length > 1) {
     // Split: the room leaves the reservation; the rest keep their dates with one room fewer.
     const rest = group.filter((b) => b !== block);
     block.reservationId = `${block.reservationId}-split-${block.id}`;
     block.roomCount = 1;
     for (const b of rest) {
       b.roomCount = rest.length;
+      bump(state, b);
       changed.add(b);
     }
   }

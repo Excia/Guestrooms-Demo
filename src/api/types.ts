@@ -220,16 +220,14 @@ export const SCHEDULE_DAYS: readonly ScheduleDays[] = [7, 14, 30];
 export type ScheduleAvailability = 'all' | 'available' | 'booked';
 
 /**
- * What to fetch: `days` columns from `startDate`. `locationIds` and `roomTypeIds` narrow the rooms;
- * absent means all, and a list must not be empty or contain commas (400 `invalid-query`). To show
- * nothing ("Select None") skip the call, or filter client-side with `applyScheduleFilters`.
+ * What to fetch: `days` columns from `startDate`. There are deliberately no filter fields: the
+ * product always loads every room and filters locally (see `applyScheduleFilters` in
+ * src/app/schedule.ts), because the drag rules must see sibling rooms of a multi-room reservation
+ * that a filtered answer would omit.
  */
 export interface ScheduleQuery {
   startDate: IsoDate;
   days: ScheduleDays;
-  locationIds?: string[];
-  roomTypeIds?: string[];
-  availability?: ScheduleAvailability;
 }
 
 export interface ScheduleLocation {
@@ -282,6 +280,12 @@ export interface ScheduleBlock {
   roomCount: number;
   /** A locked reservation can only move within its room type. */
   roomTypeLocked: boolean;
+  /**
+   * Opaque revision of this reservation room. It changes whenever the room's room or dates change
+   * (also when a sibling's move changes it) and is echoed back in a move request, so the server
+   * can refuse a move made from out-of-date data (409 `stale`). Never parse or compare it.
+   */
+  version: string;
 }
 
 /** A gray closure block (e.g. "Reserved: Fixed Loss"). Same half-open dates as `ScheduleBlock`. */
@@ -302,6 +306,8 @@ export interface ScheduleClosure {
  * and `closures` are those overlapping [startDate, startDate + days) in those rooms. "Empty" means
  * no rooms. A filtered query can omit sibling rooms of a multi-room reservation (compare
  * `roomCount` with the blocks present), so fetch unfiltered if the drag rules must see every room.
+ * The client's drag rules only see this loaded window: a long stay shifted past it, or a booking
+ * outside it, is guarded by the server's 409, which stays authoritative.
  */
 export interface ScheduleData {
   startDate: IsoDate;
@@ -313,8 +319,25 @@ export interface ScheduleData {
   closures: ScheduleClosure[];
 }
 
+/**
+ * Fields every move carries so a real backend can apply it safely.
+ * - `requestId`: client-generated idempotency key (a UUID). Sent in the body and as the
+ *   `Idempotency-Key` header. Repeating a request with the same id and body returns the first
+ *   result without applying it again; the same id with another body is 409 `idempotency-conflict`.
+ * - `version` and the `from*` fields: the state the user saw. If the reservation room has changed
+ *   since (version differs, or it is no longer in `fromRoomId` / starting on `fromStartDate`) the
+ *   server answers 409 `stale` and applies nothing.
+ */
+export interface MoveGuard {
+  requestId: string;
+  /** `ScheduleBlock.version` the user acted on. */
+  version: string;
+  /** The room the reservation room was in. */
+  fromRoomId: string;
+}
+
 /** Move one reservation room to another room, same dates. */
-export interface MoveRoomRequest {
+export interface MoveRoomRequest extends MoveGuard {
   reservationRoomId: string;
   toRoomId: string;
 }
@@ -323,10 +346,13 @@ export interface MoveRoomRequest {
  * Move a stay to new arrival `toStartDate` (the length is kept). `scope` 'all-rooms' moves every
  * room of the reservation by the same shift; 'this-room' ("split the room from the reservation")
  * moves only this room. `toRoomId` also changes the room of the named reservation room in the same
- * atomic call (the combined room and date drop).
+ * atomic call (the combined room and date drop). A `toStartDate` equal to `fromStartDate` is a
+ * room change only (allowed for checked-in rooms too).
  */
-export interface MoveDatesRequest {
+export interface MoveDatesRequest extends MoveGuard {
   reservationRoomId: string;
+  /** The arrival date the user saw. */
+  fromStartDate: IsoDate;
   toStartDate: IsoDate;
   scope: 'all-rooms' | 'this-room';
   toRoomId?: string;
@@ -335,7 +361,9 @@ export interface MoveDatesRequest {
 /**
  * The blocks that changed. Errors: 400 `invalid-id` / `invalid-query`; 404 (unknown reservation
  * room or room); 409 `conflict` (a target room is booked or closed on those nights, `details.roomId`
- * lists the rooms); 409 `not-movable` (checked out, locked room type, arrival in the past).
+ * lists the rooms); 409 `not-movable` (checked out, locked room type, arrival in the past);
+ * 409 `stale` (the reservation room changed since the request's `version` / `from*`);
+ * 409 `idempotency-conflict` (`requestId` reused with a different request).
  * Nothing is applied on an error.
  */
 export interface ScheduleMoveResult {
