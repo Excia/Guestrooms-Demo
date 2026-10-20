@@ -80,7 +80,7 @@ export default function Pagination({
           }
         />
       </Box>
-      <Typography variant="body2" color="text.secondary" aria-live="polite">
+      <Typography variant="body2" sx={{ color: 'text.secondary' }} aria-live="polite">
         {total === undefined ? '' : formatRange(current, total, rowsPerPage)}
       </Typography>
       <MuiPagination

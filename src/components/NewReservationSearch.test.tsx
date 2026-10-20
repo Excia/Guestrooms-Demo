@@ -1,5 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ThemeProvider } from '@mui/material/styles';
+import { theme } from '../theme';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import NewReservationSearch from './NewReservationSearch';
 
@@ -227,5 +229,73 @@ describe('NewReservationSearch', () => {
       '1 adults, Room 1',
     );
     expect(getComputedStyle(dec).pointerEvents).toBe('auto');
+  });
+
+  describe('calendar', () => {
+    const open = (user: ReturnType<typeof userEvent.setup>, field: string) =>
+      user.click(screen.getByRole('button', { name: `Open calendar for ${field}` }));
+    const day = (name: RegExp) => screen.getByRole('button', { name });
+
+    it('first click sets check-in, second sets check-out, a third restarts', async () => {
+      const user = userEvent.setup();
+      renderSearch();
+      await open(user, 'check in');
+      await user.click(day(/October 22, 2026/));
+      expect(screen.getByLabelText(/Check In/)).toHaveValue('2026-10-22');
+      expect(screen.getByLabelText(/Check Out/)).toHaveValue('');
+      await user.click(day(/October 25, 2026/));
+      expect(screen.getByLabelText(/Check Out/)).toHaveValue('2026-10-25');
+      await waitFor(() => expect(screen.queryByRole('grid')).not.toBeInTheDocument());
+      expect(cta()).toHaveTextContent('SEARCH 3 NIGHT STAY');
+      await open(user, 'check in');
+      await user.click(day(/October 28, 2026/));
+      expect(screen.getByLabelText(/Check In/)).toHaveValue('2026-10-28');
+      expect(screen.getByLabelText(/Check Out/)).toHaveValue('');
+      expect(screen.getByRole('button', { name: /^SEARCH/, hidden: true })).toHaveTextContent(
+        'SEARCH STAY',
+      );
+    });
+
+    it('a second click earlier than the check-in restarts with it', async () => {
+      const user = userEvent.setup();
+      renderSearch();
+      await open(user, 'check in');
+      await user.click(day(/October 25, 2026/));
+      await user.click(day(/October 22, 2026/));
+      expect(screen.getByLabelText(/Check In/)).toHaveValue('2026-10-22');
+      expect(screen.getByLabelText(/Check Out/)).toHaveValue('');
+      expect(screen.getByRole('grid')).toBeInTheDocument();
+    });
+
+    it('disables past days', async () => {
+      const user = userEvent.setup();
+      renderSearch();
+      await open(user, 'check in');
+      expect(day(/October 19, 2026/)).toHaveAttribute('aria-disabled', 'true');
+      expect(day(/October 20, 2026, today/)).not.toHaveAttribute('aria-disabled');
+    });
+  });
+
+  it('shows guidance in text.secondary and a field error once, in error.main', async () => {
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider theme={theme}>
+        <MemoryRouter>
+          <NewReservationSearch today={TODAY} onSearch={vi.fn()} />
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('Enter check-in and check-out dates.')).toHaveStyle({
+      color: theme.palette.text.secondary,
+    });
+    await user.type(screen.getByLabelText(/Check Out/), '2026-10-25');
+    await user.click(screen.getByLabelText(/Check In/));
+    await user.tab(); // the calendar button is part of the field
+    await user.tab();
+    const messages = screen.getAllByText('Enter a check-in date.');
+    expect(messages[0]).toHaveStyle({ color: theme.palette.error.main });
+    // The hint under the CTA repeats it only for assistive technology.
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toHaveStyle({ position: 'absolute' });
   });
 });

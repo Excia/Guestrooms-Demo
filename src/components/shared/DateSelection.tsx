@@ -51,8 +51,10 @@ function RangeFields({
   describedBy,
   labelPrefix,
   today,
+  weekStartsOn,
 }: {
   today?: IsoDate;
+  weekStartsOn?: WeekStart;
   from: IsoDate;
   to: IsoDate;
   onChange?: (range: { from: IsoDate; to: IsoDate }) => void;
@@ -64,17 +66,19 @@ function RangeFields({
 }) {
   // The pair shares one calendar. A half-picked range (first click only) is kept inside the
   // calendar and only a complete one is reported, so the value always has both dates.
-  const range = onChange
-    ? {
-        from,
-        to,
-        limits: { minNights: 0 },
-        endNames: ['from', 'to'] as [string, string],
-        onChange: (r: { from: IsoDate | ''; to: IsoDate | '' }) => {
-          if (r.from && r.to) onChange({ from: r.from, to: r.to });
-        },
-      }
-    : undefined;
+  const range = (role: 'from' | 'to') =>
+    onChange
+      ? {
+          role,
+          from,
+          to,
+          limits: { minNights: 0 },
+          endNames: ['from', 'to'] as [string, string],
+          onChange: (r: { from: IsoDate | ''; to: IsoDate | '' }) => {
+            if (r.from && r.to) onChange({ from: r.from, to: r.to });
+          },
+        }
+      : undefined;
   return (
     <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start', width: '100%' }}>
       <DateField
@@ -82,11 +86,12 @@ function RangeFields({
         ariaLabel={labelPrefix ? `${labelPrefix} from` : undefined}
         compact
         today={today}
+        weekStartsOn={weekStartsOn}
         value={from}
         readOnly={readOnly}
         error={invalid}
         describedBy={invalid ? describedBy : undefined}
-        range={range}
+        range={range('from')}
         onChange={(v) => onChange?.({ from: v, to })}
       />
       <DateField
@@ -94,11 +99,12 @@ function RangeFields({
         ariaLabel={labelPrefix ? `${labelPrefix} to` : undefined}
         compact
         today={today}
+        weekStartsOn={weekStartsOn}
         value={to}
         readOnly={readOnly}
         error={invalid}
         describedBy={invalid ? describedBy : undefined}
-        range={range}
+        range={range('to')}
         onChange={(v) => onChange?.({ from, to: v })}
       />
     </Box>
@@ -146,6 +152,7 @@ export default function DateSelection({
             from={period.from}
             to={period.to}
             today={today}
+            weekStartsOn={weekStartsOn}
             invalid={Boolean(errors.period)}
             describedBy={periodErrorId}
             onChange={(r) => setPeriod({ kind: 'custom', ...r })}
@@ -159,6 +166,7 @@ export default function DateSelection({
             label="Date"
             value={period.date}
             today={today}
+            weekStartsOn={weekStartsOn}
             error={Boolean(errors.period)}
             describedBy={errors.period ? periodErrorId : undefined}
             onChange={(date) => setPeriod({ kind: 'singleDay', date })}
@@ -170,6 +178,7 @@ export default function DateSelection({
             label="As of Date"
             value={period.date}
             today={today}
+            weekStartsOn={weekStartsOn}
             error={Boolean(errors.period)}
             describedBy={errors.period ? periodErrorId : undefined}
             onChange={(date) => setPeriod({ kind: 'asOf', date })}
@@ -211,6 +220,7 @@ export default function DateSelection({
               readOnly={c.preset !== 'custom'}
               labelPrefix="Compare to"
               today={today}
+              weekStartsOn={weekStartsOn}
               invalid={Boolean(errors.comparison)}
               describedBy={compareErrorId}
               onChange={(r) => onChange(updateComparison(value, { ...c, ...r }))}
@@ -238,6 +248,7 @@ export default function DateSelection({
             ariaLabel={period.kind === 'asOf' ? 'Compare to as of date' : 'Compare to date'}
             value={c.date}
             today={today}
+            weekStartsOn={weekStartsOn}
             error={Boolean(errors.comparison)}
             describedBy={errors.comparison ? compareErrorId : undefined}
             onChange={(date) =>

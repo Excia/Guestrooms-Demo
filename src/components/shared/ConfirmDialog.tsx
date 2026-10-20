@@ -50,7 +50,7 @@ export default function ConfirmDialog({
     >
       <DialogTitle id={`${id}-title`}>{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText id={`${id}-message`} color="text.primary">
+        <DialogContentText id={`${id}-message`} sx={{ color: 'text.primary' }}>
           {message}
         </DialogContentText>
       </DialogContent>

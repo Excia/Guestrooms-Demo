@@ -9,6 +9,7 @@ import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { stayLimits } from '../app/dateRange';
 import { addDays, todayIso } from '../app/dateSelection';
+import type { WeekStartDay } from '../lib/calendar';
 import { PLACEHOLDER_LOCATIONS, type SearchLocation } from '../app/placeholderLocations';
 import {
   ALL_LOCATIONS_VALUE,
@@ -21,7 +22,7 @@ import {
   MIN_CHILDREN,
   canAddRoom,
   dateHint,
-  dateHintIsError,
+  hintRepeatsFieldError,
   datesAreValid,
   formatCount,
   initialRooms,
@@ -42,6 +43,8 @@ export interface NewReservationSearchProps {
   locations?: readonly SearchLocation[];
   /** Local calendar date treated as "today"; injectable for tests. */
   today?: string;
+  /** First day of the week in the calendars (Sunday until club settings supply it). */
+  weekStartsOn?: WeekStartDay;
 }
 
 // Limit buttons keep the disabled look but must still take mouse focus, so a click does not drop it.
@@ -76,12 +79,7 @@ function Stepper({
   const atMax = value >= max;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-      <Typography
-        variant="body2"
-        component="span"
-        color="text.secondary"
-        sx={{ fontWeight: 'bold' }}
-      >
+      <Typography variant="body2" component="span" sx={{ fontWeight: 'bold' }}>
         {title}
       </Typography>
       <ButtonGroup role="group" aria-label={label} variant="outlined" color="primary">
@@ -90,7 +88,18 @@ function Stepper({
           aria-label={`Decrease ${label}`}
           aria-disabled={atMin || undefined}
           className={atMin ? 'Mui-disabled' : undefined}
-          sx={atMin ? limitSx : undefined}
+          sx={
+            atMin
+              ? // The value cell draws the divider; the disabled look must not add a second line.
+                {
+                  ...limitSx,
+                  '&.Mui-disabled': {
+                    ...limitSx['&.Mui-disabled'],
+                    borderRightColor: 'transparent',
+                  },
+                }
+              : undefined
+          }
           onClick={() => {
             if (!atMin) onChange(value - 1);
           }}
@@ -146,6 +155,7 @@ export default function NewReservationSearch({
   onSearch,
   locations = PLACEHOLDER_LOCATIONS,
   today: todayProp,
+  weekStartsOn,
 }: NewReservationSearchProps) {
   const navigate = useNavigate();
   const today = todayProp ?? todayIso();
@@ -159,9 +169,10 @@ export default function NewReservationSearch({
   const valid = datesAreValid(checkIn, checkOut, today);
   const hint = dateHint(checkIn, checkOut, today);
   const shown = visibleDateErrors(checkIn, checkOut, touched, today);
-  const hintIsError = dateHintIsError(checkIn, checkOut, touched, today);
+  const hintRepeated = hintRepeatsFieldError(checkIn, checkOut, touched, today);
   // One calendar serves both fields; the first click is the check-in, the second the check-out.
-  const range: DateFieldRange = {
+  const range = (role: 'from' | 'to'): DateFieldRange => ({
+    role,
     from: checkIn,
     to: checkOut,
     limits: stayLimits(today, MAX_ADVANCE_DAYS, MAX_STAY_NIGHTS),
@@ -170,7 +181,7 @@ export default function NewReservationSearch({
       setCheckIn(r.from);
       setCheckOut(r.to);
     },
-  };
+  });
   const hintId = useId();
   const maxRoomsId = useId();
 
@@ -249,7 +260,8 @@ export default function NewReservationSearch({
             required
             min={today}
             max={addDays(today, MAX_ADVANCE_DAYS)}
-            range={range}
+            range={range('from')}
+            weekStartsOn={weekStartsOn}
           />
           <DateField
             label="Check Out"
@@ -263,7 +275,8 @@ export default function NewReservationSearch({
             required
             min={addDays(errors.checkIn ? today : checkIn || today, 1)}
             max={errors.checkIn || !checkIn ? undefined : addDays(checkIn, MAX_STAY_NIGHTS)}
-            range={range}
+            range={range('to')}
+            weekStartsOn={weekStartsOn}
           />
         </Box>
 
@@ -377,7 +390,7 @@ export default function NewReservationSearch({
       </Button>
 
       {canAddRoom(rooms) ? null : (
-        <Typography id={maxRoomsId} variant="caption" color="text.secondary">
+        <Typography id={maxRoomsId} variant="caption" sx={{ color: 'text.secondary' }}>
           Maximum of {MAX_ROOMS} rooms
         </Typography>
       )}
@@ -397,7 +410,8 @@ export default function NewReservationSearch({
           <Typography
             id={hintId}
             variant="caption"
-            color={hintIsError ? 'error' : 'text.secondary'}
+            // Guidance only; a message a field already shows as an error is not repeated visibly.
+            sx={[{ color: 'text.secondary' }, hintRepeated && visuallyHidden]}
           >
             {hint}
           </Typography>

@@ -5,12 +5,13 @@ import ButtonBase from '@mui/material/ButtonBase';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { rangeShade, type RangeValue } from '../../app/dateRange';
 import {
   clampDate,
   dayLabel,
   monthGrid,
+  monthHasEnabledDay,
   monthTitle,
   moveFocus,
   shiftMonths,
@@ -18,6 +19,11 @@ import {
   type WeekStartDay,
 } from '../../lib/calendar';
 import { monthOf, type IsoDate } from '../../lib/dates';
+
+export interface CalendarHandle {
+  /** Puts the keyboard focus on the current day button (call once the popover has focused itself). */
+  focusDay: () => void;
+}
 
 export interface CalendarProps {
   /** Selected day(s): `to` is '' in single mode and while the second date of a range is pending. */
@@ -34,12 +40,13 @@ export interface CalendarProps {
   weekStartsOn?: WeekStartDay;
   /** Names the ends in the day buttons, e.g. ['check-in', 'check-out']. */
   endNames?: [string, string];
+  ref?: Ref<CalendarHandle>;
 }
 
 /**
  * Themed month calendar (WAI-ARIA date grid): arrows move by day and week, Home/End to the week
  * ends, PageUp/PageDown by month (Shift: year). Selected days use the primary color, days inside a
- * range the primary tint.
+ * range the primary tint. The hover/keyboard preview of a pending range is visual only.
  */
 export default function Calendar({
   value,
@@ -52,34 +59,51 @@ export default function Calendar({
   onSelect,
   weekStartsOn = 0,
   endNames,
+  ref,
 }: CalendarProps) {
   const titleId = useId();
   const [focused, setFocused] = useState<IsoDate>(initialFocus);
   const [hover, setHover] = useState<IsoDate | null>(null);
   const gridRef = useRef<HTMLTableElement>(null);
-  const focusRequested = useRef(true);
+  const focusRequested = useRef(false);
   const month = monthOf(focused);
   const weeks = monthGrid(month, weekStartsOn);
   const headers = weekdayHeaders(weekStartsOn);
 
-  // Focus follows the roving tabindex on open and after a keyboard move, not after the month
-  // buttons (they keep their own focus) and not on mouse hover.
-  useEffect(() => {
-    if (!focusRequested.current) return;
-    focusRequested.current = false;
+  const focusDay = () =>
     gridRef.current
       ?.querySelector<HTMLElement>('button[tabindex="0"]')
       ?.focus({ preventScroll: true });
+  useImperativeHandle(ref, () => ({ focusDay }));
+
+  // The modal's focus trap focuses the dialog first (it runs after this mount), so take focus on the
+  // next frame; the popover's onEntered asks again in case the first attempt came too early.
+  useEffect(() => {
+    const frame = requestAnimationFrame(focusDay);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  // After a keyboard move the roving tabindex moves; the month buttons keep their own focus.
+  useEffect(() => {
+    if (!focusRequested.current) return;
+    focusRequested.current = false;
+    focusDay();
   }, [focused]);
 
   const go = (day: IsoDate) => setFocused(clampDate(day, min, max));
-  const canPrev = !min || monthOf(min) < month;
-  const canNext = !max || monthOf(max) > month;
+  const monthOpen = (delta: number) => {
+    const m = monthOf(shiftMonths(`${month}-01`, delta));
+    const inBounds = (!min || m >= monthOf(min)) && (!max || m <= monthOf(max));
+    return inBounds && monthHasEnabledDay(m, isDisabled);
+  };
+  const canPrev = monthOpen(-1);
+  const canNext = monthOpen(1);
   const preview = hover ?? (mode === 'range' ? focused : null);
 
   const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
     const next = moveFocus(focused, event.key, event.shiftKey, weekStartsOn);
-    if (next === null || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (next === null) return;
     event.preventDefault();
     setHover(null);
     focusRequested.current = true;
@@ -92,28 +116,30 @@ export default function Calendar({
       ? value.to || (previewDay && value.from && previewDay > value.from ? previewDay : '')
       : '';
 
+  // aria-disabled (not `disabled`) keeps the focus on the month button when it reaches the limit.
+  const monthButton = (delta: -1 | 1, can: boolean) => (
+    <IconButton
+      size="small"
+      aria-label={delta < 0 ? 'Previous month' : 'Next month'}
+      aria-disabled={!can || undefined}
+      className={can ? undefined : 'Mui-disabled'}
+      sx={can ? undefined : { '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'default' } }}
+      onClick={() => {
+        if (can) go(shiftMonths(focused, delta));
+      }}
+    >
+      {delta < 0 ? <ChevronLeft /> : <ChevronRight />}
+    </IconButton>
+  );
+
   return (
     <Box sx={{ width: (t) => t.spacing(35) }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-        <IconButton
-          size="small"
-          aria-label="Previous month"
-          disabled={!canPrev}
-          onClick={() => go(shiftMonths(focused, -1))}
-        >
-          <ChevronLeft />
-        </IconButton>
+        {monthButton(-1, canPrev)}
         <Typography id={titleId} variant="subtitle1" component="div" aria-live="polite">
           {monthTitle(month)}
         </Typography>
-        <IconButton
-          size="small"
-          aria-label="Next month"
-          disabled={!canNext}
-          onClick={() => go(shiftMonths(focused, 1))}
-        >
-          <ChevronRight />
-        </IconButton>
+        {monthButton(1, canNext)}
       </Box>
       <Box
         component="table"
@@ -133,14 +159,12 @@ export default function Calendar({
                 sx={(t) => ({
                   ...t.typography.caption,
                   color: t.palette.text.secondary,
-                  fontWeight: 500,
+                  fontWeight: t.typography.fontWeightMedium,
                   height: t.spacing(4),
                   p: 0,
                 })}
               >
-                <abbr title={h.long} style={{ textDecoration: 'none' }}>
-                  {h.short}
-                </abbr>
+                <span aria-hidden>{h.short}</span>
                 <Box component="span" sx={visuallyHidden}>
                   {h.long}
                 </Box>
@@ -154,20 +178,26 @@ export default function Calendar({
               {week.map((day, i) => {
                 if (!day) return <td key={`blank-${i}`} />;
                 const disabled = isDisabled(day);
+                // What is really selected (announced) versus what is only previewed (visual).
+                const isStart = day === value.from;
+                const isEnd = mode === 'range' && day === value.to;
+                const between =
+                  mode === 'range' &&
+                  Boolean(value.from && value.to) &&
+                  day > value.from &&
+                  day < value.to;
+                const selected = isStart || isEnd || between;
                 const shade =
-                  mode === 'range'
-                    ? rangeShade(day, value, previewDay)
-                    : day === value.from
-                      ? 'start'
-                      : null;
-                const selected = shade !== null;
+                  mode === 'range' ? rangeShade(day, value, previewDay) : isStart ? 'start' : null;
                 const endpoint = shade === 'start' || shade === 'end';
                 const isToday = day === today;
                 const endName =
-                  mode === 'range' && endNames && endpoint
-                    ? shade === 'start'
+                  mode === 'range' && endNames
+                    ? isStart
                       ? endNames[0]
-                      : endNames[1]
+                      : isEnd
+                        ? endNames[1]
+                        : null
                     : null;
                 return (
                   <Box
@@ -196,7 +226,9 @@ export default function Calendar({
                       aria-disabled={disabled || undefined}
                       aria-current={isToday ? 'date' : undefined}
                       aria-label={`${dayLabel(day)}${isToday ? ', today' : ''}${endName ? `, ${endName}` : ''}`}
-                      onClick={() => {
+                      onClick={(event) => {
+                        // Safari does not focus a button on click; keep the roving focus on it.
+                        event.currentTarget.focus();
                         setFocused(day);
                         if (!disabled) onSelect(day);
                       }}
@@ -209,18 +241,23 @@ export default function Calendar({
                         borderRadius: '50%',
                         color: disabled ? t.palette.text.disabled : t.palette.text.primary,
                         cursor: disabled ? 'default' : 'pointer',
-                        border:
-                          isToday && !endpoint
-                            ? `1px solid ${t.palette.primary.main}`
-                            : '1px solid transparent',
+                        border: `1px solid ${isToday && !endpoint ? t.palette.primary.main : 'transparent'}`,
                         ...(endpoint && {
                           backgroundColor: t.palette.primary.main,
                           color: t.palette.primary.contrastText,
-                          fontWeight: 500,
+                          fontWeight: t.typography.fontWeightMedium,
                           '&:hover': { backgroundColor: t.palette.primary.dark },
                         }),
+                        // Tint on the tinted band would vanish, so a hovered in-range day gets a ring.
                         ...(!endpoint &&
-                          !disabled && { '&:hover': { backgroundColor: t.palette.primary.tint } }),
+                          !disabled && {
+                            '&:hover': {
+                              backgroundColor: t.palette.primary.tint,
+                              ...(shade === 'between' && {
+                                borderColor: t.palette.primary.outlinedBorder,
+                              }),
+                            },
+                          }),
                         ...(disabled &&
                           !endpoint && { '&:hover': { backgroundColor: 'transparent' } }),
                       })}

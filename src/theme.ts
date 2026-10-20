@@ -95,7 +95,11 @@ const base = createTheme({
         root: ({ ownerState, theme }) =>
           ownerState.variant === 'contained'
             ? {}
-            : { '&:hover': { backgroundColor: theme.palette.primary.tint } },
+            : {
+                '&:hover': { backgroundColor: theme.palette.primary.tint },
+                // Limit buttons stay hoverable (they keep focus) but must not look interactive.
+                '&.Mui-disabled:hover': { backgroundColor: 'transparent' },
+              },
         sizeSmall: font(13, 500, 22 / 13, 0.46),
         sizeMedium: font(14, 500, 24 / 14, 0.4),
         sizeLarge: font(15, 500, 26 / 15, 0.46),
@@ -125,7 +129,10 @@ const base = createTheme({
     },
     MuiIconButton: {
       styleOverrides: {
-        root: ({ theme }) => ({ '&:hover': { backgroundColor: theme.palette.primary.tint } }),
+        root: ({ theme }) => ({
+          '&:hover': { backgroundColor: theme.palette.primary.tint },
+          '&.Mui-disabled:hover': { backgroundColor: 'transparent' },
+        }),
       },
     },
     // Selected rows keep the tint on hover (a darker wash would drop the text below AA).
@@ -147,7 +154,7 @@ const base = createTheme({
           '&:hover, &.Mui-focusVisible, &.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible':
             { backgroundColor: theme.palette.primary.tint },
           '&.Mui-selected': {
-            fontWeight: 700,
+            fontWeight: theme.typography.fontWeightBold,
             boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
           },
           '&.Mui-focusVisible': {

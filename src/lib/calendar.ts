@@ -115,4 +115,12 @@ export function dayLabel(iso: IsoDate): string {
   return `${DAY_NAMES[d.getUTCDay()]}, ${MONTH_NAMES[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
 }
 
+/** True when at least one day of `month` can be clicked (stops month buttons at an all-disabled month). */
+export function monthHasEnabledDay(
+  month: IsoMonth,
+  isDisabled: (day: IsoDate) => boolean,
+): boolean {
+  return monthGrid(month).some((week) => week.some((day) => day !== null && !isDisabled(day)));
+}
+
 export { formatIsoDate };

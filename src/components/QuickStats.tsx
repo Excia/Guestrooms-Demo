@@ -134,10 +134,14 @@ function Sections({ stats, landing }: { stats: QuickStatsData; landing: boolean 
           {b.name}
           <Typography
             variant="caption"
-            color="text.secondary"
             component="span"
             // Figma sets the block subtitle at 10px: 10/14 of the 14px row text.
-            sx={{ display: 'block', fontSize: '0.714em', lineHeight: 1.43 }}
+            sx={{
+              color: 'text.secondary',
+              display: 'block',
+              fontSize: '0.714em',
+              lineHeight: 1.43,
+            }}
           >
             {blockSubtitle(b.nights, b.startDate)}
           </Typography>
@@ -241,7 +245,7 @@ function Panel({
         </Alert>
       ) : null}
       {stats && empty ? (
-        <Typography color="text.secondary">No stats for this period.</Typography>
+        <Typography sx={{ color: 'text.secondary' }}>No stats for this period.</Typography>
       ) : null}
       {stats && !empty ? (
         <Box sx={dim(refreshing)}>

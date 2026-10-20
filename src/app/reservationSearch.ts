@@ -81,7 +81,7 @@ export function dateHint(checkIn: string, checkOut: string, today: IsoDate): str
 
 /**
  * Messages to show under the fields: a field's message appears once it is touched or has a value.
- * Until then the same text is guidance (see dateHintIsError), not an error.
+ * Until then the same text is guidance (the hint under the CTA), not an error.
  */
 export function visibleDateErrors(
   checkIn: string,
@@ -96,15 +96,19 @@ export function visibleDateErrors(
   };
 }
 
-/** True when the hint repeats a message a field already shows as an error (otherwise it is guidance). */
-export function dateHintIsError(
+/**
+ * True when the hint is the message a field already shows as an error, so the screen shows it once
+ * (under the field) and the line under the CTA is guidance only.
+ */
+export function hintRepeatsFieldError(
   checkIn: string,
   checkOut: string,
   touched: { checkIn: boolean; checkOut: boolean },
   today: IsoDate,
 ): boolean {
+  const hint = dateHint(checkIn, checkOut, today);
   const v = visibleDateErrors(checkIn, checkOut, touched, today);
-  return Boolean(v.checkIn || v.checkOut);
+  return hint !== '' && (hint === v.checkIn || hint === v.checkOut);
 }
 
 export function datesAreValid(checkIn: string, checkOut: string, today: IsoDate): boolean {
