@@ -28,7 +28,7 @@ describe('NewReservationSearch', () => {
     expect(cta()).toBeDisabled();
     await fillDates(user, '2026-10-22', '2026-10-22');
     expect(cta()).toBeDisabled();
-    expect(screen.getByText('Check-out must be after check-in.')).toBeInTheDocument();
+    expect(screen.getAllByText('Check-out must be after check-in.').length).toBeGreaterThan(0);
   });
 
   it('shows the nights in the CTA, singular for one', async () => {
@@ -60,11 +60,20 @@ describe('NewReservationSearch', () => {
     renderSearch();
     await user.click(screen.getByRole('button', { name: 'Add Another Room' }));
     await user.click(screen.getByRole('button', { name: 'Increase Adults, Room 2' }));
-    expect(screen.getByRole('group', { name: 'Adults, Room 2' })).toHaveTextContent('03');
-    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent('02');
+    expect(screen.getByRole('group', { name: 'Adults, Room 2' })).toHaveTextContent(
+      '3 adults, Room 2',
+    );
+    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent(
+      '2 adults, Room 1',
+    );
     await user.click(screen.getByRole('button', { name: 'Decrease Adults, Room 1' }));
-    expect(screen.getByRole('button', { name: 'Decrease Adults, Room 1' })).toBeDisabled();
-    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent('01');
+    expect(screen.getByRole('button', { name: 'Decrease Adults, Room 1' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent(
+      '1 adults, Room 1',
+    );
   });
 
   it('submits the criteria', async () => {
@@ -106,5 +115,104 @@ describe('NewReservationSearch', () => {
     expect(screen.getByTestId('where')).toHaveTextContent(
       '/reservations/new/results?checkIn=2026-10-22&checkOut=2026-10-25&rooms=2.2',
     );
+  });
+
+  it('keeps focus on a stepper button that reaches its limit', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    const dec = screen.getByRole('button', { name: 'Decrease Adults, Room 1' });
+    dec.focus();
+    await user.keyboard('{Enter}'); // 2 -> 1 (min)
+    expect(dec).toHaveFocus();
+    expect(dec).toHaveAttribute('aria-disabled', 'true');
+    await user.keyboard('{Enter}'); // ignored at the minimum
+    expect(dec).toHaveFocus();
+    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent(
+      '1 adults, Room 1',
+    );
+    const inc = screen.getByRole('button', { name: 'Increase Adults, Room 1' });
+    inc.focus();
+    for (let i = 0; i < 10; i++) await user.keyboard('{Enter}');
+    expect(inc).toHaveFocus();
+    expect(inc).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('group', { name: 'Adults, Room 1' })).toHaveTextContent(
+      '8 adults, Room 1',
+    );
+  });
+
+  it('moves focus to the previous room Remove button, or Add when that is Room 1', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    const add = screen.getByRole('button', { name: 'Add Another Room' });
+    await user.click(add);
+    await user.click(add);
+    await user.click(screen.getByRole('button', { name: 'Remove Room 3' }));
+    expect(screen.getByRole('button', { name: 'Remove Room 2' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Remove Room 2' }));
+    expect(add).toHaveFocus();
+  });
+
+  it('removing a middle room focuses the Remove button of the room before it', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    const add = screen.getByRole('button', { name: 'Add Another Room' });
+    await user.click(add);
+    await user.click(add);
+    await user.click(add);
+    await user.click(screen.getByRole('button', { name: 'Increase Adults, Room 4' }));
+    await user.click(screen.getByRole('button', { name: 'Remove Room 3' }));
+    expect(screen.getByRole('button', { name: 'Remove Room 2' })).toHaveFocus();
+    // The old Room 4 keeps its own guests as the new Room 3.
+    expect(screen.getByRole('group', { name: 'Adults, Room 3' })).toHaveTextContent(
+      '3 adults, Room 3',
+    );
+  });
+
+  it('explains why the CTA is disabled and reveals errors from values or blur', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    expect(cta()).toHaveAccessibleDescription('Enter check-in and check-out dates.');
+    await user.type(screen.getByLabelText(/Check In/), '2026-10-22');
+    expect(cta()).toHaveAccessibleDescription('Enter a check-out date.');
+    await user.click(screen.getByLabelText(/Check Out/));
+    await user.tab();
+    expect(screen.getAllByText('Enter a check-out date.').length).toBeGreaterThan(0);
+  });
+
+  it('Enter in a date field with invalid dates announces the problem and focuses the field', async () => {
+    const user = userEvent.setup();
+    const onSearch = renderSearch();
+    await user.type(screen.getByLabelText(/Check In/), '2026-10-22');
+    await user.keyboard('{Enter}');
+    expect(onSearch).not.toHaveBeenCalled();
+    expect(
+      screen.getAllByRole('status').some((e) => e.textContent === 'Enter a check-out date.'),
+    ).toBe(true);
+    expect(screen.getByLabelText(/Check Out/)).toHaveFocus();
+  });
+
+  it('rejects stays over the maximum and does not show a night count for invalid dates', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    await fillDates(user, '2026-10-22', '2099-01-01');
+    expect(screen.getAllByText(/longer than 365 nights/).length).toBeGreaterThan(0);
+    expect(cta()).toHaveTextContent('SEARCH STAY');
+    expect(cta()).toBeDisabled();
+  });
+
+  it('does not show nights while check-in is in the past', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    await fillDates(user, '2026-10-10', '2026-10-13');
+    expect(cta()).toHaveTextContent('SEARCH STAY');
+  });
+
+  it('shows a note and disables Add at the maximum number of rooms', async () => {
+    const user = userEvent.setup();
+    renderSearch();
+    const add = screen.getByRole('button', { name: 'Add Another Room' });
+    for (let i = 0; i < 4; i++) await user.click(add);
+    expect(add).toBeDisabled();
+    expect(add).toHaveAccessibleDescription('Maximum of 5 rooms');
   });
 });

@@ -31,6 +31,8 @@ export const routes = [
     section: 'reservation',
   },
   { id: 'reservations', path: '/reservations', title: 'Reservations', section: 'reservation' },
+  // FLAG: no permission mapping yet. When role-based access (ticket 9) gives every route its own
+  // `page.<id>` permission, the owner must decide; recommended: gate on the reservations permission.
   {
     id: 'new-reservation-results',
     path: NEW_RESERVATION_RESULTS_PATH,

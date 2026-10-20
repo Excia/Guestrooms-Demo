@@ -13,10 +13,14 @@ import { PLACEHOLDER_LOCATIONS, type SearchLocation } from '../app/placeholderLo
 import {
   ALL_LOCATIONS_VALUE,
   MAX_ADULTS,
+  MAX_ADVANCE_DAYS,
   MAX_CHILDREN,
+  MAX_ROOMS,
+  MAX_STAY_NIGHTS,
   MIN_ADULTS,
   MIN_CHILDREN,
   canAddRoom,
+  dateHint,
   datesAreValid,
   formatCount,
   initialRooms,
@@ -40,6 +44,8 @@ export interface NewReservationSearchProps {
 interface StepperProps {
   label: string; // e.g. "Adults, Room 2"
   title: string; // visible heading, e.g. "Adults"
+  noun: string; // for the value announcement, e.g. "adults"
+  roomNumber: number;
   value: number;
   min: number;
   max: number;
@@ -47,13 +53,24 @@ interface StepperProps {
   firstRef?: React.Ref<HTMLButtonElement>;
 }
 
-// Figma 69:3818: label above an outlined button group (minus, value, plus).
-function Stepper({ label, title, value, min, max, onChange, firstRef }: StepperProps) {
-  const id = useId();
+// Figma 69:3818: label above an outlined button group (minus, value, plus). The limit buttons use
+// aria-disabled (not `disabled`) so focus stays on the button a keyboard user just pressed.
+function Stepper({
+  label,
+  title,
+  noun,
+  roomNumber,
+  value,
+  min,
+  max,
+  onChange,
+  firstRef,
+}: StepperProps) {
+  const atMin = value <= min;
+  const atMax = value >= max;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
       <Typography
-        id={id}
         variant="body2"
         component="span"
         color="text.secondary"
@@ -65,24 +82,42 @@ function Stepper({ label, title, value, min, max, onChange, firstRef }: StepperP
         <Button
           ref={firstRef}
           aria-label={`Decrease ${label}`}
-          disabled={value <= min}
-          onClick={() => onChange(value - 1)}
+          aria-disabled={atMin || undefined}
+          className={atMin ? 'Mui-disabled' : undefined}
+          onClick={() => {
+            if (!atMin) onChange(value - 1);
+          }}
         >
           —
         </Button>
-        <Button
-          // Display only: announced politely when it changes, never a tab stop.
-          role="status"
-          tabIndex={-1}
-          disableRipple
-          sx={{ pointerEvents: 'none', color: 'text.primary', minWidth: (t) => t.spacing(5.5) }}
+        <Box
+          component="span"
+          aria-live="polite"
+          sx={(t) => ({
+            ...t.typography.button,
+            fontWeight: 'bold',
+            color: 'text.primary',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: t.spacing(5.5),
+            px: 2,
+            borderTop: `1px solid ${t.palette.primary.outlinedBorder}`,
+            borderBottom: `1px solid ${t.palette.primary.outlinedBorder}`,
+          })}
         >
-          {formatCount(value)}
-        </Button>
+          <span aria-hidden>{formatCount(value)}</span>
+          <Box component="span" sx={visuallyHidden}>
+            {`${value} ${noun}, Room ${roomNumber}`}
+          </Box>
+        </Box>
         <Button
           aria-label={`Increase ${label}`}
-          disabled={value >= max}
-          onClick={() => onChange(value + 1)}
+          aria-disabled={atMax || undefined}
+          className={atMax ? 'Mui-disabled' : undefined}
+          onClick={() => {
+            if (!atMax) onChange(value + 1);
+          }}
         >
           +
         </Button>
@@ -111,35 +146,58 @@ export default function NewReservationSearch({
 
   const errors = validateDates(checkIn, checkOut, today);
   const valid = datesAreValid(checkIn, checkOut, today);
-  const nights = nightsBetween(checkIn, checkOut);
+  const hint = dateHint(checkIn, checkOut, today);
   const showError = (key: 'checkIn' | 'checkOut', value: string) =>
     (touched[key] || value !== '') && errors[key];
+  const hintId = useId();
+  const maxRoomsId = useId();
 
-  // Focus management: after adding, the new room's first control; after removing, the previous
-  // room's Remove Room button (or Add Another Room when that is Room 1).
-  const focusRequest = useRef<'new-room' | 'after-remove' | null>(null);
-  const firstStepperRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const removeRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  // Focus management: after adding, the new room's first control; after removing, the Remove Room
+  // button of the room before the deleted one, or Add Another Room when that is Room 1.
+  type FocusRequest = { kind: 'new-room'; id: number } | { kind: 'remove'; id: number | null };
+  const focusRequest = useRef<FocusRequest | null>(null);
+  const firstStepperRefs = useRef(new Map<number, HTMLButtonElement | null>());
+  const removeRefs = useRef(new Map<number, HTMLButtonElement | null>());
   const addRef = useRef<HTMLButtonElement>(null);
+  const checkInRef = useRef<HTMLInputElement>(null);
+  const checkOutRef = useRef<HTMLInputElement>(null);
   const [announcement, setAnnouncement] = useState('');
   const roomCount = rooms.length;
   useEffect(() => {
     const request = focusRequest.current;
     focusRequest.current = null;
-    if (request === 'new-room') {
-      firstStepperRefs.current[roomCount - 1]?.focus();
-    } else if (request === 'after-remove') {
-      (removeRefs.current[roomCount - 1] ?? addRef.current)?.focus();
-    }
+    if (!request) return;
+    if (request.kind === 'new-room') firstStepperRefs.current.get(request.id)?.focus();
+    else (request.id === null ? addRef.current : removeRefs.current.get(request.id))?.focus();
   }, [roomCount]);
+
+  // Ref callbacks keyed by room id (read only when React attaches or detaches the element).
+  const track = (kind: 'remove' | 'stepper', id: number) => (el: HTMLButtonElement | null) => {
+    const map = kind === 'remove' ? removeRefs.current : firstStepperRefs.current;
+    if (el) map.set(id, el);
+    else map.delete(id);
+  };
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    setTouched({ checkIn: true, checkOut: true });
     if (!valid) return;
-    const criteria: SearchCriteria = { checkIn, checkOut, location, rooms };
+    const criteria: SearchCriteria = {
+      checkIn,
+      checkOut,
+      location,
+      rooms: rooms.map(({ adults, children }) => ({ adults, children })),
+    };
     if (onSearch) onSearch(criteria);
     else void navigate(searchUrl(criteria));
+  };
+
+  // Enter in a field does not submit while the CTA is disabled, so explain instead of doing nothing.
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== 'Enter' || valid || !(event.target instanceof HTMLInputElement)) return;
+    event.preventDefault();
+    setTouched({ checkIn: true, checkOut: true });
+    setAnnouncement(hint);
+    (errors.checkIn ? checkInRef : checkOutRef).current?.focus();
   };
 
   return (
@@ -147,6 +205,7 @@ export default function NewReservationSearch({
       component="form"
       noValidate
       onSubmit={submit}
+      onKeyDown={handleKeyDown}
       aria-label="Search available rooms"
       sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}
     >
@@ -159,6 +218,7 @@ export default function NewReservationSearch({
           <TextField
             type="date"
             label="Check In"
+            inputRef={checkInRef}
             value={checkIn}
             onChange={(e) => setCheckIn(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, checkIn: true }))}
@@ -168,12 +228,17 @@ export default function NewReservationSearch({
             sx={{ minWidth: 0 }}
             slotProps={{
               inputLabel: { shrink: true },
-              htmlInput: { min: today, 'aria-required': true },
+              htmlInput: {
+                min: today,
+                max: addDays(today, MAX_ADVANCE_DAYS),
+                'aria-required': true,
+              },
             }}
           />
           <TextField
             type="date"
             label="Check Out"
+            inputRef={checkOutRef}
             value={checkOut}
             onChange={(e) => setCheckOut(e.target.value)}
             onBlur={() => setTouched((t) => ({ ...t, checkOut: true }))}
@@ -185,6 +250,7 @@ export default function NewReservationSearch({
               inputLabel: { shrink: true },
               htmlInput: {
                 min: addDays(errors.checkIn ? today : checkIn || today, 1),
+                max: errors.checkIn || !checkIn ? undefined : addDays(checkIn, MAX_STAY_NIGHTS),
                 'aria-required': true,
               },
             }}
@@ -213,7 +279,7 @@ export default function NewReservationSearch({
             const n = i + 1;
             return (
               <Box
-                key={n}
+                key={room.id}
                 role="group"
                 aria-label={`Room ${n}`}
                 sx={(t) => ({
@@ -233,15 +299,16 @@ export default function NewReservationSearch({
                   </Typography>
                   {i > 0 ? (
                     <Button
-                      ref={(el) => {
-                        removeRefs.current[i] = el;
-                      }}
+                      ref={track('remove', room.id)}
                       size="small"
                       color="error"
-                      startIcon={<RemoveCircle />}
+                      startIcon={<RemoveCircle aria-hidden />}
                       aria-label={`Remove Room ${n}`}
                       onClick={() => {
-                        focusRequest.current = 'after-remove';
+                        focusRequest.current = {
+                          kind: 'remove',
+                          id: i > 1 ? rooms[i - 1].id : null,
+                        };
                         dispatch({ type: 'removeRoom', index: i });
                         setAnnouncement(`Room ${n} removed`);
                       }}
@@ -253,17 +320,19 @@ export default function NewReservationSearch({
                 <Box sx={{ display: 'flex', gap: 1.75, flexWrap: 'wrap' }}>
                   <Stepper
                     title="Adults"
+                    noun="adults"
+                    roomNumber={n}
                     label={`Adults, Room ${n}`}
                     value={room.adults}
                     min={MIN_ADULTS}
                     max={MAX_ADULTS}
-                    firstRef={(el) => {
-                      firstStepperRefs.current[i] = el;
-                    }}
+                    firstRef={track('stepper', room.id)}
                     onChange={(value) => dispatch({ type: 'setAdults', index: i, value })}
                   />
                   <Stepper
                     title="Children"
+                    noun="children"
+                    roomNumber={n}
                     label={`Children, Room ${n}`}
                     value={room.children}
                     min={MIN_CHILDREN}
@@ -280,10 +349,15 @@ export default function NewReservationSearch({
       <Button
         ref={addRef}
         size="large"
-        startIcon={<AddCircle />}
+        startIcon={<AddCircle aria-hidden />}
+        aria-label="Add Another Room"
+        aria-describedby={canAddRoom(rooms) ? undefined : maxRoomsId}
         disabled={!canAddRoom(rooms)}
         onClick={() => {
-          focusRequest.current = 'new-room';
+          focusRequest.current = {
+            kind: 'new-room',
+            id: Math.max(0, ...rooms.map((r) => r.id)) + 1,
+          };
           dispatch({ type: 'addRoom' });
           setAnnouncement(`Room ${roomCount + 1} added`);
         }}
@@ -292,9 +366,29 @@ export default function NewReservationSearch({
         Add Another Room
       </Button>
 
-      <Button type="submit" variant="contained" size="large" fullWidth disabled={!valid}>
-        {searchLabel(nights)}
-      </Button>
+      {canAddRoom(rooms) ? null : (
+        <Typography id={maxRoomsId} variant="caption" color="text.secondary">
+          Maximum of {MAX_ROOMS} rooms
+        </Typography>
+      )}
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          fullWidth
+          disabled={!valid}
+          aria-describedby={valid ? undefined : hintId}
+        >
+          {searchLabel(valid ? nightsBetween(checkIn, checkOut) : NaN)}
+        </Button>
+        {valid ? null : (
+          <Typography id={hintId} variant="caption" color="text.secondary">
+            {hint}
+          </Typography>
+        )}
+      </Box>
 
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
         {announcement}

@@ -7,13 +7,14 @@ describe('NewReservationResults (stub)', () => {
     render(
       <MemoryRouter
         initialEntries={[
-          '/reservations/new/results?checkIn=2026-10-22&checkOut=2026-10-25&rooms=2.0,1.3',
+          '/reservations/new/results?checkIn=2026-10-22&checkOut=2026-10-25&location=lakeside&rooms=2.0,1.3',
         ]}
       >
         <NewReservationResults />
       </MemoryRouter>,
     );
     expect(screen.getByText('2026-10-22')).toBeInTheDocument();
+    expect(screen.getByText('Lakeside Cottages')).toBeInTheDocument();
     expect(screen.getByText('Room 2')).toBeInTheDocument();
     expect(screen.getByText('1 adults, 3 children')).toBeInTheDocument();
   });

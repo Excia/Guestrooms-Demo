@@ -1,7 +1,7 @@
 // Pure rules for the New Reservation search (Figma 69:3803): dates, nights, rooms and guests, and
 // the URL form of the criteria. Dates are ISO "yyyy-mm-dd" strings (see dateSelection.ts).
 import { NEW_RESERVATION_RESULTS_PATH } from './routes';
-import { daysBetween, isValidIsoDate, type IsoDate } from './dateSelection';
+import { addDays, daysBetween, isValidIsoDate, type IsoDate } from './dateSelection';
 
 // Limits are not in Figma or the ticket; these are the stated defaults and need the owner's confirmation.
 export const MIN_ADULTS = 1;
@@ -9,6 +9,9 @@ export const MAX_ADULTS = 8;
 export const MIN_CHILDREN = 0;
 export const MAX_CHILDREN = 8;
 export const MAX_ROOMS = 5;
+/** Longest stay and furthest-ahead check-in; defaults, the owner must confirm. */
+export const MAX_STAY_NIGHTS = 365;
+export const MAX_ADVANCE_DAYS = 730;
 export const DEFAULT_ADULTS = 2;
 export const DEFAULT_CHILDREN = 2;
 
@@ -19,6 +22,11 @@ export const SEARCH_RESULTS_PATH = NEW_RESERVATION_RESULTS_PATH;
 export interface RoomGuests {
   adults: number;
   children: number;
+}
+
+/** A room in form state: `id` is stable across removals (React keys, focus refs). */
+export interface RoomState extends RoomGuests {
+  id: number;
 }
 
 export interface SearchCriteria {
@@ -50,12 +58,25 @@ export function validateDates(checkIn: string, checkOut: string, today: IsoDate)
   if (!checkIn) errors.checkIn = 'Enter a check-in date.';
   else if (!isValidIsoDate(checkIn)) errors.checkIn = 'Enter a valid date.';
   else if (checkIn < today) errors.checkIn = 'Check-in cannot be in the past.';
+  else if (checkIn > addDays(today, MAX_ADVANCE_DAYS)) {
+    errors.checkIn = `Check-in cannot be more than ${MAX_ADVANCE_DAYS} days ahead.`;
+  }
   if (!checkOut) errors.checkOut = 'Enter a check-out date.';
   else if (!isValidIsoDate(checkOut)) errors.checkOut = 'Enter a valid date.';
-  else if (!errors.checkIn && checkOut <= checkIn) {
-    errors.checkOut = 'Check-out must be after check-in.';
+  else if (!errors.checkIn) {
+    if (checkOut <= checkIn) errors.checkOut = 'Check-out must be after check-in.';
+    else if (daysBetween(checkIn, checkOut) > MAX_STAY_NIGHTS) {
+      errors.checkOut = `A stay cannot be longer than ${MAX_STAY_NIGHTS} nights.`;
+    }
   }
   return errors;
+}
+
+/** The message that explains why the search cannot run yet; '' when the dates are valid. */
+export function dateHint(checkIn: string, checkOut: string, today: IsoDate): string {
+  if (!checkIn && !checkOut) return 'Enter check-in and check-out dates.';
+  const e = validateDates(checkIn, checkOut, today);
+  return e.checkIn ?? e.checkOut ?? '';
 }
 
 export function datesAreValid(checkIn: string, checkOut: string, today: IsoDate): boolean {
@@ -70,8 +91,8 @@ export function searchLabel(nights: number): string {
 
 // Guests ---------------------------------------------------------------------------------------
 
-export const initialRooms = (): RoomGuests[] => [
-  { adults: DEFAULT_ADULTS, children: DEFAULT_CHILDREN },
+export const initialRooms = (): RoomState[] => [
+  { id: 1, adults: DEFAULT_ADULTS, children: DEFAULT_CHILDREN },
 ];
 
 export type RoomsAction =
@@ -81,12 +102,19 @@ export type RoomsAction =
   | { type: 'setChildren'; index: number; value: number };
 
 /** Reducer for the rooms list. Room 1 cannot be removed; counts and room total are clamped. */
-export function roomsReducer(rooms: RoomGuests[], action: RoomsAction): RoomGuests[] {
+export function roomsReducer(rooms: RoomState[], action: RoomsAction): RoomState[] {
   switch (action.type) {
     case 'addRoom':
       return rooms.length >= MAX_ROOMS
         ? rooms
-        : [...rooms, { adults: DEFAULT_ADULTS, children: DEFAULT_CHILDREN }];
+        : [
+            ...rooms,
+            {
+              id: Math.max(0, ...rooms.map((r) => r.id)) + 1,
+              adults: DEFAULT_ADULTS,
+              children: DEFAULT_CHILDREN,
+            },
+          ];
     case 'removeRoom':
       return action.index <= 0 || action.index >= rooms.length
         ? rooms
@@ -123,22 +151,30 @@ export function toSearchParams(c: SearchCriteria): URLSearchParams {
   return p;
 }
 
+/**
+ * Rooms as "adults.children" entries. If any entry is malformed or there are too many, the whole
+ * param is dropped for the default single room, so room numbers never silently shift.
+ */
 function parseRooms(raw: string | null): RoomGuests[] {
+  const parts = (raw ?? '').split(',');
   const rooms: RoomGuests[] = [];
-  for (const part of (raw ?? '').split(',').slice(0, MAX_ROOMS)) {
+  for (const part of parts) {
     const m = /^(\d{1,3})\.(\d{1,3})$/.exec(part);
-    if (!m) continue;
+    if (!m) return initialRooms().map(({ adults, children }) => ({ adults, children }));
     rooms.push({
       adults: clamp(Number(m[1]), MIN_ADULTS, MAX_ADULTS),
       children: clamp(Number(m[2]), MIN_CHILDREN, MAX_CHILDREN),
     });
   }
-  return rooms.length > 0 ? rooms : initialRooms();
+  return rooms.length <= MAX_ROOMS
+    ? rooms
+    : initialRooms().map(({ adults, children }) => ({ adults, children }));
 }
 
 /**
- * Tolerant parse: never throws. Missing or invalid dates come back as "" (so callers can tell the
- * criteria are incomplete), bad room entries are dropped and counts clamped.
+ * Tolerant parse: never throws. `location` is NOT validated here (any string passes); the real
+ * results page must check it against the known location list. Missing or invalid dates come back as "" (so callers can tell the
+ * criteria are incomplete), a malformed rooms param falls back to one default room, and counts are clamped.
  */
 export function fromSearchParams(p: URLSearchParams): SearchCriteria {
   const date = (key: string) => {
