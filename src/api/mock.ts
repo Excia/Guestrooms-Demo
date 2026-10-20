@@ -1,7 +1,7 @@
 import type { MockScenario } from './config';
 import { emptyStats, fullGrant, mockReservations, mockStats, noGrant } from './mockData';
 import { queryReservations } from './reservationQuery';
-import type { ApiClient, RequestOptions } from './types';
+import type { ApiClient, PermissionGrant, RequestOptions } from './types';
 import { ApiError } from './types';
 import { assertResourceId } from './validation';
 
@@ -11,6 +11,8 @@ export interface MockOptions {
   latencyMs?: number;
   /** Default reservations page size; small so paging is exercisable with the sample data. */
   pageSize?: number;
+  /** What `permissions.getGrant` returns in the normal scenario; defaults to an unrestricted user. */
+  grant?: PermissionGrant;
 }
 
 export const MOCK_PAGE_SIZE = 4;
@@ -26,6 +28,7 @@ export function createMockClient({
   scenario = 'normal',
   latencyMs = 0,
   pageSize = MOCK_PAGE_SIZE,
+  grant = fullGrant,
 }: MockOptions = {}): ApiClient {
   function respond<T>(normal: () => T, empty: () => T, options?: RequestOptions): Promise<T> {
     const signal = options?.signal;
@@ -87,7 +90,7 @@ export function createMockClient({
     permissions: {
       getGrant: (o) =>
         respond(
-          () => structuredClone(fullGrant),
+          () => structuredClone(grant),
           () => structuredClone(noGrant),
           o,
         ),

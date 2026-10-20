@@ -1,9 +1,5 @@
-import { createMockPermissions, pagePermission } from '../app/permissions';
-import type { Permission, Permissions } from '../app/permissions';
-import { routes } from '../app/routes';
-
-// Every permission the app knows how to check. Extend when action permissions arrive (ticket 0.8).
-const KNOWN = new Set<string>(routes.map((r) => pagePermission(r.id)));
+import { createPermissions, isKnownPermission } from '../app/permissions';
+import type { Permissions } from '../app/permissions';
 
 /**
  * Feeds the app's `Permissions` interface (src/app/permissions.ts) from an API grant, so
@@ -13,11 +9,9 @@ const KNOWN = new Set<string>(routes.map((r) => pagePermission(r.id)));
  */
 export function permissionsFromGrant(grant: unknown): Permissions {
   const permissions = (grant as { permissions?: unknown } | null | undefined)?.permissions;
-  if (permissions === 'all') return createMockPermissions();
+  if (permissions === 'all') return createPermissions();
   if (Array.isArray(permissions)) {
-    return createMockPermissions(
-      permissions.filter((p): p is Permission => typeof p === 'string' && KNOWN.has(p)),
-    );
+    return createPermissions(permissions.filter(isKnownPermission));
   }
-  return createMockPermissions([]);
+  return createPermissions([]);
 }

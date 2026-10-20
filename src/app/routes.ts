@@ -19,8 +19,8 @@ export const DASHBOARD_PATH = '/dashboard';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
-// Note: '/admin' (Admin Setup landing) is not a menu link, so it has no menu permission yet;
-// gate it on "any admin page" when the real permissions (0.8) arrive.
+// Note: '/admin' (Admin Setup landing) is not a menu link; it opens for anyone who can open an
+// Admin Setup page (see src/app/access.ts).
 export const routes = [
   { id: 'dashboard', path: DASHBOARD_PATH, title: 'Dashboard', section: 'dashboard' },
   {
