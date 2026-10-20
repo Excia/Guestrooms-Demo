@@ -2,8 +2,10 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { routes, SCHEDULE_PATH } from './app/routes';
+import { DASHBOARD_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
+import AccessDeniedNotice from './components/AccessDeniedNotice';
+import RequireAccess from './components/RequireAccess';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
@@ -32,7 +34,19 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RedirectToSchedule />} />
         {routes.map((r) => (
-          <Route key={r.path} path={r.path} element={<PagePlaceholder title={r.title} />} />
+          <Route
+            key={r.path}
+            path={r.path}
+            element={
+              r.path === DASHBOARD_PATH ? (
+                <PagePlaceholder title={r.title} />
+              ) : (
+                <RequireAccess pageId={r.id}>
+                  <PagePlaceholder title={r.title} />
+                </RequireAccess>
+              )
+            }
+          />
         ))}
         {/* Deliberately not in the route table or the menu. */}
         {ComponentsDemo ? (
@@ -48,6 +62,7 @@ export default function App() {
         {/* A real 404 page is a later ticket. */}
         <Route path="*" element={<PagePlaceholder title="Not found" />} />
       </Routes>
+      <AccessDeniedNotice />
     </AppShell>
   );
 }

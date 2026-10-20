@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import App from './App';
+import { GrantedAccess } from './app/testing';
 
 function LocationProbe() {
   const { pathname, search } = useLocation();
@@ -10,19 +11,23 @@ function LocationProbe() {
 describe('App', () => {
   it('keeps the query string when redirecting / to Schedule', () => {
     render(
-      <MemoryRouter initialEntries={['/?mock=empty']}>
-        <App />
-        <LocationProbe />
-      </MemoryRouter>,
+      <GrantedAccess>
+        <MemoryRouter initialEntries={['/?mock=empty']}>
+          <App />
+          <LocationProbe />
+        </MemoryRouter>
+      </GrantedAccess>,
     );
     expect(screen.getByRole('status')).toHaveTextContent('/schedule?mock=empty');
   });
 
   it('redirects / to the Schedule page inside the shell', () => {
     render(
-      <MemoryRouter initialEntries={['/']}>
-        <App />
-      </MemoryRouter>,
+      <GrantedAccess>
+        <MemoryRouter initialEntries={['/']}>
+          <App />
+        </MemoryRouter>
+      </GrantedAccess>,
     );
     expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('banner')).toBeInTheDocument();
@@ -30,9 +35,11 @@ describe('App', () => {
 
   it('shows the page title for a trailing-slash path', () => {
     render(
-      <MemoryRouter initialEntries={['/admin/']}>
-        <App />
-      </MemoryRouter>,
+      <GrantedAccess>
+        <MemoryRouter initialEntries={['/admin/']}>
+          <App />
+        </MemoryRouter>
+      </GrantedAccess>,
     );
     expect(screen.getByRole('heading', { name: 'Admin Setup' })).toBeInTheDocument();
   });

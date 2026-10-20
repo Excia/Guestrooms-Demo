@@ -10,6 +10,7 @@ import {
   PermissionsProvider,
   type Permission,
 } from '../app/permissions';
+import { GrantedAccess } from '../app/testing';
 import { theme } from '../theme';
 import AppHeader from './AppHeader';
 import MenuOverlay from './MenuOverlay';
@@ -125,9 +126,11 @@ describe('MenuOverlay closing (in the app shell)', () => {
   function setup(path = '/reservations') {
     render(
       <ThemeProvider theme={theme}>
-        <MemoryRouter initialEntries={[path]}>
-          <App />
-        </MemoryRouter>
+        <GrantedAccess>
+          <MemoryRouter initialEntries={[path]}>
+            <App />
+          </MemoryRouter>
+        </GrantedAccess>
       </ThemeProvider>,
     );
     return userEvent.setup();
