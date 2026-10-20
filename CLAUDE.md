@@ -21,9 +21,12 @@ All four checks must pass before a PR (CI runs the same).
 2. One branch per ticket: `feat/<issue>-short-name` (or `fix/`, `chore/`, `docs/`).
 3. One PR per ticket. **PR title is a Conventional Commit** (`feat: add dashboard layout`),
    body contains `Closes #<issue>`. release-please builds the changelog from PR titles.
-4. **A human merges.** Agents never merge PRs, never push to `main`, never change repo,
+4. **Requirements log.** A PR that changes behavior, the API, permissions or a decision, or answers an
+   open question, updates the matching file in `docs/requirements/` in the same PR (see CONTRIBUTING.md).
+   The Manager checks this before opening the PR.
+5. **A human merges.** Agents never merge PRs, never push to `main`, never change repo,
    branch-protection or Actions settings, and never edit the Figma file.
-5. If a ticket needs an answer that is not in its body (an open question that blocks the
+6. If a ticket needs an answer that is not in its body (an open question that blocks the
    work, a missing design), stop and mark it blocked rather than guessing:
    `python3 scripts/board.py block <n> "<what is needed>"`.
 

@@ -35,14 +35,16 @@ anything outside that, such as a second ticket or a change to the plan.
    Figma links, the Decisions, the acceptance criteria as the definition of done, the
    **absolute worktree path** and the **branch name**. Tell it to work only in that worktree,
    to confirm the branch with `git branch --show-current` before every commit, and not to
-   push, open a PR or merge. Wait for its report.
+   push, open a PR or merge. Tell it to update the matching files in `docs/requirements/` (see
+   CONTRIBUTING.md, "Requirements log"). Wait for its report.
 7. **Verify.** Spawn `qa-engineer`, then `reviewer`, each with the same worktree path and
    branch (the reviewer diffs `main...HEAD` from inside the worktree). For a second opinion
    you may also spawn the `agent-skills:code-reviewer` and `agent-skills:security-auditor`
    agents. Send findings back to the specialist. **At most 3 rounds**; if it is still not
    passing, run `python3 scripts/board.py release <n> "<why>"` and report to the user.
 8. **PR.** Push the branch, open a PR titled as a Conventional Commit with `Closes #<n>` and
-   a checklist of acceptance criteria with evidence. Run
+   a checklist of acceptance criteria with evidence. Confirm the PR updates `docs/requirements/`
+   (or says why not) before opening it. Run
    `python3 scripts/board.py status <n> "In Review"`.
 9. **Hand off.** Tell the user the PR link and what to look at. **Do not merge.** After
    the user merges, run `python3 scripts/board.py done <n>` and remove the worktree.

@@ -14,3 +14,4 @@ Closes #
 - [ ] Responsive behavior checked where Figma shows tablet or mobile
 - [ ] Tests added or updated
 - [ ] `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` pass
+- [ ] Updated `docs/requirements/` (decisions, API contract, open questions, placeholders, feature status), or `n/a: <reason>`

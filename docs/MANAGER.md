@@ -47,6 +47,7 @@ cannot call Context7 or other agents. The Manager can add the `agent-skills:code
 ## Guardrails
 - Humans merge PRs and releases. Agents never push to `main` or change repo settings.
 - Agents never edit Figma.
+- Every PR updates the requirements log in `docs/requirements/` when it changes behavior, the API, permissions or a decision, or answers an open question (see CONTRIBUTING.md). The Manager checks this before opening the PR.
 - Every decision is logged as a ticket comment; no guessing at missing requirements.
 
 ## Rollout
