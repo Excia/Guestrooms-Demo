@@ -46,8 +46,93 @@ export interface DashboardStats {
   averageRate: Cents;
 }
 
+// ---- quick stats (dashboard column, report landing page) -----------------------------------------
+
+export type QuickStatsView = 'day' | 'week' | 'month';
+
+/** What to fetch: one day, the 7 days from `startDate`, or a calendar month (`yyyy-mm`). */
+export type QuickStatsQuery =
+  | { view: 'day'; date: IsoDate }
+  | { view: 'week'; startDate: IsoDate }
+  | { view: 'month'; month: string };
+
+/**
+ * Booked and available rooms; `percent` is 0 to 100 with one decimal at most. The backend owns the
+ * rounding (the mock rounds booked / (booked + available) to one decimal; the UI never recomputes
+ * a percent). In every TOTAL row the percent is the mean of the row percents, not total booked over
+ * total rooms: this is what Figma's "(avg)" shows.
+ */
+export interface OccupancyCounts {
+  booked: number;
+  available: number;
+  percent: number;
+}
+
+export interface QuickStatsRevenue {
+  /** One row per rate category in the data (not a fixed list). */
+  rows: RateCategoryStat[];
+  totalRevenue: Cents;
+  totalNights: number;
+  /** Weighted: totalRevenue / totalNights. Null when there are no nights. */
+  averageRate: Cents | null;
+}
+
+export interface QuickStatsRoomBlock {
+  id: string;
+  name: string;
+  nights: number;
+  startDate: IsoDate;
+  counts: OccupancyCounts;
+}
+
+export interface QuickStatsDayOccupancy {
+  date: IsoDate;
+  counts: OccupancyCounts;
+}
+
+interface QuickStatsBase {
+  /** The summary bar above the tables. */
+  occupancy: OccupancyCounts;
+  revenue: QuickStatsRevenue;
+}
+
+export interface DayQuickStats extends QuickStatsBase {
+  view: 'day';
+  date: IsoDate;
+  roomBlocks: QuickStatsRoomBlock[];
+  /** Sums of booked and available; percent is the average of the block percents. */
+  roomBlocksTotal: OccupancyCounts;
+}
+
+export interface WeekQuickStats extends QuickStatsBase {
+  view: 'week';
+  startDate: IsoDate;
+  days: QuickStatsDayOccupancy[];
+  /** Sums of booked and available; percent is the average of the daily percents. */
+  daysTotal: OccupancyCounts;
+}
+
+export interface MonthQuickStats extends QuickStatsBase {
+  view: 'month';
+  month: string;
+  roomBlocks: QuickStatsRoomBlock[];
+  roomBlocksTotal: OccupancyCounts;
+}
+
+/**
+ * "Empty" (the UI shows "No stats for this period."): `revenue.rows` is empty AND there are no
+ * `roomBlocks` (day, month) or `days` (week). A period that has rows or days but all zeros is not
+ * empty: the tables render with zeros, and a zero-night average rate is `null`. So a week with no
+ * data should answer `days: []`, not seven zero days. See `isQuickStatsEmpty`.
+ * The echoed `date`, `startDate` or `month` must equal the query; the HTTP client rejects a
+ * mismatch as `invalid-response`.
+ */
+export type QuickStats = DayQuickStats | WeekQuickStats | MonthQuickStats;
+
 export interface DashboardApi {
   getStats(options?: RequestOptions): Promise<DashboardStats>;
+  /** Quick Stats for one view; the result's `view` matches the query's. */
+  getQuickStats(query: QuickStatsQuery, options?: RequestOptions): Promise<QuickStats>;
 }
 
 // ---- reservations ----------------------------------------------------------------------------

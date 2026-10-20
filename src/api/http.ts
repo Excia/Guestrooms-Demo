@@ -3,12 +3,14 @@ import type {
   DashboardStats,
   Page,
   PermissionGrant,
+  QuickStats,
+  QuickStatsQuery,
   Reservation,
   ReservationQuery,
   RequestOptions,
 } from './types';
 import { ApiError } from './types';
-import { assertResourceId } from './validation';
+import { assertQuickStatsQuery, assertResourceId } from './validation';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -112,6 +114,53 @@ function parseStats(body: unknown, status: number): DashboardStats {
   }
   return body as unknown as DashboardStats;
 }
+
+const isCounts = (v: unknown) =>
+  isObject(v) && isCount(v.booked) && isCount(v.available) && isCount(v.percent);
+const listOf = (v: unknown, guard: (x: unknown) => boolean) => Array.isArray(v) && v.every(guard);
+
+// Light shape guards, like the others: the fields the panel reads.
+// The answer must be for the query that was sent: the view and the echoed period have to match.
+const parseQuickStats =
+  (query: QuickStatsQuery) =>
+  (body: unknown, status: number): QuickStats => {
+    const revenue = isObject(body) ? body.revenue : undefined;
+    const ok =
+      isObject(body) &&
+      isCounts(body.occupancy) &&
+      isObject(revenue) &&
+      isCount(revenue.totalRevenue) &&
+      isCount(revenue.totalNights) &&
+      (revenue.averageRate === null || isCount(revenue.averageRate)) &&
+      listOf(
+        revenue.rows,
+        (r) =>
+          isObject(r) &&
+          isString(r.id) &&
+          isString(r.name) &&
+          isCount(r.nights) &&
+          isCount(r.revenue),
+      ) &&
+      body.view === query.view &&
+      (query.view === 'week'
+        ? body.startDate === query.startDate &&
+          isCounts(body.daysTotal) &&
+          listOf(body.days, (d) => isObject(d) && isString(d.date) && isCounts(d.counts))
+        : (query.view === 'day' ? body.date === query.date : body.month === query.month) &&
+          isCounts(body.roomBlocksTotal) &&
+          listOf(
+            body.roomBlocks,
+            (b) =>
+              isObject(b) &&
+              isString(b.id) &&
+              isString(b.name) &&
+              isCount(b.nights) &&
+              isString(b.startDate) &&
+              isCounts(b.counts),
+          ));
+    if (!ok) throw invalid(status, 'quick stats');
+    return body as unknown as QuickStats;
+  };
 
 function errorFromBody(status: number, statusText: string, text: string): ApiError {
   let message = statusText || 'Request failed';
@@ -222,6 +271,21 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
   return {
     dashboard: {
       getStats: (o) => request('/dashboard/stats', {}, o, parseStats),
+      getQuickStats: (q, o) =>
+        Promise.resolve().then(() => {
+          assertQuickStatsQuery(q);
+          return request(
+            '/dashboard/quick-stats',
+            {
+              view: q.view,
+              date: q.view === 'day' ? q.date : undefined,
+              startDate: q.view === 'week' ? q.startDate : undefined,
+              month: q.view === 'month' ? q.month : undefined,
+            },
+            o,
+            parseQuickStats(q),
+          );
+        }),
     },
     reservations: {
       list: (q: ReservationQuery = {}, o) =>

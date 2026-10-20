@@ -1,0 +1,78 @@
+import { createHttpClient } from './http';
+import { buildQuickStats } from './quickStatsData';
+
+const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+const make = (fetchMock: typeof fetch) =>
+  createHttpClient('https://api.example.com/v1', { fetch: fetchMock });
+
+describe('http getQuickStats', () => {
+  it('sends the view and its period as query parameters', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(json(buildQuickStats({ view: 'week', startDate: '2026-10-11' })));
+    await make(fetchMock).dashboard.getQuickStats({ view: 'week', startDate: '2026-10-11' });
+    const url = fetchMock.mock.calls[0][0] as URL;
+    expect(url.pathname).toBe('/v1/dashboard/quick-stats');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ view: 'week', startDate: '2026-10-11' });
+  });
+
+  it('accepts a well-formed response for each view', async () => {
+    for (const query of [
+      { view: 'day', date: '2026-10-16' },
+      { view: 'week', startDate: '2026-10-11' },
+      { view: 'month', month: '2026-10' },
+    ] as const) {
+      const fetchMock = vi.fn().mockResolvedValue(json(buildQuickStats(query)));
+      expect((await make(fetchMock).dashboard.getQuickStats(query)).view).toBe(query.view);
+    }
+  });
+
+  it('rejects a malformed query before fetching', async () => {
+    const fetchMock = vi.fn();
+    await expect(
+      make(fetchMock).dashboard.getQuickStats({ view: 'day', date: 'tomorrow' }),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ view: 'day', occupancy: {} }));
+    await expect(
+      make(fetchMock).dashboard.getQuickStats({ view: 'day', date: '2026-10-16' }),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+
+  it('rejects an answer for another view or period', async () => {
+    const day = buildQuickStats({ view: 'day', date: '2026-10-16' });
+    const week = { view: 'week', startDate: '2026-10-11' } as const;
+    await expect(
+      make(vi.fn().mockResolvedValue(json(day))).dashboard.getQuickStats(week),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+    const other = buildQuickStats({ view: 'week', startDate: '2026-10-18' });
+    await expect(
+      make(vi.fn().mockResolvedValue(json(other))).dashboard.getQuickStats(week),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+    const month = buildQuickStats({ view: 'month', month: '2026-09' });
+    await expect(
+      make(vi.fn().mockResolvedValue(json(month))).dashboard.getQuickStats({
+        view: 'month',
+        month: '2026-10',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+
+  it('rejects rows and blocks without their numbers or names', async () => {
+    const good = buildQuickStats({ view: 'day', date: '2026-10-16' });
+    if (good.view !== 'day') throw new Error('unreachable');
+    const noNights = { ...good, revenue: { ...good.revenue, rows: [{ id: 'a', name: 'A' }] } };
+    const noName = { ...good, roomBlocks: [{ ...good.roomBlocks[0], name: undefined }] };
+    for (const body of [noNights, noName]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).dashboard.getQuickStats({
+          view: 'day',
+          date: '2026-10-16',
+        }),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
+});

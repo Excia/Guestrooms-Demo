@@ -15,3 +15,8 @@ export function totalsFor(categories: readonly RateCategoryStat[]): {
   const totalNights = categories.reduce((sum, c) => sum + c.nights, 0);
   return { totalRevenue, totalNights, averageRate: weightedAverageRate(totalRevenue, totalNights) };
 }
+
+/** Weighted average rate (revenue / nights) in cents; null, shown as an em dash, without nights. */
+export function weightedAverageRateOrNull(revenue: Cents, nights: number): Cents | null {
+  return nights > 0 ? weightedAverageRate(revenue, nights) : null;
+}

@@ -3,8 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { useState } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router';
-import App from '../App';
 import { renderWithApi } from '../api/testing';
+import App from '../App';
 import {
   createMockPermissions,
   pagePermission,
@@ -125,6 +125,7 @@ describe('MenuOverlay layouts', () => {
 
 describe('MenuOverlay closing (in the app shell)', () => {
   function setup(path = '/reservations') {
+    // The Dashboard page fetches Quick Stats, so the app needs an API.
     renderWithApi(
       <ThemeProvider theme={theme}>
         <GrantedAccess>

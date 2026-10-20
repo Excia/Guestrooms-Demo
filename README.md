@@ -57,6 +57,12 @@ Copy `.env.example` to `.env.local` to override.
   hooks; nothing uses them yet.
 - Responses get light shape guards on the fields consumers rely on (ids, statuses, counts, list
   shapes), not full schema validation. A mismatch is an `invalid-response` error.
+- Quick Stats (`dashboard.getQuickStats`): the answer's `view` and echoed period (`date`,
+  `startDate`, `month`) must match the query, else `invalid-response`. Money is integer cents and
+  excludes taxes and service charges; the average rate is weighted (revenue / nights), `null`
+  without nights. Occupancy percent is rounded by the backend; a TOTAL row's percent is the mean of
+  the row percents. "Empty" means no revenue rows and no room blocks (day, month) or days (week);
+  a week with no data answers `days: []`.
 - Server `message` and `details` are untrusted text: render them as text, never as HTML.
 - Ids go into URL paths; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400).
 - `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped.

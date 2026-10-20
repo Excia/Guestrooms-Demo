@@ -5,9 +5,10 @@ import { HEADER_HEIGHT } from '../app/layout';
 import NewReservationSearch from '../components/NewReservationSearch';
 import ReservationManagement from '../components/ReservationManagement';
 import DashboardColumn, { COLUMN_MAX_WIDTH_SPACING } from '../components/DashboardColumn';
+import QuickStats from '../components/QuickStats';
 
 /**
- * Slot contract: each slot is a ReactNode. `undefined` shows the placeholder, `null` renders an
+ * Slot contract: each slot is a ReactNode. `undefined` shows the default content, `null` renders an
  * empty column. Slot content must not set its own scroll or height (the column panel scrolls);
  * it is padded by the panel.
  */
@@ -20,10 +21,6 @@ export interface DashboardProps {
   newReservation?: React.ReactNode;
 }
 
-function Placeholder({ name }: { name: string }) {
-  return <Typography color="text.secondary">{name} content arrives in a later ticket.</Typography>;
-}
-
 /**
  * Dashboard (Figma 69:3712): three equal columns under the header. Desktop (>= 1200px): one row,
  * columns 450px wide at the 1512 design width (max 450px, centred on wider screens), 24px gutters,
@@ -32,7 +29,7 @@ function Placeholder({ name }: { name: string }) {
  */
 export default function Dashboard({
   reservationManagement = <ReservationManagement />,
-  quickStats = <Placeholder name="Quick Stats" />,
+  quickStats = <QuickStats placement="dashboard" />,
   newReservation = <NewReservationSearch />,
 }: DashboardProps) {
   return (

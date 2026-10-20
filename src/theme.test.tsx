@@ -102,6 +102,18 @@ describe('theme tokens (Figma variables)', () => {
   });
 });
 
+describe('tab focus ring', () => {
+  it('draws a 2px primary outline inside a focused tab', () => {
+    const root = theme.components?.MuiTab?.styleOverrides?.root as (a: {
+      theme: typeof theme;
+    }) => Record<string, Record<string, unknown>>;
+    expect(root({ theme })['&.Mui-focusVisible, &:focus-visible']).toEqual({
+      outline: `2px solid ${theme.palette.primary.main}`,
+      outlineOffset: -2,
+    });
+  });
+});
+
 describe('hover tint', () => {
   const tint = theme.palette.primary.tint;
   type Root = (args: { ownerState: Record<string, unknown>; theme: typeof theme }) => {

@@ -18,6 +18,7 @@ export interface RouteMeta {
 
 export const SCHEDULE_PATH = '/schedule';
 export const DASHBOARD_PATH = '/dashboard';
+export const ROOM_BLOCKS_PATH = '/room-blocks';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -61,7 +62,7 @@ export const routes = [
     title: 'Add-On Countdown',
     section: 'reservation',
   },
-  { id: 'room-blocks', path: '/room-blocks', title: 'Room Blocks', section: 'reservation' },
+  { id: 'room-blocks', path: ROOM_BLOCKS_PATH, title: 'Room Blocks', section: 'reservation' },
   {
     id: 'member-directory',
     path: '/member-directory',

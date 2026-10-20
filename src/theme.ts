@@ -112,6 +112,17 @@ const base = createTheme({
         }),
       },
     },
+    // Tabs sit in a scroller that clips overflow, so their ring is drawn inside the tab.
+    MuiTab: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&.Mui-focusVisible, &:focus-visible': {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: -2,
+          },
+        }),
+      },
+    },
     MuiIconButton: {
       styleOverrides: {
         root: ({ theme }) => ({ '&:hover': { backgroundColor: theme.palette.primary.tint } }),
