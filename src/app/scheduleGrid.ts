@@ -116,6 +116,22 @@ export function columnAtX(
   return col < days ? col : null;
 }
 
+/**
+ * Which edge markers a reservation block shows: the orange Early Check In sliver at its arrival
+ * edge and Late Check Out at its departure edge. A clipped edge (the stay goes on past the range)
+ * has no marker: the real arrival or departure is out of sight. Only the drawn edge is decided
+ * here; which nights the block occupies never changes.
+ */
+export function blockMarkers(
+  block: { earlyCheckIn?: boolean; lateCheckOut?: boolean },
+  layout: Pick<BlockLayout, 'continuesBefore' | 'continuesAfter'>,
+): { left: boolean; right: boolean } {
+  return {
+    left: Boolean(block.earlyCheckIn) && !layout.continuesBefore,
+    right: Boolean(block.lateCheckOut) && !layout.continuesAfter,
+  };
+}
+
 export type EmptyCellAction =
   /** A free night: a reservation can start here. */
   | { kind: 'free' }

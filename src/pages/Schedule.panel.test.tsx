@@ -870,6 +870,36 @@ describe('small review items', () => {
   });
 });
 
+describe('early and late markers on the grid', () => {
+  it('draw as slivers in the freed strip beside the block body, per edge, never for clipped edges', async () => {
+    const user = await loaded('/schedule');
+    // seeded: Daniel Whitfield (arrived yesterday: his arrival edge is off the left of today's range) has Early
+    const daniel = block('Daniel Whitfield');
+    expect(daniel.querySelector('[data-marker]')).toBeNull();
+    // Henry Lowell arrives today: Late Check Out marks only the right edge
+    await user.click(block('Henry Lowell'));
+    const dialog = await panel(/Reservation #GR-50312/);
+    await user.click(await within(dialog).findByRole('checkbox', { name: 'Late Check Out' }));
+    await within(dialog).findByText('Saved');
+    await user.keyboard('{Escape}');
+    await panelGone();
+    const henry = block('Henry Lowell');
+    expect(henry.querySelector(':scope > [data-marker="right"]')).not.toBeNull();
+    expect(henry.querySelector('[data-marker="left"]')).toBeNull();
+    // the block's own box keeps its role, label and place; only the painted body gives way to the sliver
+    expect(henry).toHaveAttribute('role', 'gridcell');
+    expect(henry.querySelector('[data-body]')).not.toBeNull();
+    // Early: the left sliver
+    await user.click(block('Henry Lowell'));
+    const again = await panel(/Reservation #GR-50312/);
+    await user.click(await within(again).findByRole('checkbox', { name: 'Early Check In' }));
+    await within(again).findByText('Saved');
+    await user.keyboard('{Escape}');
+    await panelGone();
+    expect(block('Henry Lowell').querySelector(':scope > [data-marker="left"]')).not.toBeNull();
+  });
+});
+
 describe('the time limit stops with the panel', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });

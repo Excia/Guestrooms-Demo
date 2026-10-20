@@ -30,3 +30,14 @@ export const dateAreaX = (fraction: number): string =>
 /** CSS width for a fraction of the date area, minus `gap` (a CSS length). */
 export const dateAreaWidth = (fraction: number, gap = '0px'): string =>
   `calc((100% - var(${LABEL_VAR})) * ${fraction} - ${gap})`;
+
+/**
+ * Early Check In / Late Check Out sliver on a reservation block (theme spacing units): 4px wide with a
+ * 2px gap. The block's painted body is inset by marker + gap on that edge and the sliver sits in the
+ * freed strip, so it is always against the grid background: inside the block it vanished against the
+ * orange due-out colour (a stay departing today). The block's box, the nights it occupies and its
+ * drag/drop/keyboard geometry are unchanged (only the painted edge moves), and back-to-back stays
+ * (a same-day turnover) never collide, since each marker stays inside its own box.
+ */
+export const MARKER_WIDTH = 0.5;
+export const MARKER_GAP = 0.25;
