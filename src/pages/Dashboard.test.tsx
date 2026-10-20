@@ -1,7 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { renderWithApi } from '../api/testing';
 import App from '../App';
 import Dashboard from './Dashboard';
+
+// The default Quick Stats slot fetches and links, so it needs an API and a router.
+const render = (ui: React.ReactElement) => renderWithApi(<MemoryRouter>{ui}</MemoryRouter>);
 
 describe('Dashboard', () => {
   it('has a page h1 and the three column headings in order', () => {
@@ -36,7 +40,7 @@ describe('Dashboard', () => {
   });
 
   it('is served at /dashboard inside the shell', () => {
-    render(
+    renderWithApi(
       <MemoryRouter initialEntries={['/dashboard']}>
         <App />
       </MemoryRouter>,

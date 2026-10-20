@@ -3,6 +3,7 @@ import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { HEADER_HEIGHT } from '../app/layout';
 import DashboardColumn, { COLUMN_MAX_WIDTH_SPACING } from '../components/DashboardColumn';
+import QuickStats from '../components/QuickStats';
 
 /**
  * Slot contract: each slot is a ReactNode. `undefined` shows the placeholder, `null` renders an
@@ -30,7 +31,7 @@ function Placeholder({ name }: { name: string }) {
  */
 export default function Dashboard({
   reservationManagement = <Placeholder name="Reservation Management" />,
-  quickStats = <Placeholder name="Quick Stats" />,
+  quickStats = <QuickStats placement="dashboard" />,
   newReservation = <Placeholder name="New Reservation" />,
 }: DashboardProps) {
   return (
