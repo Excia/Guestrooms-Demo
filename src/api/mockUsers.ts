@@ -1,5 +1,5 @@
 import { pagePermission, type PermissionPageId } from '../app/permissions';
-import { routes } from '../app/routes';
+import { routes, type RouteMeta } from '../app/routes';
 import type { PermissionGrant } from './types';
 
 /** Dev-only: which mock user is signed in. Persisted under this localStorage key. */
@@ -13,7 +13,11 @@ export interface MockUser {
   grant: PermissionGrant;
 }
 
-const nonAdminPages = routes.filter((r) => r.id !== 'admin' && r.section !== 'admin');
+// Widened to RouteMeta: routes without a section (e.g. the search results page) have no `section` key in the
+// narrowed table type.
+const nonAdminPages = (routes as readonly RouteMeta[]).filter(
+  (r) => r.id !== 'admin' && r.section !== 'admin',
+);
 
 export const MOCK_USERS: readonly MockUser[] = [
   { id: 'admin', label: 'Administrator', grant: { role: 'Administrator', permissions: 'all' } },
@@ -33,7 +37,7 @@ export const MOCK_USERS: readonly MockUser[] = [
       permissions: [
         ...nonAdminPages,
         ...routes.filter((r) => r.id === 'rooms' || r.id === 'room-types'),
-      ].map((r) => pagePermission(r.id)),
+      ].map((r) => pagePermission(r.id as PermissionPageId)),
     },
   },
 ];
