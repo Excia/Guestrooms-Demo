@@ -79,6 +79,34 @@ export function dateHint(checkIn: string, checkOut: string, today: IsoDate): str
   return e.checkIn ?? e.checkOut ?? '';
 }
 
+/**
+ * Messages to show under the fields: a field's message appears once it is touched or has a value.
+ * Until then the same text is guidance (see dateHintIsError), not an error.
+ */
+export function visibleDateErrors(
+  checkIn: string,
+  checkOut: string,
+  touched: { checkIn: boolean; checkOut: boolean },
+  today: IsoDate,
+): DateErrors {
+  const e = validateDates(checkIn, checkOut, today);
+  return {
+    checkIn: touched.checkIn || checkIn !== '' ? e.checkIn : undefined,
+    checkOut: touched.checkOut || checkOut !== '' ? e.checkOut : undefined,
+  };
+}
+
+/** True when the hint repeats a message a field already shows as an error (otherwise it is guidance). */
+export function dateHintIsError(
+  checkIn: string,
+  checkOut: string,
+  touched: { checkIn: boolean; checkOut: boolean },
+  today: IsoDate,
+): boolean {
+  const v = visibleDateErrors(checkIn, checkOut, touched, today);
+  return Boolean(v.checkIn || v.checkOut);
+}
+
 export function datesAreValid(checkIn: string, checkOut: string, today: IsoDate): boolean {
   const e = validateDates(checkIn, checkOut, today);
   return !e.checkIn && !e.checkOut;

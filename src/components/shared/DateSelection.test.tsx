@@ -168,4 +168,17 @@ describe('DateSelection', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'Custom' }));
     expect(named('Compare to from')).not.toHaveAttribute('readonly');
   });
+
+  it('picks a custom range on one calendar and commits only a complete range', async () => {
+    const onValue = vi.fn();
+    render(<Harness initial={createValue('custom', TODAY, 0)} onValue={onValue} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open calendar for from' }));
+    await userEvent.click(screen.getByRole('button', { name: /February 3, 2025/ }));
+    expect(onValue).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: /February 9, 2025/ }));
+    expect(onValue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ period: { kind: 'custom', from: '2025-02-03', to: '2025-02-09' } }),
+    );
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+  });
 });

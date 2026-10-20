@@ -1,7 +1,6 @@
 import Box from '@mui/material/Box';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
-import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useId } from 'react';
 import {
@@ -28,6 +27,7 @@ import {
   type RangePreset,
   type WeekStart,
 } from '../../app/dateSelection';
+import DateField from './DateField';
 import Select from './Select';
 
 export interface DateSelectionProps {
@@ -42,68 +42,6 @@ export interface DateSelectionProps {
 
 const FIELD_WIDTH = 27.5; // theme spacing units: 220px, the Figma control width.
 
-interface DateFieldProps {
-  label: string;
-  value: IsoDate;
-  onChange?: (value: IsoDate) => void;
-  readOnly?: boolean;
-  invalid?: boolean;
-  describedBy?: string;
-  /** Accessible name when it must differ from the visible Figma label. */
-  ariaLabel?: string;
-  /** Half-width field: tighter padding so the full date and the picker icon fit in 105px. */
-  compact?: boolean;
-}
-
-// Native date input: keyboard operable, no extra dependency, value is already yyyy-mm-dd.
-function DateField({
-  label,
-  value,
-  onChange,
-  readOnly,
-  invalid,
-  describedBy,
-  ariaLabel,
-  compact,
-}: DateFieldProps) {
-  return (
-    <TextField
-      type="date"
-      label={label}
-      value={value}
-      onChange={(e) => onChange?.(e.target.value)}
-      error={invalid}
-      fullWidth
-      sx={{ minWidth: 0 }}
-      slotProps={{
-        inputLabel: { shrink: true },
-        // Figma sets the dates in the 12px label style so two fit side by side in 220px.
-        input: {
-          sx: {
-            // Two date fields share 220px (minus the 10px gap), so the native input must shrink.
-            '& input': {
-              fontSize: (t) => t.typography.caption.fontSize,
-              height: (t) => t.spacing(3),
-              minWidth: 0,
-              // Figma input padding is 12px; half-width fields use 8px so the date is not clipped
-              // next to the picker icon (mouse users still get the calendar).
-              px: compact ? 1 : 1.5,
-              '&::-webkit-calendar-picker-indicator': { m: 0, ml: 0.25, p: 0 },
-            },
-          },
-        },
-        htmlInput: {
-          readOnly,
-          'aria-label': ariaLabel,
-          'aria-describedby': invalid ? describedBy : undefined,
-          // Derived values are display-only: keep them out of the tab order (three stops each).
-          tabIndex: readOnly ? -1 : undefined,
-        },
-      }}
-    />
-  );
-}
-
 function RangeFields({
   from,
   to,
@@ -112,7 +50,9 @@ function RangeFields({
   invalid,
   describedBy,
   labelPrefix,
+  today,
 }: {
+  today?: IsoDate;
   from: IsoDate;
   to: IsoDate;
   onChange?: (range: { from: IsoDate; to: IsoDate }) => void;
@@ -122,26 +62,43 @@ function RangeFields({
   /** Prefix for the accessible names, e.g. "Compare to". */
   labelPrefix?: string;
 }) {
+  // The pair shares one calendar. A half-picked range (first click only) is kept inside the
+  // calendar and only a complete one is reported, so the value always has both dates.
+  const range = onChange
+    ? {
+        from,
+        to,
+        limits: { minNights: 0 },
+        endNames: ['from', 'to'] as [string, string],
+        onChange: (r: { from: IsoDate | ''; to: IsoDate | '' }) => {
+          if (r.from && r.to) onChange({ from: r.from, to: r.to });
+        },
+      }
+    : undefined;
   return (
     <Box sx={{ display: 'flex', gap: 1.25, alignItems: 'flex-start', width: '100%' }}>
       <DateField
         label="From"
         ariaLabel={labelPrefix ? `${labelPrefix} from` : undefined}
         compact
+        today={today}
         value={from}
         readOnly={readOnly}
-        invalid={invalid}
-        describedBy={describedBy}
+        error={invalid}
+        describedBy={invalid ? describedBy : undefined}
+        range={range}
         onChange={(v) => onChange?.({ from: v, to })}
       />
       <DateField
         label="To"
         ariaLabel={labelPrefix ? `${labelPrefix} to` : undefined}
         compact
+        today={today}
         value={to}
         readOnly={readOnly}
-        invalid={invalid}
-        describedBy={describedBy}
+        error={invalid}
+        describedBy={invalid ? describedBy : undefined}
+        range={range}
         onChange={(v) => onChange?.({ from, to: v })}
       />
     </Box>
@@ -188,6 +145,7 @@ export default function DateSelection({
           <RangeFields
             from={period.from}
             to={period.to}
+            today={today}
             invalid={Boolean(errors.period)}
             describedBy={periodErrorId}
             onChange={(r) => setPeriod({ kind: 'custom', ...r })}
@@ -200,8 +158,9 @@ export default function DateSelection({
           <DateField
             label="Date"
             value={period.date}
-            invalid={Boolean(errors.period)}
-            describedBy={periodErrorId}
+            today={today}
+            error={Boolean(errors.period)}
+            describedBy={errors.period ? periodErrorId : undefined}
             onChange={(date) => setPeriod({ kind: 'singleDay', date })}
           />
         );
@@ -210,8 +169,9 @@ export default function DateSelection({
           <DateField
             label="As of Date"
             value={period.date}
-            invalid={Boolean(errors.period)}
-            describedBy={periodErrorId}
+            today={today}
+            error={Boolean(errors.period)}
+            describedBy={errors.period ? periodErrorId : undefined}
             onChange={(date) => setPeriod({ kind: 'asOf', date })}
           />
         );
@@ -250,6 +210,7 @@ export default function DateSelection({
               to={c.to}
               readOnly={c.preset !== 'custom'}
               labelPrefix="Compare to"
+              today={today}
               invalid={Boolean(errors.comparison)}
               describedBy={compareErrorId}
               onChange={(r) => onChange(updateComparison(value, { ...c, ...r }))}
@@ -276,8 +237,9 @@ export default function DateSelection({
             label={period.kind === 'asOf' ? 'As of Date' : 'Date'}
             ariaLabel={period.kind === 'asOf' ? 'Compare to as of date' : 'Compare to date'}
             value={c.date}
-            invalid={Boolean(errors.comparison)}
-            describedBy={compareErrorId}
+            today={today}
+            error={Boolean(errors.comparison)}
+            describedBy={errors.comparison ? compareErrorId : undefined}
             onChange={(date) =>
               onChange(updateComparison(value, { kind: 'date', date, derived: false }))
             }

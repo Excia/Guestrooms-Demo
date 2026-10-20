@@ -4,7 +4,6 @@ import Button from '@mui/material/Button';
 import Skeleton from '@mui/material/Skeleton';
 import Tab from '@mui/material/Tab';
 import Tabs from '@mui/material/Tabs';
-import TextField from '@mui/material/TextField';
 import type { Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
@@ -23,6 +22,7 @@ import {
   monthChoices,
 } from '../app/quickStats';
 import type { QuickStats as QuickStatsData, QuickStatsView } from '../api';
+import DateField from './shared/DateField';
 import Select from './shared/Select';
 import {
   AllRoomBlocksLink,
@@ -67,20 +67,19 @@ function DateControl({
 }) {
   const [draft, setDraft] = useState(value);
   return (
-    <TextField
-      type="date"
+    <DateField
       label={label}
       value={draft}
-      onChange={(e) => {
-        setDraft(e.target.value);
-        if (isValidIsoDate(e.target.value)) onCommit(e.target.value);
+      fullWidth={false}
+      onChange={(next) => {
+        setDraft(next);
+        if (isValidIsoDate(next)) onCommit(next);
       }}
       // A cleared or incomplete date goes back to the last valid one when the field loses focus.
       onBlur={() => {
         if (!isValidIsoDate(draft)) setDraft(value);
       }}
       error={!isValidIsoDate(draft)}
-      slotProps={{ inputLabel: { shrink: true } }}
       sx={{ width: (t) => t.spacing(DATE_FIELD_WIDTH), maxWidth: '100%' }}
     />
   );
