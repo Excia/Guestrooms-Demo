@@ -21,6 +21,8 @@ export interface ReservationPanelProps {
   onCreated: (detail: ReservationDetail) => void;
   onUnknownOutcome: () => void;
   onEarlyLateSaved: (reservationId: string, values: EarlyLateValues) => void;
+  /** Called when the panel has finished closing (the page puts focus back on what opened it). */
+  onExited?: () => void;
   now?: () => number;
 }
 
@@ -40,6 +42,7 @@ export default function ReservationPanel({
   onCreated,
   onUnknownOutcome,
   onEarlyLateSaved,
+  onExited,
   now,
 }: ReservationPanelProps) {
   const titleId = useId();
@@ -62,6 +65,7 @@ export default function ReservationPanel({
       }}
       slotProps={{
         backdrop: { invisible: true },
+        transition: { onExited },
         paper: {
           role: 'dialog',
           'aria-labelledby': titleId,

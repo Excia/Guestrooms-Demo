@@ -194,6 +194,16 @@ describe('closing', () => {
     expect(grid().getAttribute('aria-activedescendant')).toBe(block('Thomas Okafor').id);
   });
 
+  it('closing the New Reservation panel returns focus to the New Reservation button', async () => {
+    const user = await loaded();
+    const button = screen.getByRole('button', { name: 'New Reservation' });
+    await user.click(button);
+    const dialog = await panel('New Reservation');
+    await user.click(within(dialog).getByRole('button', { name: 'Back to schedule' }));
+    await panelGone();
+    expect(button).toHaveFocus();
+  });
+
   it('a click outside the panel closes it', async () => {
     const user = await loaded();
     await user.click(block('Thomas Okafor'));

@@ -45,7 +45,7 @@ export interface ScheduleControlsProps {
   onAvailability: (value: ScheduleAvailability) => void;
   onToggleFilters: (button: HTMLElement) => void;
   /** Opens the New Reservation panel on the schedule. */
-  onNewReservation: () => void;
+  onNewReservation: (button: HTMLElement) => void;
 }
 
 /** Icon button of the date navigation: 35px as in Figma. */
@@ -150,7 +150,7 @@ export default function ScheduleControls({
         <Button
           variant="contained"
           size="large"
-          onClick={onNewReservation}
+          onClick={(e) => onNewReservation(e.currentTarget)}
           startIcon={<AddCircle />}
           sx={{ minWidth: (t) => t.spacing(25), whiteSpace: 'nowrap' }}
         >

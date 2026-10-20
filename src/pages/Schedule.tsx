@@ -131,8 +131,19 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   // entry is still the one on screen, so the history has no panel left over; otherwise (a reload,
   // a shared link) it replaces the URL with the same view without the panel. Either way the view,
   // date range and filters are exactly what they were.
+  // What had focus when the panel opened (the grid, or the New Reservation button): focus goes back
+  // there once the panel has closed, however it was closed (the modal's own restore needs the page focused).
+  const panelTrigger = useRef<HTMLElement | null>(null);
+  const restoreFocus = useCallback(() => {
+    const trigger = panelTrigger.current;
+    panelTrigger.current = null;
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+  }, []);
   const openPanel = useCallback(
-    (next: Parameters<typeof applyPanel>[1]) => {
+    (next: Parameters<typeof applyPanel>[1], trigger?: HTMLElement) => {
+      const active = document.activeElement;
+      panelTrigger.current =
+        trigger ?? (active instanceof HTMLElement && active !== document.body ? active : null);
       const base = closePanel(latestParams.current);
       const search = applyPanel(latestParams.current, next);
       latestParams.current = search;
@@ -395,7 +406,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           onToday={() => update({ start: null })}
           onAvailability={(availability) => update({ availability })}
           onToggleFilters={(button) => setFilterAnchor((a) => (a ? null : button))}
-          onNewReservation={() => openPanel({ kind: 'new' })}
+          onNewReservation={(button) => openPanel({ kind: 'new' }, button)}
         />
         <Box
           sx={(t) => ({
@@ -443,6 +454,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         onCreated={onCreated}
         onUnknownOutcome={retry}
         onEarlyLateSaved={onEarlyLateSaved}
+        onExited={restoreFocus}
       />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}
