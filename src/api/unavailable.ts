@@ -8,5 +8,6 @@ export function createUnavailableClient(error: ApiError): ApiClient {
     dashboard: { getStats: fail, getQuickStats: fail },
     reservations: { list: fail, get: fail },
     permissions: { getGrant: fail },
+    schedule: { get: fail, moveRoom: fail, moveDates: fail },
   };
 }

@@ -63,6 +63,21 @@ Copy `.env.example` to `.env.local` to override.
   without nights. Occupancy percent is rounded by the backend; a TOTAL row's percent is the mean of
   the row percents. "Empty" means no revenue rows and no room blocks (day, month) or days (week);
   a week with no data answers `days: []`.
+- Schedule (`schedule.get`, `moveRoom`, `moveDates`; `GET /schedule`, `POST /schedule/move-room`,
+  `POST /schedule/move-dates`): a stay occupies the nights `[startDate, endDate)`, so a departure
+  on another stay's arrival day is not an overlap. `get` takes `startDate`, `days` (7, 14 or 30) and
+  optional `locationIds`, `roomTypeIds` (non-empty, comma-free, sent comma-separated) and
+  `availability` (`all`, `available`, `booked`); the answer must echo `startDate` and `days`, and
+  every block or closure must sit in a listed room, else `invalid-response`. "Empty" means no
+  rooms. Filter option lists are never narrowed by the query. Pure rules live in
+  `src/app/schedule.ts` (range, headers, filters, layout) and `src/app/scheduleDrag.ts` (`canDrop`).
+- Schedule mutations return the changed blocks and apply nothing on error: 400 `invalid-id` /
+  `invalid-query`, 404 unknown reservation room or room, 409 `conflict` (a target room is booked or
+  closed on those nights; `details.roomId` lists the rooms) and 409 `not-movable` (checked in or
+  out dates, locked room type, arrival in the past). `moveDates` scope `all-rooms` shifts every
+  room of the reservation, `this-room` splits the room off; `toRoomId` changes the room in the same
+  call. The mock keeps schedule state per client, honours `today` and `scheduleSize: 'large'`
+  (200 rooms), and its data is anchored on `MOCK_TODAY` unless `today` is passed.
 - Server `message` and `details` are untrusted text: render them as text, never as HTML.
 - Ids go into URL paths; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400).
 - `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped.

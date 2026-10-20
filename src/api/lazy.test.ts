@@ -10,6 +10,7 @@ describe('createLazyClient', () => {
     await client.reservations.get('res-1001');
     await client.permissions.getGrant();
     await client.reservations.list();
+    await client.schedule.get({ startDate: '2026-10-16', days: 7 });
     expect(load).toHaveBeenCalledOnce();
   });
   it('forwards arguments, including the abort signal', async () => {
@@ -18,6 +19,17 @@ describe('createLazyClient', () => {
     const promise = client.dashboard.getStats({ signal: controller.signal });
     controller.abort();
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+  });
+  it('forwards schedule moves to the loaded client', async () => {
+    const client = createLazyClient(async () => createMockClient({ today: '2026-10-16' }));
+    const room = await client.schedule.moveRoom({ reservationRoomId: 'rr-3', toRoomId: 'rm-203' });
+    expect(room.blocks[0].roomId).toBe('rm-203');
+    const dates = await client.schedule.moveDates({
+      reservationRoomId: 'rr-3',
+      toStartDate: '2026-10-30',
+      scope: 'all-rooms',
+    });
+    expect(dates.blocks[0].startDate).toBe('2026-10-30');
   });
   it('surfaces a load failure as a rejection', async () => {
     const client = createLazyClient(() => Promise.reject(new Error('chunk failed')));
