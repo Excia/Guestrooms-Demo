@@ -2,7 +2,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { HEADER_HEIGHT } from '../app/layout';
-import DashboardColumn from '../components/DashboardColumn';
+import DashboardColumn, { COLUMN_MAX_WIDTH_SPACING } from '../components/DashboardColumn';
 
 /**
  * Slot contract: each slot is a ReactNode. `undefined` shows the placeholder, `null` renders an
@@ -44,7 +44,11 @@ export default function Dashboard({
         pt: 3.5,
         pb: 4,
         [t.breakpoints.up('lg')]: {
-          flexDirection: 'row',
+          display: 'grid',
+          // Three columns of at most 450px, centred; rows: titles (auto, shared) then panels (fill).
+          gridTemplateColumns: `repeat(3, minmax(0, ${t.spacing(COLUMN_MAX_WIDTH_SPACING)}))`,
+          gridTemplateRows: 'auto minmax(0, 1fr)',
+          rowGap: 0, // title and panel touch; the title's own margin sets the spacing
           justifyContent: 'center',
           // vh first for browsers without dvh; dvh wins where supported.
           height: [

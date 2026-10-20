@@ -5,11 +5,9 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { hasVerticalOverflow } from '../app/overflow';
 
 /** Column width at the 1512 design width (Figma 69:3790); 56.25 x 8px = 450px. */
-const COLUMN_MAX_WIDTH_SPACING = 56.25;
+export const COLUMN_MAX_WIDTH_SPACING = 56.25;
 /** Smallest stacked panel: 28 x 8px = 224px, so an empty or short panel is still a visible card. */
 const STACKED_MIN_HEIGHT_SPACING = 28;
-/** Room for two title lines (subtitle1 line height 1.4 x 18px), so wrapped titles keep panel tops level. */
-const TITLE_MIN_HEIGHT_EM = 2.8;
 
 export interface DashboardColumnProps {
   /** Column title, in normal case; it is shown uppercase with CSS (the source text stays readable). */
@@ -67,9 +65,12 @@ export default function DashboardColumn({
         flexDirection: 'column',
         minWidth: 0,
         minHeight: 0,
+        // Desktop: the column spans the Dashboard grid's two rows (title, panel) and shares them via
+        // subgrid, so a wrapped title in one column pushes all panel tops down together.
         [t.breakpoints.up('lg')]: {
-          flex: '1 1 0',
-          maxWidth: t.spacing(COLUMN_MAX_WIDTH_SPACING),
+          display: 'grid',
+          gridRow: 'span 2',
+          gridTemplateRows: 'subgrid',
         },
       })}
     >
@@ -78,7 +79,7 @@ export default function DashboardColumn({
         variant="subtitle1"
         component="h2"
         color="text.secondary"
-        sx={{ textTransform: 'uppercase', mb: 0.5, minHeight: `${TITLE_MIN_HEIGHT_EM}em` }}
+        sx={{ textTransform: 'uppercase', mb: 0.5 }}
       >
         {title}
       </Typography>
