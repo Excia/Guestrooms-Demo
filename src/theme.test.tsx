@@ -108,8 +108,9 @@ describe('hover tint', () => {
     '&:hover'?: { backgroundColor?: string };
     [key: string]: unknown;
   };
-  const root = (name: 'MuiButton' | 'MuiIconButton' | 'MuiListItemButton' | 'MuiLink') =>
-    (theme.components?.[name]?.styleOverrides as { root: Root }).root;
+  const root = (
+    name: 'MuiButton' | 'MuiIconButton' | 'MuiListItemButton' | 'MuiLink' | 'MuiPaginationItem',
+  ) => (theme.components?.[name]?.styleOverrides as { root: Root }).root;
 
   it('tints text and outlined buttons on hover', () => {
     for (const variant of ['text', 'outlined']) {
@@ -129,6 +130,22 @@ describe('hover tint', () => {
     });
     expect(root('MuiListItemButton')({ ownerState: {}, theme })).toEqual({
       '&:hover, &.Mui-selected, &.Mui-selected:hover': { backgroundColor: tint },
+    });
+  });
+
+  it('tints pagination items on hover and when selected', () => {
+    expect(root('MuiPaginationItem')({ ownerState: {}, theme })).toEqual({
+      '&:hover, &.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible': {
+        backgroundColor: tint,
+      },
+    });
+  });
+
+  it('has a button_small typography token (Figma button/small)', () => {
+    expect(theme.typography.button_small).toMatchObject({
+      fontSize: '0.8125rem',
+      fontWeight: 500,
+      textTransform: 'uppercase',
     });
   });
 

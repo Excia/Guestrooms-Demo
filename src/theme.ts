@@ -17,11 +17,13 @@ declare module '@mui/material/styles' {
     h4_fixed: CSSProperties;
     menu_item: CSSProperties;
     menu_heading: CSSProperties;
+    button_small: CSSProperties;
   }
   interface TypographyVariantsOptions {
     h4_fixed?: CSSProperties;
     menu_item?: CSSProperties;
     menu_heading?: CSSProperties;
+    button_small?: CSSProperties;
   }
 }
 
@@ -30,6 +32,7 @@ declare module '@mui/material/Typography' {
     h4_fixed: true;
     menu_item: true;
     menu_heading: true;
+    button_small: true;
   }
 }
 
@@ -75,6 +78,8 @@ const base = createTheme({
     menu_heading: font(menuFontPx(20), 500, 1.6, 0.15),
     caption: font(12, 400, 1.4, 0.4),
     button: font(14, 500, 24 / 14, 0.4),
+    // Figma button/small (13px Medium): section captions such as "Compare to:" (set uppercase by the caller).
+    button_small: { ...font(13, 500, 22 / 13, 0.46), textTransform: 'uppercase' },
   },
   components: {
     // Hover: non-solid buttons, icon buttons, list rows and unstyled links get the light green tint
@@ -117,6 +122,17 @@ const base = createTheme({
         }),
       },
     },
+    // Page items follow the same rule as list rows: hover and selected are the light green tint
+    // (MUI's default selected wash is a darker alpha of the primary).
+    MuiPaginationItem: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&:hover, &.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible': {
+            backgroundColor: theme.palette.primary.tint,
+          },
+        }),
+      },
+    },
     MuiLink: {
       styleOverrides: {
         root: ({ ownerState, theme }) => ({
@@ -138,7 +154,14 @@ const base = createTheme({
     // Input label: Figma shows 12px when shrunk. MUI scales the 16px root by 0.75
     // (= 12px), so the label keeps its default size and needs no override.
     MuiTypography: {
-      defaultProps: { variantMapping: { h4_fixed: 'h4', menu_item: 'span', menu_heading: 'h2' } },
+      defaultProps: {
+        variantMapping: {
+          h4_fixed: 'h4',
+          menu_item: 'span',
+          menu_heading: 'h2',
+          button_small: 'span',
+        },
+      },
     },
   },
 });
