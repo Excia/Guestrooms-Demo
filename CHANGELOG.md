@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.2.0...guestrooms-v1.3.0) (2026-10-20)
+
+
+### Features
+
+* add schedule grid with filters and drag-and-drop moves ([#118](https://github.com/Excia/Guestrooms-Demo/issues/118)) ([a0a24b1](https://github.com/Excia/Guestrooms-Demo/commit/a0a24b14628c92b2fe7cf054fc32aae1fe7b180e))
+
+
+### Bug Fixes
+
+* themed calendar, range selection and menu hover for date and select controls ([#116](https://github.com/Excia/Guestrooms-Demo/issues/116)) ([30444cf](https://github.com/Excia/Guestrooms-Demo/commit/30444cf30086c4688420f099751adddc91b882ea))
+
 ## [1.2.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.1.0...guestrooms-v1.2.0) (2026-10-20)
 
 
