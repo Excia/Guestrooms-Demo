@@ -2,8 +2,9 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { routes, SCHEDULE_PATH } from './app/routes';
+import { DASHBOARD_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
+import Dashboard from './pages/Dashboard';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
@@ -31,9 +32,12 @@ export default function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<RedirectToSchedule />} />
-        {routes.map((r) => (
-          <Route key={r.path} path={r.path} element={<PagePlaceholder title={r.title} />} />
-        ))}
+        <Route path={DASHBOARD_PATH} element={<Dashboard />} />
+        {routes
+          .filter((r) => r.path !== DASHBOARD_PATH)
+          .map((r) => (
+            <Route key={r.path} path={r.path} element={<PagePlaceholder title={r.title} />} />
+          ))}
         {/* Deliberately not in the route table or the menu. */}
         {ComponentsDemo ? (
           <Route
