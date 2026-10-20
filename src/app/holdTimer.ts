@@ -48,3 +48,11 @@ export function describeHold(remainingMs: number): string {
   }
   return `${seconds} ${seconds === 1 ? 'second' : 'seconds'}`;
 }
+
+/**
+ * Pausing (the New Room Closure tab is shown): the time spent paused does not count. The new start
+ * is the old one moved forward by the pause, so the remaining time after resuming is exactly what
+ * it was when the pause began.
+ */
+export const startAfterPause = (startedAt: number, pausedAt: number, resumedAt: number): number =>
+  startedAt + Math.max(resumedAt - pausedAt, 0);

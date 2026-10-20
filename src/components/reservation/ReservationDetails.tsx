@@ -418,7 +418,12 @@ function Loaded({
         />
         <Box sx={{ mt: 1.5 }}>
           <SplitButton
-            primary={{ id: cta.primary.id, label: cta.primary.label, variant: cta.primary.variant }}
+            primary={{
+              id: cta.primary.id,
+              label: cta.primary.label,
+              variant: cta.primary.variant,
+              blocked: cta.primary.blockedReason ?? undefined,
+            }}
             items={cta.menu}
             onPrimary={() => {
               if (cta.primary.blockedReason) say(cta.primary.blockedReason);

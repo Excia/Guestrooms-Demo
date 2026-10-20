@@ -469,7 +469,8 @@ describe('New Reservation panel', () => {
     const labels = within(list)
       .getAllByRole('option')
       .map((o) => o.textContent);
-    expect(labels).toHaveLength(30);
+    expect(labels[0]).toBe('Unassigned'); // the first entry puts the room back to Unassigned
+    expect(labels).toHaveLength(31);
     expect(labels).toContain('Room 201'); // Main Clubhouse
     expect(labels).toContain('Room 101'); // North Lodge
     expect(labels).toContain('Room C7'); // Lakeside, a king (not a cottage)

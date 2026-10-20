@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api';
 import type { ReservationDetail, ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
-import { HEADER_HEIGHT } from '../app/layout';
+import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
   applyScheduleFilters,
@@ -44,6 +44,8 @@ type Accepted = Extract<DropResult, { ok: true }>;
 export interface ScheduleProps {
   /** Local calendar date treated as "today". Injectable for tests. */
   today?: IsoDate;
+  /** Side the reservation panel flies out from; the one setting in layout.ts by default. Injectable for tests. */
+  panelSide?: PanelSide;
 }
 
 interface Pending {
@@ -61,7 +63,10 @@ interface Toast {
  * the grid. The view (start date, length, filters) lives in the URL. Desktop-first: the controls
  * wrap below 1200px and the grid scrolls inside its own container.
  */
-export default function Schedule({ today: todayProp }: ScheduleProps) {
+export default function Schedule({
+  today: todayProp,
+  panelSide = RESERVATION_PANEL_SIDE,
+}: ScheduleProps) {
   const api = useApi();
   const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
   const [params, setParams] = useSearchParams();
@@ -469,6 +474,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         onEarlyLateSaved={onEarlyLateSaved}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
+        side={panelSide}
       />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}
@@ -478,6 +484,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         onClose={() => setToastOpen(false)}
         message={toast?.message ?? ''}
         saveId={toast?.id}
+        side={toastSideFor(panelSide)}
       />
     </Box>
   );

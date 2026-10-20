@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
@@ -210,7 +210,7 @@ describe('Location, Room Type and Room', () => {
     expect(options()).toEqual(['Unassigned', 'King Deluxe', 'Two-Bedroom Cottage']);
     await user.click(screen.getByRole('option', { name: 'King Deluxe' }));
     await user.click(room());
-    expect(options()).toEqual(['Room C7', 'Room C8']);
+    expect(options()).toEqual(['Unassigned', 'Room C7', 'Room C8']);
     await user.click(screen.getByRole('option', { name: 'Room C8' }));
     expect(room()).toHaveValue('Room C8');
   });
@@ -230,13 +230,49 @@ describe('Location, Room Type and Room', () => {
     expect(location()).toHaveTextContent('Lakeside Cottages');
     expect(type()).toHaveTextContent('King Deluxe');
     await user.click(location());
-    await user.click(await screen.findByRole('option', { name: 'Unassigned' }));
-    expect(room()).toHaveValue('Room C7'); // still fits
-    await user.click(type());
-    await user.click(await screen.findByRole('option', { name: 'Unassigned' }));
-    await user.click(location());
     await user.click(await screen.findByRole('option', { name: 'North Lodge' }));
     expect(room()).toHaveValue(''); // C7 is not in North Lodge
+    expect(type()).toHaveTextContent('King Deluxe'); // North Lodge has king rooms too
+  });
+
+  it('Unassigned in Location or Room Type also clears the room: never "Unassigned, Room 302"', async () => {
+    const { user, location, type, room } = await open();
+    await user.click(room());
+    await user.click(await screen.findByRole('option', { name: 'Room 302' }));
+    await user.click(location());
+    await user.click(await screen.findByRole('option', { name: 'Unassigned' }));
+    expect(room()).toHaveValue('');
+    expect(location()).toHaveTextContent('Unassigned');
+    expect(type()).toHaveTextContent('Unassigned'); // filled in by the room, so it went with it
+    await user.click(room());
+    await user.click(await screen.findByRole('option', { name: 'Room 302' }));
+    await user.click(type());
+    await user.click(await screen.findByRole('option', { name: 'Unassigned' }));
+    expect(room()).toHaveValue('');
+    expect(location()).toHaveTextContent('Unassigned');
+  });
+
+  it('clearing the room (Clear button or the Unassigned entry) undoes what it filled in; explicit choices stay', async () => {
+    const { user, dialog, location, type, room } = await open();
+    await user.click(room());
+    await user.click(await screen.findByRole('option', { name: 'Room 302' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Clear room' }));
+    expect(room()).toHaveValue('');
+    expect(location()).toHaveTextContent('Unassigned');
+    expect(type()).toHaveTextContent('Unassigned');
+    await user.click(room());
+    expect(options()).toHaveLength(31); // the list widened again
+    await user.keyboard('{Escape}');
+    // the user chose the location: it stays when the room goes; the Unassigned entry clears too
+    await user.click(location());
+    await user.click(await screen.findByRole('option', { name: 'North Lodge' }));
+    await user.click(room());
+    await user.click(await screen.findByRole('option', { name: 'Room 105' }));
+    expect(type()).toHaveTextContent('King Deluxe');
+    await user.click(room());
+    await user.click((await screen.findAllByRole('option'))[0]); // Unassigned
+    expect(room()).toHaveValue('');
+    expect(location()).toHaveTextContent('North Lodge');
     expect(type()).toHaveTextContent('Unassigned');
   });
 
@@ -245,7 +281,7 @@ describe('Location, Room Type and Room', () => {
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
     await user.click(within(dialog).getByRole('combobox', { name: 'Room' }));
-    expect(screen.getAllByRole('option')).toHaveLength(30);
+    expect(screen.getAllByRole('option')).toHaveLength(31); // 30 rooms and Unassigned
   });
 });
 
@@ -503,5 +539,191 @@ describe('New Room Closure tab, close button and panel side', () => {
     expect(dialog.closest('.MuiDrawer-root')).toHaveClass(
       `MuiDrawer-anchor${RESERVATION_PANEL_SIDE === 'left' ? 'Left' : 'Right'}`,
     );
+  });
+});
+
+// ---- round 3 -----------------------------------------------------------------------------------
+
+describe('a press that moves is not a click on an empty date', () => {
+  it('a drag of 10px or 60px that starts on an empty cell opens nothing; a still click does', async () => {
+    await loaded();
+    mockGeometry();
+    for (const dx of [10, 60]) {
+      const row = rowOf('203');
+      fireEvent.pointerDown(row, {
+        clientX: colX(3),
+        clientY: 150,
+        button: 0,
+        pointerType: 'mouse',
+      });
+      fireEvent.pointerMove(window, { clientX: colX(3) + dx, clientY: 150, pointerType: 'mouse' });
+      fireEvent.pointerUp(window, { clientX: colX(3) + dx, clientY: 150, pointerType: 'mouse' });
+      fireEvent.click(row, { clientX: colX(3) + dx, clientY: 150 });
+      expect(url()).toBe('/schedule');
+    }
+    const row = rowOf('203');
+    fireEvent.pointerDown(row, { clientX: colX(3), clientY: 150, button: 0, pointerType: 'mouse' });
+    fireEvent.pointerUp(window, { clientX: colX(3) + 1, clientY: 150, pointerType: 'mouse' });
+    fireEvent.click(row, { clientX: colX(3) + 1, clientY: 150 });
+    await panel('New Reservation');
+    expect(url()).toContain('room=rm-203');
+  });
+
+  it('a cancelled press (a touch scroll) opens nothing, a touch tap does, the keyboard still does', async () => {
+    const user = await loaded();
+    mockGeometry();
+    const row = rowOf('203');
+    fireEvent.pointerDown(row, { clientX: colX(3), clientY: 150, pointerType: 'touch' });
+    fireEvent.pointerCancel(row, { pointerType: 'touch' });
+    fireEvent.click(row, { clientX: colX(3), clientY: 150 });
+    expect(url()).toBe('/schedule');
+    fireEvent.pointerDown(row, { clientX: colX(3), clientY: 150, pointerType: 'touch' });
+    fireEvent.pointerUp(row, { clientX: colX(3), clientY: 150, pointerType: 'touch' });
+    fireEvent.click(row, { clientX: colX(3), clientY: 150 });
+    await panel('New Reservation');
+    await user.keyboard('{Escape}');
+    await panelGone();
+    grid().focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowRight}{ArrowRight}{ArrowRight}{Enter}');
+    await panel('New Reservation');
+  });
+});
+
+describe('the toast keeps clear of the panel', () => {
+  async function createUnassigned(panelSide: 'left' | 'right') {
+    const user = userEvent.setup();
+    render(
+      <ThemeProvider theme={theme}>
+        <GrantedAccess>
+          <ApiProvider client={createMockClient({ today: TODAY })}>
+            <MemoryRouter initialEntries={['/schedule']}>
+              <Routes>
+                <Route
+                  path="/schedule"
+                  element={<Schedule today={TODAY} panelSide={panelSide} />}
+                />
+              </Routes>
+            </MemoryRouter>
+          </ApiProvider>
+        </GrantedAccess>
+      </ThemeProvider>,
+    );
+    await screen.findByRole('grid', { name: 'Schedule', hidden: true });
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
+    await screen.findByRole('dialog', { name: /Reservation #GR-7000\d/ });
+    return document.querySelector('.MuiSnackbar-root');
+  }
+
+  it('right panel: the toast is bottom-left', async () => {
+    expect(await createUnassigned('right')).toHaveClass('MuiSnackbar-anchorOriginBottomLeft');
+  });
+
+  it('left panel: the toast is bottom-right', async () => {
+    expect(await createUnassigned('left')).toHaveClass('MuiSnackbar-anchorOriginBottomRight');
+  });
+});
+
+describe('guest fields', () => {
+  const open = async () => {
+    const user = await loaded();
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    return { user, dialog: await panel('New Reservation') };
+  };
+
+  it('the dropdown and clear buttons have real names', async () => {
+    const { user, dialog } = await open();
+    expect(within(dialog).getByRole('button', { name: 'Show booking guests' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Show rooms' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Open' })).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('combobox', { name: 'Booking guest' }));
+    await user.click(await screen.findByRole('option', { name: /Beatrice Quinn/ }));
+    await user.click(within(dialog).getByRole('combobox', { name: 'Room' }));
+    await user.click(await screen.findByRole('option', { name: 'Room 204' }));
+    expect(dialog.querySelector('button[aria-label="Clear booking guest"]')).not.toBeNull();
+    expect(dialog.querySelector('button[aria-label="Clear room"]')).not.toBeNull();
+    expect(
+      within(dialog).queryByRole('button', { name: 'Clear', hidden: true }),
+    ).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('radio', { name: 'Reserver' }));
+    expect(within(dialog).getByRole('button', { name: 'Show lead occupants' })).toBeInTheDocument();
+  });
+
+  it('Add guest: the Name field has focus when the dialog opens', async () => {
+    const { user, dialog } = await open();
+    await user.click(within(dialog).getByRole('button', { name: 'Add booking guest' }));
+    const add = await screen.findByRole('dialog', { name: 'Add guest' });
+    expect(within(add).getByRole('textbox', { name: /Name/ })).toHaveFocus();
+  });
+
+  it('the Lead Occupant X puts focus on the Lead Occupant field', async () => {
+    const { user, dialog } = await open();
+    await user.click(within(dialog).getByRole('radio', { name: 'Reserver' }));
+    const lead = within(dialog).getByRole('combobox', { name: 'Lead occupant' });
+    await user.click(lead);
+    await user.click(await screen.findByRole('option', { name: /Beatrice Quinn/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Clear lead occupant' }));
+    expect(lead).toHaveValue('');
+    expect(lead).toHaveFocus();
+  });
+});
+
+describe('Check In for an unassigned reservation', () => {
+  it('is aria-disabled with the reason; a click announces it', async () => {
+    const user = await loaded();
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
+    const created = await panel(/Reservation #GR-7000\d/);
+    const checkIn = await within(created).findByRole('button', { name: 'Check In' });
+    expect(checkIn).toHaveAttribute('aria-disabled', 'true');
+    expect(checkIn).toHaveAccessibleDescription('Assign a room before checking in.');
+    await user.click(checkIn);
+    expect(
+      await within(created).findByText('Assign a room before checking in.', {
+        selector: '.MuiAlert-message',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('an assigned reservation keeps an enabled Check In', async () => {
+    await loaded('/schedule?res=rs-5&rr=rr-5');
+    const details = await panel(/Reservation #GR-50310/);
+    expect(await within(details).findByRole('button', { name: 'Check In' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+  });
+});
+
+describe('the time limit pauses on the New Room Closure tab', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  });
+  afterEach(() => vi.useRealTimers());
+  const tick = (ms: number) =>
+    act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+
+  it('shows no timer there, does not count that time, and resumes with what was left', async () => {
+    const base = createMockClient({ today: TODAY });
+    setup('/schedule?panel=new', {
+      ...base,
+      settings: { getBookingHold: async () => ({ employee: 2, member: 2, nonMember: 2 }) },
+    });
+    const timer = await screen.findByRole('timer');
+    await waitFor(() => expect(timer).toHaveTextContent('Time left: 02:00'));
+    await tick(30_000);
+    expect(timer).toHaveTextContent('Time left: 01:30');
+    fireEvent.click(screen.getByRole('tab', { name: 'New Room Closure' }));
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    await tick(300_000); // far longer than the limit
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'New Reservation' }));
+    const resumed = await screen.findByRole('timer');
+    expect(resumed).toHaveTextContent('Time left: 01:30'); // exactly what was left
+    await tick(31_000);
+    expect(resumed).toHaveTextContent('Time left: 00:59');
   });
 });

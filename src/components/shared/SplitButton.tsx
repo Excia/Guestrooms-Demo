@@ -1,8 +1,10 @@
 import ArrowDropDown from '@mui/icons-material/ArrowDropDown';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
+import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 
 export interface SplitButtonItem {
@@ -12,7 +14,11 @@ export interface SplitButtonItem {
 
 export interface SplitButtonProps {
   /** The primary action (Figma "Res Panel Split CTAs"). */
-  primary: SplitButtonItem & { variant?: 'contained' | 'outlined' };
+  primary: SplitButtonItem & {
+    variant?: 'contained' | 'outlined';
+    /** Why the primary action cannot run now: it is aria-disabled with this as its description (still focusable and clickable, so the click can explain). */
+    blocked?: string;
+  };
   /** The secondary actions behind the arrow. */
   items: readonly SplitButtonItem[];
   onPrimary: () => void;
@@ -48,7 +54,13 @@ export default function SplitButton({
           }),
         }}
       >
-        <Button onClick={onPrimary} sx={{ flexGrow: 1 }}>
+        <Button
+          onClick={onPrimary}
+          aria-disabled={primary.blocked ? true : undefined}
+          aria-describedby={primary.blocked ? `${id}-blocked` : undefined}
+          className={primary.blocked ? 'Mui-disabled' : undefined}
+          sx={{ flexGrow: 1, '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'default' } }}
+        >
           {primary.label}
         </Button>
         <Button
@@ -63,6 +75,11 @@ export default function SplitButton({
           <ArrowDropDown />
         </Button>
       </ButtonGroup>
+      {primary.blocked ? (
+        <Box id={`${id}-blocked`} sx={visuallyHidden}>
+          {primary.blocked}
+        </Box>
+      ) : null}
       <Menu
         id={`${id}-menu`}
         anchorEl={anchor}

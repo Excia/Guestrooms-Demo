@@ -18,6 +18,9 @@ export interface NewReservationForm {
   locationId: string;
   roomTypeId: string;
   roomId: string;
+  /** Location / type filled in by choosing a room, not chosen themselves (see roomCascade.ts). */
+  autoLocation: boolean;
+  autoRoomType: boolean;
 }
 
 export type NewReservationErrors = Partial<Record<'arrival' | 'departure', string>>;
@@ -37,6 +40,8 @@ export function defaultNewReservation(today: IsoDate, tomorrow: IsoDate): NewRes
     locationId: '',
     roomTypeId: '',
     roomId: '',
+    autoLocation: false,
+    autoRoomType: false,
   };
 }
 

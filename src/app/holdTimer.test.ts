@@ -1,5 +1,6 @@
 import {
   ADMIN_HOLD_AUDIENCE,
+  startAfterPause,
   describeHold,
   formatHold,
   HOLD_WARNING_MS,
@@ -44,5 +45,21 @@ describe('hold timer', () => {
     expect(describeHold(5 * MIN)).toBe('5 minutes');
     expect(describeHold(30_000)).toBe('30 seconds');
     expect(describeHold(1000)).toBe('1 second');
+  });
+});
+
+describe('pausing the hold', () => {
+  it('moves the start forward by the pause, so the time left is unchanged', () => {
+    const start = 1_000_000;
+    const pausedAt = start + 30_000;
+    const left = holdStatus(start, 2, pausedAt).remainingMs;
+    const resumedAt = pausedAt + 300_000;
+    const newStart = startAfterPause(start, pausedAt, resumedAt);
+    expect(holdStatus(newStart, 2, resumedAt).remainingMs).toBe(left);
+    expect(holdStatus(newStart, 2, resumedAt + 10_000).remainingMs).toBe(left - 10_000);
+  });
+
+  it('never moves the start backwards', () => {
+    expect(startAfterPause(100, 500, 400)).toBe(100);
   });
 });

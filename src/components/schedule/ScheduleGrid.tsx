@@ -381,6 +381,9 @@ export default function ScheduleGrid({
     stop: () => void;
   } | null>(null);
   const suppressClick = useRef(false);
+  // Where the last pointer press on the grid began (or that it was cancelled): a click that follows
+  // a press that moved is a drag or a scroll, not a click on an empty date.
+  const pressRef = useRef<{ x: number; y: number } | 'cancelled' | null>(null);
   const followRef = useRef<{ id: string; roomId: string; startDate: IsoDate } | null>(null);
 
   const updatePointerDrag = useCallback(
@@ -538,6 +541,8 @@ export default function ScheduleGrid({
   };
 
   const selectItemFromEvent = (event: React.MouseEvent<HTMLElement>) => {
+    const press = pressRef.current;
+    pressRef.current = null;
     const element = event.target as HTMLElement;
     const rowEl = element.closest<HTMLElement>('[role="row"]');
     if (!rowEl) return;
@@ -545,7 +550,14 @@ export default function ScheduleGrid({
     if (index < 0) return;
     const target = element.closest<HTMLElement>('[data-item-id]');
     if (!target) {
-      // The empty part of a room row: which date column was clicked?
+      // The empty part of a room row. A press that moved (a drag or a scroll) or was cancelled is not a click.
+      if (press === 'cancelled') return;
+      if (
+        press &&
+        Math.hypot(event.clientX - press.x, event.clientY - press.y) >= DRAG_THRESHOLD_PX
+      ) {
+        return;
+      }
       const content = contentRef.current;
       const room = latest.current.rooms[index];
       if (!content || !room || element.closest('[role="rowheader"]')) return;
@@ -782,6 +794,12 @@ export default function ScheduleGrid({
         onScroll={onScroll}
         onClickCapture={onClickCapture}
         onClick={selectItemFromEvent}
+        onPointerDown={(e) => {
+          pressRef.current = { x: e.clientX, y: e.clientY };
+        }}
+        onPointerCancel={() => {
+          pressRef.current = 'cancelled';
+        }}
         style={
           {
             [LABEL_VAR]: theme.spacing(LABEL_WIDTH),

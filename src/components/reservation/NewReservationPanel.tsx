@@ -136,16 +136,12 @@ export default function NewReservationPanel({
 
   // ---- rooms: every room, whatever the schedule is filtered to ----
   const allRooms = useMemo(() => data?.rooms ?? [], [data]);
-  const selection: RoomSelection = {
-    locationId: form.locationId,
-    roomTypeId: form.roomTypeId,
-    roomId: form.roomId,
-  };
-  const choices = useMemo(
-    () => roomChoices(allRooms, selection),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allRooms, form.locationId, form.roomTypeId, form.roomId],
+  const { locationId, roomTypeId, roomId, autoLocation, autoRoomType } = form;
+  const selection = useMemo<RoomSelection>(
+    () => ({ locationId, roomTypeId, roomId, autoLocation, autoRoomType }),
+    [locationId, roomTypeId, roomId, autoLocation, autoRoomType],
   );
+  const choices = useMemo(() => roomChoices(allRooms, selection), [allRooms, selection]);
   const options = useMemo(
     () => (data ? buildRoomOptions(choices.rooms, data.locations, data.roomTypes) : []),
     [data, choices.rooms],
@@ -181,18 +177,22 @@ export default function NewReservationPanel({
   const holdState = useBookingHold();
   const minutes =
     holdState.status === 'success' ? holdMinutes(holdState.hold, ADMIN_HOLD_AUDIENCE) : null;
-  const timer = useHoldTimer(minutes, now, active);
+  // The time limit pauses on the New Room Closure tab: that time does not count, and the countdown
+  // resumes with what was left.
+  const timer = useHoldTimer(minutes, now, active, tab !== 0);
   const phase = timer.status?.phase;
   const expired = phase === 'expired' && active;
   // Discrete announcements only (start, under a minute, expired), not every second.
   const announcement =
-    phase === 'warning'
-      ? 'Less than a minute left to complete this reservation.'
-      : phase === 'expired'
-        ? 'Your time to complete this reservation has expired.'
-        : phase === 'running' && minutes !== null
-          ? `Complete this reservation within ${describeHold(minutes * 60_000)}.`
-          : '';
+    tab !== 0
+      ? ''
+      : phase === 'warning'
+        ? 'Less than a minute left to complete this reservation.'
+        : phase === 'expired'
+          ? 'Your time to complete this reservation has expired.'
+          : phase === 'running' && minutes !== null
+            ? `Complete this reservation within ${describeHold(minutes * 60_000)}.`
+            : '';
   useEffect(() => {
     onGuardChange(expired);
     return () => onGuardChange(false);
@@ -321,7 +321,7 @@ export default function NewReservationPanel({
             The time limit could not be loaded, so this reservation has no timer.
           </Alert>
         ) : null}
-        {timer.status ? (
+        {timer.status && tab === 0 ? (
           <Box
             role="timer"
             aria-label="Time to complete this reservation"

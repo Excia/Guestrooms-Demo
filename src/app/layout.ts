@@ -26,3 +26,7 @@ export const HEADER_ID = 'app-header';
  */
 export type PanelSide = 'left' | 'right';
 export const RESERVATION_PANEL_SIDE: PanelSide = 'right';
+
+/** The toast sits on the side the reservation panel does not (it would cover the panel). */
+export const toastSideFor = (panelSide: PanelSide): PanelSide =>
+  panelSide === 'left' ? 'right' : 'left';

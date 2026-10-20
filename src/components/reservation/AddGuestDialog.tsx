@@ -5,7 +5,9 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogTitle from '@mui/material/DialogTitle';
 import TextField from '@mui/material/TextField';
+import Box from '@mui/material/Box';
 import { useId, useRef, useState } from 'react';
+import { focusOnMount } from '../shared/focusOnMount';
 import { useApi } from '../../api';
 import type { Member } from '../../api';
 import { emptyGuestForm, validateGuest, type GuestForm } from '../../app/guest';
@@ -82,35 +84,37 @@ function AddGuestForm({
   return (
     <form onSubmit={submit} noValidate>
       <DialogTitle id={titleId}>Add guest</DialogTitle>
-      <DialogContent
-        sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1, minWidth: { sm: 360 } }}
-      >
-        <TextField
-          label="Name"
-          required
-          autoFocus
-          autoComplete="off"
-          id={`${titleId}-name`}
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { maxLength: 200 } }}
-          {...field('name')}
-        />
-        <TextField
-          label="Email"
-          type="email"
-          autoComplete="off"
-          id={`${titleId}-email`}
-          slotProps={{ inputLabel: { shrink: true } }}
-          {...field('email')}
-        />
-        <TextField
-          label="Phone"
-          type="tel"
-          autoComplete="off"
-          id={`${titleId}-phone`}
-          slotProps={{ inputLabel: { shrink: true } }}
-          {...field('phone')}
-        />
-        {failure ? <Alert severity="error">{failure}</Alert> : null}
+      <DialogContent sx={{ minWidth: { sm: 360 } }}>
+        {/* The padding sits on this box: MUI drops the content's own top padding under a title, which clips the first label. */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+          <TextField
+            label="Name"
+            required
+            // The Name field takes focus the moment the dialog mounts (the focus trap would otherwise pick the container).
+            inputRef={focusOnMount}
+            autoComplete="off"
+            id={`${titleId}-name`}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { maxLength: 200 } }}
+            {...field('name')}
+          />
+          <TextField
+            label="Email"
+            type="email"
+            autoComplete="off"
+            id={`${titleId}-email`}
+            slotProps={{ inputLabel: { shrink: true } }}
+            {...field('email')}
+          />
+          <TextField
+            label="Phone"
+            type="tel"
+            autoComplete="off"
+            id={`${titleId}-phone`}
+            slotProps={{ inputLabel: { shrink: true } }}
+            {...field('phone')}
+          />
+          {failure ? <Alert severity="error">{failure}</Alert> : null}
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} variant="outlined" sx={{ borderColor: 'primary.outlinedBorder' }}>

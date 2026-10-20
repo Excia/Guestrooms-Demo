@@ -6,7 +6,7 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Member } from '../../api';
 import { GUEST_TBD } from '../../api';
 import { useMemberSearch } from './useMemberSearch';
@@ -41,6 +41,7 @@ export default function GuestAutocomplete({
   // Typing searches; showing the chosen name must not (it would filter the list to that one person).
   const [typed, setTyped] = useState('');
   const search = useMemberSearch(typed, open);
+  const inputEl = useRef<HTMLInputElement>(null);
   const members = search.status === 'success' ? search.members : [];
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -58,6 +59,17 @@ export default function GuestAutocomplete({
         onOpen={() => setOpen(true)}
         onClose={() => setOpen(false)}
         openOnFocus
+        // The built-in buttons would only be named "Open" and "Clear".
+        slotProps={{
+          popupIndicator: {
+            'aria-label': `Show ${label.toLowerCase()}s`,
+            title: `Show ${label.toLowerCase()}s`,
+          },
+          clearIndicator: {
+            'aria-label': `Clear ${label.toLowerCase()}`,
+            title: `Clear ${label.toLowerCase()}`,
+          },
+        }}
         autoHighlight
         onChange={(_, member) => onChange(member)}
         onInputChange={(_, text, reason) => {
@@ -99,6 +111,7 @@ export default function GuestAutocomplete({
           <TextField
             {...params}
             size="small"
+            inputRef={inputEl}
             placeholder={GUEST_TBD}
             slotProps={{
               ...params.slotProps,
@@ -118,6 +131,8 @@ export default function GuestAutocomplete({
           onClick={() => {
             onChange(null);
             setTyped('');
+            // The X is disabled once cleared: focus moves to the field, not to nowhere.
+            inputEl.current?.focus();
           }}
         >
           <Close />
