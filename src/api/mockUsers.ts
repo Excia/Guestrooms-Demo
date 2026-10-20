@@ -1,4 +1,4 @@
-import { pagePermission } from '../app/permissions';
+import { pagePermission, type PermissionPageId } from '../app/permissions';
 import { routes } from '../app/routes';
 import type { PermissionGrant } from './types';
 
@@ -20,7 +20,10 @@ export const MOCK_USERS: readonly MockUser[] = [
   {
     id: 'non-admin',
     label: 'Non-admin (no admin pages)',
-    grant: { role: 'Staff', permissions: nonAdminPages.map((r) => pagePermission(r.id)) },
+    grant: {
+      role: 'Staff',
+      permissions: nonAdminPages.map((r) => pagePermission(r.id as PermissionPageId)),
+    },
   },
   {
     id: 'partial',
@@ -35,7 +38,15 @@ export const MOCK_USERS: readonly MockUser[] = [
   },
 ];
 
-/** Unknown or missing values fall back to the administrator, the pre-switcher default. */
+const byId = (id: MockUserId) => MOCK_USERS.find((u) => u.id === id)!;
+
+/**
+ * Demo builds (the mock in a production build) always run as the administrator. A demo visitor
+ * therefore never sees the non-admin experience; that is a product decision, revisit if wanted.
+ */
+export const DEMO_MOCK_USER = byId('admin');
+
+/** Dev: a missing or corrupt stored id falls back to the LEAST privileged user, never the admin. */
 export function resolveMockUser(stored: string | null | undefined): MockUser {
-  return MOCK_USERS.find((u) => u.id === stored) ?? MOCK_USERS[0];
+  return MOCK_USERS.find((u) => u.id === stored) ?? byId('non-admin');
 }

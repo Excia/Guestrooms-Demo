@@ -1,4 +1,4 @@
-import { createMockPermissions, isKnownPermission } from '../app/permissions';
+import { createPermissions, isKnownPermission } from '../app/permissions';
 import type { Permissions } from '../app/permissions';
 
 /**
@@ -9,9 +9,9 @@ import type { Permissions } from '../app/permissions';
  */
 export function permissionsFromGrant(grant: unknown): Permissions {
   const permissions = (grant as { permissions?: unknown } | null | undefined)?.permissions;
-  if (permissions === 'all') return createMockPermissions();
+  if (permissions === 'all') return createPermissions();
   if (Array.isArray(permissions)) {
-    return createMockPermissions(permissions.filter(isKnownPermission));
+    return createPermissions(permissions.filter(isKnownPermission));
   }
-  return createMockPermissions([]);
+  return createPermissions([]);
 }

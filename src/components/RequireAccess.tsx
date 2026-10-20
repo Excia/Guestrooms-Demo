@@ -6,9 +6,11 @@ import { guardDecision } from '../app/access';
 import { DASHBOARD_PATH, type PageId } from '../app/routes';
 import { useAccess } from '../app/useAccess';
 
+export type AccessDeniedReason = 'denied' | 'error' | 'unconfigured';
+
 /** Router state carried to the dashboard so it can explain the redirect once. */
 export interface AccessDeniedState {
-  accessDenied: { reason: 'denied' | 'error' };
+  accessDenied: { reason: AccessDeniedReason };
 }
 
 /**
@@ -36,7 +38,9 @@ export default function RequireAccess({
   }
   if (decision === 'deny') {
     const state: AccessDeniedState = {
-      accessDenied: { reason: status === 'error' ? 'error' : 'denied' },
+      accessDenied: {
+        reason: status === 'ready' ? 'denied' : status === 'loading' ? 'error' : status,
+      },
     };
     return <Navigate to={{ pathname: DASHBOARD_PATH, search }} state={state} replace />;
   }

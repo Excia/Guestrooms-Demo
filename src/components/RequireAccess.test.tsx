@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, useLocation } from 'react-router';
 import App from '../App';
-import { ApiProvider, MOCK_USERS, type MockUserId } from '../api';
+import { ApiError, ApiProvider, type ApiClient } from '../api';
+import { createUnavailableClient } from '../api/unavailable';
+import { MOCK_USERS, type MockUserId } from '../api/mockUsers';
 import { createMockClient, type MockOptions } from '../api/mock';
 import { AccessProvider } from '../app/AccessProvider';
 import { theme } from '../theme';
@@ -13,10 +15,10 @@ function Where() {
   return <output data-testid="where">{pathname + (state ? ' +state' : '')}</output>;
 }
 
-function renderAt(path: string, options: MockOptions = {}) {
+function renderAt(path: string, options: MockOptions = {}, client?: ApiClient) {
   render(
     <ThemeProvider theme={theme}>
-      <ApiProvider client={createMockClient(options)}>
+      <ApiProvider client={client ?? createMockClient(options)}>
         <AccessProvider>
           <MemoryRouter initialEntries={[path]}>
             <App />
@@ -83,6 +85,14 @@ describe('route guard', () => {
     expect(
       await screen.findByRole('dialog', { name: 'Access could not be checked' }),
     ).toBeInTheDocument();
+    await waitFor(() => expect(where()).toHaveTextContent(/^\/dashboard$/));
+  });
+
+  it('says so when the deployment has no API, and still denies', async () => {
+    const client = createUnavailableClient(new ApiError(0, 'x', { code: 'misconfigured' }));
+    renderAt('/admin/rooms', {}, client);
+    const dialog = await screen.findByRole('dialog', { name: 'Site not configured' });
+    expect(dialog).toHaveTextContent('not configured to reach its API');
     await waitFor(() => expect(where()).toHaveTextContent(/^\/dashboard$/));
   });
 

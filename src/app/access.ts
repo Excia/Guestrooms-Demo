@@ -1,12 +1,17 @@
-import { ADMIN_PERMISSION, pagePermission, type Permissions } from './permissions';
-import { routes, type PageId, type RouteMeta } from './routes';
+import {
+  ADMIN_PERMISSION,
+  pagePermission,
+  type PermissionPageId,
+  type Permissions,
+} from './permissions';
+import { routes, type RouteMeta } from './routes';
 
 /** The Admin Setup landing page ('/admin'): it opens for anyone who can open an Admin Setup page. */
 export const ADMIN_LANDING_ID = 'admin';
 
 type Can = Permissions['can'];
 
-const pageKey = (route: RouteMeta) => pagePermission(route.id as PageId);
+const pageKey = (route: RouteMeta) => pagePermission(route.id as PermissionPageId);
 
 /** Whether the user may open the route with this id. Unknown ids are denied. */
 export function canAccessPage(can: Can, id: string, table: readonly RouteMeta[] = routes): boolean {
@@ -33,12 +38,13 @@ export function summarizeAccess(can: Can, table: readonly RouteMeta[] = routes):
   return { canSeeAdminSetup: pages.length > 0, adminPages: pages };
 }
 
-export type AccessStatus = 'loading' | 'ready' | 'error';
+/** 'unconfigured': the deployment has no API (a misconfiguration, not a denial by the server). */
+export type AccessStatus = 'loading' | 'ready' | 'error' | 'unconfigured';
 export type GuardDecision = 'wait' | 'allow' | 'deny';
 
 /**
  * Route guard rule. While the grant loads the guard waits (no redirect, so a deep link survives a
- * reload); a failed load denies, like any missing permission.
+ * reload); a failed or unconfigured load denies, like any missing permission.
  */
 export function guardDecision(status: AccessStatus, allowed: boolean): GuardDecision {
   if (status === 'loading') return 'wait';

@@ -2,7 +2,7 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import NativeSelect from '@mui/material/NativeSelect';
 import { useId } from 'react';
-import { MOCK_USERS, MOCK_USER_STORAGE_KEY, resolveMockUser } from '../api';
+import { MOCK_USERS, MOCK_USER_STORAGE_KEY, resolveMockUser } from '../api/mockUsers';
 
 function readStoredUser(): string | null {
   try {
@@ -34,6 +34,11 @@ export default function DevUserSwitcher() {
         borderRadius: 1,
         border: 1,
         borderColor: 'divider',
+        // Visible focus ring (the native select's own is hard to see on the paper background).
+        '&:has(select:focus-visible)': {
+          outline: (theme) => `${theme.spacing(0.25)} solid ${theme.palette.primary.main}`,
+          outlineOffset: (theme) => theme.spacing(0.25),
+        },
       }}
     >
       <InputLabel htmlFor={id} shrink sx={{ px: 1 }}>

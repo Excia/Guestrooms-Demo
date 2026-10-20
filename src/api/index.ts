@@ -2,7 +2,7 @@ import { MOCK_STORAGE_KEY, resolveApiConfig } from './config';
 import type { ApiConfig } from './config';
 import { createHttpClient } from './http';
 import { createLazyClient } from './lazy';
-import { MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
+import { DEMO_MOCK_USER, MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
 import { createUnavailableClient } from './unavailable';
 import type { ApiClient } from './types';
 import { ApiError } from './types';
@@ -10,8 +10,6 @@ import { ApiError } from './types';
 export * from './types';
 export { ApiProvider, useApi } from './ApiProvider';
 export { permissionsFromGrant } from './grant';
-export { MOCK_USERS, MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
-export type { MockUser, MockUserId } from './mockUsers';
 
 const MOCK_LATENCY_MS = 300;
 
@@ -32,8 +30,8 @@ export interface ApiSetup {
 export function createApiClient(
   config: ApiConfig,
   log: Log = console,
-  /** Stored mock user id (dev only); unknown or absent means the administrator. */
-  storedMockUser?: string | null,
+  /** `mockUser`: stored mock user id (dev only); unknown or absent means the non-admin user. */
+  { mockUser }: { mockUser?: string | null } = {},
 ): ApiSetup {
   for (const warning of config.warnings) log.warn(`[api] ${warning}`);
   if (config.source === 'http' && config.baseUrl) {
@@ -42,7 +40,7 @@ export function createApiClient(
   if (config.source === 'mock') {
     log.info(`[api] using the mock client (scenario: ${config.scenario}).`);
     const { scenario } = config;
-    const { grant } = resolveMockUser(config.demo ? null : storedMockUser);
+    const { grant } = config.demo ? DEMO_MOCK_USER : resolveMockUser(mockUser);
     const client = createLazyClient(async () =>
       (await import('./mock')).createMockClient({ scenario, latencyMs: MOCK_LATENCY_MS, grant }),
     );
@@ -92,5 +90,5 @@ export function createApiClientFromEnvironment({
     stored,
     dev: env.DEV,
   });
-  return createApiClient(config, log, storedUser);
+  return createApiClient(config, log, { mockUser: storedUser });
 }

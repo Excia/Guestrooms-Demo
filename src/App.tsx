@@ -1,6 +1,6 @@
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { DASHBOARD_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
@@ -22,6 +22,9 @@ function PagePlaceholder({ title }: { title: string }) {
   );
 }
 
+// Built pages, keyed by route path; anything missing shows a placeholder.
+const pages: Partial<Record<string, ReactElement>> = {};
+
 /** Keeps the query string, so dev switches like ?mock=empty survive the redirect. */
 function RedirectToSchedule() {
   const { search } = useLocation();
@@ -33,21 +36,22 @@ export default function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<RedirectToSchedule />} />
-        {routes.map((r) => (
-          <Route
-            key={r.path}
-            path={r.path}
-            element={
-              r.path === DASHBOARD_PATH ? (
-                <PagePlaceholder title={r.title} />
-              ) : (
-                <RequireAccess pageId={r.id}>
-                  <PagePlaceholder title={r.title} />
-                </RequireAccess>
-              )
-            }
-          />
-        ))}
+        {routes.map((r) => {
+          const page = pages[r.path] ?? <PagePlaceholder title={r.title} />;
+          return (
+            <Route
+              key={r.path}
+              path={r.path}
+              element={
+                r.path === DASHBOARD_PATH ? (
+                  page
+                ) : (
+                  <RequireAccess pageId={r.id}>{page}</RequireAccess>
+                )
+              }
+            />
+          );
+        })}
         {/* Deliberately not in the route table or the menu. */}
         {ComponentsDemo ? (
           <Route

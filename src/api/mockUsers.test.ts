@@ -1,5 +1,5 @@
 import { permissionsFromGrant } from './grant';
-import { MOCK_USERS, resolveMockUser } from './mockUsers';
+import { DEMO_MOCK_USER, MOCK_USERS, resolveMockUser } from './mockUsers';
 
 const can = (
   id: string,
@@ -15,7 +15,6 @@ describe('mock users', () => {
     expect(can('non-admin', 'page.schedule')).toBe(true);
     expect(can('non-admin', 'page.dashboard')).toBe(true);
     expect(can('non-admin', 'page.rooms')).toBe(false);
-    expect(can('non-admin', 'page.admin')).toBe(false);
     expect(can('non-admin', 'admin')).toBe(false);
   });
   it('partial has Rooms and Room Types only', () => {
@@ -24,9 +23,14 @@ describe('mock users', () => {
     expect(can('partial', 'page.notifications')).toBe(false);
     expect(can('partial', 'admin')).toBe(false);
   });
-  it('falls back to the administrator for unknown or missing ids', () => {
-    expect(resolveMockUser('nope').id).toBe('admin');
-    expect(resolveMockUser(null).id).toBe('admin');
+  it('does not know a page.admin permission (the landing follows the admin pages)', () => {
+    expect(can('admin', 'page.admin' as never)).toBe(false);
+  });
+  it('falls back to the least privileged user for unknown or missing ids', () => {
+    expect(resolveMockUser('nope').id).toBe('non-admin');
+    expect(resolveMockUser(null).id).toBe('non-admin');
+    expect(resolveMockUser(undefined).id).toBe('non-admin');
+    expect(DEMO_MOCK_USER.id).toBe('admin');
     expect(MOCK_USERS.map((u) => u.id)).toEqual(['admin', 'non-admin', 'partial']);
   });
 });

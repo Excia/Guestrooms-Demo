@@ -11,18 +11,20 @@ import { routes, type PageId } from './routes';
 // - `admin` opens every Admin Setup page at once (Primary Setup, Rate Categories, Room Types,
 //   Rooms, Add-On Items, Notifications). A user can also hold single `page.<admin page>` grants
 //   (partial access) without `admin`.
-export type PagePermission = `page.${PageId}`;
+// The '/admin' landing has no permission of its own: it opens for anyone with an Admin Setup page.
+export type PermissionPageId = Exclude<PageId, 'admin'>;
+export type PagePermission = `page.${PermissionPageId}`;
 export type AdminPermission = 'admin';
 // Room for non-page permissions (e.g. 'reservation.create') once the Permissions page is designed.
 export type Permission = PagePermission | AdminPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 
-export const pagePermission = (id: PageId): PagePermission => `page.${id}`;
+export const pagePermission = (id: PermissionPageId): PagePermission => `page.${id}`;
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
   ADMIN_PERMISSION,
-  ...routes.map((r) => pagePermission(r.id)),
+  ...routes.filter((r) => r.id !== 'admin').map((r) => pagePermission(r.id as PermissionPageId)),
 ];
 
 const KNOWN = new Set<string>(ALL_PERMISSIONS);
@@ -37,13 +39,16 @@ export interface Permissions {
 /** Denies everything; the default until a grant has loaded, and after a failed load. */
 export const noPermissions: Permissions = { can: () => false };
 
-/** Mock: every known permission allowed, or only the listed ones. Unknown ids are always denied. */
-export function createMockPermissions(granted?: readonly Permission[]): Permissions {
+/** Every known permission allowed, or only the listed ones. Unknown ids are always denied. */
+export function createPermissions(granted?: readonly Permission[]): Permissions {
   const set = granted ? new Set<Permission>(granted) : null;
   return {
     can: (permission) => isKnownPermission(permission) && (set ? set.has(permission) : true),
   };
 }
+
+/** Alias kept for tests and mock setups written against the earlier name. */
+export const createMockPermissions = createPermissions;
 
 // Fail closed: without a provider (or while the grant is loading) nobody may see anything.
 const PermissionsContext = createContext<Permissions>(noPermissions);
