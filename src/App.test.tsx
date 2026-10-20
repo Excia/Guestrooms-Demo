@@ -1,8 +1,23 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import App from './App';
 
+function LocationProbe() {
+  const { pathname, search } = useLocation();
+  return <output>{pathname + search}</output>;
+}
+
 describe('App', () => {
+  it('keeps the query string when redirecting / to Schedule', () => {
+    render(
+      <MemoryRouter initialEntries={['/?mock=empty']}>
+        <App />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('/schedule?mock=empty');
+  });
+
   it('redirects / to the Schedule page inside the shell', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
