@@ -4,14 +4,18 @@ import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { DASHBOARD_PATH, NEW_RESERVATION_RESULTS_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
+import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
 import NewReservationResults from './pages/NewReservationResults';
+import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
 export const COMPONENTS_DEMO_PATH = '/dev/components';
+// The schedule (grid, drag and drop, dialogs) is the largest page: its code loads on demand.
+const Schedule = lazy(() => import('./pages/Schedule'));
 const ComponentsDemo = import.meta.env.DEV ? lazy(() => import('./pages/ComponentsDemo')) : null;
 
 function PagePlaceholder({ title }: { title: string }) {
@@ -34,6 +38,11 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
+  [SCHEDULE_PATH]: (
+    <Suspense fallback={<ScheduleSkeleton />}>
+      <Schedule />
+    </Suspense>
+  ),
 };
 
 export default function App() {
@@ -42,7 +51,10 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RedirectToSchedule />} />
         {routes.map((r) => {
-          const page = pages[r.path] ?? <PagePlaceholder title={r.title} />;
+          // A page that fails (e.g. its lazy chunk does not load) must not blank the whole app.
+          const page = (
+            <ErrorBoundary>{pages[r.path] ?? <PagePlaceholder title={r.title} />}</ErrorBoundary>
+          );
           return (
             <Route
               key={r.path}
@@ -62,9 +74,11 @@ export default function App() {
           <Route
             path={COMPONENTS_DEMO_PATH}
             element={
-              <Suspense fallback={null}>
-                <ComponentsDemo />
-              </Suspense>
+              <ErrorBoundary>
+                <Suspense fallback={null}>
+                  <ComponentsDemo />
+                </Suspense>
+              </ErrorBoundary>
             }
           />
         ) : null}

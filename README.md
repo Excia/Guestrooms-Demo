@@ -63,6 +63,43 @@ Copy `.env.example` to `.env.local` to override.
   without nights. Occupancy percent is rounded by the backend; a TOTAL row's percent is the mean of
   the row percents. "Empty" means no revenue rows and no room blocks (day, month) or days (week);
   a week with no data answers `days: []`.
+- Schedule (`schedule.get`, `moveRoom`, `moveDates`; `GET /schedule`, `POST /schedule/move-room`,
+  `POST /schedule/move-dates`): a stay occupies the nights `[startDate, endDate)`, so a departure
+  on another stay's arrival day is not an overlap. `get` takes only `startDate` and `days` (7, 14
+  or 30) and always answers every room; the answer must echo `startDate` and `days`, every block or
+  closure must sit in a listed room and ids must be unique, else `invalid-response`. "Empty" means
+  no rooms. **Filtering is client-side** (`applyScheduleFilters` in `src/app/schedule.ts`): the
+  drag rules must see every room of a multi-room reservation, which a filtered answer would omit.
+  Pure rules live in `src/app/schedule.ts` (range, headers, filters, layout) and
+  `src/app/scheduleDrag.ts` (`canDrop`). The client rules only see the loaded window; the server
+  stays authoritative (a long stay shifted past the window is guarded by the server's 409).
+- Schedule moves are safe to retry and to race. **Concurrency:** every `ScheduleBlock` has an
+  opaque `version`; a move sends it back with `fromRoomId` (and `fromStartDate` for `moveDates`).
+  If the reservation room changed since (including by a sibling's move), the server answers 409
+  `stale` and applies nothing. **Idempotency:** every move carries a client-generated `requestId`
+  (UUID; `crypto.randomUUID` with a fallback), sent in the body and as the `Idempotency-Key` header.
+  The same id with the same body replays the first result without applying again; the same id with
+  another body is 409 `idempotency-conflict`. A timeout or network error (status 0) is an _unknown
+  outcome_: the move may have been applied, so the client refetches instead of rolling back.
+  CSRF protection and credentials are the auth layer's job (`getHeaders`, `credentials`).
+  Backend requirements that follow from this: idempotency records need a TTL (long enough to cover
+  client retries, e.g. 24 h); only a failure that applied nothing (a clear 4xx) may be retried with
+  the same `requestId`, an unknown outcome is resolved by reloading, not by blind retry; the
+  `Idempotency-Key` header is authoritative and a body `requestId` that differs from it is a 400;
+  for `all-rooms` only the named block's `version` is checked (a reservation-level version would be
+  safer and is the recommended follow-up); ids must be unique across blocks AND closures, because the
+  grid looks items up by id. The client treats status 0, 408, 5xx and an unusable 2xx answer as an
+  unknown outcome (no revert, reload, neutral message); only 4xx other than 408 means nothing applied.
+- Schedule mutations return the changed blocks and apply nothing on error: 400 `invalid-id` /
+  `invalid-query`, 404 unknown reservation room or room, 409 `conflict` (a target room is booked or
+  closed on those nights; `details.roomId` lists the rooms), 409 `not-movable` (checked out, locked
+  room type, arrival of any moving room in the past, dates of a checked-in room), 409 `stale`,
+  409 `idempotency-conflict`. `moveDates` scope `all-rooms` shifts every room of the reservation
+  (the answer must contain them all, with consistent `roomCount`), `this-room` splits the room off
+  (its `roomCount` becomes 1); `toRoomId` changes the room in the same call; a `toStartDate` equal
+  to `fromStartDate` is a room change (allowed for checked-in rooms). The mock keeps schedule state
+  per client, honours `today` and `scheduleSize: 'large'` (200 rooms), bumps `version` on every
+  change and its data is anchored on `MOCK_TODAY` unless `today` is passed.
 - Server `message` and `details` are untrusted text: render them as text, never as HTML.
 - Ids go into URL paths; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400).
 - `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped.

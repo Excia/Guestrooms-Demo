@@ -1,0 +1,247 @@
+import type { ScheduleBlock } from '../api/types';
+import { blockLayout } from './schedule';
+import { canDrop, toMoveDatesRequest } from './scheduleDrag';
+import {
+  applyMoves,
+  blockAriaLabel,
+  blockSpan,
+  clampShift,
+  itemAtColumn,
+  mergeChangedBlocks,
+  moveCursor,
+  moveFailure,
+  moveDialogCopy,
+  refusalMessage,
+  revertMoves,
+  rowIndexAt,
+  shiftFromDistance,
+  yearLabel,
+} from './scheduleGrid';
+
+const block = (over: Partial<ScheduleBlock> = {}): ScheduleBlock => ({
+  kind: 'reservation',
+  id: 'b1',
+  reservationId: 'r1',
+  confirmationNumber: 'GR-1',
+  guestName: 'Ada Lovelace',
+  guestType: 'guest',
+  roomId: 'a',
+  startDate: '2026-10-20',
+  endDate: '2026-10-22',
+  status: 'confirmed',
+  roomCount: 1,
+  roomTypeLocked: false,
+  version: 'v1',
+  ...over,
+});
+
+describe('blockSpan', () => {
+  it('runs from the middle of the arrival column to the middle of the departure column', () => {
+    const layout = blockLayout(
+      { startDate: '2026-10-21', endDate: '2026-10-23' },
+      '2026-10-20',
+      7,
+    )!;
+    const span = blockSpan(layout, 7);
+    expect(span.start).toBeCloseTo(1.5 / 7);
+    expect(span.end).toBeCloseTo(3.5 / 7);
+  });
+  it('reaches the range edges for clipped stays', () => {
+    const layout = blockLayout(
+      { startDate: '2026-10-18', endDate: '2026-11-30' },
+      '2026-10-20',
+      7,
+    )!;
+    expect(blockSpan(layout, 7)).toEqual({ start: 0, end: 1 });
+  });
+  it('ends at the edge when the departure is the day after the last column', () => {
+    const layout = blockLayout(
+      { startDate: '2026-10-25', endDate: '2026-10-27' },
+      '2026-10-20',
+      7,
+    )!;
+    expect(blockSpan(layout, 7).end).toBe(1);
+  });
+});
+
+describe('pointer geometry', () => {
+  it('rounds a distance to whole days', () => {
+    expect(shiftFromDistance(190, 190)).toBe(1);
+    expect(shiftFromDistance(-100, 190)).toBe(-1);
+    expect(shiftFromDistance(80, 190)).toBe(0);
+    expect(shiftFromDistance(10, 0)).toBe(0);
+  });
+  it('finds the row at an offset', () => {
+    expect(rowIndexAt(0, 60, 3)).toBe(0);
+    expect(rowIndexAt(125, 60, 3)).toBe(2);
+    expect(rowIndexAt(180, 60, 3)).toBeNull();
+    expect(rowIndexAt(-1, 60, 3)).toBeNull();
+  });
+  it('keeps the arrival column inside the range', () => {
+    expect(clampShift(2, -5, 7)).toBe(-2);
+    expect(clampShift(2, 9, 7)).toBe(4);
+    expect(clampShift(-3, 4, 7)).toBe(4); // began before the range
+    expect(clampShift(-3, -4, 7)).toBe(0);
+  });
+});
+
+describe('moveCursor', () => {
+  const at = { row: 1, col: 1 };
+  it('moves one cell and stops at the edges', () => {
+    expect(moveCursor(at, 'ArrowDown', 3, 7)).toEqual({ row: 2, col: 1 });
+    expect(moveCursor({ row: 2, col: 1 }, 'ArrowDown', 3, 7)).toEqual({ row: 2, col: 1 });
+    expect(moveCursor({ row: 0, col: 0 }, 'ArrowLeft', 3, 7)).toEqual({ row: 0, col: 0 });
+    expect(moveCursor({ row: 0, col: 6 }, 'ArrowRight', 3, 7)).toEqual({ row: 0, col: 6 });
+  });
+  it('jumps with Home, End and the page keys', () => {
+    expect(moveCursor(at, 'Home', 3, 7).col).toBe(0);
+    expect(moveCursor(at, 'End', 3, 7).col).toBe(6);
+    expect(moveCursor(at, 'PageDown', 50, 7, 8).row).toBe(9);
+    expect(moveCursor(at, 'PageUp', 50, 7, 8).row).toBe(0);
+  });
+  it('survives an empty grid', () => {
+    expect(moveCursor({ row: 0, col: 0 }, 'ArrowDown', 0, 7)).toEqual({ row: 0, col: 0 });
+  });
+});
+
+describe('itemAtColumn', () => {
+  it('finds the item whose nights cover a column', () => {
+    const items = [block({ startDate: '2026-10-21', endDate: '2026-10-23' })];
+    expect(itemAtColumn(items, '2026-10-20', 7, 0)).toBeUndefined();
+    expect(itemAtColumn(items, '2026-10-20', 7, 1)).toBe(items[0]);
+    expect(itemAtColumn(items, '2026-10-20', 7, 2)).toBe(items[0]);
+    expect(itemAtColumn(items, '2026-10-20', 7, 3)).toBeUndefined();
+    expect(itemAtColumn(undefined, '2026-10-20', 7, 1)).toBeUndefined();
+  });
+});
+
+describe('optimistic moves', () => {
+  const move = {
+    blockId: 'b1',
+    fromRoomId: 'a',
+    toRoomId: 'b',
+    fromStart: '2026-10-20',
+    toStart: '2026-10-23',
+    fromEnd: '2026-10-22',
+    toEnd: '2026-10-25',
+  };
+  it('applies and reverts a move without touching other blocks', () => {
+    const other = block({ id: 'b2' });
+    const moved = applyMoves([block(), other], [move]);
+    expect(moved[0]).toMatchObject({ roomId: 'b', startDate: '2026-10-23', endDate: '2026-10-25' });
+    expect(moved[1]).toBe(other);
+    expect(revertMoves(moved, [move])[0]).toEqual(block());
+  });
+  it('merges API blocks and drops those that left the range', () => {
+    const data = {
+      startDate: '2026-10-20',
+      days: 7 as const,
+      blocks: [block(), block({ id: 'b2' })],
+    };
+    const merged = mergeChangedBlocks(data, [
+      block({ id: 'b1', startDate: '2026-12-01', endDate: '2026-12-03' }),
+      block({ id: 'b3', roomId: 'c' }),
+    ]);
+    expect(merged.map((b) => b.id).sort()).toEqual(['b2', 'b3']);
+  });
+});
+
+describe('copy', () => {
+  const rooms = [
+    { id: 'a', number: '1', locationId: 'l', roomTypeId: 't' },
+    { id: 'b', number: '2', locationId: 'l', roomTypeId: 't' },
+  ];
+  const state = (blocks: ScheduleBlock[]) => ({ today: '2026-10-16', rooms, blocks, closures: [] });
+  it('has a message for every refusal', () => {
+    expect(refusalMessage('closure')).toMatch(/closures cannot/i);
+    expect(refusalMessage('reservation-conflict')).toMatch(/reservation/i);
+  });
+  it('words the Room Change dialog as in Figma', () => {
+    const b = block();
+    const result = canDrop(b, { roomId: 'b', startDate: b.startDate }, state([b]));
+    if (!result.ok) throw new Error('expected ok');
+    expect(moveDialogCopy(result, b, '2')).toEqual({
+      title: 'Reservation GR-1 Room Change',
+      body: 'Please confirm moving this room to Room 2 for dates 10/20/2026 to 10/22/2026.',
+      confirmLabel: 'Move to New Room',
+    });
+  });
+  it('words the single and multi-room Date Change dialogs', () => {
+    const b = block();
+    const single = canDrop(b, { roomId: 'a', startDate: '2026-10-23' }, state([b]));
+    if (!single.ok) throw new Error('expected ok');
+    expect(moveDialogCopy(single, b, '1')).toMatchObject({
+      title: 'Reservation GR-1 Date Change',
+      body: 'Moving this room to Room 1 for dates 10/23/2026 to 10/25/2026 will change the total rate for the reservation.',
+      confirmLabel: 'Move to New Dates',
+    });
+    const b1 = block({ roomCount: 2, reservationId: 'r' });
+    const b2 = block({ id: 'b2', roomId: 'b', roomCount: 2, reservationId: 'r' });
+    const multi = canDrop(b1, { roomId: 'a', startDate: '2026-10-23' }, state([b1, b2]));
+    if (!multi.ok) throw new Error('expected ok');
+    const copy = moveDialogCopy(multi, b1, '1');
+    expect(copy.parts?.emphasis).toBe('all rooms on the reservation');
+    expect(copy.body).toMatch(
+      /will change the check in and check out dates for all rooms on the reservation and will change the total rate/,
+    );
+    expect(toMoveDatesRequest(multi, b1, 'req-12345678', 'this-room').scope).toBe('this-room');
+  });
+  it('names a block with guest, confirmation, status, room and dates', () => {
+    expect(blockAriaLabel(block({ status: 'nyci' }), { number: '202' })).toBe(
+      'Ada Lovelace, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026',
+    );
+    expect(blockAriaLabel(block({ status: 'checked-in' }), { number: '1' })).toContain(
+      'checked in',
+    );
+  });
+  it('labels the corner with the year or both years', () => {
+    expect(yearLabel(['2026-10-20', '2026-10-21'])).toBe('2026');
+    expect(yearLabel(['2026-12-30', '2027-01-02'])).toBe('2026/2027');
+  });
+});
+
+describe('moveFailure', () => {
+  const err = (status: number, code?: string, message = 'x') => ({ status, code, message });
+  it('treats no response and 5xx as an unknown outcome: no revert, reload, neutral copy', () => {
+    for (const e of [
+      err(0, 'timeout'),
+      err(0, 'network'),
+      err(503),
+      err(408),
+      err(200, 'invalid-response'),
+    ]) {
+      expect(moveFailure(e)).toEqual({
+        revert: false,
+        refetch: true,
+        message: 'Could not confirm the move. Showing the latest schedule.',
+      });
+    }
+  });
+  it('reverts and reloads for 409 and 404', () => {
+    for (const e of [err(409, 'conflict'), err(409, 'stale'), err(409, 'not-movable'), err(404)]) {
+      expect(moveFailure(e)).toMatchObject({ revert: true, refetch: true });
+    }
+  });
+  it('reverts without a reload for invalid requests', () => {
+    expect(moveFailure(err(400, 'invalid-query'))).toMatchObject({ revert: true, refetch: false });
+  });
+  it('maps known codes to our own copy', () => {
+    expect(moveFailure(err(409, 'conflict', 'Room 5 taken')).message).toMatch(/no longer free/);
+    expect(moveFailure(err(409, 'not-movable')).message).toMatch(/cannot be moved that way/);
+    expect(moveFailure(err(409, 'stale')).message).toMatch(/changed by someone else/);
+    expect(moveFailure(err(404)).message).toMatch(/no longer exists/);
+    expect(moveFailure(err(400, 'invalid-id')).message).toMatch(/not valid/);
+  });
+  it('uses safe plain server text only as a fallback detail', () => {
+    expect(moveFailure(err(422, 'weird', 'Rate plan closed.')).message).toBe(
+      'The move could not be completed: Rate plan closed.',
+    );
+    expect(moveFailure(err(422, 'weird', '<img src=x onerror=1>')).message).toBe(
+      'The move could not be completed.',
+    );
+    expect(moveFailure(err(422, 'weird', 'see https://evil.example')).message).toBe(
+      'The move could not be completed.',
+    );
+    expect(moveFailure(new Error('boom')).message).toMatch(/Could not confirm/);
+  });
+});

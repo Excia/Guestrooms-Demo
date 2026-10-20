@@ -3,7 +3,33 @@ import type { CSSProperties } from 'react';
 import { menuFontPx } from './app/layout';
 
 // Tokens from the CE Guest Rooms Figma variables (dashboard frame 69:3712). Light mode only.
+/** Schedule grid block colors (Figma "Schedule Blocks" 15963:188278). Fills are translucent. */
+export interface ScheduleColors {
+  /** Confirmed and not yet checked in. */
+  nyci: string;
+  nyciBorder: string;
+  checkedIn: string;
+  checkedOut: string;
+  /** Checked in and leaving today. */
+  dueOut: string;
+  closure: string;
+  /** Guest name colors by guest type. */
+  ownerText: string;
+  memberText: string;
+  /** Today's column. */
+  today: string;
+  /** Drop indicator while dragging: allowed / not allowed. */
+  dropAllowed: string;
+  dropRefused: string;
+}
+
 declare module '@mui/material/styles' {
+  interface Palette {
+    schedule: ScheduleColors;
+  }
+  interface PaletteOptions {
+    schedule?: ScheduleColors;
+  }
   // tint and outlinedBorder are set on palette.primary only (the Figma tokens exist for primary).
   interface PaletteColor {
     tint?: string;
@@ -43,6 +69,7 @@ declare module '@mui/material/Typography' {
 // text.disabled. Figma has one unnamed "Secondary" #545454; add it once its role is confirmed.
 const fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
 const primaryMain = '#2e7d32';
+const errorMain = '#d32f2f';
 
 // Figma letter spacing is in px; MUI expects em.
 const font = (sizePx: number, weight: number, lineHeight: number, letterSpacingPx: number) => ({
@@ -63,10 +90,24 @@ const base = createTheme({
       outlinedBorder: alpha(primaryMain, 0.5),
     },
     warning: { main: '#c24e00' },
-    error: { main: '#d32f2f' },
+    error: { main: errorMain },
     text: { primary: '#000000de', secondary: '#00000099' },
     action: { active: '#0000008f' },
     background: { default: '#f1f1f1', paper: '#ffffff' },
+    schedule: {
+      nyci: 'rgba(250, 250, 250, 0.8)',
+      nyciBorder: 'rgba(56, 142, 60, 0.8)',
+      checkedIn: 'rgba(175, 210, 177, 0.8)',
+      checkedOut: 'rgba(224, 224, 224, 0.8)',
+      // PLACEHOLDER: Figma shows the due-out block as a light orange; this is the housekeeping orange at 40%.
+      dueOut: 'rgba(228, 113, 0, 0.4)',
+      closure: 'rgba(189, 189, 189, 0.8)',
+      ownerText: '#043f7a',
+      memberText: '#16491a',
+      today: alpha(primaryMain, 0.07),
+      dropAllowed: alpha(primaryMain, 0.22),
+      dropRefused: alpha(errorMain, 0.2),
+    },
   },
   shape: { borderRadius: 4 },
   typography: {

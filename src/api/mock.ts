@@ -1,10 +1,34 @@
 import type { MockScenario } from './config';
-import { emptyStats, fullGrant, mockReservations, mockStats, noGrant } from './mockData';
+import {
+  emptyStats,
+  fullGrant,
+  MOCK_TODAY,
+  mockReservations,
+  mockStats,
+  noGrant,
+} from './mockData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { queryReservations } from './reservationQuery';
-import type { ApiClient, PermissionGrant, RequestOptions } from './types';
+import { createScheduleState, moveDates, moveRoom } from './scheduleData';
+import type { ScheduleSize } from './scheduleData';
+import { queryScheduleData } from './scheduleQuery';
+import type {
+  ApiClient,
+  IsoDate,
+  MoveDatesRequest,
+  MoveRoomRequest,
+  PermissionGrant,
+  RequestOptions,
+  ScheduleBlock,
+} from './types';
 import { ApiError } from './types';
-import { assertQuickStatsQuery, assertResourceId } from './validation';
+import {
+  assertMoveDatesRequest,
+  assertMoveRoomRequest,
+  assertQuickStatsQuery,
+  assertResourceId,
+  assertScheduleQuery,
+} from './validation';
 
 export interface MockOptions {
   scenario?: MockScenario;
@@ -14,6 +38,10 @@ export interface MockOptions {
   pageSize?: number;
   /** What `permissions.getGrant` returns in the normal scenario; defaults to an unrestricted user. */
   grant?: PermissionGrant;
+  /** The schedule's "today": data is laid out around it and arrivals before it are the past. */
+  today?: IsoDate;
+  /** Schedule inventory: `default` (about 30 rooms) or `large` (200 rooms, for performance). */
+  scheduleSize?: ScheduleSize;
 }
 
 export const MOCK_PAGE_SIZE = 4;
@@ -30,7 +58,32 @@ export function createMockClient({
   latencyMs = 0,
   pageSize = MOCK_PAGE_SIZE,
   grant = fullGrant,
+  today = MOCK_TODAY,
+  scheduleSize = 'default',
 }: MockOptions = {}): ApiClient {
+  // Per client: schedule moves mutate it, so every test and every page load starts fresh.
+  const schedule = createScheduleState(today, scheduleSize);
+  // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
+  const replays = new Map<string, { fingerprint: string; blocks: ScheduleBlock[] }>();
+  function replayable(
+    request: MoveRoomRequest | MoveDatesRequest,
+    apply: () => ScheduleBlock[],
+  ): ScheduleBlock[] {
+    const fingerprint = JSON.stringify({ ...request, requestId: undefined });
+    const previous = replays.get(request.requestId);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        throw new ApiError(409, 'This request id was already used for a different request', {
+          code: 'idempotency-conflict',
+        });
+      }
+      return structuredClone(previous.blocks);
+    }
+    const blocks = apply();
+    replays.set(request.requestId, { fingerprint, blocks: structuredClone(blocks) });
+    return blocks;
+  }
+
   function respond<T>(normal: () => T, empty: () => T, options?: RequestOptions): Promise<T> {
     const signal = options?.signal;
     return new Promise<T>((resolve, reject) => {
@@ -96,6 +149,52 @@ export function createMockClient({
           },
           () => {
             throw notFound();
+          },
+          o,
+        ),
+    },
+    schedule: {
+      get: (query, o) =>
+        respond(
+          () => {
+            assertScheduleQuery(query);
+            return structuredClone(queryScheduleData(schedule, query));
+          },
+          () => {
+            assertScheduleQuery(query);
+            return {
+              startDate: query.startDate,
+              days: query.days,
+              locations: [],
+              roomTypes: [],
+              rooms: [],
+              blocks: [],
+              closures: [],
+            };
+          },
+          o,
+        ),
+      moveRoom: (request, o) =>
+        respond(
+          () => {
+            assertMoveRoomRequest(request);
+            return { blocks: replayable(request, () => moveRoom(schedule, request)) };
+          },
+          () => {
+            assertMoveRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
+      moveDates: (request, o) =>
+        respond(
+          () => {
+            assertMoveDatesRequest(request);
+            return { blocks: replayable(request, () => moveDates(schedule, request)) };
+          },
+          () => {
+            assertMoveDatesRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
           },
           o,
         ),

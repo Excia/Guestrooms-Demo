@@ -8,9 +8,21 @@ import type {
   Reservation,
   ReservationQuery,
   RequestOptions,
+  MoveDatesRequest,
+  MoveRoomRequest,
+  ScheduleBlock,
+  ScheduleData,
+  ScheduleMoveResult,
+  ScheduleQuery,
 } from './types';
 import { ApiError } from './types';
-import { assertQuickStatsQuery, assertResourceId } from './validation';
+import {
+  assertMoveDatesRequest,
+  assertMoveRoomRequest,
+  assertQuickStatsQuery,
+  assertResourceId,
+  assertScheduleQuery,
+} from './validation';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -162,6 +174,114 @@ const parseQuickStats =
     return body as unknown as QuickStats;
   };
 
+const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
+const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
+const isDated = (v: Record<string, unknown>) =>
+  isString(v.startDate) && isString(v.endDate) && v.startDate < v.endDate;
+
+function isScheduleBlock(v: unknown): v is ScheduleBlock {
+  return (
+    isObject(v) &&
+    v.kind === 'reservation' &&
+    isString(v.id) &&
+    isString(v.reservationId) &&
+    isString(v.confirmationNumber) &&
+    isString(v.guestName) &&
+    isString(v.guestType) &&
+    GUEST_TYPES.includes(v.guestType) &&
+    isString(v.roomId) &&
+    isDated(v) &&
+    isString(v.status) &&
+    BLOCK_STATUSES.includes(v.status) &&
+    isCount(v.roomCount) &&
+    v.roomCount >= 1 &&
+    typeof v.roomTypeLocked === 'boolean' &&
+    isString(v.version) &&
+    v.version !== ''
+  );
+}
+
+// The answer must be for the query that was sent, and every block and closure must sit in a listed
+// room (the grid indexes by room id).
+const parseSchedule =
+  (query: ScheduleQuery) =>
+  (body: unknown, status: number): ScheduleData => {
+    const named = (x: unknown) => isObject(x) && isString(x.id) && isString(x.name);
+    const ok =
+      isObject(body) &&
+      body.startDate === query.startDate &&
+      body.days === query.days &&
+      listOf(body.locations, named) &&
+      listOf(body.roomTypes, named) &&
+      listOf(
+        body.rooms,
+        (r) =>
+          isObject(r) &&
+          isString(r.id) &&
+          isString(r.number) &&
+          isString(r.locationId) &&
+          isString(r.roomTypeId),
+      ) &&
+      listOf(body.blocks, isScheduleBlock) &&
+      listOf(
+        body.closures,
+        (c) =>
+          isObject(c) &&
+          c.kind === 'closure' &&
+          isString(c.id) &&
+          isString(c.roomId) &&
+          isDated(c) &&
+          isString(c.reason) &&
+          typeof c.endMarker === 'boolean',
+      );
+    if (!ok) throw invalid(status, 'schedule');
+    const data = body as unknown as ScheduleData;
+    const roomIds = new Set(data.rooms.map((r) => r.id));
+    // The grid indexes by id: duplicates would draw or move the wrong thing.
+    const unique = (ids: string[]) => new Set(ids).size === ids.length;
+    if (
+      !unique(data.rooms.map((r) => r.id)) ||
+      !unique([...data.blocks.map((b) => b.id), ...data.closures.map((c) => c.id)]) ||
+      !data.blocks.every((b) => roomIds.has(b.roomId)) ||
+      !data.closures.every((c) => roomIds.has(c.roomId))
+    ) {
+      throw invalid(status, 'schedule');
+    }
+    return data;
+  };
+
+// A move answers with the changed blocks. The moved block must be where the request put it. For
+// 'all-rooms' the answer must carry every room of the reservation, consistently counted; for a
+// split ('this-room' with new dates) the moved room must have left the reservation (roomCount 1).
+const parseMove =
+  (
+    reservationRoomId: string,
+    expect: (moved: ScheduleBlock) => boolean,
+    rule?: { scope: 'all-rooms' | 'this-room'; shifted: boolean },
+  ) =>
+  (body: unknown, status: number): ScheduleMoveResult => {
+    if (!isObject(body) || !listOf(body.blocks, isScheduleBlock)) throw invalid(status, 'move');
+    const result = body as unknown as ScheduleMoveResult;
+    const moved = result.blocks.find((b) => b.id === reservationRoomId);
+    if (!moved || !expect(moved)) throw invalid(status, 'move');
+    if (new Set(result.blocks.map((b) => b.id)).size !== result.blocks.length) {
+      throw invalid(status, 'move');
+    }
+    if (rule) {
+      const group = result.blocks.filter((b) => b.reservationId === moved.reservationId);
+      const consistent = group.every((b) => b.roomCount === moved.roomCount);
+      if (!consistent) throw invalid(status, 'move');
+      // A room-only move (no new dates) legitimately answers with just the moved block.
+      if (rule.scope === 'all-rooms' && rule.shifted && group.length !== moved.roomCount) {
+        throw invalid(status, 'move');
+      }
+      if (rule.scope === 'this-room' && rule.shifted && moved.roomCount !== 1) {
+        throw invalid(status, 'move');
+      }
+    }
+    return result;
+  };
+
 function errorFromBody(status: number, statusText: string, text: string): ApiError {
   let message = statusText || 'Request failed';
   let code: string | undefined;
@@ -193,6 +313,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     params: Record<string, string | undefined>,
     requestOptions: RequestOptions | undefined,
     parse: (body: unknown, status: number) => T,
+    send?: { method: 'POST'; body: unknown; headers?: Record<string, string> },
   ): Promise<T> {
     const url = new URL(baseUrl + path, globalThis.location?.origin);
     for (const [key, value] of Object.entries(params)) {
@@ -225,7 +346,14 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       if (controller.signal.aborted)
         throw new DOMException('The operation was aborted.', 'AbortError');
       response = await (options.fetch ?? fetch)(url, {
-        headers: { Accept: 'application/json', ...extra },
+        method: send?.method,
+        body: send ? JSON.stringify(send.body) : undefined,
+        headers: {
+          Accept: 'application/json',
+          ...(send ? { 'Content-Type': 'application/json' } : {}),
+          ...send?.headers,
+          ...extra,
+        },
         credentials,
         signal: controller.signal,
       });
@@ -309,6 +437,44 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         Promise.resolve().then(() => {
           assertResourceId(id, 'reservation');
           return request(`/reservations/${encodeURIComponent(id)}`, {}, o, parseReservation);
+        }),
+    },
+    schedule: {
+      get: (q, o) =>
+        Promise.resolve().then(() => {
+          assertScheduleQuery(q);
+          return request(
+            '/schedule',
+            { startDate: q.startDate, days: String(q.days) },
+            o,
+            parseSchedule(q),
+          );
+        }),
+      moveRoom: (r: MoveRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertMoveRoomRequest(r);
+          return request(
+            '/schedule/move-room',
+            {},
+            o,
+            parseMove(r.reservationRoomId, (b) => b.roomId === r.toRoomId),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      moveDates: (r: MoveDatesRequest, o) =>
+        Promise.resolve().then(() => {
+          assertMoveDatesRequest(r);
+          return request(
+            '/schedule/move-dates',
+            {},
+            o,
+            parseMove(
+              r.reservationRoomId,
+              (b) => b.startDate === r.toStartDate && (!r.toRoomId || b.roomId === r.toRoomId),
+              { scope: r.scope, shifted: r.toStartDate !== r.fromStartDate },
+            ),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
         }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },

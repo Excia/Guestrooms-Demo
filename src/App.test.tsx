@@ -1,35 +1,52 @@
+import { ThemeProvider } from '@mui/material/styles';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router';
 import App from './App';
+import { ApiProvider } from './api';
+import { createMockClient } from './api/mock';
 import { GrantedAccess } from './app/testing';
+import { theme } from './theme';
 
 function LocationProbe() {
   const { pathname, search } = useLocation();
-  return <output>{pathname + search}</output>;
+  return <output data-testid="location">{pathname + search}</output>;
+}
+
+// The Schedule page fetches through the API client and uses the app theme.
+function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <ThemeProvider theme={theme}>
+      <ApiProvider client={createMockClient()}>{children}</ApiProvider>
+    </ThemeProvider>
+  );
 }
 
 describe('App', () => {
   it('keeps the query string when redirecting / to Schedule', () => {
     render(
-      <GrantedAccess>
-        <MemoryRouter initialEntries={['/?mock=empty']}>
-          <App />
-          <LocationProbe />
-        </MemoryRouter>
-      </GrantedAccess>,
+      <Providers>
+        <GrantedAccess>
+          <MemoryRouter initialEntries={['/?mock=empty']}>
+            <App />
+            <LocationProbe />
+          </MemoryRouter>
+        </GrantedAccess>
+      </Providers>,
     );
-    expect(screen.getByRole('status')).toHaveTextContent('/schedule?mock=empty');
+    expect(screen.getByTestId('location')).toHaveTextContent('/schedule?mock=empty');
   });
 
-  it('redirects / to the Schedule page inside the shell', () => {
+  it('redirects / to the Schedule page inside the shell', async () => {
     render(
-      <GrantedAccess>
-        <MemoryRouter initialEntries={['/']}>
-          <App />
-        </MemoryRouter>
-      </GrantedAccess>,
+      <Providers>
+        <GrantedAccess>
+          <MemoryRouter initialEntries={['/']}>
+            <App />
+          </MemoryRouter>
+        </GrantedAccess>
+      </Providers>,
     );
-    expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 

@@ -18,6 +18,11 @@ export function parseIsoDate(value: string): Date | null {
   return formatIsoDate(d) === value ? d : null;
 }
 
+/** The local calendar date of `now`. */
+export function todayIso(now: Date = new Date()): IsoDate {
+  return `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 export function isValidIsoDate(value: string): boolean {
   return parseIsoDate(value) !== null;
 }
@@ -64,4 +69,18 @@ export function monthRange(month: IsoMonth): DateRange {
   if (!p) return { from: month, to: month };
   const lastDay = new Date(Date.UTC(p.year, p.index + 1, 0)).getUTCDate();
   return { from: `${month}-01`, to: `${month}-${pad(lastDay)}` };
+}
+
+/**
+ * Do two stays overlap? Stays are half-open night ranges [start, end): a reservation occupies the
+ * nights from arrival up to, not including, departure, so a departure on the day another stay
+ * arrives (same-day turnover) is not an overlap. Compares ISO strings, valid for 4-digit years.
+ */
+export function nightsOverlap(
+  aStart: IsoDate,
+  aEnd: IsoDate,
+  bStart: IsoDate,
+  bEnd: IsoDate,
+): boolean {
+  return aStart < bEnd && bStart < aEnd;
 }
