@@ -152,12 +152,12 @@ export default function DateField({
           // Dates use the 12px caption style in the half-width Date Selection fields (Figma 120:8668).
           input: {
             sx: {
-              ...(compact && { pr: 0.5 }),
+              ...(compact && { pr: 0.25 }),
               '& input': {
                 ...(compact && {
                   fontSize: (t: Theme) => t.typography.caption.fontSize,
                   height: (t: Theme) => t.spacing(3),
-                  px: 1,
+                  px: 0.75,
                 }),
                 minWidth: 0,
                 // The browser's own calendar cannot be themed; the button below replaces it.
@@ -173,9 +173,9 @@ export default function DateField({
                   aria-haspopup="dialog"
                   aria-expanded={open}
                   onClick={openCalendar}
-                  sx={{ p: 0.5 }}
+                  sx={{ p: compact ? 0.25 : 0.5 }}
                 >
-                  <CalendarToday fontSize="small" />
+                  <CalendarToday sx={{ fontSize: compact ? 16 : 20 }} />
                 </IconButton>
               </InputAdornment>
             ),
