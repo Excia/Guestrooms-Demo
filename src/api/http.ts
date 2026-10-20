@@ -271,7 +271,8 @@ const parseMove =
       const group = result.blocks.filter((b) => b.reservationId === moved.reservationId);
       const consistent = group.every((b) => b.roomCount === moved.roomCount);
       if (!consistent) throw invalid(status, 'move');
-      if (rule.scope === 'all-rooms' && group.length !== moved.roomCount) {
+      // A room-only move (no new dates) legitimately answers with just the moved block.
+      if (rule.scope === 'all-rooms' && rule.shifted && group.length !== moved.roomCount) {
         throw invalid(status, 'move');
       }
       if (rule.scope === 'this-room' && rule.shifted && moved.roomCount !== 1) {

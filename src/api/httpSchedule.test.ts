@@ -160,6 +160,18 @@ describe('http schedule moves', () => {
       ).rejects.toMatchObject({ code: 'invalid-response' });
     }
   });
+  it("accepts a room-only 'all-rooms' answer with just the moved block, but not a short date shift", async () => {
+    const one = [{ ...trio()[0], roomId: 'rm-9', startDate: '2026-10-18', endDate: '2026-10-21' }];
+    const roomOnly = { ...datesRequest('all-rooms'), toStartDate: '2026-10-18', toRoomId: 'rm-9' };
+    await expect(
+      make(vi.fn().mockResolvedValue(json({ blocks: one }))).schedule.moveDates(roomOnly),
+    ).resolves.toBeDefined();
+    await expect(
+      make(vi.fn().mockResolvedValue(json({ blocks: trio().slice(0, 1) }))).schedule.moveDates(
+        datesRequest('all-rooms'),
+      ),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
   it('checks that a split room left the reservation', async () => {
     const split = [
       { ...trio()[0], reservationId: 'rs-split', roomCount: 1 },

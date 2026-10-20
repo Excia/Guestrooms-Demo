@@ -203,7 +203,13 @@ describe('copy', () => {
 describe('moveFailure', () => {
   const err = (status: number, code?: string, message = 'x') => ({ status, code, message });
   it('treats no response and 5xx as an unknown outcome: no revert, reload, neutral copy', () => {
-    for (const e of [err(0, 'timeout'), err(0, 'network'), err(503)]) {
+    for (const e of [
+      err(0, 'timeout'),
+      err(0, 'network'),
+      err(503),
+      err(408),
+      err(200, 'invalid-response'),
+    ]) {
       expect(moveFailure(e)).toEqual({
         revert: false,
         refetch: true,

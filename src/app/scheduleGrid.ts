@@ -289,9 +289,10 @@ export function safeDetail(message: string | undefined): string | null {
 }
 
 /**
- * What to do when a move request failed. A response of 400 to 499 says nothing was applied: revert,
- * and for 404 and 409 also reload (the booking that blocked the move is now visible). No response
- * (status 0: timeout, network) or a 5xx is an unknown outcome: the move may have been applied, so
+ * What to do when a move request failed. A response of 400 to 499 (except 408) says nothing was
+ * applied: revert, and for 404 and 409 also reload (the booking that blocked the move is now
+ * visible). No response (status 0: timeout, network), an unusable 2xx answer, 408 or a 5xx is an
+ * unknown outcome: the move may have been applied, so
  * the optimistic state is not trusted: reload and say so neutrally. Known codes map to our own copy;
  * the server message is only a fallback detail.
  */
@@ -302,7 +303,9 @@ export function moveFailure(error: unknown): MoveFailure {
       : 0;
   const code = (error as { code?: unknown })?.code;
   const detail = safeDetail((error as { message?: string })?.message);
-  if (status === 0 || status >= 500) {
+  // Only a clear 4xx says nothing was applied. No response (0), a 2xx whose body was unusable
+  // (invalid-response), 408 and 5xx are unknown: the server may well have applied the move.
+  if (status < 400 || status === 408 || status >= 500) {
     return { revert: false, refetch: true, message: UNKNOWN_OUTCOME };
   }
   const known = typeof code === 'string' ? MOVE_ERROR_COPY[code] : undefined;
