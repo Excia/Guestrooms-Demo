@@ -8,6 +8,7 @@ import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
 import NewReservationResults from './pages/NewReservationResults';
+import Schedule from './pages/Schedule';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
@@ -34,6 +35,7 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
+  [SCHEDULE_PATH]: <Schedule />,
 };
 
 export default function App() {

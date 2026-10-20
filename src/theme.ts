@@ -3,7 +3,33 @@ import type { CSSProperties } from 'react';
 import { menuFontPx } from './app/layout';
 
 // Tokens from the CE Guest Rooms Figma variables (dashboard frame 69:3712). Light mode only.
+/** Schedule grid block colors (Figma "Schedule Blocks" 15963:188278). Fills are translucent. */
+export interface ScheduleColors {
+  /** Confirmed and not yet checked in. */
+  nyci: string;
+  nyciBorder: string;
+  checkedIn: string;
+  checkedOut: string;
+  /** Checked in and leaving today. */
+  dueOut: string;
+  closure: string;
+  /** Guest name colors by guest type. */
+  ownerText: string;
+  memberText: string;
+  /** Today's column. */
+  today: string;
+  /** Drop indicator while dragging: allowed / not allowed. */
+  dropAllowed: string;
+  dropRefused: string;
+}
+
 declare module '@mui/material/styles' {
+  interface Palette {
+    schedule: ScheduleColors;
+  }
+  interface PaletteOptions {
+    schedule?: ScheduleColors;
+  }
   // tint and outlinedBorder are set on palette.primary only (the Figma tokens exist for primary).
   interface PaletteColor {
     tint?: string;
@@ -67,6 +93,20 @@ const base = createTheme({
     text: { primary: '#000000de', secondary: '#00000099' },
     action: { active: '#0000008f' },
     background: { default: '#f1f1f1', paper: '#ffffff' },
+    schedule: {
+      nyci: 'rgba(250, 250, 250, 0.8)',
+      nyciBorder: 'rgba(56, 142, 60, 0.8)',
+      checkedIn: 'rgba(175, 210, 177, 0.8)',
+      checkedOut: 'rgba(224, 224, 224, 0.8)',
+      // PLACEHOLDER: Figma shows the due-out block as a light orange; this is the housekeeping orange at 40%.
+      dueOut: 'rgba(228, 113, 0, 0.4)',
+      closure: 'rgba(189, 189, 189, 0.8)',
+      ownerText: '#043f7a',
+      memberText: '#16491a',
+      today: alpha(primaryMain, 0.07),
+      dropAllowed: alpha(primaryMain, 0.22),
+      dropRefused: alpha('#d32f2f', 0.2),
+    },
   },
   shape: { borderRadius: 4 },
   typography: {
