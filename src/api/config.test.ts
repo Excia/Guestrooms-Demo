@@ -107,3 +107,16 @@ describe('resolveApiConfig source and demo', () => {
     ).toBe('empty');
   });
 });
+
+describe('resolveApiConfig scheduleSize', () => {
+  it('is the default inventory unless ?schedule=large in dev', () => {
+    expect(resolveApiConfig({ dev: true }).scheduleSize).toBe('default');
+    expect(resolveApiConfig({ dev: true, search: '?schedule=large' }).scheduleSize).toBe('large');
+    expect(resolveApiConfig({ dev: true, search: '?schedule=huge' }).scheduleSize).toBe('default');
+  });
+  it('ignores the parameter outside dev', () => {
+    expect(
+      resolveApiConfig({ dev: false, apiMode: 'mock', search: '?schedule=large' }).scheduleSize,
+    ).toBe('default');
+  });
+});

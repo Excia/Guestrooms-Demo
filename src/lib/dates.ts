@@ -18,6 +18,11 @@ export function parseIsoDate(value: string): Date | null {
   return formatIsoDate(d) === value ? d : null;
 }
 
+/** The local calendar date of `now`. */
+export function todayIso(now: Date = new Date()): IsoDate {
+  return `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 export function isValidIsoDate(value: string): boolean {
   return parseIsoDate(value) !== null;
 }

@@ -14,6 +14,7 @@ import {
   pad,
   parseIsoDate,
   parseMonth,
+  todayIso,
   type DateRange,
   type IsoDate,
   type IsoMonth,
@@ -28,6 +29,7 @@ export {
   monthOf,
   monthRange,
   parseIsoDate,
+  todayIso,
   type DateRange,
   type IsoDate,
   type IsoMonth,
@@ -116,11 +118,6 @@ const MONTH_NAMES = [
   'November',
   'December',
 ];
-
-/** The local calendar date of `now`. */
-export function todayIso(now: Date = new Date()): IsoDate {
-  return `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
 
 export function addMonths(month: IsoMonth, delta: number): IsoMonth {
   const p = parseMonth(month);

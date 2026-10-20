@@ -3,6 +3,7 @@ import type { ApiConfig } from './config';
 import { createHttpClient } from './http';
 import { createLazyClient } from './lazy';
 import { DEMO_MOCK_USER, MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
+import { todayIso } from '../lib/dates';
 import { createUnavailableClient } from './unavailable';
 import type { ApiClient } from './types';
 import { ApiError } from './types';
@@ -42,7 +43,14 @@ export function createApiClient(
     const { scenario } = config;
     const { grant } = config.demo ? DEMO_MOCK_USER : resolveMockUser(mockUser);
     const client = createLazyClient(async () =>
-      (await import('./mock')).createMockClient({ scenario, latencyMs: MOCK_LATENCY_MS, grant }),
+      (await import('./mock')).createMockClient({
+        scenario,
+        latencyMs: MOCK_LATENCY_MS,
+        grant,
+        // The schedule's demo data is laid out around the real current date, not the fixed MOCK_TODAY.
+        today: todayIso(),
+        scheduleSize: config.scheduleSize,
+      }),
     );
     return { client, demo: config.demo, devMock: !config.demo };
   }

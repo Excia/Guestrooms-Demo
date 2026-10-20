@@ -4,6 +4,9 @@ export const MOCK_SCENARIOS: readonly MockScenario[] = ['normal', 'loading', 'em
 /** Query parameter and localStorage key that pick the mock scenario in dev. */
 export const MOCK_PARAM = 'mock';
 export const MOCK_STORAGE_KEY = 'gr.mock';
+/** Dev-only query parameter: `?schedule=large` loads the 200-room schedule inventory in the mock. */
+export const SCHEDULE_PARAM = 'schedule';
+export type ScheduleSizeSetting = 'default' | 'large';
 
 /** Which client the app runs on. "unavailable" is a misconfigured build that fails every call. */
 export type ApiSource = 'http' | 'mock' | 'unavailable';
@@ -17,6 +20,8 @@ export interface ApiConfig {
   /** Why `baseUrl` is null. Absent when it is set. */
   problem?: 'missing' | 'invalid';
   scenario: MockScenario;
+  /** Mock schedule inventory size (dev only, `?schedule=large`). */
+  scheduleSize: ScheduleSizeSetting;
   warnings: string[];
 }
 
@@ -100,5 +105,16 @@ export function resolveApiConfig(input: ApiConfigInput): ApiConfig {
       scenarioFromEnv ??
       'normal')
     : (scenarioFromEnv ?? 'normal');
-  return { ...url, warnings, source, demo: source === 'mock' && !input.dev, scenario };
+  const scheduleSize: ScheduleSizeSetting =
+    input.dev && new URLSearchParams(input.search ?? '').get(SCHEDULE_PARAM) === 'large'
+      ? 'large'
+      : 'default';
+  return {
+    ...url,
+    warnings,
+    source,
+    demo: source === 'mock' && !input.dev,
+    scenario,
+    scheduleSize,
+  };
 }
