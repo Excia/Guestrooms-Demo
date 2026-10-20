@@ -224,15 +224,13 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         Schedule
       </Typography>
       <Box
-        sx={(t) => ({
+        sx={{
           display: 'flex',
           flexDirection: 'column',
           flex: '1 1 auto',
           minHeight: 0,
           bgcolor: 'background.paper',
-          // Below 1200px the page scrolls and the grid gets a fixed, usable height.
-          [t.breakpoints.down('lg')]: { minHeight: 'max(30rem, 70dvh)' },
-        })}
+        }}
       >
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 2, pt: 2.5 }}>
           <ButtonGroup
@@ -275,7 +273,16 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           onAvailability={(availability) => update({ availability })}
           onToggleFilters={(button) => setFilterAnchor((a) => (a ? null : button))}
         />
-        <Box sx={{ flex: '1 1 auto', minHeight: 0 }}>{body}</Box>
+        <Box
+          sx={(t) => ({
+            flex: '1 1 auto',
+            minHeight: 0,
+            // Below 1200px the page scrolls and the grid gets a fixed, usable height.
+            [t.breakpoints.down('lg')]: { flex: 'none', height: 'max(30rem, 70dvh)' },
+          })}
+        >
+          {body}
+        </Box>
       </Box>
       <ScheduleFilterPanel
         open={filterAnchor !== null}
