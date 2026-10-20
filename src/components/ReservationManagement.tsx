@@ -117,6 +117,8 @@ export default function ReservationManagement() {
               borderColor: 'divider',
               color: 'primary.main',
               '&:last-of-type': { borderBottom: 0 },
+              // Inset ring: the panel clips anything drawn outside the row.
+              '&.Mui-focusVisible': { outlineOffset: -2 },
             })}
           >
             <ListItemIcon sx={{ minWidth: 0, color: 'inherit' }}>
