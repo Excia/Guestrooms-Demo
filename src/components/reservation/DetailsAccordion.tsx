@@ -232,8 +232,6 @@ export default function DetailsAccordion({ detail, onStub }: DetailsAccordionPro
         >
           <AccordionSummary
             expandIcon={<ExpandMore />}
-            aria-controls={`panel-section-${s.id}`}
-            id={`panel-section-${s.id}-header`}
             sx={{
               '& .MuiAccordionSummary-content': {
                 alignItems: 'center',
@@ -247,14 +245,7 @@ export default function DetailsAccordion({ detail, onStub }: DetailsAccordionPro
             {s.icon}
             <Typography variant="body1">{s.title}</Typography>
           </AccordionSummary>
-          <AccordionDetails
-            id={`panel-section-${s.id}`}
-            role="region"
-            aria-labelledby={`panel-section-${s.id}-header`}
-            sx={{ px: 2.5, py: 2 }}
-          >
-            {body(s.id)}
-          </AccordionDetails>
+          <AccordionDetails sx={{ px: 2.5, py: 2 }}>{body(s.id)}</AccordionDetails>
         </Accordion>
       ))}
     </Box>

@@ -23,9 +23,15 @@ export function guestCountText(adults: number, children: number): string {
     : plural(adults, 'Adult');
 }
 
-export type PanelStatusLabel = { text: string; tone: 'success' | 'error' | 'neutral' } | null;
+export type PanelStatusLabel = {
+  text: string;
+  tone: 'success' | 'error' | 'neutral' | 'plain';
+};
 
-/** The label above the title: Checked In, Checked Out, Canceled; nothing before check in. */
+/**
+ * The label above the title: Checked In, Checked Out, Canceled. Figma draws none before check in;
+ * Confirmed and Pending are added so a reservation just created says what it is.
+ */
 export function statusLabel(status: ReservationDetail['status']): PanelStatusLabel {
   switch (status) {
     case 'checked-in':
@@ -34,8 +40,10 @@ export function statusLabel(status: ReservationDetail['status']): PanelStatusLab
       return { text: 'Checked Out', tone: 'neutral' };
     case 'cancelled':
       return { text: 'Canceled', tone: 'error' };
-    default:
-      return null;
+    case 'confirmed':
+      return { text: 'Confirmed', tone: 'plain' };
+    case 'pending':
+      return { text: 'Pending', tone: 'plain' };
   }
 }
 

@@ -650,6 +650,7 @@ export default function ScheduleGrid({
         // Enter opens the details; Space and M pick the block up to move it.
         if (key === 'Enter') {
           if (item.kind === 'reservation') latest.current.onOpen(item);
+          else setAnnouncement('Closures have no details.');
         } else pickUp(item, cursorRow);
       }
     }

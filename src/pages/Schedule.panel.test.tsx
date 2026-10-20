@@ -28,12 +28,13 @@ function setup(
   url = '/schedule',
   client: ApiClient = createMockClient({ today: TODAY }),
   granted?: Parameters<typeof GrantedAccess>[0]['granted'],
+  before: string[] = [],
 ) {
   return render(
     <ThemeProvider theme={theme}>
       <GrantedAccess granted={granted}>
         <ApiProvider client={client}>
-          <MemoryRouter initialEntries={[url]}>
+          <MemoryRouter initialEntries={[...before, url]} initialIndex={before.length}>
             <Routes>
               <Route path="/schedule" element={<Schedule today={TODAY} />} />
               <Route path="*" element={<p>Elsewhere</p>} />
@@ -567,40 +568,46 @@ describe('hold timer', () => {
 
   it('counts down from the employee hold, warns under a minute and announces it', async () => {
     setup('/schedule?panel=new', withHold(2));
-    const timer = await screen.findByRole('timer', { name: 'Reservation hold' });
-    await waitFor(() => expect(timer).toHaveTextContent('Hold expires in 02:00'));
+    const timer = await screen.findByRole('timer', { name: 'Time to complete this reservation' });
+    await waitFor(() => expect(timer).toHaveTextContent('Time left: 02:00'));
     await tick(30_000);
-    expect(timer).toHaveTextContent('Hold expires in 01:30');
+    expect(timer).toHaveTextContent('Time left: 01:30');
     await tick(31_000);
-    expect(timer).toHaveTextContent('Hold expires in 00:59');
+    expect(timer).toHaveTextContent('Time left: 00:59');
     expect(
       screen
         .getAllByRole('status')
         .map((s) => s.textContent)
         .join('|'),
-    ).toMatch(/less than a minute/);
+    ).toMatch(/Less than a minute left/);
   });
 
-  it('on expiry shows a dialog; Escape and outside clicks do not close the panel; Restart hold starts again', async () => {
+  it('on expiry shows a dialog; Escape and outside clicks do not close the panel; Restart timer starts again', async () => {
     setup('/schedule?panel=new', withHold(1));
     const timer = await screen.findByRole('timer');
     await waitFor(() => expect(timer).toHaveTextContent('01:00'));
     await tick(61_000);
-    const expired = await screen.findByRole('alertdialog', { name: 'Your hold has expired' });
-    expect(timer).toHaveTextContent('Hold expired');
+    const expired = await screen.findByRole('alertdialog', {
+      name: 'Your time to complete this reservation has expired',
+    });
+    expect(timer).toHaveTextContent('Time expired');
     fireEvent.keyDown(expired, { key: 'Escape' });
     fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
-    expect(screen.getByRole('alertdialog', { name: 'Your hold has expired' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('alertdialog', {
+        name: 'Your time to complete this reservation has expired',
+      }),
+    ).toBeInTheDocument();
     expect(url()).toBe('/schedule?panel=new');
     fireEvent.click(document.querySelector('.MuiDialog-root .MuiBackdrop-root')!);
     expect(url()).toBe('/schedule?panel=new');
-    expect(within(expired).getByRole('button', { name: 'Restart hold' })).toHaveFocus();
-    // The create button does nothing while expired; Restart hold starts a new hold.
+    expect(within(expired).getByRole('button', { name: 'Restart timer' })).toHaveFocus();
+    // The create button does nothing while expired; Restart timer starts again.
     await act(async () => {
-      within(expired).getByRole('button', { name: 'Restart hold' }).click();
+      within(expired).getByRole('button', { name: 'Restart timer' }).click();
     });
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
-    expect(timer).toHaveTextContent('Hold expires in 01:00');
+    expect(timer).toHaveTextContent('Time left: 01:00');
   });
 
   it('Back to schedule in the expiry dialog leaves the panel', async () => {
@@ -620,7 +627,255 @@ describe('hold timer', () => {
       ...base,
       settings: { getBookingHold: () => Promise.reject(new ApiError(500, 'x')) },
     });
-    expect(await screen.findByText(/hold time could not be loaded/)).toBeInTheDocument();
+    expect(await screen.findByText(/time limit could not be loaded/)).toBeInTheDocument();
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+  });
+});
+
+// ---- round 1 review ----------------------------------------------------------------------------
+
+async function fillNewReservation(
+  user: ReturnType<typeof userEvent.setup>,
+  dialog: HTMLElement,
+  room = 'Room 108',
+) {
+  await user.type(within(dialog).getByRole('textbox', { name: /Booking guest/ }), 'Ann Lee');
+  await user.click(within(dialog).getByRole('combobox', { name: /Room/ }));
+  await user.click(await screen.findByRole('option', { name: room }));
+}
+
+describe('create is idempotent across a retry', () => {
+  it('an unknown outcome keeps the request id: the retry replays and one reservation exists', async () => {
+    const base = createMockClient({ today: TODAY });
+    const ids: string[] = [];
+    let first = true;
+    const client: ApiClient = {
+      ...base,
+      reservations: {
+        ...base.reservations,
+        create: async (r, o) => {
+          ids.push(r.requestId);
+          const created = await base.reservations.create(r, o);
+          if (first) {
+            first = false;
+            throw new ApiError(0, 'timeout', { code: 'timeout' }); // applied, answer lost
+          }
+          return created;
+        },
+      },
+    };
+    const user = await loaded('/schedule', client);
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await fillNewReservation(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/could not be confirmed/);
+    await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
+    await panel(/Reservation #GR-7000\d/);
+    expect(ids).toHaveLength(2);
+    expect(ids[1]).toBe(ids[0]);
+    const found = await base.schedule.get({ startDate: TODAY, days: 14 });
+    expect(found.blocks.filter((b) => b.guestName === 'Ann Lee')).toHaveLength(1);
+  });
+
+  it('keeps the id while the form is unchanged and takes a new one when a field changes', async () => {
+    const base = createMockClient({ today: TODAY });
+    const ids: string[] = [];
+    const client: ApiClient = {
+      ...base,
+      reservations: {
+        ...base.reservations,
+        create: (r) => {
+          ids.push(r.requestId);
+          return Promise.reject(new ApiError(503, 'down'));
+        },
+      },
+    };
+    const user = await loaded('/schedule', client);
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await fillNewReservation(user, dialog);
+    const create = () => within(dialog).getByRole('button', { name: 'Create New Reservation' });
+    await user.click(create());
+    await within(dialog).findByRole('alert');
+    await user.click(create());
+    await waitFor(() => expect(ids).toHaveLength(2));
+    expect(ids[1]).toBe(ids[0]);
+    await user.click(within(dialog).getByRole('button', { name: 'Increase adults' }));
+    await user.click(create());
+    await waitFor(() => expect(ids).toHaveLength(3));
+    expect(ids[2]).not.toBe(ids[1]);
+  });
+
+  it('a definitive refusal (409) drops the id, and the refused room is explained on the Room field', async () => {
+    const base = createMockClient({ today: TODAY });
+    const ids: string[] = [];
+    const client: ApiClient = {
+      ...base,
+      reservations: {
+        ...base.reservations,
+        create: (r, o) => {
+          ids.push(r.requestId);
+          return base.reservations.create(r, o);
+        },
+      },
+    };
+    const user = await loaded('/schedule', client);
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await fillNewReservation(user, dialog, 'Room 203'); // taken today
+    const create = () => within(dialog).getByRole('button', { name: 'Create New Reservation' });
+    await user.click(create());
+    const room = within(dialog).getByRole('combobox', { name: /Room/ });
+    await waitFor(() => expect(room).toBeInvalid());
+    const described = room.getAttribute('aria-describedby')!;
+    expect(document.getElementById(described)).toHaveTextContent(
+      'That room is booked or closed on those dates.',
+    );
+    await user.click(create());
+    await waitFor(() => expect(ids).toHaveLength(2));
+    expect(ids[1]).not.toBe(ids[0]);
+  });
+});
+
+describe('history around creating', () => {
+  it('open New, create, close: one Back press leaves for where the user was (no dead press)', async () => {
+    const base = createMockClient({ today: TODAY });
+    const user = userEvent.setup();
+    setup('/schedule', base, undefined, ['/other']);
+    await screen.findByRole('grid', { name: 'Schedule', hidden: true });
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await fillNewReservation(user, dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
+    const created = await panel(/Reservation #GR-7000\d/);
+    expect(await within(created).findByText('Confirmed')).toBeInTheDocument();
+    // the heading takes focus: the form's button that had it is gone
+    await waitFor(() =>
+      expect(
+        within(created).getByRole('heading', { name: /Reservation #GR-7000\d/ }),
+      ).toHaveFocus(),
+    );
+    await user.click(within(created).getByRole('button', { name: 'Close reservation details' }));
+    await panelGone();
+    expect(url()).toBe('/schedule');
+    fireEvent.click(screen.getByRole('button', { name: 'history back', hidden: true }));
+    expect(await screen.findByText('Elsewhere')).toBeInTheDocument();
+    expect(url()).toBe('/other');
+  });
+});
+
+describe('early/late when the reload after an unknown outcome also fails', () => {
+  it('says so, keeps the box as chosen (unconfirmed) and offers Reload, which shows the server state', async () => {
+    const base = createMockClient({ today: TODAY });
+    let reloadWorks = false;
+    const client: ApiClient = {
+      ...base,
+      reservations: {
+        ...base.reservations,
+        setEarlyLate: async (r, o) => {
+          await base.reservations.setEarlyLate(r, o);
+          throw new ApiError(0, 'network', { code: 'network' });
+        },
+      },
+    };
+    // The detail fetch fails only for the reload that follows the failed save.
+    let calls = 0;
+    client.reservations.getDetail = (id, o) =>
+      ++calls === 1 || reloadWorks
+        ? base.reservations.getDetail(id, o)
+        : Promise.reject(new ApiError(0, 'network', { code: 'network' }));
+    const user = await loaded('/schedule?res=rs-5&rr=rr-5', client);
+    const dialog = await panel(/Reservation #GR-50310/);
+    const early = await within(dialog).findByRole('checkbox', { name: 'Early Check In' });
+    await user.click(early);
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'The change could not be confirmed and the reservation could not be reloaded. Reload to see the current state.',
+    );
+    expect(early).toBeChecked(); // not reverted: the server may have applied it
+    reloadWorks = true;
+    await user.click(within(alert).getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument());
+    expect(early).toBeChecked(); // the server did apply it
+  });
+});
+
+describe('small review items', () => {
+  it('Enter on a closure says there are no details; it does not open anything', async () => {
+    const user = await loaded();
+    grid().focus();
+    await user.keyboard('{ArrowDown}'.repeat(9) + '{ArrowRight}{Enter}');
+    expect(
+      screen
+        .getAllByRole('status', { hidden: true })
+        .map((s) => s.textContent)
+        .join(' '),
+    ).toMatch(/Closures have no details/);
+    expect(url()).toBe('/schedule');
+  });
+
+  it('every aria-controls in the panel points at an element that exists', async () => {
+    const user = await loaded('/schedule?res=rs-2&rr=rr-2');
+    const dialog = await panel(/Reservation #GR-50240/);
+    await within(dialog).findByRole('button', { name: 'Add-Ons' });
+    const check = () =>
+      [...dialog.querySelectorAll('[aria-controls]')].every((el) =>
+        document.getElementById(el.getAttribute('aria-controls')!),
+      );
+    expect(check()).toBe(true);
+    await user.click(within(dialog).getByRole('button', { name: 'Notes' }));
+    expect(check()).toBe(true);
+    // regions are named by their section button and there is no duplicate region id
+    const ids = [...dialog.querySelectorAll('[id]')].map((e) => e.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('the Check Out calendar opens on the current check-out date', async () => {
+    const user = await loaded('/schedule?panel=new');
+    const dialog = await panel('New Reservation');
+    await user.click(within(dialog).getByRole('button', { name: /Open calendar for check out/ }));
+    const calendar = await screen.findByRole('dialog', { name: /Choose check out/ });
+    await waitFor(() =>
+      expect(within(calendar).getByRole('button', { name: /October 17, 2026/ })).toHaveFocus(),
+    );
+  });
+
+  it('a stub notice is announced once: one live region, and the alert inside has no live role', async () => {
+    const user = await loaded('/schedule?res=rs-5&rr=rr-5');
+    const dialog = await panel(/Reservation #GR-50310/);
+    await user.click(await within(dialog).findByRole('button', { name: 'Check In' }));
+    const text = await within(dialog).findByText(/Reservation Hub \(ticket 3\.12\)/);
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+    expect(text.closest('[role=status]')).not.toBeNull();
+  });
+
+  it('the read-only reason is at the top of both panels for a user without reservation.edit', async () => {
+    await loaded('/schedule?res=rs-5&rr=rr-5', undefined, ['page.schedule']);
+    const details = await panel(/Reservation #GR-50310/);
+    expect(
+      await within(details).findByText('You can view, not change, this reservation.'),
+    ).toBeInTheDocument();
+  });
+});
+
+describe('the time limit stops with the panel', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('no expiry dialog appears on a drawer that is closing', async () => {
+    const base = createMockClient({ today: TODAY });
+    setup('/schedule?panel=new', {
+      ...base,
+      settings: { getBookingHold: async () => ({ employee: 1, member: 1, nonMember: 1 }) },
+    });
+    await screen.findByRole('timer');
+    fireEvent.click(await screen.findByRole('button', { name: 'Back to schedule' }));
+    await act(async () => {
+      vi.advanceTimersByTime(61_000);
+    });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
 });

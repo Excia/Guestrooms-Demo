@@ -21,12 +21,23 @@ export interface EarlyLateState {
   /** The flags the failed save wanted to change, for Retry (applied on top of the server's values). */
   failed: Partial<EarlyLateValues> | null;
   message: string | null;
+  /**
+   * The outcome is unknown and the reservation could not be reloaded: the boxes keep what the
+   * user chose (the server may have applied it) and the user is offered Reload, not a blind Retry.
+   */
+  unconfirmed: boolean;
 }
 
 export type EarlyLateEvent =
   | { type: 'toggle'; field: keyof EarlyLateValues }
   | { type: 'saved'; values: EarlyLateValues }
-  | { type: 'failed'; revert: boolean; message: string; values?: EarlyLateValues }
+  | {
+      type: 'failed';
+      revert: boolean;
+      message: string;
+      values?: EarlyLateValues;
+      unconfirmed?: boolean;
+    }
   | { type: 'retry' }
   | { type: 'reset'; values: EarlyLateValues };
 
@@ -36,6 +47,7 @@ export const initialEarlyLate = (values: EarlyLateValues): EarlyLateState => ({
   status: 'idle',
   failed: null,
   message: null,
+  unconfirmed: false,
 });
 
 /** The flags in `shown` that differ from `confirmed`, with their shown values. */
@@ -56,7 +68,7 @@ export function earlyLateReducer(state: EarlyLateState, event: EarlyLateEvent): 
   switch (event.type) {
     case 'toggle': {
       const shown = { ...state.shown, [event.field]: !state.shown[event.field] };
-      return { ...state, shown, status: 'saving', failed: null, message: null };
+      return { ...state, shown, status: 'saving', failed: null, message: null, unconfirmed: false };
     }
     case 'saved': {
       // Ticks made while saving keep the state "saving"; the hook sends the follow-up.
@@ -68,6 +80,7 @@ export function earlyLateReducer(state: EarlyLateState, event: EarlyLateEvent): 
         status: pending ? 'saving' : 'saved',
         failed: null,
         message: null,
+        unconfirmed: false,
       };
     }
     case 'failed':
@@ -78,6 +91,7 @@ export function earlyLateReducer(state: EarlyLateState, event: EarlyLateEvent): 
         status: 'error',
         failed: pendingChanges(state.confirmed, state.shown),
         message: event.message,
+        unconfirmed: event.unconfirmed ?? false,
       };
     case 'retry':
       return state.status === 'error' && state.failed
@@ -87,6 +101,7 @@ export function earlyLateReducer(state: EarlyLateState, event: EarlyLateEvent): 
             status: 'saving',
             failed: null,
             message: null,
+            unconfirmed: false,
           }
         : state;
     case 'reset':
@@ -118,6 +133,10 @@ export interface EarlyLateFailure {
  * 5xx and an unusable answer are unknown outcomes: reload instead of guessing. 409 `stale` means
  * the reservation changed elsewhere: reload it.
  */
+/** Shown when the outcome is unknown and the reload that should have settled it failed too. */
+export const UNCONFIRMED_MESSAGE =
+  'The change could not be confirmed and the reservation could not be reloaded. Reload to see the current state.';
+
 export function earlyLateFailure(error: unknown): EarlyLateFailure {
   const status = error instanceof ApiError ? error.status : 0;
   const code = error instanceof ApiError ? error.code : undefined;

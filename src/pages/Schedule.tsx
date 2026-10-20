@@ -72,6 +72,11 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const panel = useMemo(() => parsePanel(params), [params]);
+  const locationState = useRef<unknown>(location.state);
+  useEffect(() => {
+    locationState.current = location.state;
+  }, [location.state]);
+  const [justCreated, setJustCreated] = useState<string | undefined>(undefined);
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -137,6 +142,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const restoreFocus = useCallback(() => {
     const trigger = panelTrigger.current;
     panelTrigger.current = null;
+    setJustCreated(undefined);
     if (trigger?.isConnected) trigger.focus({ preventScroll: true });
   }, []);
   const openPanel = useCallback(
@@ -180,7 +186,9 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         reservationRoomId: detail.rooms[0]?.id,
       });
       latestParams.current = next;
-      setParams(next, { replace: true });
+      setJustCreated(detail.id);
+      // Keep the history state (where the panel was opened from), so closing still goes Back once.
+      setParams(next, { replace: true, state: locationState.current });
     },
     [retry, notify, setParams],
   );
@@ -455,6 +463,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         onUnknownOutcome={retry}
         onEarlyLateSaved={onEarlyLateSaved}
         onExited={restoreFocus}
+        focusTitleFor={justCreated}
       />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}

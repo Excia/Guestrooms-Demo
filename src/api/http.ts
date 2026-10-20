@@ -128,6 +128,8 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     isCount(v.children) &&
     isObject(v.leadOccupant) &&
     isString(v.leadOccupant.name) &&
+    isString(v.leadOccupant.guestType) &&
+    GUEST_TYPES.includes(v.leadOccupant.guestType) &&
     (v.leadOccupant.memberNumber === null || isString(v.leadOccupant.memberNumber)) &&
     listOf(
       v.rooms,
@@ -136,6 +138,10 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(r.id) &&
         (r.roomId === null || isString(r.roomId)) &&
         (r.roomNumber === null || isString(r.roomNumber)) &&
+        (r.locationName === null || isString(r.locationName)) &&
+        (r.roomTypeName === null || isString(r.roomTypeName)) &&
+        isString(r.arrival) &&
+        isString(r.departure) &&
         isString(r.status) &&
         ROOM_STATUSES.includes(r.status),
     ) &&
@@ -164,10 +170,13 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
   );
 }
 
-const parseDetail = (body: unknown, status: number): ReservationDetail => {
-  if (!isReservationDetail(body)) throw invalid(status, 'reservation detail');
-  return body;
-};
+// The answer must be for the reservation that was asked for.
+const parseDetail =
+  (id: string) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (!isReservationDetail(body) || body.id !== id) throw invalid(status, 'reservation detail');
+    return body;
+  };
 
 // The answer must carry the flags the request asked for (a changed flag that did not stick is a
 // failed save, not a success) and a new version.
@@ -191,8 +200,12 @@ const parseEarlyLate =
 const parseCreated =
   (request: CreateReservationRequest) =>
   (body: unknown, status: number): ReservationDetail => {
-    const detail = parseDetail(body, status);
+    if (!isReservationDetail(body)) throw invalid(status, 'created reservation');
+    const detail = body;
     if (
+      detail.adults !== request.adults ||
+      detail.children !== request.children ||
+      detail.leadOccupant.name !== request.guestName.trim() ||
       detail.rooms.length !== 1 ||
       detail.rooms[0].roomId !== request.roomId ||
       detail.arrival !== request.arrival ||
@@ -556,7 +569,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       getDetail: (id, o) =>
         Promise.resolve().then(() => {
           assertResourceId(id, 'reservation');
-          return request(`/reservations/${encodeURIComponent(id)}/detail`, {}, o, parseDetail);
+          return request(`/reservations/${encodeURIComponent(id)}/detail`, {}, o, parseDetail(id));
         }),
       setEarlyLate: (r: EarlyLateRequest, o) =>
         Promise.resolve().then(() => {

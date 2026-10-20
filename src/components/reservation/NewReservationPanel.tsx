@@ -69,6 +69,8 @@ export interface NewReservationPanelProps {
   onUnknownOutcome: () => void;
   /** A dialog of the panel is open (the hold expired): Escape and outside clicks must not close the panel. */
   onGuardChange: (guarded: boolean) => void;
+  /** False while the drawer is closing: the hold stops and its expiry dialog never shows. */
+  active?: boolean;
   /** Injectable clock (epoch ms) for the hold timer; Date.now by default. */
   now?: () => number;
 }
@@ -83,6 +85,7 @@ export default function NewReservationPanel({
   onCreated,
   onUnknownOutcome,
   onGuardChange,
+  active = true,
   now,
 }: NewReservationPanelProps) {
   const api = useApi();
@@ -97,9 +100,17 @@ export default function NewReservationPanel({
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
+  // A refused room (409 conflict) is also shown on the Room field; cleared when the room or dates change.
+  const [roomError, setRoomError] = useState<string | null>(null);
+  // The idempotency key of the create request: kept while the form is unchanged, so a retry after an
+  // unknown outcome (timeout, network, 5xx) replays instead of creating a second reservation. It is
+  // dropped after a definitive answer, and replaced as soon as anything in the request body changes.
+  const attempt = useRef<{ id: string; body: string } | null>(null);
   const [openSection, setOpenSection] = useState<string | null>(null);
-  const set = <K extends keyof NewReservationForm>(key: K, value: NewReservationForm[K]) =>
+  const set = <K extends keyof NewReservationForm>(key: K, value: NewReservationForm[K]) => {
+    if (key === 'roomId' || key === 'arrival' || key === 'departure') setRoomError(null);
     setForm((f) => ({ ...f, [key]: value }));
+  };
 
   // ---- rooms: every room, whatever the schedule is filtered to ----
   const options = useMemo(
@@ -111,21 +122,24 @@ export default function NewReservationPanel({
   const nights = stayNights(form.arrival, form.departure);
   const total = estimateTotal(nights, roomType);
 
-  // ---- hold ----
+  // ---- time limit ----
+  // The time limit is a UI countdown for now (Booking Rules "Reservation Hold" minutes): nothing
+  // server-side holds the room while the panel is open. A real backend needs a hold/reserve call
+  // when the panel opens and a hold token sent with the create request (see README, API conventions).
   const holdState = useBookingHold();
   const minutes =
     holdState.status === 'success' ? holdMinutes(holdState.hold, ADMIN_HOLD_AUDIENCE) : null;
-  const timer = useHoldTimer(minutes, now);
+  const timer = useHoldTimer(minutes, now, active);
   const phase = timer.status?.phase;
-  const expired = phase === 'expired';
+  const expired = phase === 'expired' && active;
   // Discrete announcements only (start, under a minute, expired), not every second.
   const announcement =
     phase === 'warning'
-      ? 'Your hold expires in less than a minute.'
+      ? 'Less than a minute left to complete this reservation.'
       : phase === 'expired'
-        ? 'Your hold has expired.'
+        ? 'Your time to complete this reservation has expired.'
         : phase === 'running' && minutes !== null
-          ? `Room held for ${describeHold(minutes * 60_000)}.`
+          ? `Complete this reservation within ${describeHold(minutes * 60_000)}.`
           : '';
   useEffect(() => {
     onGuardChange(expired);
@@ -144,29 +158,36 @@ export default function NewReservationPanel({
     if (inFlight.current || expired || !canCreate) return;
     setSubmitted((n) => n + 1);
     setFailure(null);
+    setRoomError(null);
     if (Object.keys(errors).length > 0) return;
     inFlight.current = true;
     setSaving(true);
-    api.reservations
-      .create({
-        ...toCreateRequest(form, newRequestId()),
-        publicNotes: notes.publicNotes || undefined,
-        privateNotes: notes.privateNotes || undefined,
-      })
-      .then(
-        (detail) => {
-          onCreated(detail);
-        },
-        (error: unknown) => {
-          const status = error instanceof ApiError ? error.status : 0;
-          const code = error instanceof ApiError ? error.code : undefined;
-          const result = createFailure(status, code);
-          setFailure(result.message);
-          if (result.unknown) onUnknownOutcome();
-          inFlight.current = false;
-          setSaving(false);
-        },
-      );
+    const body = {
+      ...toCreateRequest(form, ''),
+      publicNotes: notes.publicNotes || undefined,
+      privateNotes: notes.privateNotes || undefined,
+    };
+    const fingerprint = JSON.stringify(body);
+    if (attempt.current?.body !== fingerprint) {
+      attempt.current = { id: newRequestId(), body: fingerprint };
+    }
+    api.reservations.create({ ...body, requestId: attempt.current.id }).then(
+      (detail) => {
+        attempt.current = null;
+        onCreated(detail);
+      },
+      (error: unknown) => {
+        const status = error instanceof ApiError ? error.status : 0;
+        const code = error instanceof ApiError ? error.code : undefined;
+        const result = createFailure(status, code);
+        setFailure(result.message);
+        if (code === 'conflict') setRoomError(result.message);
+        if (result.unknown) onUnknownOutcome();
+        else attempt.current = null; // nothing was applied: the next attempt is a new request
+        inFlight.current = false;
+        setSaving(false);
+      },
+    );
   };
 
   const range = (role: 'from' | 'to'): DateFieldRange => ({
@@ -175,7 +196,10 @@ export default function NewReservationPanel({
     to: form.departure,
     limits: stayLimits(today, MAX_ADVANCE_DAYS, MAX_STAY_NIGHTS),
     endNames: ['check-in', 'check-out'],
-    onChange: (r) => setForm((f) => ({ ...f, arrival: r.from, departure: r.to })),
+    onChange: (r) => {
+      setRoomError(null);
+      setForm((f) => ({ ...f, arrival: r.from, departure: r.to }));
+    },
   });
   const hintId = useId();
 
@@ -186,13 +210,21 @@ export default function NewReservationPanel({
     >
       <Box sx={{ px: 2.5, pt: 2.5, flex: '1 1 auto', overflow: 'auto', minHeight: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Tabs value={0} aria-label="Create" sx={{ flex: 1, minHeight: 0 }}>
+          <Tabs
+            value={0}
+            aria-label="Create"
+            variant="scrollable"
+            scrollButtons={false}
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              '& .MuiTab-root': { px: 1, minWidth: 0, typography: 'button_small' },
+            }}
+          >
             <Tab label="New Reservation" id={`${titleId}-tab`} />
-            <Tab
-              label="New Room Closure"
-              disabled
-              title="Room closures arrive with Room Blocks (not built yet)"
-            />
+            {/* Room closures arrive with Room Blocks (not built yet). */}
+            <Tab label="New Room Closure" disabled />
           </Tabs>
           <IconButton aria-label="Close new reservation" onClick={onBack} sx={{ mr: -1 }}>
             <Close fontSize="large" />
@@ -205,6 +237,11 @@ export default function NewReservationPanel({
           New Reservation
         </Typography>
 
+        {!canCreate ? (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            You do not have permission to create reservations.
+          </Alert>
+        ) : null}
         {holdState.status === 'error' ? (
           <Alert
             severity="warning"
@@ -215,13 +252,13 @@ export default function NewReservationPanel({
               </Button>
             }
           >
-            The hold time could not be loaded, so this reservation is not on hold.
+            The time limit could not be loaded, so this reservation has no timer.
           </Alert>
         ) : null}
         {timer.status ? (
           <Box
             role="timer"
-            aria-label="Reservation hold"
+            aria-label="Time to complete this reservation"
             sx={{
               mt: 1,
               display: 'inline-flex',
@@ -238,7 +275,7 @@ export default function NewReservationPanel({
           >
             <Timer aria-hidden fontSize="small" />
             <Typography variant="body2" sx={{ fontWeight: 700 }}>
-              {expired ? 'Hold expired' : `Hold expires in ${formatHold(timer.status.remainingMs)}`}
+              {expired ? 'Time expired' : `Time left: ${formatHold(timer.status.remainingMs)}`}
             </Typography>
           </Box>
         ) : null}
@@ -383,7 +420,7 @@ export default function NewReservationPanel({
               onChange={(id) => set('roomId', id)}
               loading={!data && !dataFailed}
               unavailable={dataFailed}
-              error={shown.roomId}
+              error={shown.roomId ?? roomError ?? undefined}
             />
             {dataFailed ? (
               <Button size="small" onClick={onRetryData} sx={{ alignSelf: 'flex-start' }}>
@@ -479,11 +516,6 @@ export default function NewReservationPanel({
             {failure}
           </Alert>
         ) : null}
-        {!canCreate ? (
-          <Alert severity="info" sx={{ mb: 1.5 }}>
-            You do not have permission to create reservations.
-          </Alert>
-        ) : null}
         <Typography variant="body2" sx={{ mb: 1.5 }}>
           Estimated Reservation Total: {total === null ? 'to be calculated' : formatMoney(total)}
         </Typography>
@@ -507,10 +539,12 @@ export default function NewReservationPanel({
         aria-labelledby={`${titleId}-expired`}
         aria-describedby={`${titleId}-expired-text`}
       >
-        <DialogTitle id={`${titleId}-expired`}>Your hold has expired</DialogTitle>
+        <DialogTitle id={`${titleId}-expired`}>
+          Your time to complete this reservation has expired
+        </DialogTitle>
         <DialogContent>
           <DialogContentText id={`${titleId}-expired-text`} sx={{ color: 'text.primary' }}>
-            The room is no longer held. Restart the hold to keep what you entered, or go back to the
+            Nothing was saved. Restart the timer to keep what you entered, or go back to the
             schedule.
           </DialogContentText>
         </DialogContent>
@@ -523,7 +557,7 @@ export default function NewReservationPanel({
             Back to schedule
           </Button>
           <Button ref={focusOnMount} variant="contained" onClick={timer.restart}>
-            Restart hold
+            Restart timer
           </Button>
         </DialogActions>
       </Dialog>

@@ -49,9 +49,9 @@ describe('reservation panel copy', () => {
     expect(guestCountText(3, 0)).toBe('3 Adults');
   });
 
-  it('status label only after check in, canceled in red', () => {
-    expect(statusLabel('confirmed')).toBeNull();
-    expect(statusLabel('pending')).toBeNull();
+  it('status label: checked in, checked out, canceled in red; plain Confirmed and Pending before', () => {
+    expect(statusLabel('confirmed')).toEqual({ text: 'Confirmed', tone: 'plain' });
+    expect(statusLabel('pending')).toEqual({ text: 'Pending', tone: 'plain' });
     expect(statusLabel('checked-in')).toEqual({ text: 'Checked In', tone: 'success' });
     expect(statusLabel('checked-out')?.text).toBe('Checked Out');
     expect(statusLabel('cancelled')).toEqual({ text: 'Canceled', tone: 'error' });

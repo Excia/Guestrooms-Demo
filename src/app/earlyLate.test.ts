@@ -5,6 +5,7 @@ import {
   earlyLateReducer,
   initialEarlyLate,
   type EarlyLateEvent,
+  UNCONFIRMED_MESSAGE,
 } from './earlyLate';
 
 const OFF = { earlyCheckIn: false, lateCheckOut: false };
@@ -67,6 +68,21 @@ describe('early/late auto-save state machine', () => {
     ]);
     expect(state.shown).toEqual({ earlyCheckIn: true, lateCheckOut: true });
     expect(earlyLateChanges(state.confirmed, state.shown)).toEqual({ earlyCheckIn: true });
+  });
+
+  it('an unconfirmed failure keeps the chosen value (no revert) and is flagged', () => {
+    const state = run([
+      { type: 'toggle', field: 'earlyCheckIn' },
+      { type: 'failed', revert: false, message: UNCONFIRMED_MESSAGE, unconfirmed: true },
+    ]);
+    expect(state).toMatchObject({
+      status: 'error',
+      unconfirmed: true,
+      shown: { earlyCheckIn: true },
+    });
+    expect(state.message).toMatch(/could not be reloaded/);
+    // a reload that works clears it
+    expect(earlyLateReducer(state, { type: 'reset', values: OFF }).unconfirmed).toBe(false);
   });
 
   it('retry does nothing unless there is a failure', () => {

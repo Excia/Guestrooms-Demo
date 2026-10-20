@@ -9,6 +9,8 @@ import { holdStatus, type HoldStatus } from '../../app/holdTimer';
 export function useHoldTimer(
   minutes: number | null,
   now: () => number = Date.now,
+  /** False once the panel is closing: no more ticks. */
+  active = true,
 ): { status: HoldStatus | null; restart: () => void } {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [tick, setTick] = useState(() => now());
@@ -25,10 +27,10 @@ export function useHoldTimer(
     startedAt !== null && minutes !== null ? holdStatus(startedAt, minutes, tick) : null;
   const expired = status?.phase === 'expired';
   useEffect(() => {
-    if (startedAt === null || expired) return;
+    if (startedAt === null || expired || !active) return;
     const id = setInterval(() => setTick(now()), 1000);
     return () => clearInterval(id);
-  }, [startedAt, expired, now]);
+  }, [startedAt, expired, active, now]);
 
   return { status, restart: begin };
 }

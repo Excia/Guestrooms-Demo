@@ -100,6 +100,18 @@ Copy `.env.example` to `.env.local` to override.
   to `fromStartDate` is a room change (allowed for checked-in rooms). The mock keeps schedule state
   per client, honours `today` and `scheduleSize: 'large'` (200 rooms), bumps `version` on every
   change and its data is anchored on `MOCK_TODAY` unless `today` is passed.
+- Reservation panel (`reservations.getDetail`, `setEarlyLate`, `create`, `settings.getBookingHold`;
+  `GET /reservations/:id/detail`, `POST /reservations/:id/early-late`, `POST /reservations`,
+  `GET /settings/booking-hold`): `getDetail` must not change anything. `setEarlyLate` carries the
+  same `requestId`/`Idempotency-Key` and a reservation `version` as the schedule moves; check order:
+  validate, 404, 409 `stale`, then 409 `not-editable` (checked out or canceled). `create` is
+  idempotent on `requestId` and the panel keeps one id for an unchanged form, so a retry after an
+  unknown outcome (status 0, 408, 5xx) replays; 409 `conflict` and other 4xx applied nothing. The
+  New Reservation time limit is a UI countdown from the "Reservation Hold" minutes (employee
+  audience for staff): nothing holds the room server-side yet. A real backend needs a hold/reserve
+  call when the panel opens and a hold token sent with `create`. The mock never answers a
+  `cancelled` reservation (no cancelled block exists), but the UI and the CTA rules handle it.
+  Early/Late and the edge markers are reservation-level; the grid mirrors them on its blocks.
 - Server `message` and `details` are untrusted text: render them as text, never as HTML.
 - Ids go into URL paths; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400).
 - `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped.

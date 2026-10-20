@@ -23,6 +23,8 @@ export interface ReservationPanelProps {
   onEarlyLateSaved: (reservationId: string, values: EarlyLateValues) => void;
   /** Called when the panel has finished closing (the page puts focus back on what opened it). */
   onExited?: () => void;
+  /** The reservation just created: its heading takes focus once loaded (the form that had it is gone). */
+  focusTitleFor?: string;
   now?: () => number;
 }
 
@@ -43,6 +45,7 @@ export default function ReservationPanel({
   onUnknownOutcome,
   onEarlyLateSaved,
   onExited,
+  focusTitleFor,
   now,
 }: ReservationPanelProps) {
   const titleId = useId();
@@ -85,6 +88,7 @@ export default function ReservationPanel({
             reservationId={shown.reservationId}
             reservationRoomId={shown.reservationRoomId}
             titleId={titleId}
+            focusTitle={focusTitleFor === shown.reservationId}
             onClose={onClose}
             onEarlyLateSaved={onEarlyLateSaved}
           />
@@ -99,6 +103,7 @@ export default function ReservationPanel({
             onCreated={onCreated}
             onUnknownOutcome={onUnknownOutcome}
             onGuardChange={onGuardChange}
+            active={panel !== null}
             now={now}
           />
         ) : null}

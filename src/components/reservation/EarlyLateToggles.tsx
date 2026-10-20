@@ -13,6 +13,8 @@ export interface EarlyLateTogglesProps {
   disabledReason?: string;
   onToggle: (field: keyof EarlyLateValues) => void;
   onRetry: () => void;
+  /** After an unconfirmed save: reload the reservation. */
+  onReload?: () => void;
 }
 
 /**
@@ -26,6 +28,7 @@ export default function EarlyLateToggles({
   disabledReason,
   onToggle,
   onRetry,
+  onReload,
 }: EarlyLateTogglesProps) {
   const field = (key: keyof EarlyLateValues, label: string) => (
     <FormControlLabel
@@ -74,8 +77,8 @@ export default function EarlyLateToggles({
             <Typography variant="caption" sx={{ color: 'error.main' }}>
               {state.message}
             </Typography>
-            <Button size="small" onClick={onRetry}>
-              Retry
+            <Button size="small" onClick={state.unconfirmed && onReload ? onReload : onRetry}>
+              {state.unconfirmed ? 'Reload' : 'Retry'}
             </Button>
           </Box>
         ) : null}

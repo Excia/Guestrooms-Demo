@@ -37,6 +37,7 @@ import { formatPanelDate } from '../../app/newReservation';
 import { OPEN_FOLIOS_PATH } from '../../app/routes';
 import { splitCta, STUB_TICKETS, type CtaActionId } from '../../app/splitCta';
 import { useAccess } from '../../app/useAccess';
+import { focusOnMount } from '../shared/focusOnMount';
 import SplitButton from '../shared/SplitButton';
 import DetailsAccordion from './DetailsAccordion';
 import EarlyLateToggles from './EarlyLateToggles';
@@ -48,6 +49,8 @@ export interface ReservationDetailsProps {
   /** The reservation room whose block was clicked; the room selector starts there. */
   reservationRoomId?: string;
   titleId: string;
+  /** Put focus on the heading once loaded (the reservation was just created). */
+  focusTitle?: boolean;
   onClose: () => void;
   /** A save was confirmed (or the flags were reloaded): the schedule redraws its edge markers. */
   onEarlyLateSaved: (reservationId: string, values: EarlyLateValues) => void;
@@ -72,7 +75,9 @@ function StatusHeader({ detail }: { detail: ReservationDetail }) {
       ? 'error.main'
       : label.tone === 'success'
         ? 'primary.dark'
-        : 'text.primary';
+        : label.tone === 'plain'
+          ? 'text.secondary'
+          : 'text.primary';
   return (
     <Typography
       variant="button"
@@ -259,6 +264,7 @@ export default function ReservationDetails({
   reservationId,
   reservationRoomId,
   titleId,
+  focusTitle,
   onClose,
   onEarlyLateSaved,
 }: ReservationDetailsProps) {
@@ -320,6 +326,7 @@ export default function ReservationDetails({
       detail={state.detail}
       reservationRoomId={reservationRoomId}
       titleId={titleId}
+      focusTitle={focusTitle}
       closeButton={closeButton}
       onReloaded={state.replace}
       onEarlyLateSaved={onEarlyLateSaved}
@@ -331,6 +338,7 @@ function Loaded({
   detail,
   reservationRoomId,
   titleId,
+  focusTitle,
   closeButton,
   onReloaded,
   onEarlyLateSaved,
@@ -338,6 +346,7 @@ function Loaded({
   detail: ReservationDetail;
   reservationRoomId?: string;
   titleId: string;
+  focusTitle?: boolean;
   closeButton: React.ReactNode;
   onReloaded: (d: ReservationDetail) => void;
   onEarlyLateSaved: ReservationDetailsProps['onEarlyLateSaved'];
@@ -376,9 +385,11 @@ function Loaded({
             <StatusHeader detail={detail} />
             <Typography
               id={titleId}
+              ref={focusTitle ? focusOnMount : undefined}
+              tabIndex={-1}
               variant="subtitle2"
               component="h2"
-              sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5 }}
+              sx={{ fontWeight: 700, color: 'text.secondary', mt: 0.5, outline: 'none' }}
             >
               {reservationTitle(detail)}
             </Typography>
@@ -391,18 +402,18 @@ function Loaded({
           </Box>
           {closeButton}
         </Box>
+        {!canEdit ? (
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            You can view, not change, this reservation.
+          </Alert>
+        ) : null}
         <EarlyLateToggles
           state={early.state}
           disabled={!canEdit || !editable}
-          disabledReason={
-            !editable
-              ? 'This reservation can no longer be changed.'
-              : !canEdit
-                ? 'You can view, not change, this reservation.'
-                : undefined
-          }
+          disabledReason={!editable ? 'This reservation can no longer be changed.' : undefined}
           onToggle={early.toggle}
           onRetry={early.retry}
+          onReload={early.reload}
         />
         <Box sx={{ mt: 1.5 }}>
           <SplitButton
@@ -415,13 +426,6 @@ function Loaded({
             onItem={(id) => run(id as CtaActionId)}
             menuLabel="More reservation actions"
           />
-        </Box>
-        <Box role="status" sx={{ mt: notice ? 1.5 : 0 }}>
-          {notice ? (
-            <Alert key={notice.id} severity="info" onClose={() => setNotice(null)}>
-              {notice.text}
-            </Alert>
-          ) : null}
         </Box>
         <Box sx={{ mt: 2.5 }}>
           {multi ? (
@@ -466,6 +470,20 @@ function Loaded({
             </Typography>
           </Box>
         </Box>
+      </Box>
+      {/* Above the accordion, outside the scrolling content: a notice never moves the details. The
+          status region is the only announcer (the Alert itself has no live role). */}
+      <Box role="status" sx={{ flex: 'none', px: 2.5, pb: notice ? 1 : 0 }}>
+        {notice ? (
+          <Alert
+            key={notice.id}
+            severity="info"
+            role="presentation"
+            onClose={() => setNotice(null)}
+          >
+            {notice.text}
+          </Alert>
+        ) : null}
       </Box>
       <DetailsAccordion detail={detail} onStub={say} />
     </Box>

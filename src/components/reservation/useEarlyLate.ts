@@ -6,6 +6,7 @@ import {
   earlyLateFailure,
   earlyLateReducer,
   initialEarlyLate,
+  UNCONFIRMED_MESSAGE,
   type EarlyLateValues,
 } from '../../app/earlyLate';
 import { newRequestId } from '../../lib/requestId';
@@ -64,6 +65,7 @@ export function useEarlyLate({ detail, onSaved, onReloaded }: UseEarlyLateOption
         },
         (error: unknown) => {
           const failure = earlyLateFailure(error);
+          // `fail` is only used when the outcome is known or the reservation was reloaded.
           const fail = (values?: EarlyLateValues) => {
             inflight.current = false;
             dispatch({ type: 'failed', revert: failure.revert, message: failure.message, values });
@@ -77,14 +79,38 @@ export function useEarlyLate({ detail, onSaved, onReloaded }: UseEarlyLateOption
               callbacks.current.onSaved(values);
               callbacks.current.onReloaded(fresh);
             },
-            () => fail(),
+            () => {
+              // Unknown outcome and no way to check: keep what the user chose, do not claim a revert.
+              inflight.current = false;
+              dispatch({
+                type: 'failed',
+                revert: false,
+                message: UNCONFIRMED_MESSAGE,
+                unconfirmed: true,
+              });
+            },
           );
         },
       );
   }, [api, id, state.status, state.confirmed, state.shown]);
 
+  /** After an unconfirmed save: fetch the reservation and show what the server has. */
+  const reload = () => {
+    api.reservations.getDetail(id).then(
+      (fresh) => {
+        version.current = fresh.version;
+        const values = { earlyCheckIn: fresh.earlyCheckIn, lateCheckOut: fresh.lateCheckOut };
+        dispatch({ type: 'reset', values });
+        callbacks.current.onSaved(values);
+        callbacks.current.onReloaded(fresh);
+      },
+      () => undefined, // still unconfirmed: the message stays and Reload can be tried again
+    );
+  };
+
   return {
     state,
+    reload,
     toggle: (field: keyof EarlyLateValues) => dispatch({ type: 'toggle', field }),
     retry: () => dispatch({ type: 'retry' }),
   };

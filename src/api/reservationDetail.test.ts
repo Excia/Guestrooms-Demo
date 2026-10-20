@@ -247,6 +247,25 @@ describe('http reservation details, early/late, create and settings', () => {
     expect(never).not.toHaveBeenCalled();
   });
 
+  it('getDetail rejects an answer for another reservation or with unusable fields', async () => {
+    const d = detail();
+    const room = d.rooms[0];
+    const bad = [
+      { ...d, id: 'rs-other' },
+      { ...d, leadOccupant: { ...d.leadOccupant, guestType: 'vip' } },
+      { ...d, leadOccupant: { name: 'x', memberNumber: null } },
+      { ...d, rooms: [{ ...room, arrival: undefined }] },
+      { ...d, rooms: [{ ...room, departure: 5 }] },
+      { ...d, rooms: [{ ...room, locationName: 7 }] },
+      { ...d, rooms: [{ ...room, roomTypeName: undefined }] },
+    ];
+    for (const body of bad) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).reservations.getDetail('rs-2'),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
+
   it('setEarlyLate posts with the idempotency header and requires the asked flags back', async () => {
     const request = {
       requestId: 'req-12345678',
@@ -300,6 +319,32 @@ describe('http reservation details, early/late, create and settings', () => {
         roomId: 'rm-204',
       }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+
+  it('create also checks the party and guest name echo', async () => {
+    const c = mk();
+    const request: CreateReservationRequest = {
+      requestId: 'req-12345678',
+      roomId: 'rm-203',
+      arrival: '2026-10-20',
+      departure: '2026-10-22',
+      adults: 2,
+      children: 1,
+      guestName: ' Ann ',
+      bookingGuestRole: 'occupant',
+    };
+    const created = await c.reservations.create(request);
+    const ok = vi.fn().mockResolvedValue(json(created, 201));
+    await expect(make(ok).reservations.create(request)).resolves.toMatchObject({ id: created.id });
+    for (const wrong of [
+      { ...created, adults: 3 },
+      { ...created, children: 0 },
+      { ...created, leadOccupant: { ...created.leadOccupant, name: 'Someone Else' } },
+    ]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(wrong, 201))).reservations.create(request),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
   });
 
   it('getBookingHold requires 1 to 99 minutes per audience', async () => {
