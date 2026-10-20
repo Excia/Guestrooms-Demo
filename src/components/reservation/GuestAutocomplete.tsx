@@ -6,6 +6,7 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { alpha, type Theme } from '@mui/material/styles';
 import { useRef, useState } from 'react';
 import type { Member } from '../../api';
 import { GUEST_TBD } from '../../api';
@@ -23,10 +24,14 @@ export interface GuestAutocompleteProps {
   clearLabel?: string;
 }
 
+/** Width of the control beside the field: the Lead Occupant's X, or an equal spacer, so both fields line up. */
+const SIDE_SLOT = 5;
+
 /**
  * A directory person picker: TBD until someone is chosen, the first directory people as soon as the
- * field is focused, matches as you type. "+" beside it adds a new person; with `clearLabel` an X
- * beside it clears the choice. TBD is a real, valid state, not an error.
+ * field is focused, matches as you type. "+" sits inside the field (after the dropdown button) and
+ * adds a new person; with `clearLabel` a red X beside the field clears the choice. Both fields reserve
+ * the same space beside them, so their boxes have the same width. TBD is a real, valid state.
  */
 export default function GuestAutocomplete({
   label,
@@ -51,6 +56,11 @@ export default function GuestAutocomplete({
           flex: 1,
           minWidth: 0,
           ...(clearLabel && { '& .MuiAutocomplete-clearIndicator': { display: 'none' } }),
+          // Room for the clear, dropdown and "+" buttons inside the field (one more than the default).
+          '& .MuiOutlinedInput-root, & .MuiAutocomplete-hasPopupIcon .MuiOutlinedInput-root': {
+            pr: (t: Theme) => `${t.spacing(12)} !important`,
+          },
+          '& .MuiAutocomplete-endAdornment': { right: (t: Theme) => t.spacing(4.5) },
         }}
         options={members}
         value={value}
@@ -65,10 +75,14 @@ export default function GuestAutocomplete({
             'aria-label': `Show ${label.toLowerCase()}s`,
             title: `Show ${label.toLowerCase()}s`,
           },
-          clearIndicator: {
-            'aria-label': `Clear ${label.toLowerCase()}`,
-            title: `Clear ${label.toLowerCase()}`,
-          },
+          // With the outside X the built-in clear button is hidden (display: none) and out of the
+          // accessibility tree, so it cannot be a second "Clear lead occupant".
+          clearIndicator: clearLabel
+            ? { 'aria-hidden': true, tabIndex: -1 }
+            : {
+                'aria-label': `Clear ${label.toLowerCase()}`,
+                title: `Clear ${label.toLowerCase()}`,
+              },
         }}
         autoHighlight
         onChange={(_, member) => onChange(member)}
@@ -110,24 +124,57 @@ export default function GuestAutocomplete({
         renderInput={(params) => (
           <TextField
             {...params}
-            size="small"
             inputRef={inputEl}
             placeholder={GUEST_TBD}
             slotProps={{
               ...params.slotProps,
+              input: {
+                ...params.slotProps.input,
+                endAdornment: (
+                  <>
+                    {params.slotProps.input.endAdornment}
+                    <IconButton
+                      size="small"
+                      aria-label={addLabel}
+                      title={addLabel}
+                      color="primary"
+                      // The field's own handlers would focus the input and open the list.
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAdd();
+                      }}
+                      sx={{
+                        position: 'absolute',
+                        right: (t) => t.spacing(0.5),
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                      }}
+                    >
+                      <Add />
+                    </IconButton>
+                  </>
+                ),
+              },
               htmlInput: { ...params.slotProps.htmlInput, 'aria-label': label },
             }}
           />
         )}
       />
-      <IconButton aria-label={addLabel} color="primary" onClick={onAdd}>
-        <Add />
-      </IconButton>
       {clearLabel ? (
         <IconButton
           aria-label={clearLabel}
-          color="primary"
+          color="error"
           disabled={value === null}
+          sx={{
+            width: (t) => t.spacing(SIDE_SLOT),
+            height: (t) => t.spacing(SIDE_SLOT),
+            flex: 'none',
+            // The theme's icon-button hover is the green tint: this one is red.
+            '&:hover': {
+              bgcolor: (t) => alpha(t.palette.error.main, t.palette.action.hoverOpacity),
+            },
+          }}
           onClick={() => {
             onChange(null);
             setTyped('');
@@ -137,7 +184,16 @@ export default function GuestAutocomplete({
         >
           <Close />
         </IconButton>
-      ) : null}
+      ) : (
+        <Box
+          aria-hidden
+          sx={{
+            width: (t) => t.spacing(SIDE_SLOT),
+            height: (t) => t.spacing(SIDE_SLOT),
+            flex: 'none',
+          }}
+        />
+      )}
     </Box>
   );
 }

@@ -727,3 +727,72 @@ describe('the time limit pauses on the New Room Closure tab', () => {
     expect(resumed).toHaveTextContent('Time left: 00:59');
   });
 });
+
+describe('guest field controls', () => {
+  const open = async () => {
+    const user = await loaded();
+    await user.click(screen.getByRole('button', { name: 'New Reservation' }));
+    const dialog = await panel('New Reservation');
+    await user.click(within(dialog).getByRole('radio', { name: 'Reserver' }));
+    return { user, dialog };
+  };
+  const fieldRoot = (el: HTMLElement) => el.closest('.MuiOutlinedInput-root') as HTMLElement;
+
+  it('the + is inside both fields, after the dropdown button, and named; none sits outside', async () => {
+    const { dialog } = await open();
+    for (const [field, add, show] of [
+      ['Booking guest', 'Add booking guest', 'Show booking guests'],
+      ['Lead occupant', 'Add lead occupant', 'Show lead occupants'],
+    ]) {
+      const root = fieldRoot(within(dialog).getByRole('combobox', { name: field }));
+      const plus = within(dialog).getByRole('button', { name: add });
+      const popup = within(dialog).getByRole('button', { name: show });
+      expect(root.contains(plus)).toBe(true);
+      // keyboard (DOM) order: input, dropdown, +
+      const order = [...root.querySelectorAll('input, button')];
+      const names = order.map((e) => e.getAttribute('aria-label'));
+      expect(names.indexOf(show)).toBeGreaterThan(names.indexOf(field));
+      expect(names.indexOf(add)).toBeGreaterThan(names.indexOf(show));
+      expect(popup).toBeInTheDocument();
+    }
+  });
+
+  it('keyboard order after the lead field: its + then the X', async () => {
+    const { dialog } = await open();
+    // (the disabled X is still in the DOM order; it becomes tabbable once a lead occupant is chosen)
+    const all = [...dialog.querySelectorAll<HTMLElement>('input, button')];
+    const label = (e: HTMLElement) => e.getAttribute('aria-label');
+    const names = all.map(label);
+    expect(names.indexOf('Add lead occupant')).toBeGreaterThan(names.indexOf('Lead occupant'));
+    expect(names.indexOf('Clear lead occupant')).toBeGreaterThan(
+      names.indexOf('Add lead occupant'),
+    );
+  });
+
+  it('there is exactly one Clear lead occupant button: the outside X, red, with the same trailing space on the Booking Guest row', async () => {
+    const { user, dialog } = await open();
+    await user.click(within(dialog).getByRole('combobox', { name: 'Lead occupant' }));
+    await user.click(await screen.findByRole('option', { name: /Beatrice Quinn/ }));
+    const xs = dialog.querySelectorAll('button[aria-label="Clear lead occupant"]');
+    expect(xs).toHaveLength(1);
+    const x = xs[0] as HTMLElement;
+    const lead = fieldRoot(within(dialog).getByRole('combobox', { name: 'Lead occupant' }));
+    expect(lead.contains(x)).toBe(false); // beside the field, as the owner asked
+    expect(x).toBeEnabled();
+    expect(x).toHaveStyle({ color: theme.palette.error.main });
+    // the Booking Guest row reserves the same width, so both boxes line up
+    const bookingRow = fieldRoot(
+      within(dialog).getByRole('combobox', { name: 'Booking guest' }),
+    ).closest('.MuiAutocomplete-root')!.parentElement!;
+    const spacer = bookingRow.lastElementChild as HTMLElement;
+    expect(spacer).not.toBeNull();
+    expect(getComputedStyle(spacer).width).toBe(getComputedStyle(x).width);
+  });
+
+  it('the X reads as disabled while the lead occupant is TBD', async () => {
+    const { dialog } = await open();
+    const x = within(dialog).getByRole('button', { name: 'Clear lead occupant' });
+    expect(x).toBeDisabled();
+    expect(x).not.toHaveStyle({ color: theme.palette.error.main });
+  });
+});
