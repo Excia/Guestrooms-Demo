@@ -36,7 +36,7 @@ describe('App', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/schedule?mock=empty');
   });
 
-  it('redirects / to the Schedule page inside the shell', () => {
+  it('redirects / to the Schedule page inside the shell', async () => {
     render(
       <Providers>
         <GrantedAccess>
@@ -46,7 +46,7 @@ describe('App', () => {
         </GrantedAccess>
       </Providers>,
     );
-    expect(screen.getByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Schedule' })).toBeInTheDocument();
     expect(screen.getByRole('banner')).toBeInTheDocument();
   });
 

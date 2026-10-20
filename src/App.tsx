@@ -8,11 +8,13 @@ import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
 import NewReservationResults from './pages/NewReservationResults';
-import Schedule from './pages/Schedule';
+import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
 // production builds drop the page and its route entirely (it answers with the 404 page there).
 export const COMPONENTS_DEMO_PATH = '/dev/components';
+// The schedule (grid, drag and drop, dialogs) is the largest page: its code loads on demand.
+const Schedule = lazy(() => import('./pages/Schedule'));
 const ComponentsDemo = import.meta.env.DEV ? lazy(() => import('./pages/ComponentsDemo')) : null;
 
 function PagePlaceholder({ title }: { title: string }) {
@@ -35,7 +37,11 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
-  [SCHEDULE_PATH]: <Schedule />,
+  [SCHEDULE_PATH]: (
+    <Suspense fallback={<ScheduleSkeleton />}>
+      <Schedule />
+    </Suspense>
+  ),
 };
 
 export default function App() {
