@@ -12,14 +12,18 @@ export interface RouteMeta {
   section?: RouteSection;
   /** Menu label when it differs from the page title. */
   menuLabel?: string;
+  /** Set to false for routes that appear on the dashboard shortcut list but not in the menu. */
+  showInMenu?: false;
 }
 
 export const SCHEDULE_PATH = '/schedule';
 export const DASHBOARD_PATH = '/dashboard';
 export const ROOM_BLOCKS_PATH = '/room-blocks';
+/** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
+export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
-// Note: '/admin' (Admin Setup landing) is not a menu link, so it has no menu permission yet;
-// gate it on "any admin page" when the real permissions (0.8) arrive.
+// Note: '/admin' (Admin Setup landing) is not a menu link; it opens for anyone who can open an
+// Admin Setup page (see src/app/access.ts).
 export const routes = [
   { id: 'dashboard', path: DASHBOARD_PATH, title: 'Dashboard', section: 'dashboard' },
   {
@@ -30,7 +34,21 @@ export const routes = [
     section: 'reservation',
   },
   { id: 'reservations', path: '/reservations', title: 'Reservations', section: 'reservation' },
+  // FLAG: no permission mapping yet. When role-based access (ticket 9) gives every route its own
+  // `page.<id>` permission, the owner must decide; recommended: gate on the reservations permission.
+  {
+    id: 'new-reservation-results',
+    path: NEW_RESERVATION_RESULTS_PATH,
+    title: 'Search Results',
+  },
   { id: 'open-folios', path: '/open-folios', title: 'Open Folios', section: 'reservation' },
+  {
+    id: 'unassigned-charges',
+    path: '/unassigned-charges',
+    title: 'Unassigned Charges',
+    section: 'reservation',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the dashboard list (69:3790) has it.
+  },
   { id: 'waitlist', path: '/waitlist', title: 'Waitlist', section: 'reservation' },
   {
     id: 'night-audit-history',
@@ -73,4 +91,9 @@ export const routes = [
 
 export type PageId = (typeof routes)[number]['id'];
 /** Ids of routes listed in the menu; the overlay keys its icons to these. */
-export type MenuRouteId = Extract<(typeof routes)[number], { section: RouteSection }>['id'];
+export type MenuRouteId = Exclude<
+  Extract<(typeof routes)[number], { section: RouteSection }>,
+  { showInMenu: false }
+>['id'];
+/** Ids of the reservation section: the dashboard shortcut list (the menu's minus none, plus Unassigned Charges). */
+export type ReservationRouteId = Extract<(typeof routes)[number], { section: 'reservation' }>['id'];

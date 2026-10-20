@@ -263,7 +263,10 @@ describe('QuickStats states', () => {
 
   it('shows an empty state', async () => {
     setup({}, createMockClient({ scenario: 'empty' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('No stats for this period.');
+    // The live region is always mounted (and empty at first), so wait for its text, not its presence.
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('No stats for this period.'),
+    );
     expect(screen.getAllByText('No stats for this period.').length).toBeGreaterThan(0);
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Start Date')).toBeInTheDocument();
