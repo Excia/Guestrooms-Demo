@@ -20,7 +20,7 @@ import type { ScheduleAvailability, ScheduleDays } from '../../api';
 import type { IsoDate } from '../../lib/dates';
 import { SCHEDULE_DAYS } from '../../api';
 import { SCHEDULE_VIEW_LABELS, type ScheduleStep } from '../../app/schedule';
-import { NEW_RESERVATION_RESULTS_PATH, NIGHT_AUDIT_HISTORY_PATH } from '../../app/routes';
+import { NIGHT_AUDIT_HISTORY_PATH } from '../../app/routes';
 import Calendar, { type CalendarHandle } from '../shared/Calendar';
 import Select from '../shared/Select';
 
@@ -44,6 +44,8 @@ export interface ScheduleControlsProps {
   onToday: () => void;
   onAvailability: (value: ScheduleAvailability) => void;
   onToggleFilters: (button: HTMLElement) => void;
+  /** Opens the New Reservation panel on the schedule. */
+  onNewReservation: () => void;
 }
 
 /** Icon button of the date navigation: 35px as in Figma. */
@@ -68,6 +70,7 @@ export default function ScheduleControls({
   onToday,
   onAvailability,
   onToggleFilters,
+  onNewReservation,
 }: ScheduleControlsProps) {
   const [calendarAnchor, setCalendarAnchor] = useState<HTMLElement | null>(null);
   const [roomsAnchor, setRoomsAnchor] = useState<HTMLElement | null>(null);
@@ -147,8 +150,7 @@ export default function ScheduleControls({
         <Button
           variant="contained"
           size="large"
-          component={RouterLink}
-          to={NEW_RESERVATION_RESULTS_PATH}
+          onClick={onNewReservation}
           startIcon={<AddCircle />}
           sx={{ minWidth: (t) => t.spacing(25), whiteSpace: 'nowrap' }}
         >

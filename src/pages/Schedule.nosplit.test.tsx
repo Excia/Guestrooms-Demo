@@ -40,7 +40,7 @@ describe('confirm without a split alternative', () => {
     const grid = await screen.findByRole('grid', { name: 'Schedule' });
     grid.focus();
     // pick up Thomas Okafor (202) and drop him on 207: the dialog opens, rows are frozen
-    await user.keyboard('{ArrowDown}{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+    await user.keyboard('{ArrowDown} ' + '{ArrowDown}'.repeat(7) + '{Enter}');
     await user.click(await screen.findByRole('button', { name: 'force split' }));
     // frozen rows would ignore this filter; released rows follow it
     const rowCount = () => within(grid).getAllByRole('row', { hidden: true }).length;

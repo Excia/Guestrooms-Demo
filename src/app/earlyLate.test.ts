@@ -58,6 +58,17 @@ describe('early/late auto-save state machine', () => {
     expect(state.confirmed).toEqual(fresh);
   });
 
+  it('retry applies the failed change on top of the reloaded server values', () => {
+    const fresh = { earlyCheckIn: false, lateCheckOut: true }; // changed elsewhere meanwhile
+    const state = run([
+      { type: 'toggle', field: 'earlyCheckIn' },
+      { type: 'failed', revert: true, message: 'x', values: fresh },
+      { type: 'retry' },
+    ]);
+    expect(state.shown).toEqual({ earlyCheckIn: true, lateCheckOut: true });
+    expect(earlyLateChanges(state.confirmed, state.shown)).toEqual({ earlyCheckIn: true });
+  });
+
   it('retry does nothing unless there is a failure', () => {
     const idle = initialEarlyLate(OFF);
     expect(earlyLateReducer(idle, { type: 'retry' })).toBe(idle);

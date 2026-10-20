@@ -73,6 +73,8 @@ export interface ScheduleGridProps {
   onDrop: (block: ScheduleBlock, result: Accepted) => void;
   /** A refused drop: the reservation stays where it is. */
   onRefuse: (message: string) => void;
+  /** A reservation block was clicked (not dragged) or Enter was pressed on it: open its details. */
+  onOpen: (block: ScheduleBlock) => void;
 }
 
 interface DragState {
@@ -90,9 +92,9 @@ interface DragState {
 const DRAG_THRESHOLD_PX = 4;
 
 const HELP =
-  'Use the arrow keys to move between rooms and dates. Press Enter or M on a reservation to pick it up, ' +
-  'the arrow keys to choose a new room or date, Enter to drop it and Escape to cancel. ' +
-  'Reservations can also be dragged with a mouse.';
+  'Use the arrow keys to move between rooms and dates. Press Enter on a reservation to open its details. ' +
+  'Press Space or M to pick it up, the arrow keys to choose a new room or date, Enter or Space to drop it ' +
+  'and Escape to cancel. Reservations can also be dragged with a mouse.';
 
 interface RowProps {
   room: ScheduleRoom;
@@ -233,6 +235,7 @@ export default function ScheduleGrid({
   locked,
   onDrop,
   onRefuse,
+  onOpen,
 }: ScheduleGridProps) {
   const theme = useTheme();
   const idPrefix = useId().replace(/:/g, '');
@@ -290,9 +293,9 @@ export default function ScheduleGrid({
 
   // ---- drag target (pointer and keyboard share it) -------------------------------------------
 
-  const latest = useRef({ rooms, rules, days, startDate, dates, onDrop, onRefuse, locked });
+  const latest = useRef({ rooms, rules, days, startDate, dates, onDrop, onRefuse, onOpen, locked });
   useLayoutEffect(() => {
-    latest.current = { rooms, rules, days, startDate, dates, onDrop, onRefuse, locked };
+    latest.current = { rooms, rules, days, startDate, dates, onDrop, onRefuse, onOpen, locked };
   });
 
   const evaluate = useCallback(
@@ -499,6 +502,8 @@ export default function ScheduleGrid({
     const layout = blockLayout(item, startDate, days);
     setCursor({ row: index, col: layout?.column ?? 0 });
     scrollRef.current?.focus({ preventScroll: true });
+    // A plain click (a drag's click was swallowed in the capture phase) opens the details.
+    if (item.kind === 'reservation') latest.current.onOpen(item);
   };
 
   // ---- keyboard ----------------------------------------------------------------------------
@@ -642,7 +647,10 @@ export default function ScheduleGrid({
       );
       if (item) {
         event.preventDefault();
-        pickUp(item, cursorRow);
+        // Enter opens the details; Space and M pick the block up to move it.
+        if (key === 'Enter') {
+          if (item.kind === 'reservation') latest.current.onOpen(item);
+        } else pickUp(item, cursorRow);
       }
     }
   };

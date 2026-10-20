@@ -182,6 +182,9 @@ export default memo(function ScheduleItemView({
           {layout.continuesAfter ? null : marker('right')}
         </>
       ) : null}
+      {/* Early Check In / Late Check Out: the same orange edge markers (details ticket 2.4 refines). */}
+      {!isClosure && block.earlyCheckIn && !layout.continuesBefore ? marker('left') : null}
+      {!isClosure && block.lateCheckOut && !layout.continuesAfter ? marker('right') : null}
     </Box>
   );
 });

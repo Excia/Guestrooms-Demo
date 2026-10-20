@@ -18,8 +18,8 @@ export interface EarlyLateState {
   /** What the checkboxes show (the confirmed values plus ticks not yet saved). */
   shown: EarlyLateValues;
   status: SaveStatus;
-  /** What the failed save wanted, for Retry. */
-  failed: EarlyLateValues | null;
+  /** The flags the failed save wanted to change, for Retry (applied on top of the server's values). */
+  failed: Partial<EarlyLateValues> | null;
   message: string | null;
 }
 
@@ -37,6 +37,17 @@ export const initialEarlyLate = (values: EarlyLateValues): EarlyLateState => ({
   failed: null,
   message: null,
 });
+
+/** The flags in `shown` that differ from `confirmed`, with their shown values. */
+function pendingChanges(
+  confirmed: EarlyLateValues,
+  shown: EarlyLateValues,
+): Partial<EarlyLateValues> {
+  const changes: Partial<EarlyLateValues> = {};
+  if (confirmed.earlyCheckIn !== shown.earlyCheckIn) changes.earlyCheckIn = shown.earlyCheckIn;
+  if (confirmed.lateCheckOut !== shown.lateCheckOut) changes.lateCheckOut = shown.lateCheckOut;
+  return changes;
+}
 
 const same = (a: EarlyLateValues, b: EarlyLateValues) =>
   a.earlyCheckIn === b.earlyCheckIn && a.lateCheckOut === b.lateCheckOut;
@@ -65,12 +76,18 @@ export function earlyLateReducer(state: EarlyLateState, event: EarlyLateEvent): 
         confirmed: event.values ?? state.confirmed,
         shown: event.revert ? (event.values ?? state.confirmed) : state.shown,
         status: 'error',
-        failed: state.shown,
+        failed: pendingChanges(state.confirmed, state.shown),
         message: event.message,
       };
     case 'retry':
       return state.status === 'error' && state.failed
-        ? { ...state, shown: state.failed, status: 'saving', failed: null, message: null }
+        ? {
+            ...state,
+            shown: { ...state.confirmed, ...state.failed },
+            status: 'saving',
+            failed: null,
+            message: null,
+          }
         : state;
     case 'reset':
       return initialEarlyLate(event.values);

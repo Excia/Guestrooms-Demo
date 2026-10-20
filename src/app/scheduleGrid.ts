@@ -222,6 +222,8 @@ export function blockAriaLabel(
     status,
     `Room ${room?.number ?? ''}`.trim(),
     `${formatDialogDate(block.startDate)} to ${formatDialogDate(block.endDate)}`,
+    ...(block.earlyCheckIn ? ['early check in'] : []),
+    ...(block.lateCheckOut ? ['late check out'] : []),
   ].join(', ');
 }
 
