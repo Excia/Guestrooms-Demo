@@ -117,23 +117,22 @@ export function columnAtX(
 }
 
 /**
- * Which Early Check In / Late Check Out markers a reservation block shows.
- * - `left` / `right`: the sliver at a real arrival / departure edge (inside the block, as drawn since
- *   the markers were added).
- * - `leftClipped`: the stay arrived before the visible range and had an early check in: the arrival
- *   edge is off screen, so the sliver is painted at the visible left edge instead (with the body
- *   inset). Late Check Out at a clipped right edge has no marker (its departure is out of sight).
+ * Which Early Check In / Late Check Out markers a reservation block shows, both drawn as the card's
+ * own edge (inside its rounded outline).
+ * - `left`: Early Check In. Shown at a real arrival edge, and also on an in-house stay that arrived
+ *   before the visible range: its arrival edge is off screen, so the sliver is the visible left edge
+ *   of the card (which is then rounded like any other, not flat).
+ * - `right`: Late Check Out at a real departure edge; none at a clipped right edge (the departure is
+ *   out of sight).
  * Only the drawn edge is decided here; which nights the block occupies never changes.
  */
 export function blockMarkers(
   block: { earlyCheckIn?: boolean; lateCheckOut?: boolean },
-  layout: Pick<BlockLayout, 'continuesBefore' | 'continuesAfter'>,
-): { left: boolean; right: boolean; leftClipped: boolean } {
-  const early = Boolean(block.earlyCheckIn);
+  layout: Pick<BlockLayout, 'continuesAfter'> & Partial<Pick<BlockLayout, 'continuesBefore'>>,
+): { left: boolean; right: boolean } {
   return {
-    left: early && !layout.continuesBefore,
+    left: Boolean(block.earlyCheckIn),
     right: Boolean(block.lateCheckOut) && !layout.continuesAfter,
-    leftClipped: early && layout.continuesBefore,
   };
 }
 

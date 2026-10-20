@@ -30,13 +30,3 @@ export const dateAreaX = (fraction: number): string =>
 /** CSS width for a fraction of the date area, minus `gap` (a CSS length). */
 export const dateAreaWidth = (fraction: number, gap = '0px'): string =>
   `calc((100% - var(${LABEL_VAR})) * ${fraction} - ${gap})`;
-
-/**
- * Early Check In sliver on a block clipped at the left edge of the grid (theme spacing units): the
- * stay arrived before the first visible day, so its real arrival edge is off screen. The sliver is
- * painted at the visible left edge and the block's body is inset by sliver + gap there, so the orange
- * is never drawn on the block colour. Only the painted edge moves; the block's box and the nights it
- * occupies (drops, pointer math, keyboard cursor) are unchanged.
- */
-export const MARKER_WIDTH = 0.375;
-export const MARKER_GAP = 0.25;

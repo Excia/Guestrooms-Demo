@@ -279,57 +279,30 @@ describe('blockMarkers', () => {
   const both = { earlyCheckIn: true, lateCheckOut: true };
 
   it('a real arrival edge gets the early sliver, a real departure edge the late one', () => {
-    expect(blockMarkers({ earlyCheckIn: true }, inView)).toEqual({
-      left: true,
-      right: false,
-      leftClipped: false,
-    });
-    expect(blockMarkers({ lateCheckOut: true }, inView)).toEqual({
-      left: false,
-      right: true,
-      leftClipped: false,
-    });
-    expect(blockMarkers(both, inView)).toEqual({ left: true, right: true, leftClipped: false });
-    expect(blockMarkers({}, inView)).toEqual({ left: false, right: false, leftClipped: false });
+    expect(blockMarkers({ earlyCheckIn: true }, inView)).toEqual({ left: true, right: false });
+    expect(blockMarkers({ lateCheckOut: true }, inView)).toEqual({ left: false, right: true });
+    expect(blockMarkers(both, inView)).toEqual({ left: true, right: true });
+    expect(blockMarkers({}, inView)).toEqual({ left: false, right: false });
   });
 
-  it('an in-house stay that arrived before the range still shows its early sliver, at the visible left edge', () => {
-    expect(blockMarkers({ earlyCheckIn: true }, clippedLeft)).toEqual({
-      left: false,
-      right: false,
-      leftClipped: true,
-    });
-    expect(blockMarkers(both, clippedLeft)).toEqual({
-      left: false,
-      right: true,
-      leftClipped: true,
-    });
+  it('an in-house stay that arrived before the range still shows its early sliver, as its visible left edge', () => {
+    expect(blockMarkers({ earlyCheckIn: true }, clippedLeft)).toEqual({ left: true, right: false });
+    expect(blockMarkers(both, clippedLeft)).toEqual({ left: true, right: true });
   });
 
   it('a clipped left edge without an early check in has no marker', () => {
-    expect(blockMarkers({}, clippedLeft)).toEqual({
-      left: false,
-      right: false,
-      leftClipped: false,
-    });
-    expect(blockMarkers({ lateCheckOut: true }, clippedLeft)).toEqual({
-      left: false,
-      right: true,
-      leftClipped: false,
-    });
+    expect(blockMarkers({}, clippedLeft)).toEqual({ left: false, right: false });
+    expect(blockMarkers({ lateCheckOut: true }, clippedLeft)).toEqual({ left: false, right: true });
   });
 
-  it('a clipped right edge has no late marker (its departure is out of sight); the arrival edge keeps its early one', () => {
-    const clippedRight = { continuesBefore: false, continuesAfter: true };
-    expect(blockMarkers(both, clippedRight)).toEqual({
+  it('a clipped right edge has no late marker (its departure is out of sight)', () => {
+    expect(blockMarkers(both, { continuesBefore: false, continuesAfter: true })).toEqual({
       left: true,
       right: false,
-      leftClipped: false,
     });
     expect(blockMarkers(both, { continuesBefore: true, continuesAfter: true })).toEqual({
-      left: false,
+      left: true,
       right: false,
-      leftClipped: true,
     });
   });
 
@@ -339,6 +312,6 @@ describe('blockMarkers', () => {
       '2026-10-16',
       7,
     )!;
-    expect(blockMarkers({ earlyCheckIn: true }, layout).leftClipped).toBe(true);
+    expect(blockMarkers({ earlyCheckIn: true }, layout).left).toBe(true);
   });
 });

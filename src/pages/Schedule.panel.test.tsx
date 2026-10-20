@@ -871,15 +871,16 @@ describe('small review items', () => {
 });
 
 describe('early and late markers on the grid', () => {
-  it('GR-50240 (arrived before today, early check in) shows its sliver at the visible left edge, body inset', async () => {
+  it('GR-50240 (arrived before today, early check in) draws the sliver the same way as an in-view block: inside its card', async () => {
     await loaded('/schedule');
     const daniel = block('Daniel Whitfield');
     expect(daniel.getAttribute('aria-label')).toMatch(/early check in/);
-    expect(daniel.querySelector(':scope > [data-marker="left-clipped"]')).not.toBeNull();
-    expect(daniel.querySelector('[data-marker="left"]')).toBeNull();
-    // the gridcell itself keeps its role and label; the painted body is a separate element
-    expect(daniel).toHaveAttribute('role', 'gridcell');
-    expect(daniel.querySelector('[data-body]')).not.toBeNull();
+    const body = daniel.querySelector('[data-body]') as HTMLElement;
+    // inside the card, as the in-view marker is; no detached piece, no inset body
+    expect(body.querySelector(':scope > [data-marker="left"]')).not.toBeNull();
+    expect(daniel.querySelector(':scope > [data-marker]')).toBeNull();
+    expect(body).toHaveStyle({ left: '0px' });
+    // (the rounded left corner is checked in the browser: jsdom does not parse the mixed radius)
   });
 
   it('a stay arriving in view keeps its early sliver at the arrival edge, inside the block; late at the departure edge', async () => {
@@ -897,7 +898,6 @@ describe('early and late markers on the grid', () => {
     const henry = block('Henry Lowell');
     expect(henry.querySelector('[data-body] > [data-marker="left"]')).not.toBeNull();
     expect(henry.querySelector('[data-body] > [data-marker="right"]')).not.toBeNull();
-    expect(henry.querySelector('[data-marker="left-clipped"]')).toBeNull();
   });
 });
 

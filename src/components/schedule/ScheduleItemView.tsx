@@ -15,8 +15,6 @@ import {
   BLOCK_ICON_SPACING,
   BLOCK_TOP,
   dateAreaWidth,
-  MARKER_GAP,
-  MARKER_WIDTH,
   dateAreaX,
 } from './scheduleLayout';
 
@@ -105,26 +103,7 @@ export default memo(function ScheduleItemView({
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
   const settled = !isClosure && (block.status === 'checked-in' || block.status === 'checked-out');
-  const markers = isClosure
-    ? { left: false, right: false, leftClipped: false }
-    : blockMarkers(block, layout);
-  // A block clipped at the left edge of the grid whose arrival was an early check in: its painted body
-  // gives up the sliver and a gap on that edge, and the sliver sits in the freed strip against the grid.
-  const inset = (t: Theme) => t.spacing(MARKER_WIDTH + MARKER_GAP);
-  const clippedSliver = (
-    <Box
-      aria-hidden
-      data-marker="left-clipped"
-      sx={(t) => ({
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        width: t.spacing(MARKER_WIDTH),
-        bgcolor: 'warning.main',
-      })}
-    />
-  );
+  const markers = isClosure ? { left: false, right: false } : blockMarkers(block, layout);
   return (
     <Box
       id={id}
@@ -162,13 +141,15 @@ export default memo(function ScheduleItemView({
           const far = t.spacing(0.375);
           // Checked-in and checked-out blocks round the left corners more; others the right (Figma).
           const [left, right] = settled || isClosure ? [near, far] : [far, near];
-          const cl = layout.continuesBefore ? 0 : left;
+          // A block clipped at the left edge is flat there to show it goes on, unless it carries the
+          // early check in sliver: then the sliver is its left edge, a rounded card like any other.
+          const cl = layout.continuesBefore && !markers.left ? 0 : left;
           const cr = layout.continuesAfter ? 0 : right;
           return {
             position: 'absolute',
             top: 0,
             bottom: 0,
-            left: markers.leftClipped ? inset(t) : 0,
+            left: 0,
             right: 0,
             boxSizing: 'border-box',
             px: 0.75,
@@ -220,7 +201,6 @@ export default memo(function ScheduleItemView({
         {markers.left ? marker('left') : null}
         {markers.right ? marker('right') : null}
       </Box>
-      {markers.leftClipped ? clippedSliver : null}
     </Box>
   );
 });
