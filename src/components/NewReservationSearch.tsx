@@ -69,7 +69,7 @@ function Stepper({
   const atMin = value <= min;
   const atMax = value >= max;
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.5 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
       <Typography
         variant="body2"
         component="span"
