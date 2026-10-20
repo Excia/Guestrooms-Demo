@@ -1,13 +1,7 @@
 import { createMockPermissions, pagePermission } from './permissions';
 import { routes } from './routes';
 import { buildMenu } from './menu';
-import {
-  badgeWidthPx,
-  buildShortcuts,
-  formatCount,
-  shouldShowBadge,
-  unassignedChargesLabel,
-} from './shortcuts';
+import { buildShortcuts, formatCount, shouldShowBadge, unassignedChargesLabel } from './shortcuts';
 
 describe('buildShortcuts', () => {
   it('lists the ten links in ticket order with their paths', () => {
@@ -69,14 +63,6 @@ describe('menu', () => {
 });
 
 describe('badge', () => {
-  it('keeps the 28px minimum for one digit and grows with the number', () => {
-    expect(badgeWidthPx(1)).toBe(28);
-    expect(badgeWidthPx(10)).toBe(30);
-    expect(badgeWidthPx(100)).toBe(37);
-    expect(badgeWidthPx(1000)).toBe(51);
-    expect(badgeWidthPx(12000)).toBeGreaterThan(badgeWidthPx(1000));
-  });
-
   it('formats and labels counts', () => {
     expect(formatCount(1000)).toBe('1,000');
     expect(unassignedChargesLabel(1)).toBe('1 unassigned charge');

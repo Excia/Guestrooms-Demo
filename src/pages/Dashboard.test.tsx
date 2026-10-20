@@ -39,13 +39,19 @@ describe('Dashboard', () => {
     expect(screen.getByText('search here')).toBeInTheDocument();
   });
 
-  it('shows a placeholder for undefined slots and nothing for null', () => {
+  it('renders nothing in a column whose slot is null', () => {
     renderWithApi(
       <MemoryRouter>
-        <Dashboard quickStats={null} />
+        <Dashboard
+          reservationManagement={null}
+          quickStats={<p>stats here</p>}
+          newReservation={null}
+        />
       </MemoryRouter>,
     );
-    expect(screen.getAllByText(/arrives in a later ticket/)).toHaveLength(1);
+    expect(screen.getByText('stats here')).toBeInTheDocument();
+    expect(screen.queryByText(/arrives in a later ticket/)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('link')).toHaveLength(0);
   });
 
   it('is served at /dashboard inside the shell', () => {

@@ -16,12 +16,14 @@ declare module '@mui/material/styles' {
   interface TypographyVariants {
     h4_fixed: CSSProperties;
     menu_item: CSSProperties;
+    list_link: CSSProperties;
     menu_heading: CSSProperties;
     button_small: CSSProperties;
   }
   interface TypographyVariantsOptions {
     h4_fixed?: CSSProperties;
     menu_item?: CSSProperties;
+    list_link?: CSSProperties;
     menu_heading?: CSSProperties;
     button_small?: CSSProperties;
   }
@@ -31,6 +33,7 @@ declare module '@mui/material/Typography' {
   interface TypographyPropsVariantOverrides {
     h4_fixed: true;
     menu_item: true;
+    list_link: true;
     menu_heading: true;
     button_small: true;
   }
@@ -76,6 +79,8 @@ const base = createTheme({
     // Menu overlay (Figma 1302:18023): links 22px and headings 20px Medium, scaled by MENU_SCALE.
     menu_item: font(menuFontPx(22), 500, 1.2, 0),
     menu_heading: font(menuFontPx(20), 500, 1.6, 0.15),
+    // Dashboard shortcut rows (Figma 69:3790): 22px Medium, unscaled (MENU_SCALE is menu-only).
+    list_link: font(22, 500, 1.2, 0),
     caption: font(12, 400, 1.4, 0.4),
     button: font(14, 500, 24 / 14, 0.4),
     // Figma button/small (13px Medium): section captions such as "Compare to:" (set uppercase by the caller).
@@ -158,6 +163,7 @@ const base = createTheme({
         variantMapping: {
           h4_fixed: 'h4',
           menu_item: 'span',
+          list_link: 'span',
           menu_heading: 'h2',
           button_small: 'span',
         },

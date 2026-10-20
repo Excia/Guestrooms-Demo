@@ -56,10 +56,11 @@ function useUnassignedCount(): number | undefined {
     const controller = new AbortController();
     api.dashboard
       .getStats({ signal: controller.signal })
-      .then((stats) => setCount(stats.unassignedChargesCount))
-      .catch(() => {
-        if (!controller.signal.aborted) setCount(undefined);
-      });
+      .then((stats) => {
+        if (!controller.signal.aborted) setCount(stats.unassignedChargesCount);
+      })
+      // A failed request keeps the last good count (or none); the links work regardless.
+      .catch(() => undefined);
     return () => controller.abort();
   }, [api]);
   return count;
@@ -80,7 +81,7 @@ function CountBadge({ count }: { count: number }) {
           height: t.spacing(BADGE_MIN_SIZE_SPACING),
           minWidth: t.spacing(BADGE_MIN_SIZE_SPACING),
           px: BADGE_PADDING_X_SPACING,
-          borderRadius: 25, // pill
+          borderRadius: t.spacing(BADGE_MIN_SIZE_SPACING / 2), // half the height: a pill
           bgcolor: 'warning.main',
           color: 'warning.contrastText',
           ...t.typography.caption,
@@ -122,11 +123,12 @@ export default function ReservationManagement() {
             })}
           >
             <ListItemIcon sx={{ minWidth: 0, color: 'inherit' }}>
+              {/* Figma icon size 32px (no icon-size token in the theme). */}
               <Icon aria-hidden sx={{ fontSize: 32 }} />
             </ListItemIcon>
             <ListItemText
               primary={item.label}
-              slotProps={{ primary: { variant: 'menu_item' } }}
+              slotProps={{ primary: { variant: 'list_link' } }}
               sx={{ flex: '0 1 auto' }}
             />
             {item.id === 'unassigned-charges' && shouldShowBadge(unassigned) && (
