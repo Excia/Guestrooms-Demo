@@ -18,9 +18,21 @@ describe('Dashboard', () => {
   });
 
   it('renders slot content in its column', () => {
-    render(<Dashboard quickStats={<p>stats here</p>} />);
+    render(
+      <Dashboard
+        reservationManagement={<p>list here</p>}
+        quickStats={<p>stats here</p>}
+        newReservation={<p>search here</p>}
+      />,
+    );
+    expect(screen.getByText('list here')).toBeInTheDocument();
     expect(screen.getByText('stats here')).toBeInTheDocument();
-    expect(screen.getByText(/New Reservation content/)).toBeInTheDocument();
+    expect(screen.getByText('search here')).toBeInTheDocument();
+  });
+
+  it('shows a placeholder for undefined slots and nothing for null', () => {
+    render(<Dashboard quickStats={null} />);
+    expect(screen.getAllByText(/arrives in a later ticket/)).toHaveLength(2);
   });
 
   it('is served at /dashboard inside the shell', () => {

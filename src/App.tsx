@@ -1,6 +1,6 @@
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
-import { lazy, Suspense } from 'react';
+import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
 import { DASHBOARD_PATH, routes, SCHEDULE_PATH } from './app/routes';
 import AppShell from './AppShell';
@@ -27,17 +27,23 @@ function RedirectToSchedule() {
   return <Navigate to={{ pathname: SCHEDULE_PATH, search }} replace />;
 }
 
+// Real pages by route path; routes without an entry show the placeholder. Page tickets add theirs here.
+const pages: Partial<Record<string, ReactElement>> = {
+  [DASHBOARD_PATH]: <Dashboard />,
+};
+
 export default function App() {
   return (
     <AppShell>
       <Routes>
         <Route path="/" element={<RedirectToSchedule />} />
-        <Route path={DASHBOARD_PATH} element={<Dashboard />} />
-        {routes
-          .filter((r) => r.path !== DASHBOARD_PATH)
-          .map((r) => (
-            <Route key={r.path} path={r.path} element={<PagePlaceholder title={r.title} />} />
-          ))}
+        {routes.map((r) => (
+          <Route
+            key={r.path}
+            path={r.path}
+            element={pages[r.path] ?? <PagePlaceholder title={r.title} />}
+          />
+        ))}
         {/* Deliberately not in the route table or the menu. */}
         {ComponentsDemo ? (
           <Route

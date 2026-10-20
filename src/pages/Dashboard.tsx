@@ -1,8 +1,14 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import { visuallyHidden } from '@mui/utils';
 import { HEADER_HEIGHT } from '../app/layout';
 import DashboardColumn from '../components/DashboardColumn';
 
+/**
+ * Slot contract: each slot is a ReactNode. `undefined` shows the placeholder, `null` renders an
+ * empty column. Slot content must not set its own scroll or height (the column panel scrolls);
+ * it is padded by the panel.
+ */
 export interface DashboardProps {
   /** Slot for the reservation shortcut list (ticket #15). */
   reservationManagement?: React.ReactNode;
@@ -40,25 +46,17 @@ export default function Dashboard({
         [t.breakpoints.up('lg')]: {
           flexDirection: 'row',
           justifyContent: 'center',
-          height: `calc(100dvh - ${t.spacing(HEADER_HEIGHT)})`,
+          // vh first for browsers without dvh; dvh wins where supported.
+          height: [
+            `calc(100vh - ${t.spacing(HEADER_HEIGHT)})`,
+            `calc(100dvh - ${t.spacing(HEADER_HEIGHT)})`,
+          ],
           boxSizing: 'border-box',
         },
       })}
     >
       {/* Figma has no page title; the h1 is for screen readers. Column titles are h2. */}
-      <Typography
-        variant="h1"
-        sx={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '1px',
-          height: '1px',
-          overflow: 'hidden',
-          clip: 'rect(0 0 0 0)',
-          whiteSpace: 'nowrap',
-        }}
-      >
+      <Typography variant="h1" sx={visuallyHidden}>
         Dashboard
       </Typography>
       <DashboardColumn title="Reservation Management">{reservationManagement}</DashboardColumn>
