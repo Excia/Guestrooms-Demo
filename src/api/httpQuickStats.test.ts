@@ -41,4 +41,38 @@ describe('http getQuickStats', () => {
       make(fetchMock).dashboard.getQuickStats({ view: 'day', date: '2026-10-16' }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
+
+  it('rejects an answer for another view or period', async () => {
+    const day = buildQuickStats({ view: 'day', date: '2026-10-16' });
+    const week = { view: 'week', startDate: '2026-10-11' } as const;
+    await expect(
+      make(vi.fn().mockResolvedValue(json(day))).dashboard.getQuickStats(week),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+    const other = buildQuickStats({ view: 'week', startDate: '2026-10-18' });
+    await expect(
+      make(vi.fn().mockResolvedValue(json(other))).dashboard.getQuickStats(week),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+    const month = buildQuickStats({ view: 'month', month: '2026-09' });
+    await expect(
+      make(vi.fn().mockResolvedValue(json(month))).dashboard.getQuickStats({
+        view: 'month',
+        month: '2026-10',
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+
+  it('rejects rows and blocks without their numbers or names', async () => {
+    const good = buildQuickStats({ view: 'day', date: '2026-10-16' });
+    if (good.view !== 'day') throw new Error('unreachable');
+    const noNights = { ...good, revenue: { ...good.revenue, rows: [{ id: 'a', name: 'A' }] } };
+    const noName = { ...good, roomBlocks: [{ ...good.roomBlocks[0], name: undefined }] };
+    for (const body of [noNights, noName]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).dashboard.getQuickStats({
+          view: 'day',
+          date: '2026-10-16',
+        }),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
 });

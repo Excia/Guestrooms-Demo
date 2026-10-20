@@ -4,6 +4,7 @@ import type {
   Page,
   PermissionGrant,
   QuickStats,
+  QuickStatsQuery,
   Reservation,
   ReservationQuery,
   RequestOptions,
@@ -119,29 +120,47 @@ const isCounts = (v: unknown) =>
 const listOf = (v: unknown, guard: (x: unknown) => boolean) => Array.isArray(v) && v.every(guard);
 
 // Light shape guards, like the others: the fields the panel reads.
-function parseQuickStats(body: unknown, status: number): QuickStats {
-  const revenue = isObject(body) ? body.revenue : undefined;
-  const ok =
-    isObject(body) &&
-    isCounts(body.occupancy) &&
-    isObject(revenue) &&
-    isCount(revenue.totalRevenue) &&
-    isCount(revenue.totalNights) &&
-    (revenue.averageRate === null || isCount(revenue.averageRate)) &&
-    listOf(revenue.rows, (r) => isObject(r) && isString(r.id) && isString(r.name)) &&
-    (body.view === 'week'
-      ? isString(body.startDate) &&
-        isCounts(body.daysTotal) &&
-        listOf(body.days, (d) => isObject(d) && isString(d.date) && isCounts(d.counts))
-      : (body.view === 'day' || body.view === 'month') &&
-        isCounts(body.roomBlocksTotal) &&
-        listOf(
-          body.roomBlocks,
-          (b) => isObject(b) && isString(b.id) && isString(b.startDate) && isCounts(b.counts),
-        ));
-  if (!ok) throw invalid(status, 'quick stats');
-  return body as unknown as QuickStats;
-}
+// The answer must be for the query that was sent: the view and the echoed period have to match.
+const parseQuickStats =
+  (query: QuickStatsQuery) =>
+  (body: unknown, status: number): QuickStats => {
+    const revenue = isObject(body) ? body.revenue : undefined;
+    const ok =
+      isObject(body) &&
+      isCounts(body.occupancy) &&
+      isObject(revenue) &&
+      isCount(revenue.totalRevenue) &&
+      isCount(revenue.totalNights) &&
+      (revenue.averageRate === null || isCount(revenue.averageRate)) &&
+      listOf(
+        revenue.rows,
+        (r) =>
+          isObject(r) &&
+          isString(r.id) &&
+          isString(r.name) &&
+          isCount(r.nights) &&
+          isCount(r.revenue),
+      ) &&
+      body.view === query.view &&
+      (query.view === 'week'
+        ? body.startDate === query.startDate &&
+          isCounts(body.daysTotal) &&
+          listOf(body.days, (d) => isObject(d) && isString(d.date) && isCounts(d.counts))
+        : (query.view === 'day' ? body.date === query.date : body.month === query.month) &&
+          isCounts(body.roomBlocksTotal) &&
+          listOf(
+            body.roomBlocks,
+            (b) =>
+              isObject(b) &&
+              isString(b.id) &&
+              isString(b.name) &&
+              isCount(b.nights) &&
+              isString(b.startDate) &&
+              isCounts(b.counts),
+          ));
+    if (!ok) throw invalid(status, 'quick stats');
+    return body as unknown as QuickStats;
+  };
 
 function errorFromBody(status: number, statusText: string, text: string): ApiError {
   let message = statusText || 'Request failed';
@@ -264,7 +283,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
               month: q.view === 'month' ? q.month : undefined,
             },
             o,
-            parseQuickStats,
+            parseQuickStats(q),
           );
         }),
     },

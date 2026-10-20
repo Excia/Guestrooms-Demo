@@ -1,4 +1,4 @@
-import { isValidMonth, parseIsoDate } from '../app/dateSelection';
+import { isValidMonth, parseIsoDate } from '../lib/dates';
 import type { QuickStatsQuery } from './types';
 import { ApiError } from './types';
 

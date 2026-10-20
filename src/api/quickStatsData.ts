@@ -1,9 +1,9 @@
 // Mock Quick Stats: plausible numbers for any date, week or month, deterministic from the request
 // (the same query always gives the same answer). Replaced by the backend later.
-import { addDays, monthRange, daysBetween } from '../app/dateSelection';
-import { occupancyCounts, summarizeOccupancy, weightedAverageRateOrNull } from '../app/quickStats';
+import { addDays, monthRange, daysBetween } from '../lib/dates';
+import { occupancyCounts, summarizeOccupancy } from './occupancy';
 import { rateCategories } from './mockData';
-import { totalsFor } from './stats';
+import { totalsFor, weightedAverageRateOrNull } from './stats';
 import type {
   OccupancyCounts,
   QuickStats,
@@ -62,13 +62,34 @@ function occupancyForDay(date: string): OccupancyCounts {
   return occupancyCounts(booked, MOCK_SELLABLE_ROOMS - booked);
 }
 
+/**
+ * Splits `total` whole units over `weights` by the largest-remainder method, so the parts always
+ * add up to `total` (separate rounding drifts by one).
+ */
+export function apportion(total: number, weights: readonly number[]): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (sum <= 0) return weights.map(() => 0);
+  const exact = weights.map((w) => (total * w) / sum);
+  const parts = exact.map(Math.floor);
+  let left = total - parts.reduce((a, b) => a + b, 0);
+  const order = exact
+    .map((x, i) => ({ i, r: x - Math.floor(x) }))
+    .sort((a, b) => b.r - a.r || a.i - b.i);
+  for (const { i } of order) {
+    if (left <= 0) break;
+    parts[i] += 1;
+    left -= 1;
+  }
+  return parts;
+}
+
 /** Revenue for `nightsTotal` room nights, split over the rate categories deterministically. */
 function revenueFor(seedKey: string, nightsTotal: number): QuickStatsRevenue {
   const rand = seeded(hash(`revenue:${seedKey}`));
   const weights = rateCategories.map(() => 0.5 + rand());
-  const weightSum = weights.reduce((a, b) => a + b, 0);
+  const shares = apportion(nightsTotal, weights);
   const rows = rateCategories.map((c, i) => {
-    const nights = Math.round((nightsTotal * weights[i]) / weightSum);
+    const nights = shares[i];
     const rate = (BASE_RATE[c.id] ?? 18_000) + between(rand, -1_500, 1_500);
     return { id: c.id, name: c.name, nights, revenue: nights * rate };
   });

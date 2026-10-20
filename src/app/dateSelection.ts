@@ -3,8 +3,36 @@
 // an ISO "yyyy-mm-dd" string (months as "yyyy-mm"). Arithmetic runs on UTC midnights, so DST never
 // shifts a day. Weeks start on Sunday unless a caller passes another day.
 
-export type IsoDate = string;
-export type IsoMonth = string;
+import {
+  addDays,
+  daysBetween,
+  formatIsoDate,
+  isValidIsoDate,
+  isValidMonth,
+  monthOf,
+  monthRange,
+  pad,
+  parseIsoDate,
+  parseMonth,
+  type DateRange,
+  type IsoDate,
+  type IsoMonth,
+} from '../lib/dates';
+
+export {
+  addDays,
+  daysBetween,
+  formatIsoDate,
+  isValidIsoDate,
+  isValidMonth,
+  monthOf,
+  monthRange,
+  parseIsoDate,
+  type DateRange,
+  type IsoDate,
+  type IsoMonth,
+};
+
 export type WeekStart = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export type Period =
@@ -74,7 +102,6 @@ export const PRESET_LABELS: Record<RangePreset, string> = {
   custom: 'Custom',
 };
 
-const DAY_MS = 86_400_000;
 const MONTH_NAMES = [
   'January',
   'February',
@@ -90,58 +117,9 @@ const MONTH_NAMES = [
   'December',
 ];
 
-const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const ISO_MONTH = /^(\d{4})-(\d{2})$/;
-
-const pad = (n: number, width = 2) => String(n).padStart(width, '0');
-
-/** UTC-midnight Date for a valid ISO date, otherwise null (rejects "2025-02-30"). */
-export function parseIsoDate(value: string): Date | null {
-  const m = ISO_DATE.exec(value);
-  if (!m) return null;
-  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
-  return formatIsoDate(d) === value ? d : null;
-}
-
-export function isValidIsoDate(value: string): boolean {
-  return parseIsoDate(value) !== null;
-}
-
-export function formatIsoDate(d: Date): IsoDate {
-  return `${pad(d.getUTCFullYear(), 4)}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
-
 /** The local calendar date of `now`. */
 export function todayIso(now: Date = new Date()): IsoDate {
   return `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
-
-export function addDays(iso: IsoDate, days: number): IsoDate {
-  const d = parseIsoDate(iso);
-  if (!d) return iso;
-  return formatIsoDate(new Date(d.getTime() + days * DAY_MS));
-}
-
-/** Whole days from `from` to `to` (negative when `to` is earlier); NaN for an invalid date. */
-export function daysBetween(from: IsoDate, to: IsoDate): number {
-  const a = parseIsoDate(from);
-  const b = parseIsoDate(to);
-  return a && b ? Math.round((b.getTime() - a.getTime()) / DAY_MS) : NaN;
-}
-
-export function monthOf(iso: IsoDate): IsoMonth {
-  return iso.slice(0, 7);
-}
-
-function parseMonth(month: IsoMonth): { year: number; index: number } | null {
-  const m = ISO_MONTH.exec(month);
-  if (!m) return null;
-  const index = Number(m[2]) - 1;
-  return index >= 0 && index < 12 ? { year: Number(m[1]), index } : null;
-}
-
-export function isValidMonth(month: string): boolean {
-  return parseMonth(month) !== null;
 }
 
 export function addMonths(month: IsoMonth, delta: number): IsoMonth {
@@ -163,18 +141,6 @@ export function addMonthsToDate(iso: IsoDate, delta: number): IsoDate {
   const target = addMonths(monthOf(iso), delta);
   const last = Number(monthRange(target).to.slice(8));
   return `${target}-${pad(Math.min(Number(iso.slice(8)), last))}`;
-}
-
-export interface DateRange {
-  from: IsoDate;
-  to: IsoDate;
-}
-
-export function monthRange(month: IsoMonth): DateRange {
-  const p = parseMonth(month);
-  if (!p) return { from: month, to: month };
-  const lastDay = new Date(Date.UTC(p.year, p.index + 1, 0)).getUTCDate();
-  return { from: `${month}-01`, to: `${month}-${pad(lastDay)}` };
 }
 
 /** The 7-day week containing `iso`. */

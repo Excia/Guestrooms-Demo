@@ -1,5 +1,5 @@
 import { createMockClient } from './mock';
-import { MOCK_SELLABLE_ROOMS, buildQuickStats } from './quickStatsData';
+import { MOCK_SELLABLE_ROOMS, apportion, buildQuickStats } from './quickStatsData';
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 
@@ -91,5 +91,35 @@ describe('mock client getQuickStats', () => {
     );
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
+
+describe('mock consistency', () => {
+  it('apportions exactly, whatever the weights', () => {
+    expect(apportion(10, [1, 1, 1])).toEqual([4, 3, 3]);
+    expect(apportion(0, [1, 2])).toEqual([0, 0]);
+    expect(apportion(5, [0, 0])).toEqual([0, 0]);
+    for (let total = 0; total < 60; total += 1) {
+      expect(sum(apportion(total, [0.7, 1.3, 0.9, 1.1]))).toBe(total);
+    }
+  });
+
+  it('keeps the occupancy bar, the revenue nights and the detail tables in step', () => {
+    const start = Date.UTC(2026, 0, 1);
+    for (let i = 0; i < 400; i += 1) {
+      const date = new Date(start + i * 86_400_000).toISOString().slice(0, 10);
+      const day = buildQuickStats({ view: 'day', date });
+      expect(day.revenue.totalNights).toBe(day.occupancy.booked);
+      const week = buildQuickStats({ view: 'week', startDate: date });
+      expect(week.revenue.totalNights).toBe(week.occupancy.booked);
+      if (week.view === 'week') {
+        expect(week.daysTotal.booked).toBe(week.occupancy.booked);
+        expect(week.revenue.totalNights).toBe(sum(week.days.map((d) => d.counts.booked)));
+      }
+      if (i % 28 === 0) {
+        const month = buildQuickStats({ view: 'month', month: date.slice(0, 7) });
+        expect(month.revenue.totalNights).toBe(month.occupancy.booked);
+      }
+    }
   });
 });
