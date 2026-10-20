@@ -75,6 +75,10 @@ export default function DashboardColumn({ title, children }: DashboardColumnProp
             flex: '1 1 auto',
             minHeight: 0,
             p: 3,
+            '&:focus-visible': {
+              outline: `2px solid ${t.palette.primary.main}`,
+              outlineOffset: -2,
+            },
             [t.breakpoints.up('lg')]: { overflowY: 'auto' },
           })}
         >
