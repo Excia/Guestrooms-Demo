@@ -11,6 +11,8 @@ import type {
   QuickStatsQuery,
   ScheduleQuery,
 } from './types';
+import type { ReservationListQuery } from './reservationListTypes';
+import { LIST_STATUSES } from './reservationListTypes';
 import { SCHEDULE_DAYS } from './types';
 import { ApiError } from './types';
 
@@ -199,6 +201,52 @@ export function assertMemberQuery(query: { q?: string; limit?: number }): void {
       (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 50))
   ) {
     throw invalidQuery('member query');
+  }
+}
+
+const LIST_SORT_FIELDS = [
+  'arrival',
+  'departure',
+  'confirmationNumber',
+  'guestName',
+  'reserverName',
+  'blockName',
+  'locationName',
+  'roomTypeName',
+  'roomNumber',
+  'status',
+];
+export const MAX_LIST_FILTER_LENGTH = 200;
+
+/** The Reservation List query reaches the mock and the URL of the real API: reject anything malformed. */
+export function assertReservationListQuery(query: ReservationListQuery): void {
+  const date = (v: unknown) =>
+    v === undefined || (typeof v === 'string' && parseIsoDate(v) !== null);
+  const text = (v: unknown) =>
+    v === undefined || (typeof v === 'string' && v.length <= MAX_LIST_FILTER_LENGTH);
+  const ids = (v: unknown) =>
+    v === undefined || (Array.isArray(v) && v.length <= 100 && v.every(shortId));
+  if (
+    !date(query.checkInFrom) ||
+    !date(query.checkInTo) ||
+    (query.unassignedOnly !== undefined && typeof query.unassignedOnly !== 'boolean') ||
+    !ids(query.locationIds) ||
+    !ids(query.roomTypeIds) ||
+    (query.statuses !== undefined &&
+      !(Array.isArray(query.statuses) && query.statuses.every((s) => LIST_STATUSES.includes(s)))) ||
+    !text(query.guest) ||
+    !text(query.reserver) ||
+    !text(query.resNumber) ||
+    !text(query.block) ||
+    !text(query.room) ||
+    !text(query.search) ||
+    (query.sort !== undefined &&
+      (!LIST_SORT_FIELDS.includes(query.sort.field) ||
+        (query.sort.direction !== 'asc' && query.sort.direction !== 'desc'))) ||
+    (query.page !== undefined && (!Number.isInteger(query.page) || query.page < 1)) ||
+    (query.limit !== undefined && (!Number.isInteger(query.limit) || query.limit < 1))
+  ) {
+    throw invalidQuery('reservation list query');
   }
 }
 

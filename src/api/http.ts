@@ -33,6 +33,7 @@ import type {
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { expectedLeadOccupantName } from './createRules';
+import { listParams, parseListOptions, parseListPage } from './httpReservationList';
 import { ApiError } from './types';
 import {
   assertChangeRoomRequest,
@@ -44,6 +45,7 @@ import {
   assertMoveRoomRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
+  assertReservationListQuery,
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
@@ -895,6 +897,14 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
+    },
+    reservationList: {
+      list: (q = {}, o) =>
+        Promise.resolve().then(() => {
+          assertReservationListQuery(q);
+          return request('/reservation-list', listParams(q), o, parseListPage);
+        }),
+      getOptions: (o) => request('/reservation-list/options', {}, o, parseListOptions),
     },
     schedule: {
       get: (q, o) =>
