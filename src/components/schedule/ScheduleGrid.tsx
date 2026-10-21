@@ -113,6 +113,8 @@ interface RowProps {
   activeCol: number | null;
   draggingId: string | null;
   idPrefix: string;
+  /** Room numbers by id, to name the other room of a stay that changed room. */
+  roomNumbers: ReadonlyMap<string, string>;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
 }
 
@@ -131,6 +133,7 @@ const ScheduleRow = memo(function ScheduleRow({
   activeCol,
   draggingId,
   idPrefix,
+  roomNumbers,
   onItemPointerDown,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
@@ -191,6 +194,10 @@ const ScheduleRow = memo(function ScheduleRow({
       {items.map((item) => {
         const layout = blockLayout(item, startDate, days);
         if (!layout) return null;
+        const linked =
+          item.kind === 'reservation' && item.roomChange
+            ? roomNumbers.get(item.roomChange.otherRoomId)
+            : undefined;
         return (
           <ScheduleItemView
             key={item.id}
@@ -202,11 +209,12 @@ const ScheduleRow = memo(function ScheduleRow({
             dragging={draggingId === item.id}
             label={
               item.kind === 'reservation'
-                ? blockAriaLabel(item, room)
+                ? blockAriaLabel(item, room, linked)
                 : closureAriaLabel(item, room)
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
             active={activeItem?.id === item.id}
+            linkedRoomNumber={linked}
           />
         );
       })}
@@ -251,6 +259,10 @@ export default function ScheduleGrid({
   const todayIndex = daysBetween(startDate, today);
   const blocksByRoom = useMemo(() => groupByRoom(data.blocks), [data.blocks]);
   const closuresByRoom = useMemo(() => groupByRoom(data.closures), [data.closures]);
+  const roomNumbers = useMemo(
+    () => new Map(data.rooms.map((r) => [r.id, r.number])),
+    [data.rooms],
+  );
   const labels = useMemo(
     () => rooms.map((r) => roomRowLabel(r, data.locations, data.roomTypes)),
     [rooms, data.locations, data.roomTypes],
@@ -937,6 +949,7 @@ export default function ScheduleGrid({
                 activeCol={i === cursorRow ? cursor.col : null}
                 draggingId={drag?.item.id ?? null}
                 idPrefix={idPrefix}
+                roomNumbers={roomNumbers}
                 onItemPointerDown={onItemPointerDown}
               />
             ))}

@@ -18,6 +18,12 @@ import {
   shiftScheduleStart,
   type ScheduleStep,
 } from '../app/schedule';
+import {
+  applyRoomChange,
+  changeRoomFailure,
+  mergeRoomChange,
+  revertRoomChange,
+} from '../app/changeRoom';
 import { applyPanel, closePanel, parsePanel } from '../app/panelUrl';
 import type { EarlyLateValues } from '../app/earlyLate';
 import { applyMoves, mergeChangedBlocks, moveFailure, revertMoves } from '../app/scheduleGrid';
@@ -30,6 +36,7 @@ import {
 } from '../app/scheduleUrl';
 import { todayIso, type IsoDate } from '../lib/dates';
 import { newRequestId } from '../lib/requestId';
+import type { RoomChangeSubmission } from '../components/reservation/ChangeRoomDialog';
 import ReservationPanel from '../components/reservation/ReservationPanel';
 import MoveConfirmDialog from '../components/schedule/MoveConfirmDialog';
 import ScheduleControls from '../components/schedule/ScheduleControls';
@@ -107,6 +114,12 @@ export default function Schedule({
   useEffect(() => {
     currentRange.current = { startDate: start, days: view.days };
   }, [start, view.days]);
+  // A room change during a stay is in flight (ticket 2.3); `detailRefresh` reloads the open details.
+  const [roomChanging, setRoomChanging] = useState(false);
+  const [detailRefresh, setDetailRefresh] = useState(0);
+  const changeSubmitted = useRef(false);
+  // The blocks on screen, readable from callbacks that outlive a render.
+  const loadedBlocks = useRef<ScheduleBlock[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [toastOpen, setToastOpen] = useState(false);
 
@@ -204,6 +217,12 @@ export default function Schedule({
   const onEarlyLateSaved = useCallback(
     (reservationId: string, values: EarlyLateValues) => {
       const range = currentRange.current;
+      // A stay that changed room is several blocks and the markers sit on only some of them: the
+      // server knows which, so load the schedule again instead of guessing.
+      if (loadedBlocks.current.some((b) => b.reservationId === reservationId && b.roomChange)) {
+        retry();
+        return;
+      }
       setBlocks(range, (blocks) =>
         blocks.map((b) =>
           b.reservationId === reservationId
@@ -216,10 +235,13 @@ export default function Schedule({
         ),
       );
     },
-    [setBlocks],
+    [setBlocks, retry],
   );
 
   const data = schedule.status === 'success' ? schedule.data : null;
+  useEffect(() => {
+    loadedBlocks.current = data?.blocks ?? [];
+  }, [data]);
   const liveRooms = useMemo(
     () =>
       data
@@ -280,6 +302,58 @@ export default function Schedule({
         if (failure.refetch || (failure.revert && !reverted)) retry();
         notify(failure.message);
         settle();
+      },
+    );
+  };
+
+  /**
+   * A confirmed room change during the stay. Shown at once on the grid (the block moves and the
+   * nights already stayed stay behind in the old room), then confirmed or rolled back like a drag:
+   * a clear 4xx reverts, an unknown outcome (no response, 408, 5xx, unusable answer) reloads and
+   * says so neutrally. After success the schedule and the open details reload.
+   */
+  const submitRoomChange = (submission: RoomChangeSubmission) => {
+    if (changeSubmitted.current) return;
+    changeSubmitted.current = true;
+    setRoomChanging(true);
+    const { request, block, toRoomNumber } = submission;
+    const range = { ...currentRange.current };
+    const inRange = () =>
+      currentRange.current.startDate === range.startDate &&
+      currentRange.current.days === range.days;
+    const pendingId = `${block.id}~pending`;
+    setBlocks(range, (blocks) =>
+      applyRoomChange(blocks, {
+        reservationRoomId: block.id,
+        toRoomId: request.toRoomId,
+        effectiveDate: request.effectiveDate,
+        pendingId,
+      }),
+    );
+    const finish = () => {
+      changeSubmitted.current = false;
+      setRoomChanging(false);
+      setDetailRefresh((n) => n + 1);
+    };
+    api.reservations.changeRoomDuringStay(request).then(
+      (answer) => {
+        if (inRange()) {
+          setBlocks(range, (blocks) =>
+            mergeRoomChange({ ...range, blocks }, pendingId, answer.blocks),
+          );
+        }
+        retry();
+        notify(`Moved to Room ${toRoomNumber}`);
+        finish();
+      },
+      (error: unknown) => {
+        const failure = changeRoomFailure(error);
+        if (failure.revert && inRange()) {
+          setBlocks(range, (blocks) => revertRoomChange(blocks, block, pendingId));
+        }
+        if (failure.refetch || (failure.revert && !inRange())) retry();
+        notify(failure.message);
+        finish();
       },
     );
   };
@@ -472,6 +546,9 @@ export default function Schedule({
         onCreated={onCreated}
         onUnknownOutcome={retry}
         onEarlyLateSaved={onEarlyLateSaved}
+        onChangeRoom={submitRoomChange}
+        roomChangeBusy={roomChanging}
+        detailRefresh={detailRefresh}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}

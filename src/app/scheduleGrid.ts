@@ -275,6 +275,8 @@ export function moveDialogCopy(
 export function blockAriaLabel(
   block: ScheduleBlock,
   room: Pick<ScheduleRoom, 'number'> | undefined,
+  /** The room number of the other segment when the room changed during the stay (ticket 2.3). */
+  linkedRoomNumber?: string,
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
   return [
@@ -285,7 +287,18 @@ export function blockAriaLabel(
     `${formatDialogDate(block.startDate)} to ${formatDialogDate(block.endDate)}`,
     ...(block.earlyCheckIn ? ['early check in'] : []),
     ...(block.lateCheckOut ? ['late check out'] : []),
+    ...(linkedRoomNumber ? [roomChangeText(block, linkedRoomNumber)] : []),
   ].join(', ');
+}
+
+/**
+ * How a segment of a stay that changed room points at the other one: "moved to Room 204" on the
+ * nights already stayed, "moved from Room 201" on the rest of the stay.
+ */
+export function roomChangeText(block: Pick<ScheduleBlock, 'roomChange'>, linkedRoomNumber: string) {
+  return block.roomChange?.part === 'previous'
+    ? `moved to Room ${linkedRoomNumber}`
+    : `moved from Room ${linkedRoomNumber}`;
 }
 
 export function closureAriaLabel(

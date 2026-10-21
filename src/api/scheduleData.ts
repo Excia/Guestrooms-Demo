@@ -875,7 +875,11 @@ export function changeRoomDuringStay(
       endDate: effective,
       status: 'checked-out',
       roomChange: { part: 'previous', otherRoomId: toRoom.id },
+      // The markers sit on the edges that are still real: Early Check In stays with the segment that
+      // holds the arrival, Late Check Out with the current one.
+      lateCheckOut: undefined,
     };
+    block.earlyCheckIn = undefined;
     bump(state, past);
     state.blocks.push(past);
     changed.push(past);

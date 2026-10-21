@@ -124,8 +124,22 @@ describe('mock reservations.changeRoomDuringStay', () => {
     const result = await c.reservations.changeRoomDuringStay(
       await request(c, { toRoomId: 'rm-205' }),
     );
-    expect(result.blocks.every((b) => b.earlyCheckIn === true)).toBe(true);
+    // Early Check In stays with the segment that holds the arrival; Late Check Out with the current one.
+    expect(result.blocks.find((b) => b.id === 'rr-2~1')!.earlyCheckIn).toBe(true);
+    expect(result.blocks.find((b) => b.id === 'rr-2')!.earlyCheckIn).toBeUndefined();
     expect((await c.reservations.getDetail('rs-2')).earlyCheckIn).toBe(true);
+    const saved = await c.reservations.getDetail('rs-2');
+    await c.reservations.setEarlyLate({
+      requestId: 'late-after-change-1',
+      reservationId: 'rs-2',
+      version: saved.version,
+      lateCheckOut: true,
+    });
+    const grid = await blocksOf(c, 'rs-2');
+    expect(grid.find((b) => b.id === 'rr-2~1')).toMatchObject({ earlyCheckIn: true });
+    expect(grid.find((b) => b.id === 'rr-2~1')!.lateCheckOut).toBeUndefined();
+    expect(grid.find((b) => b.id === 'rr-2')!.lateCheckOut).toBe(true);
+    expect(grid.find((b) => b.id === 'rr-2')!.earlyCheckIn).toBeUndefined();
   });
 
   it('marks the vacated room dirty from the effective date', async () => {

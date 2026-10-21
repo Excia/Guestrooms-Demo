@@ -147,8 +147,11 @@ export function setEarlyLate(state: ScheduleState, request: EarlyLateRequest): E
   if (request.lateCheckOut !== undefined) extras.lateCheckOut = request.lateCheckOut;
   extras.version = `r${++state.versionSeq}`;
   for (const b of group) {
-    b.earlyCheckIn = extras.earlyCheckIn || undefined;
-    b.lateCheckOut = extras.lateCheckOut || undefined;
+    // After a room change during the stay the markers sit on the edges that are still real: Early
+    // Check In on the first segment of the room (its arrival), Late Check Out on the last.
+    const first = !group.some((o) => stayOf(o) === stayOf(b) && o.startDate < b.startDate);
+    b.earlyCheckIn = (extras.earlyCheckIn && first) || undefined;
+    b.lateCheckOut = (extras.lateCheckOut && b.roomChange?.part !== 'previous') || undefined;
   }
   return {
     earlyCheckIn: extras.earlyCheckIn,
