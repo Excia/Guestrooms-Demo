@@ -11,23 +11,26 @@ import {
 } from './mockData';
 import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
 import { permissionsFromGrant } from './grant';
+import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
 import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
-import { buildListRows, listOptions } from './reservationListData';
+import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
 import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
+import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { validateSystemSettings } from '../app/systemSettings';
 import type { ApiClient, IsoDate, PermissionGrant, RequestOptions, RoomChangeRule } from './types';
 import { ApiError } from './types';
 import {
   assertChangeRoomRequest,
+  assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
   assertMemberQuery,
@@ -80,7 +83,9 @@ export function createMockClient({
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
   const members = seedMembers();
+  const listCheckedIn = new Set<string>();
   let systemSettings = mockSystemSettings();
+  let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
@@ -228,7 +233,11 @@ export function createMockClient({
         respond(
           () => {
             assertReservationListQuery(query ?? {});
-            return queryReservationList(buildListRows(schedule), query, LIST_PAGE_SIZE);
+            return queryReservationList(
+              buildListRows(schedule, listCheckedIn),
+              query,
+              LIST_PAGE_SIZE,
+            );
           },
           () => {
             assertReservationListQuery(query ?? {});
@@ -240,6 +249,18 @@ export function createMockClient({
         respond(
           () => listOptions(schedule),
           () => ({ locations: [], roomTypes: [] }),
+          o,
+        ),
+      checkInRoom: (request, o) =>
+        respond(
+          () => {
+            assertCheckInRoomRequest(request);
+            return replayable(request, () => checkInRoom(schedule, listCheckedIn, request));
+          },
+          () => {
+            assertCheckInRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
+          },
           o,
         ),
     },
@@ -339,9 +360,10 @@ export function createMockClient({
         ),
     },
     settings: {
+      // The hold minutes are the "Reservation Hold" row of Booking Rules (ticket 7.5).
       getBookingHold: (o) =>
         respond(
-          () => ({ ...MOCK_BOOKING_HOLD }),
+          () => holdFromRules(bookingRules),
           () => ({ ...MOCK_BOOKING_HOLD }),
           o,
         ),
@@ -349,6 +371,32 @@ export function createMockClient({
         respond(
           () => ({ ...roomChangeRule }),
           () => ({ ...roomChangeRule }),
+          o,
+        ),
+    },
+    bookingRules: {
+      get: (o) =>
+        respond(
+          () => structuredClone(bookingRules),
+          () => structuredClone(bookingRules),
+          o,
+        ),
+      save: (rules, o) =>
+        respond(
+          () => {
+            if (Object.keys(validateBookingRules(rules)).length > 0) {
+              throw new ApiError(422, 'Booking rules are not valid', { code: 'validation' });
+            }
+            bookingRules = structuredClone(rules);
+            return structuredClone(bookingRules);
+          },
+          () => structuredClone(rules),
+          o,
+        ),
+      getOptions: (o) =>
+        respond(
+          () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
+          () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
           o,
         ),
     },

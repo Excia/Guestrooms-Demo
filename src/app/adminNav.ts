@@ -15,7 +15,7 @@ const path = (id: string) => routes.find((r) => r.id === id)?.path;
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { label: 'Locations' },
   { label: 'Room Options' },
-  { label: 'Booking Rules' },
+  { label: 'Booking Rules', path: path('booking-rules'), id: 'booking-rules' },
   { label: 'System Settings', path: path('primary-setup'), id: 'primary-setup' },
   { label: 'Employees' },
   { label: 'Permissions' },

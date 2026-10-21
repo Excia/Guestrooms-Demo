@@ -21,6 +21,9 @@ import {
   type ReservationListView,
 } from '../app/reservationListUrl';
 import { reservationHubPath, SCHEDULE_PATH } from '../app/routes';
+import BulkCheckInButton from '../components/reservationList/BulkCheckInButton';
+import CheckInResultDialog from '../components/reservationList/CheckInResultDialog';
+import { useBulkCheckIn } from '../components/reservationList/useBulkCheckIn';
 import ReservationListTable from '../components/reservationList/ReservationListTable';
 import ReservationListToolbar from '../components/reservationList/ReservationListToolbar';
 import {
@@ -35,9 +38,9 @@ export interface ReservationListProps {
   today?: IsoDate;
   /** Called whenever the selected rows change; what bulk actions (ticket 3.2) build on. */
   onSelectionChange?: (rows: ReservationListRow[]) => void;
-  /** Slot under the table for the bulk action button (ticket 3.2). */
+  /** Replaces the built-in "Check in N rooms" button under the table. */
   renderBulkActions?: (selected: ReservationListRow[]) => ReactNode;
-  /** Rows a bulk action could not process (ticket 3.2): tinted orange until the page is refreshed. */
+  /** Extra rows to tint orange, besides those the built-in bulk check-in could not process. */
   failedIds?: ReadonlySet<string>;
 }
 
@@ -60,7 +63,8 @@ export default function ReservationList({
   const navigate = useNavigate();
   const query = useMemo(() => toListQuery(view), [view]);
   const queryKey = JSON.stringify(query);
-  const list = useReservationList(query, queryKey);
+  const bulk = useBulkCheckIn();
+  const list = useReservationList(query, queryKey, bulk.reloadToken);
   const optionsState = useReservationListOptions();
   const options = optionsState.status === 'success' ? optionsState.options : NO_OPTIONS;
 
@@ -102,6 +106,11 @@ export default function ReservationList({
     // `chosen` changes identity with `rows`; its ids are the real change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chosenKey]);
+
+  const allFailed = useMemo(
+    () => (failedIds ? new Set([...failedIds, ...bulk.failedIds]) : bulk.failedIds),
+    [failedIds, bulk.failedIds],
+  );
 
   const loading = list.status === 'loading';
   const total = list.status === 'success' ? list.page.total : undefined;
@@ -208,7 +217,7 @@ export default function ReservationList({
           refreshing={list.status === 'success' && list.refreshing}
           sort={view.sort}
           onSort={(field) => update({ sort: nextSort(view.sort, field) })}
-          failedIds={failedIds}
+          failedIds={allFailed}
           search={view.search}
           onSearch={onSearch}
           selected={selected}
@@ -227,9 +236,22 @@ export default function ReservationList({
             onChange={({ page, rowsPerPage }) => update({ page, rowsPerPage })}
           />
         ) : null}
-        {renderBulkActions ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>{renderBulkActions(chosen)}</Box>
-        ) : null}
+        <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+          {renderBulkActions ? (
+            renderBulkActions(chosen)
+          ) : (
+            <BulkCheckInButton
+              rows={chosen}
+              running={bulk.running}
+              onCheckIn={() => void bulk.checkIn(chosen)}
+            />
+          )}
+        </Box>
+        <CheckInResultDialog
+          open={bulk.results !== null}
+          results={bulk.results ?? []}
+          onClose={bulk.dismiss}
+        />
         <Box role="status" sx={visuallyHidden}>
           {chosen.length > 0 ? `${chosen.length} selected` : ''}
         </Box>

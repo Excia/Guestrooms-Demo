@@ -11,7 +11,7 @@ import type {
   QuickStatsQuery,
   ScheduleQuery,
 } from './types';
-import type { ReservationListQuery } from './reservationListTypes';
+import type { CheckInRoomRequest, ReservationListQuery } from './reservationListTypes';
 import { LIST_STATUSES } from './reservationListTypes';
 import { SCHEDULE_DAYS } from './types';
 import { ApiError } from './types';
@@ -70,6 +70,11 @@ export function assertMoveRoomRequest(request: MoveRoomRequest): void {
   assertMoveGuard(request);
   assertResourceId(request.reservationRoomId, 'reservation room');
   assertResourceId(request.toRoomId, 'room');
+}
+
+export function assertCheckInRoomRequest(request: CheckInRoomRequest): void {
+  assertRequestId(request.requestId);
+  assertResourceId(request.reservationRoomId, 'reservation room');
 }
 
 export function assertMoveDatesRequest(request: MoveDatesRequest): void {
