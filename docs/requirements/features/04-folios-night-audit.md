@@ -80,7 +80,20 @@ Excia/Guestrooms-Demo#39. Figma: All Folio Line Types 16480:83130.
   status text and actions; pure `lineActions(line)` returns allowed actions (select, split, transfer,
   settle, delete, edit), unit tested across combinations; visual states differ by color and icon, not
   by color alone.
-- **Open questions:** Q-39-1.
+- **Implemented:** `<FolioLine>` (`src/components/folio/FolioLine.tsx`) renders every variation of the
+  Figma frame; pure `lineActions(line, {today})` and `selectionActions` in `src/app/folioLine.ts`
+  (unit tested for each of the 16 frame variations plus the fee lines); the charges table and its action
+  bar use them. New line types `split-parent` and `split-child`; a split parent shows its selection
+  name and "Posted - Split" with a Split control; the mock shows a split on every fourth reservation.
+  Matrix: D-086.
+- **Deviations from Figma or the ticket:** the restore icon is not built (figma-deviations row 54). The
+  ticket asks for the error dialogs of tickets 4.5 and 4.13, which do not exist yet: a refused Split or
+  Transfer on a split part shows a notice with placeholder copy, to be swapped for those dialogs.
+- **Assumptions and defaults chosen:** D-086 (supersedes D-078, which only stood in for this ticket).
+- **Stubs and placeholders:** the Split control on a parent, Edit and Delete show a notice; error copy is a
+  placeholder (Q-42-1).
+- **Open questions:** Q-39-1 (default built), Q-42-1.
+- **Status:** in review, not yet merged, 2026-10-21.
 
 ## 4.3 Open Folios list
 

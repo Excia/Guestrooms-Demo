@@ -84,3 +84,21 @@ describe('mock folios', () => {
     expect.fail('expected a closed folio in the sample data');
   });
 });
+
+describe('mock folio split lines', () => {
+  it('shows a split parent with two parts that add up to the original night', async () => {
+    const api = createMockClient({ today: '2026-10-16' });
+    const schedule = await api.schedule.get({ startDate: '2026-10-10', days: 14 });
+    const ids = [...new Set(schedule.blocks.map((b) => b.reservationId))];
+    const folios = await Promise.all(ids.map((id) => api.folios.get(id)));
+    const withSplit = folios.filter((f) => f.charges.some((c) => c.type === 'split-parent'));
+    expect(withSplit.length).toBeGreaterThan(0);
+    for (const f of withSplit) {
+      const parent = f.charges.find((c) => c.type === 'split-parent')!;
+      const parts = f.charges.filter((c) => c.type === 'split-child');
+      expect(parent.status).toBe('split');
+      expect(parts).toHaveLength(2);
+      expect(parts.reduce((sum, c) => sum + c.amountCents, 0)).toBe(parent.amountCents);
+    }
+  });
+});

@@ -27,6 +27,7 @@ import PaymentsTable from '../components/folio/PaymentsTable';
 import PostChargeDialog from '../components/folio/PostChargeDialog';
 import { useFolio } from '../components/folio/useFolio';
 import SaveToast from '../components/shared/SaveToast';
+import { todayIso, type IsoDate } from '../lib/dates';
 import { newRequestId } from '../lib/requestId';
 
 const CHECK_IN_CHIP = {
@@ -108,7 +109,7 @@ function Section({
 }
 
 /** Folio of one reservation (ticket 4.1): balances, charges, payments and the action bar. */
-export default function Folio() {
+export default function Folio({ today = todayIso() }: { today?: IsoDate } = {}) {
   const { id = '' } = useParams();
   const state = useFolio(id);
   const api = useApi();
@@ -308,6 +309,7 @@ export default function Folio() {
                 key={folio.reservationId}
                 folio={folio}
                 labelledBy={labelledBy}
+                today={today}
                 onPost={(c) => {
                   postKey.current = null;
                   setPosting(c);

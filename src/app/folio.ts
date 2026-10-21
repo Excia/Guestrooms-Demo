@@ -127,57 +127,8 @@ export function chargeCountText(shown: number, total: number, filterLabel: strin
   return `Showing ${shown}/${total} Charges - Viewed by ${filterLabel}`;
 }
 
-// ---- selection and actions ---------------------------------------------------------------------
-// FLAG: the full action matrix per line type is ticket 4.2 (open question Q-39-1). Until then:
-// only posted lines can be settled, split or transferred; only manual and MPOS lines transfer.
-
-/** Settled and split lines have no checkbox. */
-export const isSelectable = (c: FolioCharge) => c.status === 'posted' || c.status === 'unposted';
-
 export const selectionTotalCents = (selected: readonly FolioCharge[]): Cents =>
   selected.reduce((sum, c) => sum + c.amountCents, 0);
-
-const TRANSFERABLE: readonly FolioLineType[] = ['manual', 'mpos'];
-
-export interface SelectionActions {
-  split: boolean;
-  transfer: boolean;
-  settle: boolean;
-}
-
-export function selectionActions(
-  selected: readonly FolioCharge[],
-  open: boolean,
-): SelectionActions {
-  const posted = open && selected.length > 0 && selected.every((c) => c.status === 'posted');
-  return {
-    split: posted,
-    settle: posted,
-    transfer: posted && selected.every((c) => TRANSFERABLE.includes(c.type)),
-  };
-}
-
-export interface RowActions {
-  post: boolean;
-  edit: boolean;
-  remove: boolean;
-  transfer: boolean;
-}
-
-/**
- * Row icons a charge carries (Figma 12047:3400). On a closed folio they stay but are disabled;
- * the component does that, so these say only which icons a line has.
- */
-export function rowActions(c: FolioCharge): RowActions {
-  const unposted = c.status === 'unposted';
-  return {
-    post: unposted,
-    edit: unposted && c.type === 'room-rate',
-    remove: unposted && c.type === 'manual',
-    // A settled MPOS line may still move, to Unassigned only (decided in the transfer dialog).
-    transfer: c.type === 'mpos' && (c.status === 'posted' || c.status === 'settled'),
-  };
-}
 
 // ---- display -----------------------------------------------------------------------------------
 
@@ -188,7 +139,13 @@ export const CHARGE_TYPE_LABELS: Record<FolioLineType, string> = {
   'add-on': 'Add-On',
   surcharge: 'Surcharge',
   'service-fee': 'Service Fee',
+  'split-parent': 'Split Item',
+  'split-child': 'Split',
 };
+
+/** Type column text: a split parent shows the item or selection it was made from. */
+export const chargeTypeLabel = (c: FolioCharge) =>
+  c.type === 'split-parent' ? c.description : CHARGE_TYPE_LABELS[c.type];
 
 /** MAX_REFERENCES reference numbers show in the Status cell; the rest are on hover. */
 export const MAX_REFERENCES = 3;
@@ -214,7 +171,7 @@ export function chargeStatusLabel(c: FolioCharge): { text: string; full: string 
     case 'unposted':
       return { text: 'Unposted', full: null };
     case 'split':
-      return { text: 'Split', full: null };
+      return { text: 'Posted - Split', full: null };
     case 'settled': {
       const refs = referenceDisplay(c.references);
       return {

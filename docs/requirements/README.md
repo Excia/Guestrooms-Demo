@@ -149,7 +149,7 @@ Issue Excia/Guestrooms-Demo#37. Epic status: **not started**. Details: [features
 | Ticket                   | Title                                                                 | Status                     | PR  |
 | ------------------------ | --------------------------------------------------------------------- | -------------------------- | --- |
 | Excia/Guestrooms-Demo#38 | [4.1] Folio view: charges, payments, balance summary, occupant filter | in review                  |     |
-| Excia/Guestrooms-Demo#39 | [4.2] Folio line type variations                                      | not started                |     |
+| Excia/Guestrooms-Demo#39 | [4.2] Folio line type variations                                      | in review                  |     |
 | Excia/Guestrooms-Demo#40 | [4.3] Open Folios list                                                | not started (needs design) |     |
 | Excia/Guestrooms-Demo#41 | [4.4] Unassigned Charges list                                         | not started                |     |
 | Excia/Guestrooms-Demo#42 | [4.5] Item transfer dialog                                            | not started                |     |
@@ -185,7 +185,7 @@ Issue Excia/Guestrooms-Demo#56. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                                              | Status      | PR  |
 | ------------------------ | -------------------------------------------------------------------------------------------------- | ----------- | --- |
-| Excia/Guestrooms-Demo#57 | [6.1] Reporting landing page                                                                       | not started |     |
+| Excia/Guestrooms-Demo#57 | [6.1] Reporting landing page                                                                       | in review   |     |
 | Excia/Guestrooms-Demo#58 | [6.2] Standard report shell: filters, column filter, group-by, view and export options, pagination | not started |     |
 | Excia/Guestrooms-Demo#59 | [6.3] Custom report builder: column list, group-by list, save split menu, save toast               | not started |     |
 | Excia/Guestrooms-Demo#60 | [6.4] Report: Housekeeping (types and statuses logic from the Figma note)                          | not started |     |

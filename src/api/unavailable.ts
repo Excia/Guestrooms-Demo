@@ -19,6 +19,7 @@ export function createUnavailableClient(error: ApiError): ApiClient {
     folios: { get: fail, postCharge: fail },
     members: { search: fail, create: fail },
     permissions: { getGrant: fail },
+    reports: { listCustom: fail },
     schedule: { get: fail, moveRoom: fail, moveDates: fail },
   };
 }

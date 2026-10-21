@@ -32,6 +32,17 @@ Excia/Guestrooms-Demo#57. Figma: Reporting Landing 310:7003; Quick Stats landing
   route); the custom list loads from the API, filters as you type, sorted by most recently updated;
   empty states for no reports and no matches.
 - **Open questions:** Q-57-1, Q-57-2.
+- **Status:** in review (Excia/Guestrooms-Demo#57). Built: `src/pages/Reporting.tsx` at `/reporting`
+  (Quick Stats with `placement="landing"`, tile grid, custom reports panel), registry and rules in
+  `src/app/reports.ts` (`STANDARD_REPORTS`, sort newest first, filter by name or creator, "MM/DD/YY h:mm AM"
+  formatting), `GET /reports/custom` (`api.reports.listCustom`, mock in `src/api/reportsData.ts`).
+  Two regions scroll on their own from 1200px; below it everything stacks and the tile grid reflows
+  (`auto-fill`, min 260px). Empty states: "No custom reports yet..." and "No custom reports match your search."; a
+  failed load shows an error with Retry.
+- **Built defaults:** tiles link to `/reporting/standard/<id>`, custom rows to `/reporting/custom/<id>` and NEW
+  REPORT to `/reporting/custom/new`. Those routes arrive with 6.2 and 6.3 and show "Not found" until then.
+  The search also matches the creator name (the ticket says "filters by the search box"; Figma shows only
+  "Search Custom Reports"). The Quick Stats average rate stays the weighted average already built in 1.2.
 
 ## 6.2 Standard report shell
 

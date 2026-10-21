@@ -74,3 +74,7 @@ data is added or a placeholder is replaced (see the PR checklist).
   the designer or owner (see [open-questions.md](open-questions.md)).
 - Default notification templates (page 85 of the requirements document, not available to the team).
 - The Migration Tool frame includes reference mockups that look like examples from another product.
+
+## Reporting landing (ticket 6.1)
+
+- Sample custom reports ("Weekend Occupancy by Room Type", "Member vs. Guest Revenue", and three more with invented creators and dates): `src/api/reportsData.ts`. Figma only shows "[Custom Report Name]". Replaced by `GET /reports/custom` from the backend; owner: Custom report builder 6.3 (Excia/Guestrooms-Demo#59).

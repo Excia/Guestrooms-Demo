@@ -11,6 +11,7 @@ import {
 } from './mockData';
 import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
 import { permissionsFromGrant } from './grant';
+import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
@@ -350,6 +351,14 @@ export function createMockClient({
         respond(
           () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
           () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
+          o,
+        ),
+    },
+    reports: {
+      listCustom: (o) =>
+        respond(
+          () => mockCustomReports(),
+          () => [],
           o,
         ),
     },
