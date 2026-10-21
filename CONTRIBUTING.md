@@ -6,7 +6,8 @@
 2. Branch from `main`: `feat/<issue-number>-short-name` (also `fix/`, `chore/`, `docs/`).
 3. Build against the Figma link in the ticket. Use the MUI theme for all color, type and spacing.
 4. Open a PR whose **title is a Conventional Commit** (`feat: add reservation list`) and whose body says `Closes #<issue>`. Move the ticket to **In Review**.
-5. CI must pass (lint, typecheck, test, build). Squash-merge. The ticket moves to **Done**.
+5. Right before opening the PR run `git fetch origin && git merge origin/main`, fix any conflicts and re-run the checks. See [How to avoid merge conflicts](#how-to-avoid-merge-conflicts).
+6. CI must pass (lint, typecheck, test, build). Squash-merge. The ticket moves to **Done**.
 
 ## Requirements log
 
@@ -18,17 +19,38 @@ template has a checkbox for it.
 
 | If the PR... | Update |
 |---|---|
-| builds, changes or stubs a ticket's behavior, or changes its status or PR link | the epic file in `docs/requirements/features/` (copy `TEMPLATE-ticket.md`) and the status tables in `docs/requirements/README.md` |
-| makes or changes a decision, or records an owner message | `docs/requirements/decisions.md` |
+| builds, changes or stubs a ticket's behavior, or changes its status or PR link | the epic file in `docs/requirements/features/` (copy `TEMPLATE-ticket.md`) and your entry's `Status` line; not the README status tables |
+| makes or changes a decision, or records an owner message | your entry (`D-<ticket>-<n>`); `decisions.md` only to change an existing row |
 | adds or changes an endpoint, header, error code, shape or backend rule | `docs/requirements/api-contract.md` |
 | adds or changes a permission or a mock user | `docs/requirements/permissions.md` |
-| raises a question, or answers one (set status, date and answer) | `docs/requirements/open-questions.md` |
-| adds invented sample data, or replaces a placeholder | `docs/requirements/placeholders.md` |
-| differs from Figma, or finds a missing frame | `docs/requirements/figma-deviations.md` |
+| raises a question | your entry (`Q-<ticket>-<n>`) |
+| answers an existing question (set status, date and answer) | that one row in `docs/requirements/open-questions.md` |
+| adds invented sample data, or replaces a placeholder | your entry (`P-<ticket>-<n>`); an old line in `placeholders.md` only to replace it |
+| differs from Figma, or finds a missing frame | your entry (`F-<ticket>-<n>`) |
 | adds an env variable, route, build switch or architecture change | `docs/requirements/overview.md` |
 | adds a domain term, or an accessibility, responsive, performance, security or test rule | `docs/requirements/glossary.md`, `docs/requirements/nonfunctional.md` |
 
+"Your entry" is `docs/requirements/entries/<ticket>-<short-name>.md` (copy `entries/_TEMPLATE.md`; rules in
+`docs/requirements/entries/README.md`). Endpoints go in a section of `api-contract.md` named for your ticket,
+appended at the end of its group.
+
 If nothing in `docs/requirements/` needs to change, tick the PR template box as "n/a" and say why.
+
+## How to avoid merge conflicts
+
+1. Put new decisions, questions, deviations and placeholders in your own `docs/requirements/entries/` file with ticket-scoped IDs (`Q-3-5-1`); never take "the next number" from a shared file.
+2. Do not edit the README status tables; set `Status` in your entry.
+3. Editing a shared file? Touch only your own lines. No reformatting, re-padding of tables or reordering.
+4. Add a new file for new code (`src/api/<area>Data.ts`, `src/pages/<Page>.tsx`) rather than growing a shared one.
+5. `src/api/lazy.ts` and `unavailable.ts` need no edit for a new endpoint; add it to `types.ts`, `http.ts` and `mock.ts` only.
+6. Keep shared-file edits small and at the end of their block, so two PRs rarely touch the same lines.
+7. Run `git fetch origin && git merge origin/main` right before opening the PR and again before asking for merge; resolve conflicts yourself, never ask the owner to.
+8. Never rewrite a branch someone else pushed. Do not hand-edit `CHANGELOG.md`, `.release-please-manifest.json` or the version in `package.json` (release-please owns them); commit `package-lock.json` only when you changed dependencies.
+9. Land small PRs; a long-lived branch merges `origin/main` at least daily.
+10. Run `python3 scripts/requirements_index.py` to see all entries and catch duplicate IDs.
+
+Proposed further splits of `types.ts`, `http.ts`, `mock.ts`, `App.tsx` and `routes.ts`:
+[docs/proposals/conflict-prevention-api-split.md](docs/proposals/conflict-prevention-api-split.md).
 
 ## Board columns
 
