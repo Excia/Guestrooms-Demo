@@ -256,14 +256,38 @@ describe('ReservationList', () => {
     const user = userEvent.setup();
     setup('/reservations?from=&to=');
     await bodyRows();
-    await user.click(screen.getByRole('button', { name: 'Search reservations' }));
-    await user.type(screen.getByRole('textbox', { name: 'Search reservations' }), 'GR-50188');
+    const button = screen.getByRole('button', { name: 'Search reservations' });
+    await user.click(button);
+    const field = screen.getByRole('textbox', { name: 'Search reservations' });
+    expect(field).toHaveFocus();
+    await user.type(field, 'GR-50188');
     await waitFor(() => expect(url()).toContain('q=GR-50188'));
+    // Escape closes the pop-up, keeps the query and returns focus to the button.
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('textbox')).not.toBeInTheDocument());
+    const active = screen.getByRole('button', { name: 'Search reservations, filter active' });
+    expect(active).toHaveFocus();
+    expect(url()).toContain('q=GR-50188');
     expect(await bodyRows()).toHaveLength(1);
-    // The X clears the query and collapses the field back to the icon.
+    // The X clears the query.
+    await user.click(active);
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
     await waitFor(() => expect(url()).not.toContain('q='));
-    expect(screen.getByRole('button', { name: 'Search reservations' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search reservations' })).toHaveValue('');
+  });
+
+  it('does not change the table layout when the search pop-up opens', async () => {
+    const user = userEvent.setup();
+    setup('/reservations?from=&to=');
+    await bodyRows();
+    const headerCells = () => screen.getAllByRole('columnheader', { hidden: true }).length;
+    const before = headerCells();
+    await user.click(screen.getByRole('button', { name: 'Search reservations' }));
+    expect(screen.getByRole('dialog', { name: 'Search reservations' })).toBeInTheDocument();
+    expect(headerCells()).toBe(before);
+    expect(screen.getByRole('table', { hidden: true }).contains(screen.getByRole('textbox'))).toBe(
+      false,
+    );
   });
 
   it('pages through the results and keeps the page in the URL', async () => {

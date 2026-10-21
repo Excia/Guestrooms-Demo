@@ -48,8 +48,10 @@ Excia/Guestrooms-Demo#24. Figma: Bulk Action P1 2524:23962, P2 2524:31991, P2 af
   that agree give that status; any other mix (partly checked in, or one out and one still to arrive) shows
   Checked In. Only the "partially checked in shows Checked In" part is in Figma.
 - **Room column:** the first room's number (or "Unassigned" in the error color) plus "+N" for further rooms.
-- **From the requirements document (behavior Figma does not contradict):** the search icon expands into a
-  field and an X collapses it (doc 16.8); the Location select is single-select with "All Locations" and is
+- **From the requirements document (behavior Figma does not contradict):** the search icon opens a pop-up
+  (MUI Popover under the button) with the field, so the table never resizes; Escape closes it and returns
+  focus to the icon, the X clears the query, and a dot on the icon shows an active search (doc 16.8 says
+  the icon expands in place: changed on request); the Location select is single-select with "All Locations" and is
   hidden, with the Location column, when the property has one location (16.7, 16.10.7); Unassigned Only keeps
   its state in the URL (the doc resets it on refresh, the ticket asks for URL state: ticket wins).
 - **Conflicts with the requirements document (Figma and ticket win):** default range is 2 weeks in the doc

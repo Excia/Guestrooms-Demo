@@ -1,8 +1,10 @@
 import Close from '@mui/icons-material/Close';
 import Search from '@mui/icons-material/Search';
+import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Checkbox from '@mui/material/Checkbox';
 import IconButton from '@mui/material/IconButton';
+import Popover from '@mui/material/Popover';
 import Skeleton from '@mui/material/Skeleton';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -333,18 +335,19 @@ function ListRow({
 }
 
 /**
- * The search icon expands into a field (requirements doc 16.8); typing filters after a short pause,
- * the X clears it and collapses back to the icon.
+ * The search icon opens a pop-up with the field (requirements doc 16.8), so the table never
+ * changes size. Typing filters after a short pause, Enter applies at once and closes, Escape
+ * closes and returns focus to the icon; the X clears the query. The Figma frames show only the
+ * button (see figma-deviations.md), so the pop-up uses the standard MUI Popover.
  */
 function SearchButton({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [open, setOpen] = useState(value !== '');
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [draft, setDraft] = useState(value);
   const [synced, setSynced] = useState(value);
   // The URL changed elsewhere (Clear filters, Back): follow it.
   if (value !== synced) {
     setSynced(value);
     setDraft(value);
-    setOpen(value !== '');
   }
   useEffect(() => {
     if (draft.trim() === value) return;
@@ -352,50 +355,67 @@ function SearchButton({ value, onChange }: { value: string; onChange: (v: string
     return () => clearTimeout(timer);
   }, [draft, value, onChange]);
 
-  if (!open) {
-    return (
-      <IconButton
-        aria-label="Search reservations"
-        aria-expanded={false}
-        onClick={() => setOpen(true)}
-        sx={(t) => ({
-          bgcolor: 'primary.main',
-          color: 'primary.contrastText',
-          borderRadius: `${t.shape.borderRadius}px`,
-          '&:hover': { bgcolor: 'primary.dark' },
-        })}
-      >
-        <Search />
-      </IconButton>
-    );
-  }
+  const open = anchor !== null;
+  const close = () => setAnchor(null);
   return (
-    <TextField
-      autoFocus
-      size="small"
-      label="Search reservations"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') clear();
-      }}
-      sx={{ width: (t) => t.spacing(30) }}
-      slotProps={{
-        htmlInput: { maxLength: 200 },
-        input: {
-          endAdornment: (
-            <IconButton size="small" edge="end" aria-label="Clear search" onClick={clear}>
-              <Close fontSize="small" />
-            </IconButton>
-          ),
-        },
-      }}
-    />
+    <>
+      <Badge variant="dot" color="info" invisible={value === ''} overlap="rectangular">
+        <IconButton
+          aria-label={value === '' ? 'Search reservations' : 'Search reservations, filter active'}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          onClick={(e) => setAnchor(e.currentTarget)}
+          sx={(t) => ({
+            bgcolor: 'primary.main',
+            color: 'primary.contrastText',
+            borderRadius: `${t.shape.borderRadius}px`,
+            '&:hover': { bgcolor: 'primary.dark' },
+          })}
+        >
+          <Search />
+        </IconButton>
+      </Badge>
+      <Popover
+        open={open}
+        anchorEl={anchor}
+        onClose={close}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{ paper: { 'aria-label': 'Search reservations', role: 'dialog' } }}
+      >
+        <Box sx={{ p: 2 }}>
+          <TextField
+            autoFocus
+            size="small"
+            label="Search reservations"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                if (draft.trim() !== value) onChange(draft.trim());
+                close();
+              }
+            }}
+            sx={{ width: (t) => t.spacing(35) }}
+            slotProps={{
+              htmlInput: { maxLength: 200 },
+              input: {
+                endAdornment:
+                  draft !== '' ? (
+                    <IconButton size="small" edge="end" aria-label="Clear search" onClick={clear}>
+                      <Close fontSize="small" />
+                    </IconButton>
+                  ) : null,
+              },
+            }}
+          />
+        </Box>
+      </Popover>
+    </>
   );
 
   function clear() {
     setDraft('');
-    setOpen(false);
     if (value !== '') onChange('');
   }
 }
