@@ -279,9 +279,10 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !isString(body.checkOutTime) ||
     !isString(body.lateCheckOutTime) ||
     typeof body.earlyLateEnabled !== 'boolean' ||
-    !isCount(body.mposVisibleHoursBefore) ||
-    !isCount(body.mposVisibleHoursAfter) ||
-    !isCount(body.closeSettledFoliosHours) ||
+    !isObject(body.mposVisibleBefore) ||
+    !isObject(body.mposVisibleAfter) ||
+    !isObject(body.closeSettledFolios) ||
+    !isString(body.nightAuditRunTime) ||
     (body.nightAudit !== 'manual' && body.nightAudit !== 'automatic') ||
     !isObject(body.alternativeBaseRate1) ||
     !isObject(body.alternativeBaseRate2) ||

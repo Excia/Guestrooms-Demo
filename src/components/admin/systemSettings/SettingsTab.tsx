@@ -6,14 +6,17 @@ import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import type { SystemSettings, SystemSettingsOptions } from '../../../api/types';
+import type {
+  Duration,
+  DurationUnit,
+  SystemSettings,
+  SystemSettingsOptions,
+} from '../../../api/types';
 import {
   ALT_RATE_NIGHTS,
-  CLOSE_SETTLED_HOURS,
+  DURATION_AMOUNT,
   formatTime12,
   lateCheckoutOptions,
-  MPOS_AFTER_HOURS,
-  MPOS_BEFORE_HOURS,
   SERVICE_CHARGE_LABEL_MAX,
   TIME_STEP_MINUTES,
   withLateCheckoutInRange,
@@ -35,24 +38,27 @@ export interface SettingsTabProps {
 
 const range = ({ min, max }: { min: number; max: number }) =>
   Array.from({ length: max - min + 1 }, (_, i) => ({ value: min + i, label: String(min + i) }));
-const HOURS_UNIT = [{ value: 'hours', label: 'Hours' }];
+const AMOUNTS = range(DURATION_AMOUNT);
+const UNITS: { value: DurationUnit; label: string }[] = [
+  { value: 'hours', label: 'Hours' },
+  { value: 'days', label: 'Days' },
+];
 
 // A column of the two-column form (stacks below 1200px).
 const column = { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 } as const;
 
-interface HoursRowProps {
+interface DurationRowProps {
   field: SystemSettingsField;
   label: string;
-  value: number;
-  bounds: { min: number; max: number };
-  onChange: (hours: number) => void;
+  value: Duration;
+  onChange: (value: Duration) => void;
   errors: SystemSettingsErrors;
   before?: string;
   after: string;
 }
 
-// "N | Hours | text" row of the MPOS and Close Settled Folios settings (Figma 11895:16081).
-function HoursRow({ field, label, value, bounds, onChange, errors, before, after }: HoursRowProps) {
+// "N | Hours or Days | text" row of the MPOS and Close Settled Folios settings (Figma 11895:16081).
+function DurationRow({ field, label, value, onChange, errors, before, after }: DurationRowProps) {
   const messages = errors[field];
   const errorId = `${fieldId(field)}-error`;
   return (
@@ -69,19 +75,19 @@ function HoursRow({ field, label, value, bounds, onChange, errors, before, after
         <Select<number>
           id={fieldId(field)}
           label={label}
-          value={value}
-          options={range(bounds)}
-          onChange={onChange}
+          value={value.amount}
+          options={AMOUNTS}
+          onChange={(amount) => onChange({ ...value, amount })}
           error={Boolean(messages)}
-          sx={{ width: (t) => t.spacing(10) }}
           describedBy={messages ? errorId : undefined}
+          sx={{ width: (t) => t.spacing(10) }}
         />
-        <Select
+        <Select<DurationUnit>
           label="Unit"
           ariaLabel={`${label} unit`}
-          value="hours"
-          options={HOURS_UNIT}
-          onChange={() => {}}
+          value={value.unit}
+          options={UNITS}
+          onChange={(unit) => onChange({ ...value, unit })}
           error={Boolean(messages)}
           sx={{ width: (t) => t.spacing(15) }}
         />
@@ -211,23 +217,21 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
             tickets can be settled to the Reservation Folio. This setting allows for Folios to be
             charged for a period of time before and after the reservation is checked in or out.
           </Hint>
-          <HoursRow
-            field="mposVisibleHoursBefore"
+          <DurationRow
+            field="mposVisibleBefore"
             label="Folio becomes visible"
             before="Folio becomes visible"
-            value={value.mposVisibleHoursBefore}
-            bounds={MPOS_BEFORE_HOURS}
-            onChange={(v) => set('mposVisibleHoursBefore', v)}
+            value={value.mposVisibleBefore}
+            onChange={(v) => set('mposVisibleBefore', v)}
             errors={errors}
             after="before system check in time on the day of check in"
           />
-          <HoursRow
-            field="mposVisibleHoursAfter"
+          <DurationRow
+            field="mposVisibleAfter"
             label="Folio is no longer visible"
             before="Folio is no longer visible"
-            value={value.mposVisibleHoursAfter}
-            bounds={MPOS_AFTER_HOURS}
-            onChange={(v) => set('mposVisibleHoursAfter', v)}
+            value={value.mposVisibleAfter}
+            onChange={(v) => set('mposVisibleAfter', v)}
             errors={errors}
             after="after system checkout time on the day of checkout"
           />
@@ -240,12 +244,11 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
             after the checkout time. Note: This value must be larger than the MPOS Visibility
             setting after checkout.
           </Hint>
-          <HoursRow
-            field="closeSettledFoliosHours"
+          <DurationRow
+            field="closeSettledFolios"
             label="Close Settled Folios"
-            value={value.closeSettledFoliosHours}
-            bounds={CLOSE_SETTLED_HOURS}
-            onChange={(v) => set('closeSettledFoliosHours', v)}
+            value={value.closeSettledFolios}
+            onChange={(v) => set('closeSettledFolios', v)}
             errors={errors}
             after="after system checkout time"
           />
@@ -264,6 +267,22 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
             <FormControlLabel value="manual" control={<Radio />} label="Run Manually" />
             <FormControlLabel value="automatic" control={<Radio />} label="Run Automatically" />
           </RadioGroup>
+          {value.nightAudit === 'automatic' ? (
+            <TextField
+              id={fieldId('nightAuditRunTime')}
+              type="time"
+              label="Daily Run Time"
+              value={value.nightAuditRunTime}
+              onChange={(e) => set('nightAuditRunTime', e.target.value)}
+              error={Boolean(errors.nightAuditRunTime)}
+              helperText={errors.nightAuditRunTime?.[0]}
+              slotProps={{
+                inputLabel: { shrink: true },
+                htmlInput: { step: TIME_STEP_MINUTES * 60 },
+              }}
+              sx={{ mt: 1, ml: 4, width: (t) => t.spacing(25) }}
+            />
+          ) : null}
         </FormControl>
 
         <Section title="Alternative Base Rates">

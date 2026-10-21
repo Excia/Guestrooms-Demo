@@ -223,4 +223,21 @@ describe('SystemSettings page', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Run Automatically' })).toBeChecked();
   });
+
+  it('reveals the daily run time only for an automatic night audit', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    expect(screen.queryByLabelText('Daily Run Time')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'Run Automatically' }));
+    expect(screen.getByLabelText('Daily Run Time')).toHaveValue('02:00');
+  });
+
+  it('offers hours or days for the duration settings', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('combobox', { name: 'Close Settled Folios unit' }));
+    expect(screen.getByRole('option', { name: 'Days' })).toBeInTheDocument();
+  });
 });

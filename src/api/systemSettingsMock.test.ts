@@ -21,13 +21,16 @@ describe('mock system settings', () => {
 
   it('refuses settings that break a rule with a 422', async () => {
     const client = createMockClient();
-    const bad = { ...mockSystemSettings(), closeSettledFoliosHours: 1 };
+    const bad = {
+      ...mockSystemSettings(),
+      closeSettledFolios: { amount: 1, unit: 'hours' as const },
+    };
     await expect(client.systemSettings.save(bad)).rejects.toMatchObject({
       status: 422,
       code: 'validation',
     });
     await expect(client.systemSettings.save(bad)).rejects.toBeInstanceOf(ApiError);
-    expect((await client.systemSettings.get()).closeSettledFoliosHours).toBe(8);
+    expect((await client.systemSettings.get()).closeSettledFolios.amount).toBe(8);
   });
 
   it('fails in the error scenario', async () => {

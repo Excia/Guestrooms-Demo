@@ -389,12 +389,20 @@ export interface AlternativeBaseRate {
   minNights: number;
 }
 
+export type DurationUnit = 'hours' | 'days';
+
+/** A whole number of hours or days (0 to 31), counted from the check in or checkout time. */
+export interface Duration {
+  amount: number;
+  unit: DurationUnit;
+}
+
 export type NightAuditMode = 'manual' | 'automatic';
 export type RateChangeHandling = 'time-of-booking' | 'time-of-stay';
 
 /**
  * System-wide settings of one club (Figma System Settings 11895:16081). Times are 24-hour
- * `HH:mm` strings in the club's time zone, always on a 5-minute step. Hour fields count whole hours.
+ * `HH:mm` strings in the club's time zone, always on a 5-minute step.
  */
 export interface SystemSettings {
   /** IANA zone id, e.g. `America/New_York`. */
@@ -404,13 +412,15 @@ export interface SystemSettings {
   /** "Enable Early Check In and Late Check Out". When off, the late checkout time is unused. */
   earlyLateEnabled: boolean;
   lateCheckOutTime: string;
-  /** MPOS: the folio is visible this many hours before the check-in time on the day of check in. */
-  mposVisibleHoursBefore: number;
-  /** MPOS: the folio stays visible this many hours after the checkout time on the day of checkout. */
-  mposVisibleHoursAfter: number;
-  /** A settled folio closes this many hours after the checkout time. */
-  closeSettledFoliosHours: number;
+  /** MPOS: the folio becomes visible this long before the check-in time on the day of check in. */
+  mposVisibleBefore: Duration;
+  /** MPOS: the folio stays visible this long after the checkout time on the day of checkout. */
+  mposVisibleAfter: Duration;
+  /** A settled folio closes this long after the checkout time. */
+  closeSettledFolios: Duration;
   nightAudit: NightAuditMode;
+  /** Daily run time of an automatic night audit; unused while the audit runs manually. */
+  nightAuditRunTime: string;
   alternativeBaseRate1: AlternativeBaseRate;
   alternativeBaseRate2: AlternativeBaseRate;
   /** New cards are authorized for $0.01. */

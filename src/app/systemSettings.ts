@@ -1,15 +1,17 @@
 // Business rules of System Settings (ticket 7.1): times, hour ranges and cross-field validation.
 // Pure functions; the page and the settings context only call them.
-import type { FolioDetails, SystemSettings } from '../api/types';
+import type { Duration, FolioDetails, SystemSettings } from '../api/types';
 
 export const TIME_STEP_MINUTES = 5;
 const MINUTES_PER_DAY = 24 * 60;
 
-// FLAG: ranges are not in Figma or the ticket (Q-70-2); these are placeholders the owner confirms.
-export const MPOS_BEFORE_HOURS = { min: 0, max: 24 } as const;
-export const MPOS_AFTER_HOURS = { min: 0, max: 48 } as const;
-export const CLOSE_SETTLED_HOURS = { min: 1, max: 72 } as const;
-export const ALT_RATE_NIGHTS = { min: 2, max: 30 } as const;
+// Ranges from the functional requirements (6.2, 6.3 and 6.5); Figma does not state them.
+/** Amount of the MPOS visibility and Close Settled Folios settings, in hours or days. */
+export const DURATION_AMOUNT = { min: 0, max: 31 } as const;
+export const ALT_RATE_NIGHTS = { min: 2, max: 99 } as const;
+
+export const durationMinutes = ({ amount, unit }: Duration): number =>
+  amount * (unit === 'days' ? MINUTES_PER_DAY : 60);
 
 export const SERVICE_CHARGE_LABEL_MAX = 15;
 export const FOLIO_LIMITS = {
@@ -78,9 +80,10 @@ export type SystemSettingsField =
   | 'checkInTime'
   | 'checkOutTime'
   | 'lateCheckOutTime'
-  | 'mposVisibleHoursBefore'
-  | 'mposVisibleHoursAfter'
-  | 'closeSettledFoliosHours'
+  | 'mposVisibleBefore'
+  | 'mposVisibleAfter'
+  | 'closeSettledFolios'
+  | 'nightAuditRunTime'
   | 'alternativeBaseRate1'
   | 'alternativeBaseRate2'
   | 'serviceChargeLabel'
@@ -132,39 +135,48 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
     }
   }
 
-  if (!inRange(s.mposVisibleHoursBefore, MPOS_BEFORE_HOURS)) {
-    add(
-      'mposVisibleHoursBefore',
-      `Choose ${MPOS_BEFORE_HOURS.min} to ${MPOS_BEFORE_HOURS.max} hours.`,
-    );
-  }
-  if (!inRange(s.mposVisibleHoursAfter, MPOS_AFTER_HOURS)) {
-    add(
-      'mposVisibleHoursAfter',
-      `Choose ${MPOS_AFTER_HOURS.min} to ${MPOS_AFTER_HOURS.max} hours.`,
-    );
-  } else if (s.earlyLateEnabled && s.mposVisibleHoursAfter * 60 <= lateOffset) {
-    add('mposVisibleHoursAfter', MESSAGES.mposAfterLate);
+  const validDuration = (d: Duration) =>
+    inRange(d.amount, DURATION_AMOUNT) && (d.unit === 'hours' || d.unit === 'days');
+  const rangeMessage = `Choose ${DURATION_AMOUNT.min} to ${DURATION_AMOUNT.max}.`;
+  if (!validDuration(s.mposVisibleBefore)) add('mposVisibleBefore', rangeMessage);
+  if (!validDuration(s.mposVisibleAfter)) {
+    add('mposVisibleAfter', rangeMessage);
+  } else if (s.earlyLateEnabled && durationMinutes(s.mposVisibleAfter) <= lateOffset) {
+    add('mposVisibleAfter', MESSAGES.mposAfterLate);
   }
 
-  if (!inRange(s.closeSettledFoliosHours, CLOSE_SETTLED_HOURS)) {
-    add(
-      'closeSettledFoliosHours',
-      `Choose ${CLOSE_SETTLED_HOURS.min} to ${CLOSE_SETTLED_HOURS.max} hours.`,
-    );
+  if (!validDuration(s.closeSettledFolios)) {
+    add('closeSettledFolios', rangeMessage);
   } else {
-    if (s.closeSettledFoliosHours <= s.mposVisibleHoursAfter) {
-      add('closeSettledFoliosHours', MESSAGES.closeAfterMpos);
+    const close = durationMinutes(s.closeSettledFolios);
+    if (validDuration(s.mposVisibleAfter) && close <= durationMinutes(s.mposVisibleAfter)) {
+      add('closeSettledFolios', MESSAGES.closeAfterMpos);
     }
-    if (s.earlyLateEnabled && s.closeSettledFoliosHours * 60 <= lateOffset) {
-      add('closeSettledFoliosHours', MESSAGES.closeAfterLate);
-    }
+    if (s.earlyLateEnabled && close <= lateOffset)
+      add('closeSettledFolios', MESSAGES.closeAfterLate);
+  }
+
+  if (s.nightAudit === 'automatic' && !isOnTimeStep(s.nightAuditRunTime)) {
+    add('nightAuditRunTime', 'Enter the run time in 5-minute steps.');
   }
 
   for (const key of ['alternativeBaseRate1', 'alternativeBaseRate2'] as const) {
     if (s[key].enabled && !inRange(s[key].minNights, ALT_RATE_NIGHTS)) {
       add(key, `Choose ${ALT_RATE_NIGHTS.min} to ${ALT_RATE_NIGHTS.max} nights.`);
     }
+  }
+
+  // The two ranges chain (1-6 standard, 7-13 alternative 1, 14+ alternative 2), so 2 starts later.
+  if (
+    s.alternativeBaseRate1.enabled &&
+    s.alternativeBaseRate2.enabled &&
+    s.alternativeBaseRate2.minNights <= s.alternativeBaseRate1.minNights &&
+    !errors.alternativeBaseRate2
+  ) {
+    add(
+      'alternativeBaseRate2',
+      'Alternative Base Rate 2 must start after Alternative Base Rate 1.',
+    );
   }
 
   const label = s.serviceChargeLabel.trim();
@@ -205,9 +217,10 @@ export const FIELD_ORDER: readonly SystemSettingsField[] = [
   'checkInTime',
   'checkOutTime',
   'lateCheckOutTime',
-  'mposVisibleHoursBefore',
-  'mposVisibleHoursAfter',
-  'closeSettledFoliosHours',
+  'mposVisibleBefore',
+  'mposVisibleAfter',
+  'closeSettledFolios',
+  'nightAuditRunTime',
   'alternativeBaseRate1',
   'alternativeBaseRate2',
   'serviceChargeLabel',

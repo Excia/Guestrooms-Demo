@@ -53,17 +53,26 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
   consumer at once. Confirm Leaving (`useLeaveGuard`, `src/app/leaveGuard.ts`) holds in-app link clicks and
   asks the browser to confirm reload or tab close. The folio details and logo are the shared `FolioDetails`
   type for the printed folio (4.1).
-  - **Built defaults (see Q-70-1 to Q-70-3):** "extend past the Late Checkout Time" is strict (the hours after
-    checkout, times 60, must be larger than the minutes between checkout and late checkout); ranges are
-    visible-before 0 to 24 h, visible-after 0 to 48 h, close settled 1 to 72 h, alternative rate 2 to 30 nights;
-    all settings are system-wide (not per location). The unit select next to the hour fields has one option,
-    Hours.
+  - **From the functional requirements PDF (sections 6.1 to 6.8; Figma wins on layout and labels):** the
+    MPOS visibility and Close Settled Folios settings take 0 to 31 hours or days (6.2, 6.3); an automatic night
+    audit reveals a daily run time (6.4; Figma draws no field, so it is added under the radios, 5-minute steps);
+    alternative base rates run 2 to 99 nights and chain, so rate 2 must start after rate 1 (6.5); the folio
+    header fields follow 6.8. Not contradicted by Figma, so kept.
+  - **Built defaults (see Q-70-1 and Q-70-3):** "extend past the Late Checkout Time" is strict (the duration in
+    minutes must be larger than the minutes between checkout and late checkout); all settings are system-wide
+    (not per location).
   - **Not built here:** the Change Log button (7.10), the Print Registration Card setting (7.8, which owns its
     tab), consumers of the settings (3.11, 3.12, 7.3 still read their own defaults). Browser Back is not
     intercepted by Confirm Leaving (the app has no data router); the main menu's links are.
   - **Backend:** `GET` and `PUT /settings/system`, `GET /settings/system/options` (see
     [api-contract.md](../api-contract.md)).
-- **Open questions:** Q-70-1 to Q-70-3.
+  - **Doc items with no Figma content or no ticket (candidate tickets):** 6.7 Default Rate Categories for Room
+    Blocks, Members and Non-Members with "Add Member Type Override" rows (the Figma tab exists but is empty;
+    depends on Rate Categories 7.2); 6.5.4 new alternative base rate columns inheriting the standard rates (Rate
+    Categories 7.2); 6.4 the automatic Night Audit job itself (backend and Night Audit screens); the doc's admin
+    heading with breadcrumbs, fixed Save CTA and 10-second success flag with progress bar (Figma shows a plain
+    heading, a header Save button and the shared save toast, which are what is built).
+- **Open questions:** Q-70-1 and Q-70-3 (Q-70-2 answered by the PDF).
 
 ## 7.2 Rate Categories
 

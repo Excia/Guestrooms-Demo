@@ -3,6 +3,7 @@ import type { SystemSettings } from '../api/types';
 import {
   firstErrorField,
   formatTime12,
+  durationMinutes,
   isDirty,
   isOnTimeStep,
   lateCheckoutOffsetMinutes,
@@ -14,6 +15,7 @@ import {
   withLateCheckoutInRange,
 } from './systemSettings';
 
+const h = (amount: number) => ({ amount, unit: 'hours' as const });
 const base = (over: Partial<SystemSettings> = {}): SystemSettings => ({
   ...mockSystemSettings(),
   ...over,
@@ -67,12 +69,12 @@ describe('validateSystemSettings', () => {
 
   it('requires Close Settled Folios to be larger than the MPOS visibility after checkout', () => {
     const errors = validateSystemSettings(
-      base({ mposVisibleHoursAfter: 6, closeSettledFoliosHours: 6, earlyLateEnabled: false }),
+      base({ mposVisibleAfter: h(6), closeSettledFolios: h(6), earlyLateEnabled: false }),
     );
-    expect(errors.closeSettledFoliosHours).toEqual([MESSAGES.closeAfterMpos]);
+    expect(errors.closeSettledFolios).toEqual([MESSAGES.closeAfterMpos]);
     expect(
       validateSystemSettings(
-        base({ mposVisibleHoursAfter: 6, closeSettledFoliosHours: 7, earlyLateEnabled: false }),
+        base({ mposVisibleAfter: h(6), closeSettledFolios: h(7), earlyLateEnabled: false }),
       ),
     ).toEqual({});
   });
@@ -80,30 +82,27 @@ describe('validateSystemSettings', () => {
   it('requires Close Settled Folios to extend past the Late Checkout Time', () => {
     // Late checkout is 3 hours after checkout; closing after 3 hours is not past it.
     const errors = validateSystemSettings(
-      base({ mposVisibleHoursAfter: 1, closeSettledFoliosHours: 3 }),
+      base({ mposVisibleAfter: h(1), closeSettledFolios: h(3) }),
     );
-    expect(errors.closeSettledFoliosHours).toEqual([MESSAGES.closeAfterLate]);
+    expect(errors.closeSettledFolios).toEqual([MESSAGES.closeAfterLate]);
     expect(
-      validateSystemSettings(base({ mposVisibleHoursAfter: 1, closeSettledFoliosHours: 4 }))
-        .closeSettledFoliosHours,
+      validateSystemSettings(base({ mposVisibleAfter: h(1), closeSettledFolios: h(4) }))
+        .closeSettledFolios,
     ).toBeUndefined();
   });
 
   it('reports both Close Settled Folios rules at once (Figma error state)', () => {
-    const errors = validateSystemSettings(base({ closeSettledFoliosHours: 1 }));
-    expect(errors.closeSettledFoliosHours).toEqual([
-      MESSAGES.closeAfterMpos,
-      MESSAGES.closeAfterLate,
-    ]);
+    const errors = validateSystemSettings(base({ closeSettledFolios: h(1) }));
+    expect(errors.closeSettledFolios).toEqual([MESSAGES.closeAfterMpos, MESSAGES.closeAfterLate]);
   });
 
   it('requires folio visibility after checkout to extend past the Late Checkout Time', () => {
     const errors = validateSystemSettings(
-      base({ mposVisibleHoursAfter: 3, closeSettledFoliosHours: 10 }),
+      base({ mposVisibleAfter: h(3), closeSettledFolios: h(10) }),
     );
-    expect(errors.mposVisibleHoursAfter).toEqual([MESSAGES.mposAfterLate]);
+    expect(errors.mposVisibleAfter).toEqual([MESSAGES.mposAfterLate]);
     expect(
-      validateSystemSettings(base({ mposVisibleHoursAfter: 4, closeSettledFoliosHours: 10 })),
+      validateSystemSettings(base({ mposVisibleAfter: h(4), closeSettledFolios: h(10) })),
     ).toEqual({});
   });
 
@@ -112,8 +111,8 @@ describe('validateSystemSettings', () => {
       base({
         earlyLateEnabled: false,
         lateCheckOutTime: '23:00',
-        mposVisibleHoursAfter: 1,
-        closeSettledFoliosHours: 2,
+        mposVisibleAfter: h(1),
+        closeSettledFolios: h(2),
       }),
     );
     expect(errors).toEqual({});
@@ -137,10 +136,10 @@ describe('validateSystemSettings', () => {
 
   it('checks the hour and night ranges', () => {
     expect(
-      validateSystemSettings(base({ mposVisibleHoursBefore: 30 })).mposVisibleHoursBefore,
+      validateSystemSettings(base({ mposVisibleBefore: h(32) })).mposVisibleBefore,
     ).toBeDefined();
     expect(
-      validateSystemSettings(base({ closeSettledFoliosHours: 0 })).closeSettledFoliosHours,
+      validateSystemSettings(base({ closeSettledFolios: h(0) })).closeSettledFolios,
     ).toBeDefined();
     const alt = validateSystemSettings(
       base({ alternativeBaseRate1: { enabled: true, minNights: 1 } }),
@@ -178,10 +177,57 @@ describe('validateSystemSettings', () => {
   });
 
   it('finds the first error in page order', () => {
-    expect(firstErrorField({ 'folio.city': ['x'], closeSettledFoliosHours: ['y'] })).toBe(
-      'closeSettledFoliosHours',
+    expect(firstErrorField({ 'folio.city': ['x'], closeSettledFolios: ['y'] })).toBe(
+      'closeSettledFolios',
     );
     expect(firstErrorField({})).toBeNull();
+  });
+});
+
+describe('durations and the doc rules', () => {
+  it('compares days with hours', () => {
+    // 1 day after checkout extends past a late checkout 3 hours after checkout.
+    const errors = validateSystemSettings(
+      base({ mposVisibleAfter: h(2), closeSettledFolios: { amount: 1, unit: 'days' } }),
+    );
+    expect(errors.closeSettledFolios).toBeUndefined();
+    expect(
+      validateSystemSettings(
+        base({ mposVisibleAfter: { amount: 1, unit: 'days' }, closeSettledFolios: h(20) }),
+      ).closeSettledFolios,
+    ).toEqual([MESSAGES.closeAfterMpos]);
+  });
+
+  it('allows 0 to 31 hours or days only', () => {
+    expect(
+      validateSystemSettings(base({ mposVisibleBefore: h(0) })).mposVisibleBefore,
+    ).toBeUndefined();
+    expect(
+      validateSystemSettings(base({ mposVisibleBefore: h(32) })).mposVisibleBefore,
+    ).toBeDefined();
+    expect(durationMinutes({ amount: 2, unit: 'days' })).toBe(2880);
+  });
+
+  it('needs a run time on the 5-minute step only for an automatic night audit', () => {
+    expect(validateSystemSettings(base({ nightAuditRunTime: '02:03' }))).toEqual({});
+    expect(
+      validateSystemSettings(base({ nightAudit: 'automatic', nightAuditRunTime: '02:03' }))
+        .nightAuditRunTime,
+    ).toBeDefined();
+  });
+
+  it('chains the alternative base rates up to 99 nights', () => {
+    const rates = (n1: number, n2: number) =>
+      validateSystemSettings(
+        base({
+          alternativeBaseRate1: { enabled: true, minNights: n1 },
+          alternativeBaseRate2: { enabled: true, minNights: n2 },
+        }),
+      );
+    expect(rates(7, 14)).toEqual({});
+    expect(rates(7, 7).alternativeBaseRate2).toBeDefined();
+    expect(rates(7, 99).alternativeBaseRate2).toBeUndefined();
+    expect(rates(7, 100).alternativeBaseRate2).toBeDefined();
   });
 });
 
