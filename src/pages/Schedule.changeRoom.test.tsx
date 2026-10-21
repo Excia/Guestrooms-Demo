@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { decomposeColor, recomposeColor } from '@mui/material/styles';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ApiProvider } from '../api';
@@ -159,6 +160,25 @@ describe('the Change Room action', () => {
     expect(
       screen.queryByRole('dialog', { name: 'Change Room During Stay' }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('disabled room options', () => {
+  it('keep full opacity so the reason stays readable, are aria-disabled and cannot be pressed', async () => {
+    const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }));
+    await user.click(menu(dlg, 3));
+    const list = await screen.findByRole('listbox');
+    const booked = within(list).getByRole('option', { name: /^Room 302/ });
+    expect(booked).toHaveAttribute('aria-disabled', 'true');
+    // The row is not dimmed (MUI's 0.38 would drop the reason below 4.5:1); the name is dim, the
+    // reason is secondary text.
+    expect(getComputedStyle(booked).opacity).toBe('1');
+    expect(getComputedStyle(booked).pointerEvents).toBe('none');
+    const reason = within(booked).getByText('Booked 10/17-10/19');
+    expect(getComputedStyle(reason).color).toBe(rgb(theme.palette.text.secondary));
+    expect(getComputedStyle(within(booked).getByText('Room 302')).color).toBe(
+      rgb(theme.palette.text.disabled),
+    );
   });
 });
 
@@ -425,7 +445,9 @@ describe('applying the plan', () => {
     );
     expect(labels.find((l) => l.includes('part 2 of 2'))).toContain('moved from Room 301');
     // The toast, and the open details show the plan: the current room, the stay's end and the later room.
-    expect((await screen.findAllByText('Moved to Room 107')).length).toBeGreaterThan(0);
+    expect(
+      (await screen.findAllByText('Moved to Room 107 for the night of 10/19')).length,
+    ).toBeGreaterThan(0);
     expect(
       await within(dialog).findByText(
         /Later in this stay: Room 107 \(10\/19\/2026 to 10\/20\/2026\)/,
@@ -510,7 +532,7 @@ describe('applying the plan', () => {
     await toConfirm(user, dlg);
     await user.dblClick(await screen.findByRole('button', { name: 'Update Reservation' }));
     await waitFor(() => expect(calls).toHaveLength(1));
-    await screen.findAllByText('Moved to Room 110');
+    await screen.findAllByText('Moved to Room 110 for the night of 10/19');
     expect(calls).toHaveLength(1);
   });
 
@@ -532,7 +554,7 @@ describe('applying the plan', () => {
       'true',
     );
     release();
-    await screen.findAllByText('Moved to Room 110');
+    await screen.findAllByText('Moved to Room 110 for the night of 10/19');
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Change Room' })).not.toHaveAttribute(
         'aria-disabled',
@@ -782,6 +804,47 @@ describe('a split stay inside a multi-room reservation', () => {
     }
   });
 });
+
+const rgb = (hex: string) => recomposeColor(decomposeColor(hex));
+
+describe('the tooltip of the block under the grid cursor follows the input modality', () => {
+  async function ready() {
+    const user = userEvent.setup();
+    setup(createMockClient({ today: TODAY }));
+    await screen.findByRole('grid', { name: 'Schedule', hidden: true });
+    return user;
+  }
+  const tips = () => screen.queryAllByRole('tooltip', { hidden: true });
+
+  it('is not shown when the grid gets focus from a mouse press or from code', async () => {
+    await ready();
+    fireEvent.pointerDown(grid());
+    grid().focus();
+    await user_wait();
+    expect(tips()).toHaveLength(0);
+  });
+
+  it('is shown when the cursor is moved with the keyboard, and put away by a pointer press', async () => {
+    const user = await ready();
+    grid().focus();
+    await user.keyboard('{ArrowRight}');
+    const tip = await screen.findByRole('tooltip', { hidden: true });
+    expect(tip).toHaveTextContent('Daniel Whitfield, GR-50240, Room 201');
+    fireEvent.pointerDown(grid());
+    await waitFor(() => expect(tips()).toHaveLength(0));
+  });
+
+  it('is gone when the grid loses focus', async () => {
+    const user = await ready();
+    grid().focus();
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('tooltip', { hidden: true });
+    grid().blur();
+    await waitFor(() => expect(tips()).toHaveLength(0));
+  });
+});
+
+const user_wait = () => new Promise((r) => setTimeout(r, 50));
 
 describe('long block text', () => {
   it('no tooltip lingers on the block under the keyboard cursor while a panel is open (the grid has no focus)', async () => {

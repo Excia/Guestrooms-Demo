@@ -197,14 +197,15 @@ const NightRow = memo(function NightRow({
               key={key}
               {...props}
               aria-describedby={choice.reason ? reasonId : undefined}
-              // A disabled option stays readable: the dimming (0.38 opacity) would put its reason
-              // below the 4.5:1 contrast, so the text colours carry the state instead.
-              sx={{ '&.Mui-disabled': { opacity: 1 } }}
+              // A disabled option stays readable: MUI dims the whole row (opacity 0.38, selector
+              // [aria-disabled="true"], inside the listbox: hence the repeated &), which would put the reason below 4.5:1 contrast. The row
+              // keeps full opacity; the room name is dim and the reason is secondary text.
+              sx={{ '&&&[aria-disabled="true"]': { opacity: 1 } }}
             >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, width: '100%' }}>
                 <Box
                   component="span"
-                  sx={{ color: choice.disabled ? 'text.secondary' : 'text.primary' }}
+                  sx={{ color: choice.disabled ? 'text.disabled' : 'text.primary' }}
                 >
                   {choice.option.label}
                 </Box>

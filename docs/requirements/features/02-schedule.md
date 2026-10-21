@@ -188,7 +188,13 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
   - **Readability (D-092):** the reason a Change Room action is unavailable is visible text under the button
     (not only a tooltip); disabled room options keep their reason at normal secondary contrast; blocks have a
     lazily created tooltip with the full text (guest, confirmation number, part n of m, room and neighbours)
-    on hover (only when cut off) or grid keyboard focus, the aria-label unchanged.
+    on hover (only when cut off) or keyboard-driven grid focus (an arrow key or keyboard focus; a mouse press,
+    a drag or closing the panel clears it), the aria-label unchanged. Toasts are green only for success: an
+    unknown outcome or "review the plan" is a warning (orange) and a failure is an error (red), from the theme.
+    The success toast is accurate for what moved ("Moved to Room 107", "Moved to Room 107 for the night of
+    10/19", "Room plan updated: 2 nights changed"). The drag confirmation of a checked-in single-block stay says
+    the whole stay moves, including the nights already stayed, and points to Change Room During Stay (D-050,
+    Q-20-5; the move itself is unchanged).
   - **Optimistic update and refresh:** the grid shows the plan at once (`applyRoomPlan`), then confirms or rolls
     back like a drag (409/404/400 revert; no response, 408, 5xx or an unusable 2xx reload with a neutral
     message). After success the schedule is refetched, the open details reload in place and a toast says "Moved to
@@ -213,7 +219,10 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
 - **Stubs and placeholders:** the setting `askRateOnRoomChange` (default on) and `ScheduleRoom.housekeeping` are
   placeholders; the housekeeping state is not shown anywhere yet (Housekeeping report 6.4, "H" blocks); nightly
   rates are the placeholder room type rates ([placeholders.md](../placeholders.md)).
-- **Known limits:** a stayed block that ends where the visible range starts is not drawn (at start = today a
+- **Known limits:** when the focused row of the windowed night list (stays of more than 60 remaining nights) is
+  scrolled out and unmounts, focus falls back to the dialog container; the part label of an optimistic block
+  ("part n of m") can differ from the committed one when an earlier part lies outside the loaded date range (the
+  server's answer replaces it); a stayed block that ends where the visible range starts is not drawn (at start = today a
   stayed part has no column; the panel lists it under "Earlier in this stay"); the windowed list of a very long
   stay is reached by scrolling (Tab does not visit rows that are not rendered).
 - **Performance (200 rooms, a 365-night stay, Chrome, mock latency excluded):** opening the dialog costs about

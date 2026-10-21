@@ -383,3 +383,45 @@ describe('segmentLinks (ticket 2.3)', () => {
     expect(segmentLinks([{ ...blocks[0], roomChange: undefined }], rooms).size).toBe(0);
   });
 });
+
+describe('moveDialogCopy for a checked-in stay (D-050, Q-20-5)', () => {
+  it('says the whole stay moves, including the nights already stayed, and points to Change Room', () => {
+    const block = {
+      confirmationNumber: 'GR-1',
+      status: 'checked-in' as const,
+      startDate: '2026-10-14',
+    };
+    const result = {
+      ok: true,
+      kind: 'room-change',
+      dialog: 'room-change',
+      moves: [
+        {
+          blockId: 'b',
+          fromRoomId: 'a',
+          toRoomId: 'c',
+          fromStart: '2026-10-14',
+          toStart: '2026-10-14',
+          fromEnd: '2026-10-18',
+          toEnd: '2026-10-18',
+        },
+      ],
+      splitMoves: null,
+    } as unknown as Parameters<typeof moveDialogCopy>[0];
+    const copy = moveDialogCopy(result, block, '204', '2026-10-16');
+    expect(copy.body).toBe(
+      'Please confirm moving the whole stay to Room 204 for dates 10/14/2026 to 10/18/2026. This includes the 2 nights already stayed. To change only the nights not yet stayed, use Change Room During Stay in the reservation details.',
+    );
+    expect(moveDialogCopy(result, block, '204', '2026-10-15').body).toContain(
+      'includes the 1 night already stayed',
+    );
+    // Arrival today, a not yet checked-in room, or no "today": the plain copy.
+    expect(
+      moveDialogCopy(result, { ...block, startDate: '2026-10-16' }, '204', '2026-10-16').body,
+    ).toBe('Please confirm moving this room to Room 204 for dates 10/14/2026 to 10/18/2026.');
+    expect(
+      moveDialogCopy(result, { ...block, status: 'confirmed' as never }, '204', '2026-10-16').body,
+    ).toMatch(/^Please confirm moving this room/);
+    expect(moveDialogCopy(result, block, '204').body).toMatch(/^Please confirm moving this room/);
+  });
+});

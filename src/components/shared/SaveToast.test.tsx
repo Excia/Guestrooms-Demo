@@ -106,3 +106,24 @@ describe('SaveToast', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe('SaveToast severity', () => {
+  const bg = () =>
+    getComputedStyle(screen.getByRole('group', { name: 'Notification' })).backgroundColor;
+
+  it('is the green success toast by default; warning and error use their own theme colors', () => {
+    const { rerender } = render(<SaveToast open onClose={vi.fn()} message="Saved" />);
+    const green = bg();
+    rerender(<SaveToast open onClose={vi.fn()} message="Look again" severity="warning" />);
+    const orange = bg();
+    rerender(<SaveToast open onClose={vi.fn()} message="Failed" severity="error" />);
+    const red = bg();
+    expect(new Set([green, orange, red]).size).toBe(3);
+  });
+
+  it('keeps the same live region for every severity', () => {
+    render(<SaveToast open onClose={vi.fn()} message="Failed" severity="error" />);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveTextContent('Failed');
+  });
+});

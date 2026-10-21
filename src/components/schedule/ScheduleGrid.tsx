@@ -99,6 +99,18 @@ interface DragState {
 
 const DRAG_THRESHOLD_PX = 4;
 
+/** Keys that move the grid's cursor. */
+const NAVIGATION_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+]);
+
 const HELP =
   'Use the arrow keys to move between rooms and dates. Press Enter on a reservation to open its details, or on an empty date to start a new reservation there. ' +
   'Press Space or M to pick it up, the arrow keys to choose a new room or date, Enter or Space to drop it ' +
@@ -287,6 +299,9 @@ export default function ScheduleGrid({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [gridFocused, setGridFocused] = useState(false);
+  // The block under the cursor shows its tooltip only while the cursor is driven by the keyboard:
+  // set by a navigation key or by keyboard (focus-visible) focus, cleared by any pointer press.
+  const [keyboardCursor, setKeyboardCursor] = useState(false);
 
   // Virtualization window. The scroll handler only stores the row range when it changes.
   const range = useMemo(
@@ -661,6 +676,7 @@ export default function ScheduleGrid({
     if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey)
       return;
     const key = event.key;
+    if (NAVIGATION_KEYS.has(key)) setKeyboardCursor(true);
     if (drag?.mode === 'keyboard') {
       const arrows: Record<string, [number, number]> = {
         ArrowUp: [-1, 0],
@@ -804,9 +820,23 @@ export default function ScheduleGrid({
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
-        onFocus={() => setGridFocused(true)}
+        onFocus={(e) => {
+          setGridFocused(true);
+          // Keyboard focus (Tab, or focus handed back by a closing panel) is :focus-visible; a mouse
+          // press that focuses the grid is not.
+          let visible = false;
+          try {
+            visible = e.currentTarget.matches(':focus-visible');
+          } catch {
+            // old engines: treat as a pointer focus
+          }
+          if (visible) setKeyboardCursor(true);
+        }}
         onBlur={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget)) setGridFocused(false);
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setGridFocused(false);
+            setKeyboardCursor(false);
+          }
           // Leaving the grid abandons a keyboard pick-up.
           if (drag?.mode === 'keyboard' && !e.currentTarget.contains(e.relatedTarget)) {
             setDrag(null);
@@ -818,6 +848,8 @@ export default function ScheduleGrid({
         onClick={selectItemFromEvent}
         onPointerDown={(e) => {
           pressRef.current = { x: e.clientX, y: e.clientY };
+          // Any pointer use (a click, a drag, a refused drag) ends the keyboard cursor's tooltip.
+          setKeyboardCursor(false);
         }}
         onPointerCancel={() => {
           pressRef.current = 'cancelled';
@@ -960,7 +992,7 @@ export default function ScheduleGrid({
                 draggingId={drag?.item.id ?? null}
                 idPrefix={idPrefix}
                 links={links}
-                focused={gridFocused}
+                focused={gridFocused && keyboardCursor}
                 onItemPointerDown={onItemPointerDown}
               />
             ))}

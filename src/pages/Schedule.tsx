@@ -56,9 +56,12 @@ interface Pending {
   result: Accepted;
 }
 
+type ToastSeverity = 'success' | 'warning' | 'error';
+
 interface Toast {
   id: number;
   message: string;
+  severity: ToastSeverity;
 }
 
 /**
@@ -148,8 +151,8 @@ export default function Schedule({
     },
     [setParams],
   );
-  const notify = useCallback((message: string) => {
-    setToast((t) => ({ id: (t?.id ?? 0) + 1, message }));
+  const notify = useCallback((message: string, severity: ToastSeverity = 'success') => {
+    setToast((t) => ({ id: (t?.id ?? 0) + 1, message, severity }));
     setToastOpen(true);
   }, []);
 
@@ -305,7 +308,8 @@ export default function Schedule({
         const reverted =
           failure.revert && inRange() && setBlocks(range, (blocks) => revertMoves(blocks, moves));
         if (failure.refetch || (failure.revert && !reverted)) retry();
-        notify(failure.message);
+        // An unknown outcome is a warning (look again); a clear failure is an error.
+        notify(failure.message, failure.revert ? 'error' : 'warning');
         settle();
       },
     );
@@ -350,7 +354,7 @@ export default function Schedule({
           setBlocks(range, (blocks) => revertRoomPlan(blocks, snapshot, stayId));
         }
         if (failure.refetch || (failure.revert && !inRange())) retry();
-        notify(failure.message);
+        notify(failure.message, failure.reopen || !failure.revert ? 'warning' : 'error');
         if (failure.reopen) {
           if (failure.serverToday) setServerToday(failure.serverToday);
           setReopen((r) => ({
@@ -426,7 +430,7 @@ export default function Schedule({
           setFrozenRooms(liveRooms);
           setPending({ block, result });
         }}
-        onRefuse={notify}
+        onRefuse={(message) => notify(message, 'warning')}
         onOpen={openDetails}
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
       />
@@ -533,6 +537,7 @@ export default function Schedule({
           block={pending.block}
           result={pending.result}
           toRoomNumber={toRoom?.number ?? ''}
+          today={today}
           onCancel={() => {
             setPending(null);
             setFrozenRooms(null);
@@ -568,6 +573,7 @@ export default function Schedule({
         onClose={() => setToastOpen(false)}
         message={toast?.message ?? ''}
         saveId={toast?.id}
+        severity={toast?.severity}
         side={toastSideFor(panelSide)}
       />
     </Box>

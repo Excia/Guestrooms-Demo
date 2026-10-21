@@ -300,19 +300,30 @@ export const runText = (run: PlanRun): string =>
 export const planSentence = (from: IsoDate, end: IsoDate): string =>
   `New room plan effective ${formatDialogDate(from)} through ${formatDialogDate(end)}`;
 
-/** The toast: "Moved to Room 205" when one room takes the changed nights, else a general line. */
+/**
+ * The success toast, accurate for what moved: "Moved to Room 203" when one room takes every remaining
+ * night, "Moved to Room 203 for the night of 10/21" / "for 2 nights from 10/21" when it takes one run
+ * of later nights (tonight may stay), and a general line when several runs or rooms are involved.
+ */
 export function changeToast(
   current: readonly NightRoom[],
   plan: readonly NightRoom[],
   rooms: readonly Pick<ScheduleRoom, 'id' | 'number'>[],
 ): string {
-  const changed = new Set(changedNights(current, plan));
-  const targets = new Set(plan.filter((n) => changed.has(n.date)).map((n) => n.roomId));
-  if (targets.size === 1) {
-    const id = [...targets][0];
-    return `Moved to Room ${rooms.find((r) => r.id === id)?.number ?? ''}`.trim();
+  const changed = changedNights(current, plan);
+  const targets = new Set(plan.filter((n) => changed.includes(n.date)).map((n) => n.roomId));
+  const oneRun =
+    changed.length > 0 &&
+    daysBetween(changed[0], changed[changed.length - 1]) === changed.length - 1;
+  if (targets.size !== 1 || !oneRun) {
+    return `Room plan updated: ${plural(changed.length, 'night')} changed`;
   }
-  return 'Rooms updated for the remaining nights';
+  const id = [...targets][0];
+  const room = `Room ${rooms.find((r) => r.id === id)?.number ?? ''}`.trim();
+  if (changed.length === plan.length) return `Moved to ${room}`;
+  return changed.length === 1
+    ? `Moved to ${room} for the night of ${shortDate(changed[0])}`
+    : `Moved to ${room} for ${changed.length} nights from ${shortDate(changed[0])}`;
 }
 
 export interface StayedNight {

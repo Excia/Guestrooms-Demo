@@ -213,7 +213,15 @@ export default memo(function ScheduleItemView({
         left: dateAreaX(span.start),
         width: dateAreaWidth(span.end - span.start, theme.spacing(0.25)),
       }}
-      onPointerDown={onPointerDown}
+      onPointerDown={
+        onPointerDown
+          ? (e) => {
+              // Pressing (and then dragging) the block puts its tooltip away.
+              setHover(false);
+              onPointerDown(e);
+            }
+          : undefined
+      }
       onPointerEnter={
         ghost || !tip
           ? undefined

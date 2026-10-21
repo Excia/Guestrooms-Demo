@@ -306,28 +306,31 @@ describe('the plan', () => {
       'New room plan effective 10/16/2026 through 10/20/2026',
     );
   });
-  it('the toast names the room when one room takes the changed nights', () => {
-    expect(
-      changeToast(
-        current,
-        nightsOf(['16', 'rm-301'], ['17', 'rm-107'], ['18', 'rm-107'], ['19', 'rm-301']),
-        rooms,
-      ),
-    ).toBe('Moved to Room 107');
-    expect(
-      changeToast(
-        current,
-        nightsOf(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-301']),
-        rooms,
-      ),
-    ).toBe('Moved to Room 107');
-    expect(
-      changeToast(
-        current,
-        nightsOf(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-X']),
-        [...rooms, { id: 'rm-X', number: 'X' }],
-      ),
-    ).toBe('Rooms updated for the remaining nights');
+  it('the toast says what moved: every night, a later run (tonight stays), or several runs', () => {
+    const t = (...p: [string, string][]) =>
+      changeToast(current, nightsOf(...p), [...rooms, { id: 'rm-X', number: 'X' }]);
+    // every remaining night moves
+    expect(t(['16', 'rm-107'], ['17', 'rm-107'], ['18', 'rm-107'], ['19', 'rm-107'])).toBe(
+      'Moved to Room 107',
+    );
+    // only a later night or run moves: tonight stays where it is
+    expect(t(['16', 'rm-301'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-107'])).toBe(
+      'Moved to Room 107 for the night of 10/19',
+    );
+    expect(t(['16', 'rm-301'], ['17', 'rm-107'], ['18', 'rm-107'], ['19', 'rm-301'])).toBe(
+      'Moved to Room 107 for 2 nights from 10/17',
+    );
+    // tonight alone moves
+    expect(t(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-301'])).toBe(
+      'Moved to Room 107 for the night of 10/16',
+    );
+    // several runs or rooms
+    expect(t(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-X'])).toBe(
+      'Room plan updated: 2 nights changed',
+    );
+    expect(t(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-107'], ['19', 'rm-301'])).toBe(
+      'Room plan updated: 2 nights changed',
+    );
   });
   it('signedMoney', () => {
     expect(signedMoney(5000)).toBe('+$50.00');

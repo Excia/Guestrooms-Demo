@@ -240,15 +240,33 @@ export interface MoveDialogCopy {
 /** Title, text and primary button of the confirm dialog for an accepted drop (Figma 2623:*). */
 export function moveDialogCopy(
   result: Accepted,
-  block: Pick<ScheduleBlock, 'confirmationNumber'>,
+  block: Pick<ScheduleBlock, 'confirmationNumber' | 'status' | 'startDate'>,
   toRoomNumber: string,
+  /** The schedule's today: a checked-in stay that began earlier has nights already stayed. */
+  today?: IsoDate,
 ): MoveDialogCopy {
   const move = result.moves[0];
   const dates = `${formatDialogDate(move.toStart)} to ${formatDialogDate(move.toEnd)}`;
   if (result.dialog === 'room-change') {
+    // Dragging a checked-in stay moves all of it (D-050, Q-20-5): say so, including the nights that
+    // were already stayed, and point to the way of changing only the nights still to come.
+    const stayed =
+      block.status === 'checked-in' && today !== undefined
+        ? Math.max(
+            0,
+            Math.min(
+              daysBetween(block.startDate, today),
+              daysBetween(move.fromStart, move.fromEnd),
+            ),
+          )
+        : 0;
+    const body =
+      stayed > 0
+        ? `Please confirm moving the whole stay to Room ${toRoomNumber} for dates ${dates}. This includes the ${stayed === 1 ? '1 night' : `${stayed} nights`} already stayed. To change only the nights not yet stayed, use Change Room During Stay in the reservation details.`
+        : `Please confirm moving this room to Room ${toRoomNumber} for dates ${dates}.`;
     return {
       title: `Reservation ${block.confirmationNumber} Room Change`,
-      body: `Please confirm moving this room to Room ${toRoomNumber} for dates ${dates}.`,
+      body,
       confirmLabel: 'Move to New Room',
     };
   }
