@@ -120,13 +120,13 @@ ones in `createHttpClient` (`src/api/http.ts`).
 - A create retried after an unknown outcome (status 0, 408, 5xx) reuses its `requestId`; the backend must
   replay instead of duplicating. 409 `conflict` and other 4xx applied nothing.
 - **Unassigned room:** `roomId` null or absent creates a reservation with no room. It has no lane on the
-  schedule until a room is assigned (D-076), and no assign-room endpoint exists yet. A `guestName` of "TBD" and no `leadOccupant` are valid
-  (D-077): the backend must accept "TBD" as a guest name.
+  schedule until a room is assigned (D-079), and no assign-room endpoint exists yet. A `guestName` of "TBD" and no `leadOccupant` are valid
+  (D-080): the backend must accept "TBD" as a guest name.
 - **Members** (`members.search`, `members.create`) are a placeholder directory (25 mock people,
   `MEM-0001` ...) until the Member Directory ticket (10.3); the Booking Guest and Lead Occupant pickers
   use them. Where real member data comes from is open (Q-51-1).
 - **`ScheduleBlock` flags:** `earlyCheckIn?` and `lateCheckOut?` (optional booleans) tell the grid to
-  draw the early check-in sliver and the late check-out marker (D-081). They are read-only on the
+  draw the early check-in sliver and the late check-out marker (D-084). They are read-only on the
   block; they change through `POST /reservations/{id}/early-late`, so the backend should return the
   new flags on the next `GET /schedule`.
 - **Permission:** `reservation.edit` ([permissions.md](permissions.md)) gates the panel's edits and
@@ -134,6 +134,22 @@ ones in `createHttpClient` (`src/api/http.ts`).
 - **Backend need:** nothing holds the room while the New Reservation timer runs. A real backend needs a
   hold/reserve call when the panel opens and a hold token sent with create (Q-19-3). What the timer's
   expiry means once a server hold exists is open (Q-19-10).
+
+## Folio endpoints (ticket 4.1)
+
+Added by the Folio view (Excia/Guestrooms-Demo#38). Both are in `createHttpClient` and the mock.
+
+| #   | Method and path                      | Request                                                                     | Response                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Errors                                                                       |
+| --- | ------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 13  | `GET /reservations/{id}/folio`       | none (must not change anything)                                             | `Folio` (reservationId, confirmationNumber, checkInStatus `not-checked-in\|checked-in\|checked-out`, open, mposVisible, nights, guests, rooms[] {id, number}, occupants[] {id, name, roomId}, charges[] {id, type `room-rate\|mpos\|manual\|add-on\|surcharge\|service-fee`, date, description, amountCents (total incl. taxes and service charges), status `posted\|unposted\|settled\|split`, references[], roomId, occupantId}, payments[] {id, typeLabel, date, reference, ticket, description, amountCents, status}) | 400, 404                                                                     |
+| 14  | `POST /reservations/{id}/folio/post` | `PostChargeRequest {requestId, reservationId, chargeId}`; `Idempotency-Key` | the updated `Folio`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 400, 404, 409 `folio-closed`, 409 `not-unposted`, 409 `idempotency-conflict` |
+
+- Balances are not sent: the client derives Posted Balance (posted lines) and Unposted Balance
+  (unposted lines) from `charges` (D-077). A backend that wants to own the numbers should add them to
+  `Folio` and the client will prefer them.
+- Surcharge (MPOS card present) and service fee (card on file) arrive as `charges` of those types with
+  the settle reference; `references` holds every payment reference of a split settlement.
+- Posting is idempotent by `requestId`. Print and Email are not endpoints yet (D-003, Q-38-2).
 
 ## Error codes
 
@@ -153,6 +169,8 @@ ones in `createHttpClient` (`src/api/http.ts`).
 | 409    | `not-movable`          | checked out, locked room type, arrival in the past, dates of a checked-in room                                                                                | revert and refetch                                                    |
 | 409    | `stale`                | `version` or `from*` no longer matches                                                                                                                        | revert and refetch                                                    |
 | 409    | `idempotency-conflict` | `requestId` reused with a different request                                                                                                                   |                                                                       |
+| 409    | `folio-closed`         | (ticket 4.1) posting to a closed folio                                                                                                                        |                                                                       |
+| 409    | `not-unposted`         | (ticket 4.1) the charge is not waiting for Night Audit                                                                                                        |                                                                       |
 | 409    | `not-editable`         | (PR 119) reservation checked out or cancelled                                                                                                                 | Early/Late save fails with the error and Retry                        |
 | 5xx    | (any)                  | server error                                                                                                                                                  | Schedule move: unknown outcome (reload, no revert)                    |
 

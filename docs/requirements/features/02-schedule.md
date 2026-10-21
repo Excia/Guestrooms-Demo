@@ -33,7 +33,7 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
     Keyboard: pick up with Space or M, arrows to a target, Enter to drop, Escape to cancel, with
     live-region announcements. PR #118 also picked up with Enter; since PR #119 Enter on a block opens
     its details (D-057) and Enter on an empty date opens New Reservation (D-067).
-  - A press that moves 4px or more is a drag, not a click (D-080).
+  - A press that moves 4px or more is a drag, not a click (D-083).
   - `role=grid` with column and row headers and named gridcells; one tab stop with
     `aria-activedescendant`; visible focus.
   - Rows are virtualized: with `?schedule=large` (200 rooms x 30 days, dev only) about 17 rows render;
@@ -49,7 +49,7 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
 - **Not built:** housekeeping "H" blocks and the linked-room block style (ticket 2.4); the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot
-  drag; no edge auto-scroll. Reservations with an Unassigned room have no lane on the grid (D-076).
+  drag; no edge auto-scroll. Reservations with an Unassigned room have no lane on the grid (D-079).
 - **Notes:** mock schedule data follows the real current date. `?mock=empty|error|loading` also drive
   the permissions call, so they redirect before the Schedule shows; a `?schedule=empty|error` dev
   toggle would fix that (not done). `routes.ts` gained `RESERVATIONS_PATH` and
@@ -95,12 +95,12 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
     Click an empty cell, or press Enter on it, to open New Reservation with that room preselected and
     the clicked date as Check In, Check Out empty. A past day becomes today with the note "Check In was
     set to today because the day you clicked has passed." A closure cell does nothing (announces "Room
-    closed."). A press that moves 4px or more is a drag, not a click (D-067, D-080). The Schedule's New
+    closed."). A press that moves 4px or more is a drag, not a click (D-067, D-083). The Schedule's New
     Reservation button opens the panel without a room.
   - **Split CTA** (`splitCta()`): Check In (one room) / Check In All Rooms / Check In Remaining Rooms;
     Check Out / All / Remaining; Manage Reservation (outlined) for cancelled or fully checked-out
     reservations. The menu holds Print Registration Card (not after check out) and Jump to Folio. Check In
-    is disabled, but focusable with the reason, while a room to be checked in is unassigned (D-079).
+    is disabled, but focusable with the reason, while a room to be checked in is unassigned (D-082).
   - **Room details (New Reservation):** Location, Room Type and Room are three cascading dropdowns, all
     "Unassigned" by default, filtering each other (D-066). The Room list shows every room (30 rooms in 8
     groups while the grid showed 9 rows; all 200 in the large inventory), grouped "location | room
@@ -110,13 +110,13 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
     its title above, shows "TBD" and is a member autocomplete (first people on focus, matches as you
     type) with a "+" inside the field, after the dropdown arrow, that opens the Add guest dialog
     (D-064). **Lead Occupant** (optional, "TBD") appears when the Reserver option is selected; it has its
-    own "+" and a red clear X outside the field (D-065). TBD is a valid saved guest (D-077). Both fields
+    own "+" and a red clear X outside the field (D-065). TBD is a valid saved guest (D-080). Both fields
     reserve the same space beside them so they are the same size.
   - **Unassigned room:** a reservation can be created with an Unassigned room. The details panel then
     shows "Not shown on the schedule until a room is assigned." because the grid has no lane for it
-    (D-076, Q-19-8).
+    (D-079, Q-19-8).
   - **Tabs:** "New Reservation" and "New Room Closure" are both selectable; the closure tab shows
-    "Room closures arrive with Room Blocks." and the hold timer pauses there (D-069, D-078). The close X
+    "Room closures arrive with Room Blocks." and the hold timer pauses there (D-069, D-081). The close X
     is green (D-068).
   - **Hold timer:** employee audience; starts when the hold length has loaded (right after the panel
     opens); placeholder 15 / 10 / 10 minutes; "Time left: mm:ss"; warns and announces under a minute;
@@ -129,9 +129,9 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
   - **Schedule markers (small part of ticket 2.4):** the early check-in sliver is drawn on any block with
     `earlyCheckIn`, including a stay clipped at the left edge of the visible range (drawn as the card's
     own rounded left edge, the GR-50240 case); the late check-out marker only at a real departure edge
-    (D-081).
-- **Owner feedback applied during review (2026-10-20/21):** D-057, D-063 to D-069 and D-076 to D-082 in
-  [decisions.md](../decisions.md). The dashboard "New Reservation" search is unchanged (D-082).
+    (D-084).
+- **Owner feedback applied during review (2026-10-20/21):** D-057, D-063 to D-069 and D-079 to D-085 in
+  [decisions.md](../decisions.md). The dashboard "New Reservation" search is unchanged (D-085).
 - **Deviations from Figma:** header shows "Confirmed" / "Pending" before check in (Figma draws no
   label, D-061); the Early/Late checkboxes sit under the stay dates (no frame shows them in the header);
   "Back to schedule" is not drawn on the details panel in Figma (only the close X) and is a text button
@@ -193,7 +193,7 @@ Schedule Block Exploration 12843:35986; States and Variations 12423:59315.
 - **Implemented:** a base block renderer exists from 2.1 (`ScheduleItemView`: confirmed/NYCI,
   checked-in, checked-out, due-out, closure, guest type colors); minimal early/late edge markers in
   PR #119 (an early check-in sliver on any block with the flag, a late check-out marker only at a
-  real departure edge, D-081). Canceled, unassigned and linked states, the owner icon and the tooltips
+  real departure edge, D-084). Canceled, unassigned and linked states, the owner icon and the tooltips
   are not built. **Source conflict:** this ticket says Not Yet Checked In shows only early and Checked In
   / Checked Out only late; the markers built in PR #119 follow the flags on the block (the mock sets
   them on a few reservations) and do not filter by status. Ticket 2.4 decides.
