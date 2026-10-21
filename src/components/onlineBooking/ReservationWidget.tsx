@@ -222,7 +222,8 @@ export function ReservationForm({
                 sx={(t) => ({
                   border: `1px solid ${t.palette.grey[400]}`,
                   borderRadius: 2.5,
-                  p: 2,
+                  py: 2,
+                  px: 1.5,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 1.875,
@@ -251,7 +252,7 @@ export function ReservationForm({
                     </Button>
                   ) : null}
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1.75, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', gap: 0.75, justifyContent: 'space-between' }}>
                   <CountStepper
                     title="Adults"
                     noun="adults"

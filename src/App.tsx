@@ -26,6 +26,11 @@ export const COMPONENTS_DEMO_PATH = '/dev/components';
 const Schedule = lazy(() => import('./pages/Schedule'));
 const Folio = lazy(() => import('./pages/Folio'));
 const ComponentsDemo = import.meta.env.DEV ? lazy(() => import('./pages/ComponentsDemo')) : null;
+// Dev-only mock of the embedded widget and the online booking pages (ticket 5.2).
+export const ONLINE_BOOKING_DEMO_PATH = '/dev/online-booking';
+const OnlineBookingDemo = import.meta.env.DEV
+  ? lazy(() => import('./pages/OnlineBookingDemo'))
+  : null;
 
 function PagePlaceholder({ title }: { title: string }) {
   return (
@@ -92,6 +97,18 @@ export default function App() {
               <ErrorBoundary>
                 <Suspense fallback={null}>
                   <ComponentsDemo />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
+        ) : null}
+        {OnlineBookingDemo ? (
+          <Route
+            path={ONLINE_BOOKING_DEMO_PATH}
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={null}>
+                  <OnlineBookingDemo />
                 </Suspense>
               </ErrorBoundary>
             }

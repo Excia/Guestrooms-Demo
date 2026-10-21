@@ -65,7 +65,7 @@ Update-search notice 12136:20607.
   exists (default 3). Location is hidden when the club has one location. The results route
   (`/book/results`) and the 150-character global message setting (7.9) are not built: the widget takes the
   message as a prop and opens the URL. The embeddable web-component wrapper (D-011) is not built; the React
-  component is the unit it will wrap. Not wired into any route yet. Open: Q-49-1. Deviations 54 to 56.
+  component is the unit it will wrap. Not wired into a product route yet; the dev-only mock page `/dev/online-booking` (`src/pages/OnlineBookingDemo.tsx`, dropped from production builds like `/dev/components`) shows the widget on a stand-in club page and the header with Adjust Search, with a signed-out / non-member / member switch. Open: Q-49-1. Deviations 54 to 56.
 
 ## 5.3 Results cards
 
