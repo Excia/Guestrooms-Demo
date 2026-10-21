@@ -148,6 +148,7 @@ Share is computed (Q-67-1).
 | ------ | ------------------------------------------------------------------------------------------------------------- | -------------- | ------------- | ------- | ------- | ------ |
 | Q-48-1 | "Axis (?)" and "Paycloud (?)" destinations for Account and Payment Methods, and how members are authenticated | Account menu   | Nothing built | Owner   | 48, 99  | open   |
 | Q-48-2 | How the embedded mobile app signals its mode                                                                  | Header         | Nothing built | Owner   | 48      | open   |
+| Q-49-1 | Online search limits (max stay, days ahead, max rooms, guests per room): from 7.5?                            | Widget         | Placeholders  | Owner   | 49, 7.5 | open   |
 | Q-50-1 | Image carousel library (does one exist?)                                                                      | Dependency     | Nothing built | Owner   | 50      | open   |
 | Q-50-2 | Waitlist deferred: confirm hidden                                                                             | Scope          | Nothing built | Owner   | 50      | open   |
 | Q-51-1 | Where a member's saved guests come from (Axis profile or Guest Rooms history)                                 | Guest dropdown | Nothing built | Owner   | 51      | open   |
