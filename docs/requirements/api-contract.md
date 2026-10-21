@@ -126,7 +126,7 @@ Added by Excia/Guestrooms-Demo#119 (not on `main` yet; may change before merge; 
 
 ## Change room during stay (ticket 2.3, branch `feat/20-change-room-during-stay`)
 
-Per-night model (D-084 to D-090); see also [02-schedule.md](features/02-schedule.md#23-change-room-during-stay-menu-and-dialog).
+Per-night model (D-087 to D-093); see also [02-schedule.md](features/02-schedule.md#23-change-room-during-stay-menu-and-dialog).
 
 | #   | Method and path                            | Request                                                                                                                                                 | Response                                                                                                                                                  | Errors                                                                                                                                                                                                                                          |
 | --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -168,14 +168,14 @@ Per-night model (D-084 to D-090); see also [02-schedule.md](features/02-schedule
   blocks are not exactly the normalized plan (the first block may start earlier), whose numbering, stay link
   or part order is inconsistent, with a link on a single block, a stayed part in the room of the current one,
   a block of another reservation or duplicate ids, a vacated room or date that differs, or non-integer money.
-- **Rates (D-015, D-086):** money is integer cents excluding taxes and service charges (Q-20-6). Nights before
+- **Rates (D-015, D-089):** money is integer cents excluding taxes and service charges (Q-20-6). Nights before
   the effective date are never repriced; a night that keeps its room keeps its price; a changed night is
   repriced per its new room: `retain` keeps its current price, `update` or `null` uses its new room's rate.
   When the setting asks (`askRateOnRoomChange`) and a changed night's rate differs, `null` is refused (400,
   `details.rateChoice`); a setting or rate that changed between the dialog opening and the request is handled
   the same way (the client reopens on step 1). `folio.deltaCents` is the change of this reservation room's
   room charges (negative: cheaper); the weighted average rate is untouched.
-- **Housekeeping (D-087):** when the room the guest sleeps in tonight changes, it becomes `dirty` from that
+- **Housekeeping (D-090):** when the room the guest sleeps in tonight changes, it becomes `dirty` from that
   night (`vacatedRoom`, `ScheduleRoom.housekeeping`; PLACEHOLDER until ticket 6.4); otherwise `vacatedRoom` is
   null (rooms of later nights were never occupied).
 - **Concurrency and idempotency:** exactly like the schedule moves: `version` and `fromRoomId` guard against a
@@ -184,7 +184,7 @@ Per-night model (D-084 to D-090); see also [02-schedule.md](features/02-schedule
   including the original versions and `removedBlockIds`**; another body is 409 `idempotency-conflict`. The
   client treats status 0, 408, 5xx and an unusable 2xx as an unknown outcome (reload, neutral message, no
   revert).
-- **Moves of a stay with several parts (D-089):** `POST /schedule/move-room` and `/move-dates` answer 409
+- **Moves of a stay with several parts (D-092):** `POST /schedule/move-room` and `/move-dates` answer 409
   `not-movable` for any block of such a stay; the client refuses the drop first.
 - **Reporting rule:** the blocks of one stay share the reservation id and confirmation number. Nights and
   revenue are summed **per night**, never per block, and the segments of a stay are **not** extra
