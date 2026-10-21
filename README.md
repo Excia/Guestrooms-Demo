@@ -112,6 +112,13 @@ Copy `.env.example` to `.env.local` to override.
   call when the panel opens and a hold token sent with `create`. The mock never answers a
   `cancelled` reservation (no cancelled block exists), but the UI and the CTA rules handle it.
   Early/Late and the edge markers are reservation-level; the grid mirrors them on its blocks.
+- Change room during a stay (`reservations.changeRoomDuringStay`, `settings.getRoomChangeRule`;
+  `POST /reservation-rooms/:id/change-room`, `GET /settings/room-change-rule`): same safety as the schedule
+  moves (`version`, `fromRoomId`, `requestId` / `Idempotency-Key`, 409 `stale` / `conflict` / `not-movable` /
+  `idempotency-conflict`, unknown-outcome semantics) for a checked-in reservation room. The nights before
+  `effectiveDate` stay in the old room as a `previous` segment (`ScheduleBlock.roomChange`), the rest move; the
+  answer must match the request. Rates: integer cents excluding taxes, nights before today never repriced,
+  `rateChoice` `retain|update|null`. Details in `docs/requirements/api-contract.md`.
 - Server `message` and `details` are untrusted text: render them as text, never as HTML.
 - Ids go into URL paths; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400).
 - `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped.

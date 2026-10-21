@@ -74,7 +74,9 @@ totalNights, averageRate}`; rows are one per rate category in the data (not a fi
   `endDate` (exclusive), `status` (`confirmed`, `nyci` = Not Yet Checked In with arrival reached,
   `checked-in`, `checked-out`; a "due out" block is a checked-in one ending today), `roomCount`
   (rooms on the reservation; blocks with the same `reservationId` move together), `roomTypeLocked`,
-  `version` (opaque, never parsed or compared by the client).
+  `version` (opaque, never parsed or compared by the client), optional `earlyCheckIn` / `lateCheckOut`, and
+  optional `roomChange {part: 'previous'|'current', otherRoomId}` when the stay changed room (ticket 2.3);
+  `ScheduleRoom.housekeeping` (`clean|dirty`) is optional and a placeholder.
 - `ScheduleClosure`: `kind: 'closure'`, `id`, `roomId`, `startDate`, `endDate`, `reason`, `endMarker`.
 - Every block and closure must sit in a listed room; **ids must be unique across blocks and closures**
   (the grid looks items up by id); rooms unique. "Empty" means no rooms.
@@ -120,6 +122,49 @@ Added by Excia/Guestrooms-Demo#119 (not on `main` yet; may change before merge; 
 - New permission `reservation.edit` ([permissions.md](permissions.md)). The owner requests in progress on
   that PR (Booking Guest TBD, Lead Occupant optional, Unassigned room/location/room type) will change the
   create request shape; update this table when that PR is final (**Unknown** today).
+
+## Change room during stay (ticket 2.3, branch `feat/20-change-room-during-stay`)
+
+Decisions D-077 to D-081; see also [02-schedule.md](features/02-schedule.md#23-change-room-during-stay-menu-and-dialog).
+
+| #   | Method and path                            | Request                                                                                                                                                | Response                                                                                                                       | Errors                                                                                                                               |
+| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 13  | `POST /reservation-rooms/{id}/change-room` | `ChangeRoomRequest {requestId, reservationRoomId, fromRoomId, toRoomId, effectiveDate, rateChoice `retain\|update\|null`, version}`; `Idempotency-Key` | `{ blocks[], folio {deltaCents, repricedNights, roomChargesCents}, vacatedRoom {roomId, housekeeping `clean\|dirty`, since} }` | 400 `invalid-id`/`invalid-query`, 404, 409 `stale`, 409 `not-movable`, 409 `conflict` (`details.roomId`), 409 `idempotency-conflict` |
+| 14  | `GET /settings/room-change-rule`           | none                                                                                                                                                   | `RoomChangeRule { askRateOnRoomChange: boolean }` (PLACEHOLDER: name, default true and home are undecided, Q-20-2)             | 5xx                                                                                                                                  |
+
+- **Semantics:** only a **checked-in** reservation room can change room during the stay (409 `not-movable`
+  otherwise; also when a locked room type would be left). The nights before `effectiveDate` stay in
+  `fromRoomId` and keep their price; the nights from `effectiveDate` to the departure move to `toRoomId`.
+  `effectiveDate` must be today or later and before the departure (400 `invalid-query`, `details.effectiveDate`).
+  The reservation stays checked in; its early/late flags carry over (Early Check In on the first segment,
+  Late Check Out on the current one).
+- **Answer:** the changed blocks. The block with the request's `reservationRoomId` keeps its id, is now in
+  `toRoomId` from `effectiveDate`, is `checked-in` and has `roomChange {part: 'current', otherRoomId: fromRoomId}`.
+  When nights were already stayed there is also a new block in `fromRoomId` ending on `effectiveDate`,
+  `status: 'checked-out'`, `roomChange {part: 'previous', otherRoomId: toRoomId}`, same `reservationId` and
+  confirmation number. `roomCount` counts rooms, not segments. The client rejects (`invalid-response`) an answer
+  whose moved block is not where the request put it, that is not checked in or not linked back, that carries
+  a block of another reservation or one that runs past the effective date, whose vacated room or date differs,
+  or whose folio numbers are not integers. A second change moves the whole current segment when it is made at its
+  start, and the earlier segments are re-linked to the new room.
+- **Rates (D-015, D-079):** money is integer cents excluding taxes and service charges. Nights before today are
+  never repriced; tonight is repriced. `rateChoice` `retain` keeps the nights' current prices, `update` or
+  `null` uses the new room's rates. When the setting asks (`askRateOnRoomChange`) and the rates differ, `null` is
+  refused (400, `details.rateChoice`). `folio.deltaCents` is the change of this reservation room's room charges
+  (negative: cheaper); the weighted average rate is untouched.
+- **Housekeeping:** the vacated room becomes `dirty` from the effective date (PLACEHOLDER until ticket 6.4);
+  `ScheduleRoom.housekeeping` carries it when tracked.
+- **Concurrency and idempotency:** exactly like the schedule moves: `version` and `fromRoomId` guard against a
+  stale view (409 `stale`, nothing applied), `requestId` is also the `Idempotency-Key`; the same id with the
+  same body replays the first answer, another body is 409 `idempotency-conflict`. Check order: validate, 404,
+  409 `stale`, 409 `not-movable`, 400 effective date, 409 `conflict`, 400 missing rate choice. The client treats
+  status 0, 408, 5xx and an unusable 2xx as an unknown outcome (reload, neutral message, no revert).
+- **Related fields:** `ReservationDetail.rooms[]` lists the current room only, with optional
+  `previousStays[] {roomId, roomNumber, arrival, departure}`; `stay.lines[]` has one line per night over all
+  segments with optional `reservationRoomId`. The reservation `version` is **not** changed by a room change
+  (the mock's choice; a real backend may bump it, the client reloads the detail afterwards either way).
+- The client loads the inventory for the remaining nights with `schedule.get` (several 30-day windows for a
+  long stay), because the schedule page's own window may not cover them.
 
 ## Error codes
 

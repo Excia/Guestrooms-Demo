@@ -114,9 +114,9 @@ Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Result
 
 ## 2.3 Change room during stay (menu and dialog)
 
-Ticket Excia/Guestrooms-Demo#20. Figma: Change Room During Stay 1326:19431; room menu 2623:14538;
-Room Number 818:7756; reservation menu 2623:11689; hub menu 2623:11665. "ARCHIVE Change Room During
-Stay/On" is superseded.
+Ticket Excia/Guestrooms-Demo#20; PR not opened yet (branch `feat/20-change-room-during-stay`). Figma: Change
+Room During Stay 1326:19431; room menu 2623:14538; Room Number 818:7756; reservation menu 2623:11689; hub
+menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
 
 - **Requirements:** from a checked-in reservation the user opens Change Room During Stay and selects
   a new room from a menu; Change Room available only when checked in; the menu lists eligible rooms
@@ -124,9 +124,63 @@ Stay/On" is superseded.
   states old and new room and effective dates (Cancel changes nothing); the reservation stays checked
   in on the new room; folio and room charges follow the rate rules (D-015: setting-driven retain-rate
   dialog; nights already stayed keep their price); schedule and hub refresh.
-- **Implemented:** nothing (the grid's drag already allows a checked-in room to change room, D-050).
-- **Open questions:** Q-20-1, Q-20-2.
-- **Status:** not started.
+- **Implemented (branch, in review once the PR is open):**
+  - **Entry point (D-076):** a "Change Room" text button under the room card (single room) or the room
+    selector (multi-room) in the reservation details panel (`ReservationDetails.tsx`). It is shown for
+    every room but is `aria-disabled` with the reason as its description (and a tooltip) unless the room is
+    checked in, the user holds `reservation.edit`, a room is assigned, at least one night is left (the stay
+    does not end today) and no room change is being saved. Clicking it while unavailable shows the reason in
+    the panel's notice. The other stubs ("Edit Room", the pencil, Undo Check In) are unchanged.
+  - **Room menu:** `ChangeRoomDialog` step 1, a searchable listbox (MUI Autocomplete) grouped
+    "location | room type" like the New Reservation Room field. Every room is listed; rooms that cannot take
+    the remaining nights are disabled (`aria-disabled`, reason as text and `aria-describedby`): "Same room",
+    "Closed 10/17-10/20", "Booked 10/16-10/19", "Checked-out stay 10/16-10/19" and "Locked to its room type".
+    Nights are half-open, so a stay that arrives on the departure day is a same-day turnover and does not
+    block. The rooms, bookings and closures come from the API for the remaining nights (several 30-day
+    `schedule.get` windows when the stay is long), not from the schedule page's own window.
+  - **Confirmation:** step 2 states "Move from Room 201 to Room 205 effective 10/16/2026 through
+    10/18/2026." (D-078), that the reservation stays checked in and that the nights already stayed keep their
+    room and price. Back, Cancel, Escape and the backdrop change nothing; the primary action "Move to New
+    Room" has focus and works once.
+  - **Rate question (D-015, D-079, D-081):** when the setting `askRateOnRoomChange` is on and the new room's
+    nightly rate differs for a remaining night, radios ask "Retain the current rate ($249.00 per night)" or
+    "Update to the new room's rate ($199.00 per night, -$100.00 for 2 nights)" (default Retain). Same rates,
+    or the setting off: no question and the new rates apply to the nights not yet stayed.
+  - **Rate rules (pure, `src/lib/roomChangeRates.ts`, shared with the mock):** nights before today are
+    stayed and never repriced; tonight is the current night and is repriced; integer cents, excluding taxes
+    and service charges; the weighted average rate is not touched.
+  - **Segments (D-077):** the stay becomes several blocks with the same reservation id and confirmation
+    number: a `previous` block (checked out, not movable) holds the nights already stayed in the old room and
+    the `current` block, which keeps the reservation-room id, holds the rest in the new room. The grid
+    shows "GR-50240 → 205" and "GR-50240 ← 201" and the labels read "moved to Room 205" / "moved from Room
+    201". Early Check In stays on the first segment and Late Check Out on the current one.
+  - **Optimistic update and refresh:** the grid shows the change at once (`applyRoomChange`), then confirms or
+    rolls back like a drag (409/404/400 revert; no response, 408, 5xx or an unusable 2xx reload with a neutral
+    message). After success the schedule is refetched, the open details reload in place and a toast says
+    "Moved to Room 205". The hub does not exist yet (D-076), so only the schedule and the panel refresh.
+  - Code: `src/app/changeRoom.ts` (availability, eligibility, windows, copy, request, optimistic update,
+    failures), `src/lib/roomChangeRates.ts`, `src/components/reservation/ChangeRoomDialog.tsx`,
+    `useChangeRoomData.ts`, API `reservations.changeRoomDuringStay` and `settings.getRoomChangeRule`
+    (`src/api/*`), optional `ScheduleBlock.roomChange`, `ScheduleRoom.housekeeping`,
+    `ReservationRoomDetail.previousStays` and `ReservationStayLine.reservationRoomId`.
+- **Deviations from Figma:** the Figma frame is the "Change Room During Stay" switch inside the room editor
+  with one room Select per remaining night and locked "Night n | Room" lines (shield icon) for stayed nights;
+  there is no frame for a menu item, the confirmation dialog or the rate question. The build keeps the
+  locked night lines and the room menu look (room type groups, `[Room #]` items) but asks for **one** room
+  for all remaining nights and confirms in a second step (the ticket's confirmation). Per-night rooms are
+  Q-20-3. The rate question copy is the agent's (Q-20-4). See [figma-deviations.md](../figma-deviations.md).
+- **Assumptions and defaults chosen:** D-076 to D-081; setting off applies the new rates silently (Q-20-2);
+  the vacated room is marked `dirty` (Q-20-1); dragging a checked-in block to another room still moves the
+  whole stay (D-050) and was not changed (Q-20-5).
+- **Stubs and placeholders:** the setting `askRateOnRoomChange` (default on) and `ScheduleRoom.housekeeping`
+  are placeholders; the housekeeping state is not shown anywhere yet (Housekeeping report 6.4, "H" blocks);
+  nightly rates are the placeholder room type rates ([placeholders.md](../placeholders.md)).
+- **API:** `POST /reservation-rooms/{id}/change-room`, `GET /settings/room-change-rule`
+  ([api-contract.md](../api-contract.md)).
+- **Permissions:** `reservation.edit` (no new permission). Not exercised in the browser: no mock user lacks it,
+  so the read-only state is covered by tests only.
+- **Open questions:** Q-20-1, Q-20-2 (built defaults), Q-20-3 to Q-20-5 (new).
+- **Status:** in review (branch complete; PR link to be added when it is opened), 2026-10-20.
 
 ## 2.4 Schedule blocks and linked room blocks
 

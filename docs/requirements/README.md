@@ -6,7 +6,7 @@ this folder is the one place that captures every system requirement, decision, A
 question.
 
 **Snapshot:** 2026-10-20, `main` at release 1.3.0 (commit 769d488). One PR is open and counted as
-"in review": Excia/Guestrooms-Demo#119 (ticket 2.2). Tickets are GitHub issues in
+"in review": Excia/Guestrooms-Demo#119 (ticket 2.2) and the branch for ticket 2.3 (PR not opened yet). Tickets are GitHub issues in
 Excia/Guestrooms-Demo; each ticket body is the spec, and its acceptance criteria are the
 definition of done. Figma file: CE Guest Rooms (key `WksR3zAy2S8cDsjrVvRklE`).
 
@@ -76,8 +76,8 @@ ticked "n/a", the PR description must say why.
 | Status        | Tickets |
 | ------------- | ------- |
 | done          | 15      |
-| in review     | 1       |
-| not started   | 72      |
+| in review     | 2       |
+| not started   | 71      |
 | total tickets | 88      |
 
 ### Epic Foundation
@@ -112,13 +112,13 @@ Issue Excia/Guestrooms-Demo#12. Epic status: **done**. Details: [features/01-das
 
 Issue Excia/Guestrooms-Demo#17. Epic status: **in progress**. Details: [features/02-schedule.md](features/02-schedule.md).
 
-| Ticket                   | Title                                           | Status      | PR                        |
-| ------------------------ | ----------------------------------------------- | ----------- | ------------------------- |
-| Excia/Guestrooms-Demo#18 | [2.1] Schedule grid (rooms by dates)            | done        | Excia/Guestrooms-Demo#118 |
-| Excia/Guestrooms-Demo#19 | [2.2] Reservation details panel with split CTA  | in review   | Excia/Guestrooms-Demo#119 |
-| Excia/Guestrooms-Demo#20 | [2.3] Change room during stay (menu and dialog) | not started |                           |
-| Excia/Guestrooms-Demo#21 | [2.4] Schedule blocks and linked room blocks    | not started |                           |
-| Excia/Guestrooms-Demo#22 | [2.5] Reservation menus and multi-room selector | not started |                           |
+| Ticket                   | Title                                           | Status      | PR                                                    |
+| ------------------------ | ----------------------------------------------- | ----------- | ----------------------------------------------------- |
+| Excia/Guestrooms-Demo#18 | [2.1] Schedule grid (rooms by dates)            | done        | Excia/Guestrooms-Demo#118                             |
+| Excia/Guestrooms-Demo#19 | [2.2] Reservation details panel with split CTA  | in review   | Excia/Guestrooms-Demo#119                             |
+| Excia/Guestrooms-Demo#20 | [2.3] Change room during stay (menu and dialog) | in review   | branch `feat/20-change-room-during-stay` (PR to open) |
+| Excia/Guestrooms-Demo#21 | [2.4] Schedule blocks and linked room blocks    | not started |                                                       |
+| Excia/Guestrooms-Demo#22 | [2.5] Reservation menus and multi-room selector | not started |                                                       |
 
 ### Epic Reservations
 

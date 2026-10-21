@@ -413,6 +413,10 @@ describe('Cancel leaves everything unchanged', () => {
         screen.queryByRole('dialog', { name: 'Change Room During Stay' }),
       ).not.toBeInTheDocument(),
     );
+    // Focus goes back to the button that opened it.
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: 'Change Room' })).toHaveFocus(),
+    );
     // Escape on the confirmation step also cancels everything.
     await user.click(within(dialog).getByRole('button', { name: 'Change Room' }));
     const third = await screen.findByRole('dialog', { name: 'Change Room During Stay' });

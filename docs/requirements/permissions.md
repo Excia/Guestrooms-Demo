@@ -54,6 +54,10 @@ page and two columns otherwise; "Return to Site" shows in the menu only in the o
 in the details panel (Early/Late saves) and create one; without it the panel is read-only and shows the
 reason. It is fail-closed and the mock staff users hold it.
 
+**Used by ticket 2.3:** the "Change Room" action needs `reservation.edit` as well (shown disabled with the reason
+"You do not have permission to change this reservation."). No mock user lacks it, so that state is covered by
+tests only.
+
 ## Mock users (`src/api/mockUsers.ts`)
 
 | User id     | Label                       | Role string           | Grant                                                                                                                                                                                                                                               | Who gets it                                       |
