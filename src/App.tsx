@@ -2,13 +2,21 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { DASHBOARD_PATH, NEW_RESERVATION_RESULTS_PATH, routes, SCHEDULE_PATH } from './app/routes';
+import {
+  DASHBOARD_PATH,
+  NEW_RESERVATION_RESULTS_PATH,
+  RESERVATION_HUB_PATH,
+  RESERVATIONS_PATH,
+  routes,
+  SCHEDULE_PATH,
+} from './app/routes';
 import AppShell from './AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
 import NewReservationResults from './pages/NewReservationResults';
+import ReservationList from './pages/ReservationList';
 import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
@@ -38,6 +46,7 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
+  [RESERVATIONS_PATH]: <ReservationList />,
   [SCHEDULE_PATH]: (
     <Suspense fallback={<ScheduleSkeleton />}>
       <Schedule />
@@ -69,6 +78,17 @@ export default function App() {
             />
           );
         })}
+        {/* The Reservation Hub (ticket 3.3) is not a menu link; until it exists the row click lands on a placeholder. */}
+        <Route
+          path={RESERVATION_HUB_PATH}
+          element={
+            <RequireAccess pageId="reservations">
+              <ErrorBoundary>
+                <PagePlaceholder title="Reservation Hub" />
+              </ErrorBoundary>
+            </RequireAccess>
+          }
+        />
         {/* Deliberately not in the route table or the menu. */}
         {ComponentsDemo ? (
           <Route
