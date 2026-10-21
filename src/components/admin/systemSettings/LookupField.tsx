@@ -25,7 +25,15 @@ export default function LookupField({ label, value, options, onChange, id }: Loo
       forcePopupIcon
       slotProps={{ popupIndicator: { sx: { transform: 'none' }, 'aria-label': `Search ${label}` } }}
       renderInput={(params) => (
-        <TextField {...params} label={label} slotProps={{ inputLabel: { shrink: true } }} />
+        <TextField
+          {...params}
+          label={label}
+          // Keep the slots Autocomplete wires up (the input ref, ARIA attributes), only add `shrink`.
+          slotProps={{
+            ...params.slotProps,
+            inputLabel: { ...params.slotProps?.inputLabel, shrink: true },
+          }}
+        />
       )}
     />
   );

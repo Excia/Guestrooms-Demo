@@ -102,6 +102,31 @@ Picker 11964:13394, Image Placeholder 11964:13054, Section Header 11895:18681.
   validation; a reusable Quantity Picker (min 0); photo upload with preview, remove and a max count;
   deleting a room or type in use blocked or warned.
 - **Open questions:** Q-72-1 to Q-72-3. The Quantity Picker divider decision is D-029.
+- **Implemented (Excia/Guestrooms-Demo#72, in review):** `src/pages/RoomTypes.tsx` at `/admin/room-types` and
+  `src/pages/Rooms.tsx` at `/admin/rooms`, both inside the Admin Setup shell (`AdminShell` gained an optional
+  `sidebar` for the item list, D-088). Left list (`SetupList`) with NEW ROOM TYPE / NEW ROOM, the selected item
+  filled, inactive items last with "(Inactive)" (PDF 9.4.2.4); a new item shows the default title and a Cancel
+  button; duplicate makes a new unsaved item named "Copy of ..."; delete asks Delete or Cancel (D-087). Form
+  parts: Active Start/End Date with "Configure active end date?" (end must be after start), SKU lookup, switches,
+  the shared `QuantityPicker` (`src/components/shared`, min 0 by default; occupancy 1 to 99, bedrooms 0 to 10,
+  full bath 1 to 99, half bath and bed types 0 to 99), description with a counter (750), photos (ADD PHOTOS,
+  remove, 50 max, at least one for a room type; D-089), Associations tabs with Select All / Select None and a
+  count in each tab label. Rooms: Room Owner (only while the System Settings owner switch is on, always enabled,
+  not inherited), Room Type lookup (changing it re-reads inherited details), Inherit Details (disables and fills
+  occupancy, beds, description, photos, features, add-ons), Inherit Rates (the rates table waits for 7.2), Display
+  in Online Booking, Linked Rooms tab (two-way, D-090). Saving a room type updates rooms that inherit from it (in
+  the mock). Unsaved changes ask before picking another item, creating one or following a link
+  (`useSetupEditor`, `useLeaveGuard`). Pure rules and tests: `src/app/roomSetup.ts`. API: `roomSetup` (see
+  [api-contract.md](../api-contract.md)). `LookupField` (7.1) now keeps the input slots MUI wires up (it had
+  dropped the input ref and its combobox role).
+- **From the functional requirements PDF (sections 9 and 10; Figma wins on layout and labels):** name 50
+  characters, description 750, photos 50 with one required, defaults 2 / 0 / 1 / 0 and bed types 0, active dates,
+  inactive items to the bottom, linked rooms two-way, inherit rules 10.4.3 to 10.4.7.
+- **Not built:** rates tables (7.2), room order editing, photo reorder and per-photo description, location
+  association (Figma shows only "SKU", see [figma-deviations.md](../figma-deviations.md)), deactivation checks,
+  visibility of the online booking toggles by Booking Rules (7.5), the schedule hiding inactive types and showing
+  linked rooms as unavailable (ticket 1.x reads its own data today).
+- **Status:** in review, 2026-10-21.
 
 ## 7.4 Add-On Items
 

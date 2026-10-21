@@ -84,3 +84,9 @@ data is added or a placeholder is replaced (see the PR checklist).
 ## Reporting landing (ticket 6.1)
 
 - Sample custom reports ("Weekend Occupancy by Room Type", "Member vs. Guest Revenue", and three more with invented creators and dates): `src/api/reportsData.ts`. Figma only shows "[Custom Report Name]". Replaced by `GET /reports/custom` from the backend; owner: Custom report builder 6.3 (Excia/Guestrooms-Demo#59).
+
+## Room Types and Rooms (ticket 7.3)
+
+- Sample room types, rooms, features, add-ons, bed sizes (King, Queen, Double, Twin), SKU lookups ("Location A" to "C") and owner members: `src/api/roomSetupData.ts`. Features and bed sizes will come from Room Options, add-ons from 7.4, SKUs and members from their own sources.
+- Photo upload limits (JPEG, PNG, WebP, 5 MB) and local-only previews (Q-72-1); thumbnails without a preview show the striped placeholder (Figma 11964:13054).
+- Room rates table (Inherit Rates off) is not built: it needs the Rate Categories (7.2). The switch exists and shows a note.

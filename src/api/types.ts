@@ -657,6 +657,89 @@ export interface SystemSettingsApi {
   getOptions(options?: RequestOptions): Promise<SystemSettingsOptions>;
 }
 
+// ---- room setup (Admin Setup: Room Types and Rooms, ticket 7.3) --------------------------------
+
+/** A photo of a room type or room. `url` is a placeholder until the storage service is chosen (Q-72-1). */
+export interface RoomPhoto {
+  id: string;
+  name: string;
+  url: string;
+}
+
+/** The details a room can inherit from its room type. */
+export interface RoomDetails {
+  maxOccupancy: number;
+  bedrooms: number;
+  fullBaths: number;
+  halfBaths: number;
+  /** Quantity per bed size id (bed sizes come from Room Options). */
+  bedTypes: Record<string, number>;
+  description: string;
+  photos: RoomPhoto[];
+  featureIds: string[];
+  addOnIds: string[];
+}
+
+export interface RoomTypeSetup {
+  id: string;
+  name: string;
+  /** yyyy-mm-dd. */
+  startDate: string;
+  /** null: no end date configured. */
+  endDate: string | null;
+  sku: LookupRef | null;
+  onlineBooking: boolean;
+  details: RoomDetails;
+}
+
+export interface RoomSetup {
+  id: string;
+  name: string;
+  /** Only used while the Owner system setting is on; never inherited from the room type. */
+  owner: LookupRef | null;
+  startDate: string;
+  endDate: string | null;
+  roomTypeId: string;
+  inheritDetails: boolean;
+  inheritRates: boolean;
+  onlineBooking: boolean;
+  /** Replaced by the room type's details by the backend while `inheritDetails` is on. */
+  details: RoomDetails;
+  /** Two-way: the backend keeps the other side in step. */
+  linkedRoomIds: string[];
+  /** Read only; a room with upcoming reservations is deleted only after a warning. */
+  upcomingReservations: number;
+}
+
+/** A form's value: `id` is missing until the first save. */
+export type RoomTypeInput = Omit<RoomTypeSetup, 'id'> & { id?: string };
+export type RoomInput = Omit<RoomSetup, 'id' | 'upcomingReservations'> & {
+  id?: string;
+  upcomingReservations?: number;
+};
+
+export interface RoomSetupOptions {
+  skus: LookupRef[];
+  features: LookupRef[];
+  addOns: LookupRef[];
+  bedSizes: LookupRef[];
+  members: LookupRef[];
+}
+
+/**
+ * Errors: 422 `validation` (the rules in `src/app/roomSetup.ts`), 404 `not-found`, 409 `in-use`
+ * (deleting a room type that rooms still use).
+ */
+export interface RoomSetupApi {
+  getOptions(options?: RequestOptions): Promise<RoomSetupOptions>;
+  listRoomTypes(options?: RequestOptions): Promise<RoomTypeSetup[]>;
+  saveRoomType(input: RoomTypeInput, options?: RequestOptions): Promise<RoomTypeSetup>;
+  deleteRoomType(id: string, options?: RequestOptions): Promise<void>;
+  listRooms(options?: RequestOptions): Promise<RoomSetup[]>;
+  saveRoom(input: RoomInput, options?: RequestOptions): Promise<RoomSetup>;
+  deleteRoom(id: string, options?: RequestOptions): Promise<void>;
+}
+
 // ---- booking rules (Admin Setup, ticket 7.5) --------------------------------------------------
 
 export type TimeUnit = 'days' | 'weeks' | 'months';
@@ -974,6 +1057,7 @@ export interface ApiClient {
   schedule: ScheduleApi;
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
+  roomSetup: RoomSetupApi;
   bookingRules: BookingRulesApi;
   members: MembersApi;
   folios: FoliosApi;

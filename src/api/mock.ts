@@ -14,6 +14,7 @@ import { permissionsFromGrant } from './grant';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
 import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
+import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
@@ -26,6 +27,13 @@ import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { validateSystemSettings } from '../app/systemSettings';
+import {
+  effectiveDetails,
+  syncLinkedRooms,
+  validateRoom,
+  validateRoomType,
+  withoutRoom,
+} from '../app/roomSetup';
 import type { ApiClient, IsoDate, PermissionGrant, RequestOptions, RoomChangeRule } from './types';
 import { ApiError } from './types';
 import {
@@ -85,6 +93,9 @@ export function createMockClient({
   const members = seedMembers();
   const listCheckedIn = new Set<string>();
   let systemSettings = mockSystemSettings();
+  let roomTypes = mockRoomTypes();
+  let rooms = mockRooms(roomTypes);
+  let nextSetupId = 1;
   let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
@@ -432,6 +443,105 @@ export function createMockClient({
         respond(
           () => mockCustomReports(),
           () => [],
+          o,
+        ),
+    },
+    roomSetup: {
+      getOptions: (o) =>
+        respond(
+          () => structuredClone(MOCK_ROOM_SETUP_OPTIONS),
+          () => structuredClone(MOCK_ROOM_SETUP_OPTIONS),
+          o,
+        ),
+      listRoomTypes: (o) =>
+        respond(
+          () => structuredClone(roomTypes),
+          () => [],
+          o,
+        ),
+      saveRoomType: (input, o) =>
+        respond(
+          () => {
+            if (Object.keys(validateRoomType(input)).length > 0) {
+              throw new ApiError(422, 'Room type is not valid', { code: 'validation' });
+            }
+            const id = input.id ?? `rt-new-${nextSetupId++}`;
+            const saved = { ...structuredClone(input), id };
+            if (input.id && !roomTypes.some((t) => t.id === input.id)) {
+              throw new ApiError(404, 'Room type not found', { code: 'not-found' });
+            }
+            roomTypes = input.id
+              ? roomTypes.map((t) => (t.id === id ? saved : t))
+              : [...roomTypes, saved];
+            // Rooms that inherit details follow their room type.
+            rooms = rooms.map((r) =>
+              r.roomTypeId === id && r.inheritDetails
+                ? { ...r, details: effectiveDetails(r, roomTypes) }
+                : r,
+            );
+            return structuredClone(saved);
+          },
+          () => ({ ...structuredClone(input), id: input.id ?? 'rt-new' }),
+          o,
+        ),
+      deleteRoomType: (id, o) =>
+        respond(
+          () => {
+            if (rooms.some((r) => r.roomTypeId === id)) {
+              throw new ApiError(409, 'Room type is in use', { code: 'in-use' });
+            }
+            if (!roomTypes.some((t) => t.id === id)) {
+              throw new ApiError(404, 'Room type not found', { code: 'not-found' });
+            }
+            roomTypes = roomTypes.filter((t) => t.id !== id);
+          },
+          () => undefined,
+          o,
+        ),
+      listRooms: (o) =>
+        respond(
+          () => structuredClone(rooms),
+          () => [],
+          o,
+        ),
+      saveRoom: (input, o) =>
+        respond(
+          () => {
+            if (Object.keys(validateRoom(input)).length > 0) {
+              throw new ApiError(422, 'Room is not valid', { code: 'validation' });
+            }
+            const existing = input.id ? rooms.find((r) => r.id === input.id) : undefined;
+            if (input.id && !existing) {
+              throw new ApiError(404, 'Room not found', { code: 'not-found' });
+            }
+            const id = input.id ?? `room-new-${nextSetupId++}`;
+            const saved = {
+              ...structuredClone(input),
+              id,
+              upcomingReservations: existing?.upcomingReservations ?? 0,
+              details: effectiveDetails(input, roomTypes),
+            };
+            const linked = saved.linkedRoomIds;
+            rooms = existing ? rooms.map((r) => (r.id === id ? saved : r)) : [...rooms, saved];
+            rooms = syncLinkedRooms(rooms, id, linked);
+            return structuredClone(rooms.find((r) => r.id === id) as typeof saved);
+          },
+          () => ({
+            ...structuredClone(input),
+            id: input.id ?? 'room-new',
+            upcomingReservations: 0,
+          }),
+          o,
+        ),
+      deleteRoom: (id, o) =>
+        respond(
+          () => {
+            if (!rooms.some((r) => r.id === id)) {
+              throw new ApiError(404, 'Room not found', { code: 'not-found' });
+            }
+            rooms = withoutRoom(rooms, id);
+          },
+          () => undefined,
           o,
         ),
     },
