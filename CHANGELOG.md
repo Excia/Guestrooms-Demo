@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.7.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.6.0...guestrooms-v1.7.0) (2026-10-21)
+
+
+### Features
+
+* add booking rules ([#137](https://github.com/Excia/Guestrooms-Demo/issues/137)) ([ed2d7e2](https://github.com/Excia/Guestrooms-Demo/commit/ed2d7e2b8c5848627e4b74c8cb4c77513d43a6e9))
+* add bulk check-in with result dialogs ([#139](https://github.com/Excia/Guestrooms-Demo/issues/139)) ([d4053b2](https://github.com/Excia/Guestrooms-Demo/commit/d4053b2a9eb37273e13b7de4a1a1aeeb3cb171ac))
+* add online booking reservation widget and adjust search ([#136](https://github.com/Excia/Guestrooms-Demo/issues/136)) ([eae0918](https://github.com/Excia/Guestrooms-Demo/commit/eae09188bc4ff14a102f9e98cb47bcdb04880e44))
+* add reservation list with filters, sorting and selection ([#138](https://github.com/Excia/Guestrooms-Demo/issues/138)) ([c9106e5](https://github.com/Excia/Guestrooms-Demo/commit/c9106e59c4c9c836c1ce96c876442b7e82f614f0))
+* add room types and rooms setup ([#140](https://github.com/Excia/Guestrooms-Demo/issues/140)) ([b695a75](https://github.com/Excia/Guestrooms-Demo/commit/b695a75ff19360b260c1a7ca9ba09e6faf270b05))
+
 ## [1.6.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.5.0...guestrooms-v1.6.0) (2026-10-21)
 
 
