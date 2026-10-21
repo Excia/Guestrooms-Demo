@@ -28,12 +28,14 @@ interface Settled {
 export function useReservationList(
   query: ReservationListQuery,
   queryKey: string,
+  /** Changing it fetches the same query again, keeping the last answer on screen meanwhile. */
+  reloadToken = 0,
 ): ReservationListState & { retry: () => void } {
   const api = useApi();
   const [attempt, setAttempt] = useState(0);
   const [settled, setSettled] = useState<Settled | null>(null);
   const [last, setLast] = useState<Page<ReservationListRow> | null>(null);
-  const key = `${queryKey}|${attempt}`;
+  const key = `${queryKey}|${attempt}|${reloadToken}`;
 
   useEffect(() => {
     const controller = new AbortController();

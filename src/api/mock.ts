@@ -15,7 +15,7 @@ import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
-import { buildListRows, listOptions } from './reservationListData';
+import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
 import { createScheduleState, moveDates, moveRoom } from './scheduleData';
@@ -26,6 +26,7 @@ import { validateSystemSettings } from '../app/systemSettings';
 import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
 import { ApiError } from './types';
 import {
+  assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
   assertMemberQuery,
@@ -75,6 +76,7 @@ export function createMockClient({
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
   const members = seedMembers();
+  const listCheckedIn = new Set<string>();
   let systemSettings = mockSystemSettings();
   let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
@@ -207,7 +209,11 @@ export function createMockClient({
         respond(
           () => {
             assertReservationListQuery(query ?? {});
-            return queryReservationList(buildListRows(schedule), query, LIST_PAGE_SIZE);
+            return queryReservationList(
+              buildListRows(schedule, listCheckedIn),
+              query,
+              LIST_PAGE_SIZE,
+            );
           },
           () => {
             assertReservationListQuery(query ?? {});
@@ -219,6 +225,18 @@ export function createMockClient({
         respond(
           () => listOptions(schedule),
           () => ({ locations: [], roomTypes: [] }),
+          o,
+        ),
+      checkInRoom: (request, o) =>
+        respond(
+          () => {
+            assertCheckInRoomRequest(request);
+            return replayable(request, () => checkInRoom(schedule, listCheckedIn, request));
+          },
+          () => {
+            assertCheckInRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
+          },
           o,
         ),
     },

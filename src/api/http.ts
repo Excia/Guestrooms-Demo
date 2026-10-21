@@ -31,9 +31,11 @@ import type {
   SystemSettingsOptions,
 } from './types';
 import { expectedLeadOccupantName } from './createRules';
-import { listParams, parseListOptions, parseListPage } from './httpReservationList';
+import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
+import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError } from './types';
 import {
+  assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
   assertMemberQuery,
@@ -794,6 +796,17 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           return request('/reservation-list', listParams(q), o, parseListPage);
         }),
       getOptions: (o) => request('/reservation-list/options', {}, o, parseListOptions),
+      checkInRoom: (r: CheckInRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCheckInRoomRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/check-in`,
+            {},
+            o,
+            parseCheckIn(r.reservationRoomId),
+            { method: 'POST', body: {}, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
     },
     schedule: {
       get: (q, o) =>
