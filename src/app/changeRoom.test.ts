@@ -1,17 +1,24 @@
 import { createScheduleState } from '../api/scheduleData';
 import { queryScheduleData } from '../api/scheduleQuery';
 import { ApiError } from '../api/types';
-import type { ScheduleBlock } from '../api/types';
+import type { NightRoom } from '../api/types';
 import {
-  applyRoomChange,
+  applyRoomPlan,
   changeRoomAvailability,
   changeRoomFailure,
-  changeRoomSummary,
-  mergeRoomChange,
+  changeToast,
+  confirmBlocker,
+  filterChoices,
+  mergeRoomPlan,
   mergeScheduleWindows,
+  nightChoices,
+  NO_CHANGE_REASON,
+  NO_ROOM_FILTER,
+  planRuns,
+  planSentence,
   rateQuestion,
-  revertRoomChange,
-  roomChoices,
+  revertRoomPlan,
+  runText,
   scheduleWindowsFor,
   shortDate,
   signedMoney,
@@ -120,108 +127,193 @@ describe('scheduleWindowsFor', () => {
   });
 });
 
-describe('roomChoices (eligibility for the remaining nights)', () => {
+const nightsOf = (...pairs: [string, string][]): NightRoom[] =>
+  pairs.map(([date, roomId]) => ({ date: `2026-10-${date}`, roomId }));
+
+describe('nightChoices (eligibility for ONE night)', () => {
   const data = queryScheduleData(createScheduleState(T), { startDate: T, days: 14 });
-  const daniel = data.blocks.find((b) => b.id === 'rr-2')!; // rm-201, 10/15 to 10/18, checked in
-  const choices = (current: Partial<ScheduleBlock> = {}, effectiveDate = T) =>
-    roomChoices({
+  // Victor Almeida: rm-301 Suite, 10/15 to 10/20, checked in.
+  const stay = { id: 'rr-14', roomTypeLocked: false, roomId: 'rm-301' };
+  const choices = (
+    date: string,
+    over: Partial<{ stay: typeof stay; currentRoomId: string }> = {},
+  ) =>
+    nightChoices({
       ...data,
-      current: { ...daniel, ...current },
-      effectiveDate,
+      stay,
+      date,
+      currentRoomId: 'rm-301',
+      ...over,
     });
   const of = (list: ReturnType<typeof choices>, number: string) =>
     list.find((c) => c.option.number === number)!;
 
-  it('the current room is disabled: Same room', () => {
-    expect(of(choices(), '201')).toMatchObject({ disabled: true, reason: 'Same room' });
+  it("the night's current room is always selectable", () => {
+    expect(of(choices('2026-10-16'), '301')).toMatchObject({
+      disabled: false,
+      reason: null,
+      current: true,
+    });
   });
-  it('a free room is enabled', () => {
-    expect(of(choices(), '209')).toMatchObject({ disabled: false, reason: null });
+  it('a room booked on THAT night is disabled with the booking dates; the same room is free on other nights', () => {
+    // rm-302 is booked 10/17 to 10/19 (Olivia Hartman).
+    expect(of(choices('2026-10-17'), '302')).toMatchObject({
+      disabled: true,
+      reason: 'Booked 10/17-10/19',
+    });
+    expect(of(choices('2026-10-18'), '302').disabled).toBe(true);
+    // ... but available on the night before and on the departure night (half-open range).
+    expect(of(choices('2026-10-16'), '302').disabled).toBe(false);
+    expect(of(choices('2026-10-19'), '302').disabled).toBe(false);
   });
-  it('a room booked on a remaining night says Booked with its dates', () => {
-    // rm-202: Thomas Okafor 10/16 to 10/19
-    expect(of(choices(), '202')).toMatchObject({
+  it('a room is listed even when it is not free for the whole stay (27.9.1.2.2)', () => {
+    expect(of(choices('2026-10-16'), '302').disabled).toBe(false);
+  });
+  it('a closed room says Closed with its dates', () => {
+    expect(of(choices('2026-10-17'), '208')).toMatchObject({
+      disabled: true,
+      reason: 'Closed 10/17-10/20',
+    });
+    expect(of(choices('2026-10-16'), '208').disabled).toBe(false);
+  });
+  it('same-day turnover: a stay that ends on the night does not block, one that starts that night does', () => {
+    // rm-202: Priya Raman 10/14 to 10/16, Thomas Okafor 10/16 to 10/19.
+    expect(of(choices('2026-10-16'), '202')).toMatchObject({
       disabled: true,
       reason: 'Booked 10/16-10/19',
     });
+    const data2 = queryScheduleData(createScheduleState(T), { startDate: '2026-10-14', days: 14 });
+    const list = nightChoices({ ...data2, stay, date: '2026-10-16', currentRoomId: 'rm-301' });
+    expect(list.find((c) => c.option.number === '202')!.reason).toBe('Booked 10/16-10/19');
   });
-  it('a closed room says Closed with its dates', () => {
-    expect(of(choices(), '208')).toMatchObject({ disabled: true, reason: 'Closed 10/17-10/20' });
-  });
-  it('half-open nights: a stay that starts on the departure day does not block (same-day turnover)', () => {
-    // rm-204: Annika Lindqvist arrives 10/18, the day Daniel leaves.
-    expect(of(choices(), '204').disabled).toBe(false);
-    // ... but it blocks as soon as the stay is one night longer.
-    expect(of(choices({ endDate: '2026-10-19' }), '204')).toMatchObject({
-      disabled: true,
-      reason: 'Booked 10/18-10/21',
-    });
-  });
-  it('a stay that ends on the effective date does not block either', () => {
-    // rm-202: Priya Raman 10/14 to 10/16 (checked in), then Thomas Okafor from 10/16.
-    const later = choices({ endDate: '2026-10-18' }, '2026-10-17');
-    expect(of(later, '202').reason).toBe('Booked 10/16-10/19');
-    // rm-105 has Peter Vandenberg until 10/19; the next effective date after that is free.
-    const free = choices({ endDate: '2026-10-22' }, '2026-10-19');
-    expect(of(free, '105').reason).toBe('Booked 10/19-10/21');
-  });
-  it('only the remaining nights count: a booking in the nights already stayed is ignored', () => {
-    // rm-C5 had a checked-out stay (Elise Moreau) from 10/13 to 10/16: before the effective date.
-    expect(of(choices(), 'C5').disabled).toBe(false);
-  });
-  it('a checked-out stay that still holds a remaining night says Checked-out stay', () => {
+  it('a checked-out stay that holds the night says Checked-out stay', () => {
     const blocks = data.blocks.map((b) =>
       b.id === 'rr-5' ? { ...b, status: 'checked-out' as const } : b,
     );
-    const list = roomChoices({ ...data, blocks, current: daniel, effectiveDate: T });
+    const list = nightChoices({
+      ...data,
+      blocks,
+      stay,
+      date: '2026-10-17',
+      currentRoomId: 'rm-301',
+    });
     expect(of(list, '202').reason).toBe('Checked-out stay 10/16-10/19');
   });
-  it('a locked reservation can only change within its room type', () => {
-    const list = choices({ roomTypeLocked: true });
-    expect(of(list, '209')).toMatchObject({ disabled: false });
-    expect(of(list, '205')).toMatchObject({ disabled: true, reason: 'Locked to its room type' });
+  it('a locked reservation can only use rooms of its room type', () => {
+    const list = choices('2026-10-17', { stay: { ...stay, roomTypeLocked: true } });
+    expect(of(list, '110').disabled).toBe(false); // another Suite
+    expect(of(list, '107')).toMatchObject({ disabled: true, reason: 'Locked to its room type' });
   });
-  it('the closure wins over a booking, and Same room wins over everything', () => {
-    const list = roomChoices({
+  it("the stay's own parts never block: a room used on another night is free for this one", () => {
+    const own = {
+      ...data.blocks.find((b) => b.id === 'rr-14')!,
+      id: 'rr-14~1',
+      roomId: 'rm-107',
+      roomChange: { part: 'next' as const, index: 2, count: 2, stayId: 'rr-14' },
+      startDate: '2026-10-19',
+      endDate: '2026-10-20',
+    };
+    const list = nightChoices({
       ...data,
-      closures: [
-        ...data.closures,
-        {
-          kind: 'closure',
-          id: 'cl-x',
-          roomId: 'rm-202',
-          startDate: T,
-          endDate: '2026-10-17',
-          reason: 'x',
-          endMarker: false,
-        },
-      ],
-      current: daniel,
-      effectiveDate: T,
+      blocks: [...data.blocks, own],
+      stay,
+      date: '2026-10-19',
+      currentRoomId: 'rm-107',
     });
-    expect(of(list, '202').reason).toBe('Closed 10/16-10/17');
+    expect(of(list, '107')).toMatchObject({ disabled: false, current: true });
+    const other = nightChoices({
+      ...data,
+      blocks: [...data.blocks, own],
+      stay,
+      date: '2026-10-17',
+      currentRoomId: 'rm-301',
+    });
+    expect(other.find((c) => c.option.number === '107')!.disabled).toBe(false);
   });
-  it('lists every room in the grouped order (location | room type, rooms numbered naturally)', () => {
-    const list = choices();
+  it('lists every room in grouped order (location | room type, rooms numbered naturally)', () => {
+    const list = choices('2026-10-16');
     expect(list).toHaveLength(data.rooms.length);
     expect(list[0].option.group).toBe('Main Clubhouse | King Deluxe');
   });
   it('shortDate', () => expect(shortDate('2026-10-05')).toBe('10/05'));
+
+  describe('the optional location and room type filter', () => {
+    const list = () => choices('2026-10-16');
+    it('narrows by location, by room type and by both, and keeps the selected room', () => {
+      const lodge = filterChoices(list(), { locationId: 'north-lodge', roomTypeId: '' }, 'rm-301');
+      expect(
+        lodge.every((c) => c.option.locationId === 'north-lodge' || c.option.id === 'rm-301'),
+      ).toBe(true);
+      expect(lodge.some((c) => c.option.id === 'rm-301')).toBe(true);
+      const suites = filterChoices(list(), { locationId: '', roomTypeId: 'suite' }, 'rm-301');
+      expect(suites.every((c) => c.option.roomTypeId === 'suite')).toBe(true);
+      const both = filterChoices(
+        list(),
+        { locationId: 'north-lodge', roomTypeId: 'suite' },
+        'rm-301',
+      );
+      expect(both.map((c) => c.option.number).sort()).toEqual(['109', '110', '301']);
+    });
+    it('no filter keeps everything', () => {
+      expect(filterChoices(list(), NO_ROOM_FILTER, 'rm-301')).toHaveLength(data.rooms.length);
+    });
+  });
 });
 
-describe('copy and nights', () => {
-  it('states old and new room and the effective dates', () => {
+describe('the plan', () => {
+  const rooms = [
+    { id: 'rm-301', number: '301' },
+    { id: 'rm-107', number: '107' },
+  ];
+  const current = nightsOf(['16', 'rm-301'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-301']);
+
+  it('confirm is blocked with a reason until a night changes', () => {
+    expect(confirmBlocker(current, current)).toBe(NO_CHANGE_REASON);
     expect(
-      changeRoomSummary({
-        fromNumber: '201',
-        toNumber: '204',
-        effectiveDate: '2026-10-20',
-        departure: '2026-10-22',
-      }),
-    ).toEqual({
-      sentence: 'Move from Room 201 to Room 204 effective 10/20/2026 through 10/22/2026',
-      nights: 2,
-    });
+      confirmBlocker(
+        current,
+        nightsOf(['16', 'rm-301'], ['17', 'rm-107'], ['18', 'rm-301'], ['19', 'rm-301']),
+      ),
+    ).toBeNull();
+  });
+  it('a night put back in its room is no change again', () => {
+    expect(confirmBlocker(current, [...current])).not.toBeNull();
+  });
+  it('groups consecutive nights in one room and flags runs with a changed night', () => {
+    const plan = nightsOf(['16', 'rm-301'], ['17', 'rm-107'], ['18', 'rm-107'], ['19', 'rm-301']);
+    const runs = planRuns(plan, current, rooms);
+    expect(runs.map(runText)).toEqual([
+      'Room 301: 10/16/2026 to 10/17/2026 (1 night)',
+      'Room 107: 10/17/2026 to 10/19/2026 (2 nights)',
+      'Room 301: 10/19/2026 to 10/20/2026 (1 night)',
+    ]);
+    expect(runs.map((r) => r.changed)).toEqual([false, true, false]);
+    expect(planSentence('2026-10-16', '2026-10-20')).toBe(
+      'New room plan effective 10/16/2026 through 10/20/2026',
+    );
+  });
+  it('the toast names the room when one room takes the changed nights', () => {
+    expect(
+      changeToast(
+        current,
+        nightsOf(['16', 'rm-301'], ['17', 'rm-107'], ['18', 'rm-107'], ['19', 'rm-301']),
+        rooms,
+      ),
+    ).toBe('Moved to Room 107');
+    expect(
+      changeToast(
+        current,
+        nightsOf(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-301']),
+        rooms,
+      ),
+    ).toBe('Moved to Room 107');
+    expect(
+      changeToast(
+        current,
+        nightsOf(['16', 'rm-107'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-X']),
+        [...rooms, { id: 'rm-X', number: 'X' }],
+      ),
+    ).toBe('Rooms updated for the remaining nights');
   });
   it('signedMoney', () => {
     expect(signedMoney(5000)).toBe('+$50.00');
@@ -252,85 +344,121 @@ describe('copy and nights', () => {
   });
 });
 
-describe('rateQuestion', () => {
+describe('rateQuestion (per night)', () => {
+  const line = (date: string, amountCents: number, id = 'rr-14') => ({
+    roomType: 'Suite',
+    date: `2026-10-${date}`,
+    amountCents,
+    reservationRoomId: id,
+  });
   const detail = {
     stay: {
       folioTotalCents: 0,
       lines: [
-        {
-          roomType: 'King Deluxe',
-          date: '2026-10-15',
-          amountCents: 24900,
-          reservationRoomId: 'rr-2',
-        },
-        {
-          roomType: 'King Deluxe',
-          date: '2026-10-16',
-          amountCents: 24900,
-          reservationRoomId: 'rr-2',
-        },
-        {
-          roomType: 'King Deluxe',
-          date: '2026-10-17',
-          amountCents: 24900,
-          reservationRoomId: 'rr-2',
-        },
-        {
-          roomType: 'Suite',
-          date: '2026-10-16',
-          amountCents: 99900,
-          reservationRoomId: 'rr-other',
-        },
+        line('15', 34900),
+        line('16', 34900),
+        line('17', 34900),
+        line('18', 34900),
+        line('19', 34900),
+        line('16', 99900, 'rr-other'),
       ],
     },
   };
+  const current = nightsOf(['16', 'rm-301'], ['17', 'rm-301'], ['18', 'rm-301'], ['19', 'rm-301']);
+  const rates: Record<string, number | null> = {
+    'rm-301': 34900,
+    'rm-110': 34900,
+    'rm-107': 19900,
+    'rm-X': null,
+  };
   const base = {
     detail,
-    reservationRoomId: 'rr-2',
-    effectiveDate: T,
+    reservationRoomId: 'rr-14',
+    current,
+    newRateCents: (id: string) => rates[id] ?? null,
     today: T,
+    ask: true,
   };
-  it('asks when the setting is on and the rates differ, and prices each answer', () => {
-    const q = rateQuestion({ ...base, newRateCents: 19900, ask: true });
+  const plan = (...rooms: string[]) => current.map((n, i) => ({ ...n, roomId: rooms[i] }));
+
+  it('asks when a changed night has another rate, and prices each answer for the changed nights only', () => {
+    const q = rateQuestion({ ...base, plan: plan('rm-301', 'rm-107', 'rm-107', 'rm-301') });
     expect(q).toMatchObject({
       asked: true,
       ratesDiffer: true,
-      currentRate: '$249.00',
+      changedNights: 2,
+      currentRate: '$349.00',
       newRate: '$199.00',
-      updateDeltaCents: -10000,
+      updateDeltaCents: -30000,
       repricedNights: 2,
     });
   });
-  it('does not ask when the rates are the same', () => {
-    expect(rateQuestion({ ...base, newRateCents: 24900, ask: true })).toMatchObject({
+  it('does not ask when the changed nights have the same rate', () => {
+    expect(
+      rateQuestion({ ...base, plan: plan('rm-301', 'rm-110', 'rm-301', 'rm-301') }),
+    ).toMatchObject({
       asked: false,
       ratesDiffer: false,
       updateDeltaCents: 0,
     });
   });
   it('does not ask when the setting is off, but still prices the update', () => {
-    expect(rateQuestion({ ...base, newRateCents: 19900, ask: false })).toMatchObject({
+    expect(
+      rateQuestion({ ...base, ask: false, plan: plan('rm-107', 'rm-301', 'rm-301', 'rm-301') }),
+    ).toMatchObject({
       asked: false,
       ratesDiffer: true,
-      updateDeltaCents: -10000,
+      updateDeltaCents: -15000,
     });
   });
+  it('mixed new rooms say the rate varies', () => {
+    const q = rateQuestion({ ...base, plan: plan('rm-107', 'rm-110', 'rm-301', 'rm-301') });
+    expect(q.newRate).toBe('varies by night');
+  });
+  it('a nights that keeps its room is never repriced, even if its room type rate differs now', () => {
+    const q = rateQuestion({
+      ...base,
+      newRateCents: (id) => (id === 'rm-301' ? 1 : 19900),
+      plan: plan('rm-301', 'rm-107', 'rm-301', 'rm-301'),
+    });
+    expect(q.repricedNights).toBe(1);
+  });
+  it('an unknown new rate asks (setting on) without amounts', () => {
+    const q = rateQuestion({ ...base, plan: plan('rm-301', 'rm-X', 'rm-301', 'rm-301') });
+    expect(q).toMatchObject({ asked: true, newRate: null, changedNights: 1 });
+    expect(
+      rateQuestion({ ...base, ask: false, plan: plan('rm-301', 'rm-X', 'rm-301', 'rm-301') }).asked,
+    ).toBe(false);
+  });
+  it('a stayed night is never part of the question', () => {
+    const q = rateQuestion({
+      ...base,
+      today: '2026-10-18',
+      plan: plan('rm-107', 'rm-107', 'rm-301', 'rm-301'),
+    });
+    expect(q.changedNights).toBe(0);
+    expect(q.asked).toBe(false);
+  });
   it('only looks at the nights of this reservation room', () => {
-    const q = rateQuestion({ ...base, newRateCents: 99900, ask: true });
-    expect(q.updateDeltaCents).toBe(2 * 75000);
+    const q = rateQuestion({
+      ...base,
+      newRateCents: () => 99900,
+      plan: plan('rm-301', 'rm-107', 'rm-301', 'rm-301'),
+    });
+    expect(q.updateDeltaCents).toBe(65000);
   });
 });
 
 describe('toChangeRoomRequest', () => {
-  const block = { id: 'rr-2', roomId: 'rm-201', version: 'v1' };
-  const base = { block, toRoomId: 'rm-205', effectiveDate: T, requestId: 'req-12345678' };
-  it('carries the guard (room, version) and the effective date', () => {
+  const block = { id: 'rr-14', roomId: 'rm-301', version: 'v1' };
+  const plan = nightsOf(['16', 'rm-301'], ['17', 'rm-107']);
+  const base = { block, plan, requestId: 'req-12345678' };
+  it('carries the guard (room, version) and the whole remaining plan', () => {
     expect(toChangeRoomRequest({ ...base, asked: true, answer: 'retain' })).toEqual({
       requestId: 'req-12345678',
-      reservationRoomId: 'rr-2',
-      fromRoomId: 'rm-201',
-      toRoomId: 'rm-205',
-      effectiveDate: T,
+      reservationRoomId: 'rr-14',
+      fromRoomId: 'rm-301',
+      nights: plan,
       rateChoice: 'retain',
       version: 'v1',
     });
@@ -342,69 +470,111 @@ describe('toChangeRoomRequest', () => {
 
 describe('optimistic update', () => {
   const data = queryScheduleData(createScheduleState(T), { startDate: '2026-10-10', days: 14 });
-  const daniel = data.blocks.find((b) => b.id === 'rr-2')!;
-  const edit = {
-    reservationRoomId: 'rr-2',
-    toRoomId: 'rm-205',
-    effectiveDate: T,
-    pendingId: 'rr-2~pending',
-  };
+  const victor = data.blocks.find((b) => b.id === 'rr-14')!;
+  const plan = (...rooms: string[]) =>
+    ['16', '17', '18', '19'].map((d, i) => ({ date: `2026-10-${d}`, roomId: rooms[i] }));
+  const shape = (blocks: typeof data.blocks) =>
+    blocks
+      .filter((b) => b.reservationId === 'rs-11')
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))
+      .map((b) =>
+        [b.roomChange?.part, b.roomId, b.startDate.slice(8), b.endDate.slice(8), b.status].join(
+          ' ',
+        ),
+      );
 
-  it('moves the block to the new room from the effective date and leaves the stayed nights behind', () => {
-    const next = applyRoomChange(data.blocks, edit);
-    expect(next.find((b) => b.id === 'rr-2')).toMatchObject({
-      roomId: 'rm-205',
-      startDate: T,
-      endDate: '2026-10-18',
-      status: 'checked-in',
-      roomChange: { part: 'current', otherRoomId: 'rm-201' },
+  it('last night only: the stayed night stays behind, the rest is one part, the last night another', () => {
+    const next = applyRoomPlan(data.blocks, {
+      stayId: 'rr-14',
+      plan: plan('rm-301', 'rm-301', 'rm-301', 'rm-107'),
     });
-    expect(next.find((b) => b.id === 'rr-2~pending')).toMatchObject({
-      roomId: 'rm-201',
-      startDate: '2026-10-15',
-      endDate: T,
-      status: 'checked-out',
-      confirmationNumber: 'GR-50240',
-      roomChange: { part: 'previous', otherRoomId: 'rm-205' },
+    expect(shape(next)).toEqual([
+      'previous rm-301 15 16 checked-out',
+      'current rm-301 16 19 checked-in',
+      'next rm-107 19 20 checked-in',
+    ]);
+    expect(next.filter((b) => b.reservationId === 'rs-11').map((b) => b.roomChange!.count)).toEqual(
+      [3, 3, 3],
+    );
+  });
+  it('a middle night makes four parts; ids of new parts are temporary, the current one keeps its id', () => {
+    const next = applyRoomPlan(data.blocks, {
+      stayId: 'rr-14',
+      plan: plan('rm-301', 'rm-107', 'rm-301', 'rm-301'),
     });
-    expect(next).toHaveLength(data.blocks.length + 1);
+    expect(shape(next)).toHaveLength(4);
+    const ids = next.filter((b) => b.reservationId === 'rs-11').map((b) => b.id);
+    expect(ids).toContain('rr-14');
+    expect(ids.filter((id) => id.includes('pending'))).toHaveLength(3);
   });
-  it('arrival today: no stayed nights, so no segment is left behind', () => {
-    const arrivesToday = data.blocks.map((b) => (b.id === 'rr-2' ? { ...b, startDate: T } : b));
-    const next = applyRoomChange(arrivesToday, edit);
-    expect(next).toHaveLength(arrivesToday.length);
-    expect(next.find((b) => b.id === 'rr-2')!.roomId).toBe('rm-205');
+  it('all remaining nights in one other room: two parts', () => {
+    const next = applyRoomPlan(data.blocks, {
+      stayId: 'rr-14',
+      plan: plan('rm-110', 'rm-110', 'rm-110', 'rm-110'),
+    });
+    expect(shape(next)).toEqual([
+      'previous rm-301 15 16 checked-out',
+      'current rm-110 16 20 checked-in',
+    ]);
   });
-  it('does nothing for an unknown block and does not mutate its input', () => {
+  it('arrival today: no stayed night, so no previous part', () => {
+    const arrivesToday = data.blocks.map((b) => (b.id === 'rr-14' ? { ...b, startDate: T } : b));
+    const next = applyRoomPlan(arrivesToday, {
+      stayId: 'rr-14',
+      plan: plan('rm-110', 'rm-110', 'rm-110', 'rm-110'),
+    });
+    expect(shape(next)).toEqual(['current rm-110 16 20 checked-in']);
+  });
+  it('early check in stays on the first part and late check out on the last', () => {
+    const flagged = data.blocks.map((b) =>
+      b.id === 'rr-14' ? { ...b, earlyCheckIn: true, lateCheckOut: true } : b,
+    );
+    const next = applyRoomPlan(flagged, {
+      stayId: 'rr-14',
+      plan: plan('rm-301', 'rm-301', 'rm-107', 'rm-107'),
+    });
+    const parts = next
+      .filter((b) => b.reservationId === 'rs-11')
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+    expect(parts.map((b) => b.earlyCheckIn)).toEqual([true, undefined, undefined]);
+    expect(parts.map((b) => b.lateCheckOut)).toEqual([undefined, undefined, true]);
+  });
+  it('does nothing for an unknown stay and does not mutate its input', () => {
     const before = structuredClone(data.blocks);
-    expect(applyRoomChange(data.blocks, { ...edit, reservationRoomId: 'nope' })).toEqual(before);
-    applyRoomChange(data.blocks, edit);
+    expect(applyRoomPlan(data.blocks, { stayId: 'nope', plan: plan('a', 'b', 'c', 'd') })).toEqual(
+      before,
+    );
+    applyRoomPlan(data.blocks, {
+      stayId: 'rr-14',
+      plan: plan('rm-301', 'rm-107', 'rm-301', 'rm-301'),
+    });
     expect(data.blocks).toEqual(before);
   });
-  it('revert restores the original and drops the temporary segment', () => {
-    const next = applyRoomChange(data.blocks, edit);
-    expect(revertRoomChange(next, daniel, edit.pendingId)).toEqual(data.blocks);
+  it('revert restores the stay as it was', () => {
+    const next = applyRoomPlan(data.blocks, {
+      stayId: 'rr-14',
+      plan: plan('rm-301', 'rm-107', 'rm-301', 'rm-301'),
+    });
+    const back = revertRoomPlan(next, [victor], 'rr-14');
+    expect(back.filter((b) => b.reservationId === 'rs-11')).toEqual([victor]);
+    expect(back).toHaveLength(data.blocks.length);
   });
   it("merging the answer replaces the optimistic blocks with the server's", () => {
-    const optimistic = applyRoomChange(data.blocks, edit);
-    const serverCurrent = { ...optimistic.find((b) => b.id === 'rr-2')!, version: 'v9' };
-    const serverPrev = {
-      ...optimistic.find((b) => b.id === 'rr-2~pending')!,
-      id: 'rr-2~1',
-      version: 'v8',
-    };
-    const merged = mergeRoomChange({ ...data, blocks: optimistic }, edit.pendingId, [
-      serverPrev,
-      serverCurrent,
-    ]);
-    expect(merged.some((b) => b.id === 'rr-2~pending')).toBe(false);
-    expect(merged.find((b) => b.id === 'rr-2')!.version).toBe('v9');
-    expect(merged.find((b) => b.id === 'rr-2~1')).toBeDefined();
-    expect(merged).toHaveLength(data.blocks.length + 1);
+    const optimistic = applyRoomPlan(data.blocks, {
+      stayId: 'rr-14',
+      plan: plan('rm-301', 'rm-301', 'rm-301', 'rm-107'),
+    });
+    const server = optimistic
+      .filter((b) => b.reservationId === 'rs-11')
+      .map((b, i) => ({ ...b, id: b.id.includes('pending') ? `rr-14~${i}` : b.id, version: 'v9' }));
+    const merged = mergeRoomPlan({ ...data, blocks: optimistic }, 'rr-14', server);
+    expect(merged.some((b) => b.id.includes('pending'))).toBe(false);
+    expect(merged.filter((b) => b.reservationId === 'rs-11')).toHaveLength(3);
+    expect(merged.every((b) => b.reservationId !== 'rs-11' || b.version === 'v9')).toBe(true);
   });
   it('merging drops changed blocks outside the loaded window', () => {
-    const narrow = { startDate: '2026-10-30', days: 7 as const, blocks: [] as ScheduleBlock[] };
-    expect(mergeRoomChange(narrow, 'p', [{ ...daniel }])).toEqual([]);
+    const narrow = { startDate: '2026-10-30', days: 7 as const, blocks: [] as typeof data.blocks };
+    expect(mergeRoomPlan(narrow, 'rr-14', [victor])).toEqual([]);
   });
 });
 

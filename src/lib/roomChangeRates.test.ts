@@ -137,6 +137,39 @@ describe('rateOutcome', () => {
     expect(out.deltaCents).toBe(2000);
   });
 
+  it('per night: only nights whose room changed are repriced', () => {
+    const changed = new Set(['2026-10-21']);
+    const out = rateOutcome({
+      ...base,
+      newRateCents: 25000,
+      choice: 'update',
+      changed: (d) => changed.has(d),
+    });
+    expect(out.nights.map((n) => n.amountCents)).toEqual([20000, 20000, 20000, 25000]);
+    expect(out.repricedNights).toBe(1);
+    expect(out.deltaCents).toBe(5000);
+  });
+
+  it('per night: a changed night with the same price needs no question', () => {
+    const out = rateOutcome({
+      ...base,
+      newRateCents: 20000,
+      choice: null,
+      changed: (d) => d === '2026-10-21',
+    });
+    expect(out.ratesDiffer).toBe(false);
+  });
+
+  it('per night: a changed night that is already stayed is never repriced', () => {
+    const out = rateOutcome({
+      ...base,
+      newRateCents: 25000,
+      choice: 'update',
+      changed: () => true,
+    });
+    expect(out.nights.slice(0, 2).map((n) => n.amountCents)).toEqual([20000, 20000]);
+  });
+
   it('does not touch its input', () => {
     const input = nights(20000, 20000);
     rateOutcome({

@@ -486,15 +486,23 @@ function Loaded({
             />
           )}
         </Box>
-        {room.previousStays?.length ? (
+        {room.previousStays?.length || room.upcomingStays?.length ? (
           <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
-            Earlier in this stay:{' '}
-            {room.previousStays
-              .map(
-                (p) =>
-                  `Room ${p.roomNumber ?? ''} (${formatPanelDate(p.arrival)} to ${formatPanelDate(p.departure)})`,
-              )
-              .join(', ')}
+            {[
+              ['Earlier in this stay', room.previousStays],
+              ['Later in this stay', room.upcomingStays],
+            ]
+              .filter(([, parts]) => (parts as unknown[] | undefined)?.length)
+              .map(([label, parts]) => {
+                const list = parts as NonNullable<ReservationRoomDetail['previousStays']>;
+                return `${label}: ${list
+                  .map(
+                    (p) =>
+                      `Room ${p.roomNumber ?? ''} (${formatPanelDate(p.arrival)} to ${formatPanelDate(p.departure)})`,
+                  )
+                  .join(', ')}`;
+              })
+              .join('. ')}
           </Typography>
         ) : null}
         {onChangeRoom ? (

@@ -209,6 +209,8 @@ export function formatDialogDate(iso: IsoDate): string {
 
 const REFUSALS: Record<DropRefusal, string> = {
   closure: 'Closures cannot be moved.',
+  'room-changed-stay':
+    'This stay has several rooms. Use Change Room During Stay in its details to change them.',
   'checked-out': 'Checked-out rooms cannot be moved.',
   past: 'A reservation cannot be moved to a date in the past.',
   'room-type-locked': 'This reservation is locked to its room type.',
@@ -271,12 +273,73 @@ export function moveDialogCopy(
   };
 }
 
+/** Where a part of a stay that changed room sits in its chain, for the label and the grid text. */
+export interface SegmentLink {
+  index: number;
+  count: number;
+  /** Room number of the part before this one, if loaded. */
+  fromRoomNumber?: string;
+  /** Room number of the part after this one, if loaded. */
+  toRoomNumber?: string;
+}
+
+/**
+ * Links the parts of every stay that changed room during the stay: each part knows its place
+ * ("part 2 of 3") and the rooms of its neighbours, found by `stayId` among the loaded blocks.
+ */
+export function segmentLinks(
+  blocks: readonly ScheduleBlock[],
+  rooms: readonly Pick<ScheduleRoom, 'id' | 'number'>[],
+): Map<string, SegmentLink> {
+  const number = new Map(rooms.map((r) => [r.id, r.number]));
+  const byStay = new Map<string, ScheduleBlock[]>();
+  for (const b of blocks) {
+    if (!b.roomChange) continue;
+    const list = byStay.get(b.roomChange.stayId) ?? [];
+    list.push(b);
+    byStay.set(b.roomChange.stayId, list);
+  }
+  const links = new Map<string, SegmentLink>();
+  for (const parts of byStay.values()) {
+    for (const b of parts) {
+      const { index, count } = b.roomChange!;
+      const before = parts.find((p) => p.roomChange!.index === index - 1);
+      const after = parts.find((p) => p.roomChange!.index === index + 1);
+      links.set(b.id, {
+        index,
+        count,
+        fromRoomNumber: before ? number.get(before.roomId) : undefined,
+        toRoomNumber: after ? number.get(after.roomId) : undefined,
+      });
+    }
+  }
+  return links;
+}
+
+/** "part 2 of 3, moved from Room 201, continues in Room 207". */
+export function segmentText(link: SegmentLink): string {
+  return [
+    `part ${link.index} of ${link.count}`,
+    ...(link.fromRoomNumber ? [`moved from Room ${link.fromRoomNumber}`] : []),
+    ...(link.toRoomNumber ? [`continues in Room ${link.toRoomNumber}`] : []),
+  ].join(', ');
+}
+
+/** The short text on the block: "2/3 ← 201 → 207". */
+export function segmentBadge(link: SegmentLink): string {
+  return [
+    `${link.index}/${link.count}`,
+    ...(link.fromRoomNumber ? [`← ${link.fromRoomNumber}`] : []),
+    ...(link.toRoomNumber ? [`→ ${link.toRoomNumber}`] : []),
+  ].join(' ');
+}
+
 /** Name of a block for assistive technology: guest, confirmation number, status, room, dates. */
 export function blockAriaLabel(
   block: ScheduleBlock,
   room: Pick<ScheduleRoom, 'number'> | undefined,
-  /** The room number of the other segment when the room changed during the stay (ticket 2.3). */
-  linkedRoomNumber?: string,
+  /** The place of this part in a stay that changed room (ticket 2.3). */
+  link?: SegmentLink,
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
   return [
@@ -287,18 +350,8 @@ export function blockAriaLabel(
     `${formatDialogDate(block.startDate)} to ${formatDialogDate(block.endDate)}`,
     ...(block.earlyCheckIn ? ['early check in'] : []),
     ...(block.lateCheckOut ? ['late check out'] : []),
-    ...(linkedRoomNumber ? [roomChangeText(block, linkedRoomNumber)] : []),
+    ...(link ? [segmentText(link)] : []),
   ].join(', ');
-}
-
-/**
- * How a segment of a stay that changed room points at the other one: "moved to Room 204" on the
- * nights already stayed, "moved from Room 201" on the rest of the stay.
- */
-export function roomChangeText(block: Pick<ScheduleBlock, 'roomChange'>, linkedRoomNumber: string) {
-  return block.roomChange?.part === 'previous'
-    ? `moved to Room ${linkedRoomNumber}`
-    : `moved from Room ${linkedRoomNumber}`;
 }
 
 export function closureAriaLabel(

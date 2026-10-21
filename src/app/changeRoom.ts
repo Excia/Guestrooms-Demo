@@ -6,6 +6,7 @@ import type {
   ApiClient,
   ChangeRoomRequest,
   Cents,
+  NightRoom,
   RateChoice,
   ReservationDetail,
   ReservationRoomDetail,
@@ -26,6 +27,7 @@ import {
   remainingNights,
   type NightRate,
 } from '../lib/roomChangeRates';
+import { changedNights, isChange, normalizeRuns, stayOf } from '../lib/stayPlan';
 import { buildRoomOptions, type RoomOption } from './roomOptions';
 import { formatMoney } from './quickStats';
 import { formatDialogDate, safeDetail } from './scheduleGrid';
@@ -110,13 +112,15 @@ export function mergeScheduleWindows(parts: readonly ScheduleData[]): ScheduleDa
   };
 }
 
-// ---- the room menu -----------------------------------------------------------------------------
+// ---- the room menu of one night ----------------------------------------------------------------
 
 export interface RoomChoice {
   option: RoomOption;
   disabled: boolean;
-  /** Why the room cannot be chosen, else null. */
+  /** Why the room cannot be chosen for this night, else null. */
   reason: string | null;
+  /** The room this night is in now: always selectable. */
+  current: boolean;
 }
 
 /** "10/22" for the reasons ("Booked 10/22-10/24"). */
@@ -124,61 +128,152 @@ export const shortDate = (iso: IsoDate): string => `${iso.slice(5, 7)}/${iso.sli
 const span = (start: IsoDate, end: IsoDate) => `${shortDate(start)}-${shortDate(end)}`;
 
 /**
- * Every room with whether it can take the stay for the remaining nights [effectiveDate, departure).
- * Nights are half-open, so a stay that ends on the day the new one starts is a same-day turnover and
- * does not block. The reasons, first match wins: Same room; Closed; Checked-out stay (a checked-out
- * stay still holds those nights); Booked; Locked to its room type (the reservation cannot leave its
- * room type). `blocks` and `closures` must cover the remaining nights (see `scheduleWindowsFor`);
- * the current block itself never blocks.
+ * Every room with whether it can be the room of ONE night (requirements 27.9.1.2.2: the rooms
+ * available on that single night, even when not free for the whole stay). The night is the half-open
+ * range [date, date + 1), so a stay that ends on `date` or starts the day after does not block (same-day
+ * turnover). The reasons, first match wins: Closed; Checked-out stay; Booked; Locked to its room type.
+ * The room the night is in now is always selectable. The stay's own blocks (all its parts) never
+ * block, so a room used on another night of the same stay is free for this one. `blocks` and
+ * `closures` must cover the night (see `scheduleWindowsFor`).
  */
-export function roomChoices(input: {
+export function nightChoices(input: {
   rooms: readonly ScheduleRoom[];
   locations: readonly ScheduleLocation[];
   roomTypes: readonly ScheduleRoomType[];
   blocks: readonly ScheduleBlock[];
   closures: readonly ScheduleClosure[];
-  current: Pick<ScheduleBlock, 'id' | 'roomId' | 'endDate' | 'roomTypeLocked'>;
-  effectiveDate: IsoDate;
+  /** The reservation room being changed: its parts never block, and a locked type stays. */
+  stay: { id: string; roomTypeLocked: boolean; roomId: string };
+  date: IsoDate;
+  /** The room this night is in now. */
+  currentRoomId: string;
 }): RoomChoice[] {
-  const { current, effectiveDate } = input;
-  const end = current.endDate;
-  const currentRoom = input.rooms.find((r) => r.id === current.roomId);
+  const { date, stay } = input;
+  const next = addDays(date, 1);
+  const stayRoom = input.rooms.find((r) => r.id === stay.roomId);
+  const roomType = new Map(input.rooms.map((r) => [r.id, r.roomTypeId]));
   const earliest = <T extends { startDate: IsoDate }>(items: T[]) =>
     [...items].sort((a, b) => a.startDate.localeCompare(b.startDate))[0];
-  const overlapping = <T extends { roomId: string; startDate: IsoDate; endDate: IsoDate }>(
+  const hit = <T extends { roomId: string; startDate: IsoDate; endDate: IsoDate }>(
     items: readonly T[],
     roomId: string,
   ) =>
     earliest(
-      items.filter(
-        (i) => i.roomId === roomId && nightsOverlap(i.startDate, i.endDate, effectiveDate, end),
-      ),
+      items.filter((i) => i.roomId === roomId && nightsOverlap(i.startDate, i.endDate, date, next)),
     );
-  const rooms = new Map(input.rooms.map((r) => [r.id, r]));
+  const foreign = input.blocks.filter((b) => stayOf(b) !== stay.id);
   return buildRoomOptions(input.rooms, input.locations, input.roomTypes).map((option) => {
-    const closure = overlapping(input.closures, option.id);
-    const booked = overlapping(
-      input.blocks.filter((b) => b.id !== current.id),
-      option.id,
-    );
+    const current = option.id === input.currentRoomId;
     let reason: string | null = null;
-    if (option.id === current.roomId) reason = 'Same room';
-    else if (closure) reason = `Closed ${span(closure.startDate, closure.endDate)}`;
-    else if (booked?.status === 'checked-out') {
-      reason = `Checked-out stay ${span(booked.startDate, booked.endDate)}`;
-    } else if (booked) reason = `Booked ${span(booked.startDate, booked.endDate)}`;
-    else if (
-      current.roomTypeLocked &&
-      currentRoom &&
-      rooms.get(option.id)?.roomTypeId !== currentRoom.roomTypeId
-    ) {
-      reason = 'Locked to its room type';
+    if (!current) {
+      const closure = hit(input.closures, option.id);
+      const booked = hit(foreign, option.id);
+      if (closure) reason = `Closed ${span(closure.startDate, closure.endDate)}`;
+      else if (booked?.status === 'checked-out') {
+        reason = `Checked-out stay ${span(booked.startDate, booked.endDate)}`;
+      } else if (booked) reason = `Booked ${span(booked.startDate, booked.endDate)}`;
+      else if (stay.roomTypeLocked && stayRoom && roomType.get(option.id) !== stayRoom.roomTypeId) {
+        reason = 'Locked to its room type';
+      }
     }
-    return { option, disabled: reason !== null, reason };
+    return { option, disabled: reason !== null, reason, current };
   });
 }
 
-// ---- nights, rates and copy --------------------------------------------------------------------
+export interface RoomFilter {
+  /** '' means every location. */
+  locationId: string;
+  /** '' means every room type. */
+  roomTypeId: string;
+}
+
+export const NO_ROOM_FILTER: RoomFilter = { locationId: '', roomTypeId: '' };
+
+/**
+ * The optional location and room type filter of the night menus (27.9.1.2.3): rooms outside it are
+ * left out, except the room the night is set to (a menu always shows its own value).
+ */
+export function filterChoices(
+  choices: readonly RoomChoice[],
+  filter: RoomFilter,
+  selectedRoomId: string,
+): RoomChoice[] {
+  return choices.filter(
+    (c) =>
+      c.option.id === selectedRoomId ||
+      ((filter.locationId === '' || c.option.locationId === filter.locationId) &&
+        (filter.roomTypeId === '' || c.option.roomTypeId === filter.roomTypeId)),
+  );
+}
+
+// ---- the plan ------------------------------------------------------------------------------------
+
+export const NO_CHANGE_REASON = 'Choose a different room for at least one night.';
+
+/** Why the plan cannot be confirmed, else null: nothing changed (the nights are the current ones). */
+export function confirmBlocker(
+  current: readonly NightRoom[],
+  plan: readonly NightRoom[],
+): string | null {
+  return isChange(current, plan) ? null : NO_CHANGE_REASON;
+}
+
+export interface PlanRun {
+  roomId: string;
+  roomNumber: string;
+  startDate: IsoDate;
+  /** Exclusive. */
+  endDate: IsoDate;
+  nights: number;
+  /** Some night of this run is in another room than before. */
+  changed: boolean;
+}
+
+/** The plan as runs of consecutive nights in one room ("Room 201 10/16-10/18, Room 205 10/18-10/20"). */
+export function planRuns(
+  plan: readonly NightRoom[],
+  current: readonly NightRoom[],
+  rooms: readonly Pick<ScheduleRoom, 'id' | 'number'>[],
+): PlanRun[] {
+  const changed = new Set(changedNights(current, plan));
+  const number = new Map(rooms.map((r) => [r.id, r.number]));
+  return normalizeRuns(plan).map((run) => {
+    const nights = daysBetween(run.startDate, run.endDate);
+    return {
+      roomId: run.roomId,
+      roomNumber: number.get(run.roomId) ?? '',
+      startDate: run.startDate,
+      endDate: run.endDate,
+      nights,
+      changed: Array.from({ length: nights }, (_, i) => addDays(run.startDate, i)).some((d) =>
+        changed.has(d),
+      ),
+    };
+  });
+}
+
+/** "Room 205: 10/18/2026 to 10/20/2026 (2 nights)". */
+export const runText = (run: PlanRun): string =>
+  `Room ${run.roomNumber}: ${formatDialogDate(run.startDate)} to ${formatDialogDate(run.endDate)} (${plural(run.nights, 'night')})`;
+
+/** The confirmation's lead sentence: the plan's span. */
+export const planSentence = (from: IsoDate, end: IsoDate): string =>
+  `New room plan effective ${formatDialogDate(from)} through ${formatDialogDate(end)}`;
+
+/** The toast: "Moved to Room 205" when one room takes the changed nights, else a general line. */
+export function changeToast(
+  current: readonly NightRoom[],
+  plan: readonly NightRoom[],
+  rooms: readonly Pick<ScheduleRoom, 'id' | 'number'>[],
+): string {
+  const changed = new Set(changedNights(current, plan));
+  const targets = new Set(plan.filter((n) => changed.has(n.date)).map((n) => n.roomId));
+  if (targets.size === 1) {
+    const id = [...targets][0];
+    return `Moved to Room ${rooms.find((r) => r.id === id)?.number ?? ''}`.trim();
+  }
+  return 'Rooms updated for the remaining nights';
+}
 
 export interface StayedNight {
   /** 1-based number of the night within the whole stay. */
@@ -189,7 +284,8 @@ export interface StayedNight {
 
 /**
  * The nights already stayed (before the effective date) with the room each was spent in: the
- * earlier rooms, then the current room. Figma shows them as locked "Night n: date | Room".
+ * earlier rooms, then the current room. Figma shows them as locked "Night n: date | Room" lines
+ * with a shield icon.
  */
 export function stayedNights(
   room: Pick<ReservationRoomDetail, 'roomNumber' | 'arrival' | 'previousStays'>,
@@ -207,77 +303,69 @@ export function stayedNights(
   const nights: StayedNight[] = [];
   for (const s of segments) {
     for (let date = s.from; date < s.to && date < effectiveDate; date = addDays(date, 1)) {
-      nights.push({
-        night: daysBetween(stayArrival, date) + 1,
-        date,
-        roomNumber: s.roomNumber,
-      });
+      nights.push({ night: daysBetween(stayArrival, date) + 1, date, roomNumber: s.roomNumber });
     }
   }
   return nights;
 }
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
-
-export interface ChangeRoomSummary {
-  /** "Move from Room 201 to Room 204 effective 10/20/2026 through 10/22/2026". */
-  sentence: string;
-  nights: number;
-}
-
-export function changeRoomSummary(input: {
-  fromNumber: string;
-  toNumber: string;
-  effectiveDate: IsoDate;
-  departure: IsoDate;
-}): ChangeRoomSummary {
-  return {
-    sentence: `Move from Room ${input.fromNumber} to Room ${input.toNumber} effective ${formatDialogDate(input.effectiveDate)} through ${formatDialogDate(input.departure)}`,
-    nights: Math.max(0, daysBetween(input.effectiveDate, input.departure)),
-  };
-}
-
 export const nightsText = (n: number): string => plural(n, 'night');
 
 export interface RateQuestion {
-  /** The question applies (setting on and the rates differ, or the new rate is not known). */
+  /** The question applies (setting on and the rates differ, or a new rate is not known). */
   asked: boolean;
+  /** A changed night could be repriced to another price. */
   ratesDiffer: boolean;
-  /** Nightly rate of the remaining nights today ("$249.00"), "varies by night" when nights differ. */
+  /** Nights whose room changed and that are not yet stayed. */
+  changedNights: number;
+  /** Current nightly price of those nights ("$249.00"), "varies by night" when they differ. */
   currentRate: string;
-  /** "$199.00", or null when the new room's rate is not known (PLACEHOLDER rates are optional). */
+  /** Their new rooms' nightly rate, "varies by night", or null when one is not known (PLACEHOLDER rates). */
   newRate: string | null;
   /** Change of the room charges if the new rates are used, in cents (negative: cheaper). */
   updateDeltaCents: Cents;
   repricedNights: number;
 }
 
+const rateText = (cents: Iterable<Cents>) => {
+  const set = new Set(cents);
+  return set.size === 1 ? formatMoney([...set][0]) : 'varies by night';
+};
+
 /**
- * What the rate dialog needs: whether to ask, and what each answer means in money. When the new
- * room's rate is not known (`null`) the question is asked whenever the setting is on, without
- * amounts for the new room.
+ * What the rate dialog needs, per night: only nights whose room changed and that are not yet stayed
+ * can be repriced; a night that keeps its room keeps its price. `newRateCents(roomId)` is a room's
+ * nightly rate, null when unknown (then the question is asked whenever the setting is on, without
+ * amounts for the new rooms).
  */
 export function rateQuestion(input: {
   detail: Pick<ReservationDetail, 'stay'>;
   reservationRoomId: string;
-  newRateCents: Cents | null;
-  effectiveDate: IsoDate;
+  current: readonly NightRoom[];
+  plan: readonly NightRoom[];
+  newRateCents: (roomId: string) => Cents | null;
   today: IsoDate;
   ask: boolean;
 }): RateQuestion {
+  const changed = new Set(changedNights(input.current, input.plan));
+  const planned = new Map(input.plan.map((n) => [n.date, n.roomId]));
   const nights: NightRate[] = input.detail.stay.lines
     .filter(
       (l) => l.reservationRoomId === undefined || l.reservationRoomId === input.reservationRoomId,
     )
     .map((l) => ({ date: l.date, amountCents: l.amountCents }));
-  const moving = nights.filter((n) => n.date >= input.effectiveDate && n.date >= input.today);
-  const rates = new Set(moving.map((n) => n.amountCents));
-  const currentRate = rates.size === 1 ? formatMoney([...rates][0]) : 'varies by night';
-  if (input.newRateCents === null) {
+  const moving = nights.filter((n) => changed.has(n.date) && n.date >= input.today);
+  const rates = moving.map((n) => input.newRateCents(planned.get(n.date) ?? ''));
+  const base = {
+    changedNights: moving.length,
+    currentRate: rateText(moving.map((n) => n.amountCents)),
+  };
+  if (rates.some((r) => r === null)) {
     return {
-      asked: input.ask,
-      ratesDiffer: true,
-      currentRate,
+      ...base,
+      asked: input.ask && moving.length > 0,
+      ratesDiffer: moving.length > 0,
       newRate: null,
       updateDeltaCents: 0,
       repricedNights: 0,
@@ -285,16 +373,16 @@ export function rateQuestion(input: {
   }
   const update = rateOutcome({
     nights,
-    newRateCents: input.newRateCents,
-    effectiveDate: input.effectiveDate,
+    newRateCents: (date) => input.newRateCents(planned.get(date) ?? '') ?? 0,
     today: input.today,
     choice: 'update',
+    changed: (date) => changed.has(date),
   });
   return {
+    ...base,
     asked: needsRateChoice(input.ask, update.ratesDiffer),
     ratesDiffer: update.ratesDiffer,
-    currentRate,
-    newRate: formatMoney(input.newRateCents),
+    newRate: rateText(rates as Cents[]),
     updateDeltaCents: update.deltaCents,
     repricedNights: update.repricedNights,
   };
@@ -306,11 +394,10 @@ export function signedMoney(cents: Cents): string {
   return `${cents > 0 ? '+' : '-'}${formatMoney(Math.abs(cents))}`;
 }
 
-/** The request for a confirmed change. `answer` is the user's rate choice; only sent when asked. */
+/** The request for a confirmed plan. `answer` is the user's rate choice; only sent when asked. */
 export function toChangeRoomRequest(input: {
   block: Pick<ScheduleBlock, 'id' | 'roomId' | 'version'>;
-  toRoomId: string;
-  effectiveDate: IsoDate;
+  plan: readonly NightRoom[];
   asked: boolean;
   answer: RateChoice | null;
   requestId: string;
@@ -319,8 +406,7 @@ export function toChangeRoomRequest(input: {
     requestId: input.requestId,
     reservationRoomId: input.block.id,
     fromRoomId: input.block.roomId,
-    toRoomId: input.toRoomId,
-    effectiveDate: input.effectiveDate,
+    nights: input.plan.map((n) => ({ date: n.date, roomId: n.roomId })),
     rateChoice: rateChoiceToSend(input.asked, input.answer),
     version: input.block.version,
   };
@@ -328,69 +414,79 @@ export function toChangeRoomRequest(input: {
 
 // ---- optimistic update on the grid -------------------------------------------------------------
 
-export interface RoomChangeEdit {
-  reservationRoomId: string;
-  toRoomId: string;
-  effectiveDate: IsoDate;
-  /** Temporary id of the "previous" segment until the server answers with the real one. */
-  pendingId: string;
-}
-
 /**
- * Shows the change at once: the block moves to the new room from the effective date and, when nights
- * were already stayed, a checked-out segment stays behind in the old room.
+ * Shows a plan at once. The loaded blocks of the stay (found by their `stayId`) are replaced by one
+ * block per run of the plan from the first remaining night on; nights of the current block before
+ * that are stayed and stay behind as a checked-out `previous` block; blocks already stayed are kept.
+ * Ids of new blocks are temporary (`<stay>~pending-n`) until the server answers. The server stays
+ * authoritative: its answer replaces all of it (`mergeRoomPlan`).
  */
-export function applyRoomChange(
+export function applyRoomPlan(
   blocks: readonly ScheduleBlock[],
-  edit: RoomChangeEdit,
+  edit: { stayId: string; plan: readonly NightRoom[] },
 ): ScheduleBlock[] {
-  const block = blocks.find((b) => b.id === edit.reservationRoomId);
-  if (!block) return [...blocks];
-  const out: ScheduleBlock[] = blocks.map((b) =>
-    b === block
-      ? {
-          ...b,
-          roomId: edit.toRoomId,
-          startDate: edit.effectiveDate,
-          roomChange: { part: 'current', otherRoomId: block.roomId },
-          // Early Check In stays with the segment that holds the arrival.
-          ...(edit.effectiveDate > block.startDate ? { earlyCheckIn: undefined } : {}),
-        }
-      : b,
-  );
-  if (edit.effectiveDate > block.startDate) {
-    out.push({
-      ...block,
-      id: edit.pendingId,
-      endDate: edit.effectiveDate,
-      status: 'checked-out',
-      roomChange: { part: 'previous', otherRoomId: edit.toRoomId },
-      // Late Check Out stays with the current segment.
-      lateCheckOut: undefined,
-    });
-  }
-  return out;
+  const chain = blocks.filter((b) => stayOf(b) === edit.stayId);
+  const lead = chain.find((b) => b.id === edit.stayId);
+  if (!lead || edit.plan.length === 0) return [...blocks];
+  const from = edit.plan[0].date;
+  const early = chain.some((b) => b.earlyCheckIn);
+  const late = chain.some((b) => b.lateCheckOut);
+  const sorted = (list: ScheduleBlock[]) =>
+    [...list].sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const earlier = sorted(chain.filter((b) => b.roomChange?.part === 'previous'));
+  const stayed = sorted(
+    chain.filter((b) => b.roomChange?.part !== 'previous' && b.startDate < from),
+  ).map((b, i): ScheduleBlock => ({
+    ...b,
+    id: `${edit.stayId}~pending-stayed-${i}`,
+    endDate: b.endDate < from ? b.endDate : from,
+    status: 'checked-out',
+  }));
+  const runs = normalizeRuns(edit.plan);
+  const parts: ScheduleBlock[] = [
+    ...earlier,
+    ...stayed,
+    ...runs.map((run, i): ScheduleBlock => ({
+      ...lead,
+      id: i === 0 ? edit.stayId : `${edit.stayId}~pending-${i}`,
+      roomId: run.roomId,
+      startDate: run.startDate,
+      endDate: run.endDate,
+      status: 'checked-in',
+    })),
+  ];
+  const firstRun = earlier.length + stayed.length;
+  const out = parts.map((b, i): ScheduleBlock => {
+    const part = i < firstRun ? 'previous' : i === firstRun ? 'current' : 'next';
+    return {
+      ...b,
+      // Early Check In sits on the first part of the stay, Late Check Out on the last.
+      earlyCheckIn: (early && i === 0) || undefined,
+      lateCheckOut: (late && i === parts.length - 1) || undefined,
+      roomChange: { part, index: i + 1, count: parts.length, stayId: edit.stayId },
+    };
+  });
+  return [...blocks.filter((b) => stayOf(b) !== edit.stayId), ...out];
 }
 
-/** Undoes `applyRoomChange`: the block as it was, and no temporary segment. */
-export function revertRoomChange(
+/** Undoes `applyRoomPlan`: the blocks of the stay as they were. */
+export function revertRoomPlan(
   blocks: readonly ScheduleBlock[],
-  original: ScheduleBlock,
-  pendingId: string,
+  snapshot: readonly ScheduleBlock[],
+  stayId: string,
 ): ScheduleBlock[] {
-  return blocks.filter((b) => b.id !== pendingId).map((b) => (b.id === original.id ? original : b));
+  return [...blocks.filter((b) => stayOf(b) !== stayId), ...snapshot];
 }
 
-/** The server's answer replaces the optimistic blocks (the temporary segment goes). */
-export function mergeRoomChange(
+/** The server's answer replaces every block of the stay (optimistic ones and removed ones go). */
+export function mergeRoomPlan(
   data: Pick<ScheduleData, 'startDate' | 'days' | 'blocks'>,
-  pendingId: string,
+  stayId: string,
   changed: readonly ScheduleBlock[],
 ): ScheduleBlock[] {
-  const ids = new Set(changed.map((b) => b.id));
   const end = addDays(data.startDate, data.days);
   return [
-    ...data.blocks.filter((b) => b.id !== pendingId && !ids.has(b.id)),
+    ...data.blocks.filter((b) => stayOf(b) !== stayId),
     ...changed.filter((b) => nightsOverlap(b.startDate, b.endDate, data.startDate, end)),
   ];
 }

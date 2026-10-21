@@ -32,8 +32,8 @@ export interface ScheduleItemViewProps {
   dragging?: boolean;
   /** The keyboard cursor is on this block. */
   active?: boolean;
-  /** Room change during the stay: the other room's number, shown as an arrow next to the confirmation number. */
-  linkedRoomNumber?: string;
+  /** Room change during the stay: "2/3 ← 201 → 207" next to the confirmation number (and the tooltip). */
+  linkText?: string;
   onPointerDown?: PointerEventHandler<HTMLElement>;
 }
 
@@ -79,7 +79,7 @@ export default memo(function ScheduleItemView({
   ghost = false,
   dragging = false,
   active,
-  linkedRoomNumber,
+  linkText,
   onPointerDown,
 }: ScheduleItemViewProps) {
   const theme = useTheme();
@@ -192,9 +192,7 @@ export default memo(function ScheduleItemView({
             sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
           >
             {block.confirmationNumber}
-            {linkedRoomNumber && block.roomChange
-              ? ` ${block.roomChange.part === 'previous' ? '→' : '←'} ${linkedRoomNumber}`
-              : ''}
+            {linkText ? ` · ${linkText}` : ''}
           </Typography>
         )}
         {isClosure && closure.endMarker ? (

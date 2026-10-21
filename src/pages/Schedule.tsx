@@ -18,12 +18,8 @@ import {
   shiftScheduleStart,
   type ScheduleStep,
 } from '../app/schedule';
-import {
-  applyRoomChange,
-  changeRoomFailure,
-  mergeRoomChange,
-  revertRoomChange,
-} from '../app/changeRoom';
+import { applyRoomPlan, changeRoomFailure, mergeRoomPlan, revertRoomPlan } from '../app/changeRoom';
+import { stayOf } from '../lib/stayPlan';
 import { applyPanel, closePanel, parsePanel } from '../app/panelUrl';
 import type { EarlyLateValues } from '../app/earlyLate';
 import { applyMoves, mergeChangedBlocks, moveFailure, revertMoves } from '../app/scheduleGrid';
@@ -316,20 +312,15 @@ export default function Schedule({
     if (changeSubmitted.current) return;
     changeSubmitted.current = true;
     setRoomChanging(true);
-    const { request, block, toRoomNumber } = submission;
+    const { request, block, plan, toast } = submission;
+    const stayId = block.id;
     const range = { ...currentRange.current };
     const inRange = () =>
       currentRange.current.startDate === range.startDate &&
       currentRange.current.days === range.days;
-    const pendingId = `${block.id}~pending`;
-    setBlocks(range, (blocks) =>
-      applyRoomChange(blocks, {
-        reservationRoomId: block.id,
-        toRoomId: request.toRoomId,
-        effectiveDate: request.effectiveDate,
-        pendingId,
-      }),
-    );
+    // What is on screen for this stay now: what a rollback puts back.
+    const snapshot = loadedBlocks.current.filter((b) => stayOf(b) === stayId);
+    setBlocks(range, (blocks) => applyRoomPlan(blocks, { stayId, plan }));
     const finish = () => {
       changeSubmitted.current = false;
       setRoomChanging(false);
@@ -338,18 +329,16 @@ export default function Schedule({
     api.reservations.changeRoomDuringStay(request).then(
       (answer) => {
         if (inRange()) {
-          setBlocks(range, (blocks) =>
-            mergeRoomChange({ ...range, blocks }, pendingId, answer.blocks),
-          );
+          setBlocks(range, (blocks) => mergeRoomPlan({ ...range, blocks }, stayId, answer.blocks));
         }
         retry();
-        notify(`Moved to Room ${toRoomNumber}`);
+        notify(toast);
         finish();
       },
       (error: unknown) => {
         const failure = changeRoomFailure(error);
         if (failure.revert && inRange()) {
-          setBlocks(range, (blocks) => revertRoomChange(blocks, block, pendingId));
+          setBlocks(range, (blocks) => revertRoomPlan(blocks, snapshot, stayId));
         }
         if (failure.refetch || (failure.revert && !inRange())) retry();
         notify(failure.message);

@@ -30,24 +30,27 @@ export interface RateOutcome {
   deltaCents: number;
   /** Nights whose price changed. */
   repricedNights: number;
-  /** Some night that could be repriced has another price in the new room (the rate question applies). */
+  /** A night that could be repriced has another price in its new room (the rate question applies). */
   ratesDiffer: boolean;
 }
 
 /**
- * Prices a room change. Nights before `max(effectiveDate, today)` are untouched. From then on a
- * night keeps its current price for 'retain' and takes the new room's price for 'update'; `null`
- * (no choice was asked: the setting is off) is the default and means 'update'.
- * `newRateCents` is one nightly rate or a function of the date.
+ * Prices a room change, night by night. A night is repriced only when it is not stayed yet (on or
+ * after `max(effectiveDate, today)`; `effectiveDate` defaults to today) and, when `changed` is given,
+ * only when its room changed: a night that keeps its room keeps its price. A repriceable night keeps
+ * its current price for 'retain' and takes the new room's price for 'update'; `null` (no choice was
+ * asked: the setting is off) is the default and means 'update'. `newRateCents` is one nightly rate or
+ * a function of the date.
  */
 export function rateOutcome(input: {
   nights: readonly NightRate[];
   newRateCents: number | ((date: IsoDate) => number);
-  effectiveDate: IsoDate;
+  effectiveDate?: IsoDate;
   today: IsoDate;
   choice: RateChoice | null;
+  changed?: (date: IsoDate) => boolean;
 }): RateOutcome {
-  const from = firstRepricedNight(input.effectiveDate, input.today);
+  const from = firstRepricedNight(input.effectiveDate ?? input.today, input.today);
   const rateFor = (date: IsoDate) =>
     typeof input.newRateCents === 'function' ? input.newRateCents(date) : input.newRateCents;
   const apply = input.choice !== 'retain';
@@ -55,7 +58,7 @@ export function rateOutcome(input: {
   let repricedNights = 0;
   let ratesDiffer = false;
   const nights = input.nights.map((night): NightRate => {
-    if (night.date < from) return { ...night };
+    if (night.date < from || (input.changed && !input.changed(night.date))) return { ...night };
     const next = rateFor(night.date);
     if (next === night.amountCents) return { ...night };
     ratesDiffer = true;

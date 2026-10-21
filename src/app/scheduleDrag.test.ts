@@ -402,3 +402,31 @@ describe('canDrop on the mock inventories', () => {
     expect((performance.now() - t0) / runs).toBeLessThan(5);
   });
 });
+
+describe('a stay that changed room during the stay (ticket 2.3)', () => {
+  const part = (p: 'previous' | 'current' | 'next', index: number) =>
+    block({
+      roomId: 'a1',
+      status: p === 'previous' ? 'checked-out' : 'checked-in',
+      startDate: day(index),
+      endDate: day(index + 1),
+      roomChange: { part: p, index, count: 3, stayId: 'stay' },
+    });
+
+  it('none of its parts can be dragged: they are changed with Change Room During Stay', () => {
+    for (const [p, i] of [
+      ['previous', 0],
+      ['current', 1],
+      ['next', 2],
+    ] as const) {
+      const source = part(p, i);
+      expect(isDraggable(source)).toBe(false);
+      expect(
+        canDrop(source, { roomId: 'a2', startDate: source.startDate }, state([source])),
+      ).toMatchObject({
+        ok: false,
+        reason: 'room-changed-stay',
+      });
+    }
+  });
+});

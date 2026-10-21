@@ -28,6 +28,9 @@ import {
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
 import {
   blockAriaLabel,
+  segmentBadge,
+  segmentLinks,
+  type SegmentLink,
   blockSpan,
   columnAtX,
   emptyCellAction,
@@ -113,8 +116,8 @@ interface RowProps {
   activeCol: number | null;
   draggingId: string | null;
   idPrefix: string;
-  /** Room numbers by id, to name the other room of a stay that changed room. */
-  roomNumbers: ReadonlyMap<string, string>;
+  /** Place of each part of a stay that changed room: "part 2 of 3" and the rooms next to it. */
+  links: ReadonlyMap<string, SegmentLink>;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
 }
 
@@ -133,7 +136,7 @@ const ScheduleRow = memo(function ScheduleRow({
   activeCol,
   draggingId,
   idPrefix,
-  roomNumbers,
+  links,
   onItemPointerDown,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
@@ -194,10 +197,7 @@ const ScheduleRow = memo(function ScheduleRow({
       {items.map((item) => {
         const layout = blockLayout(item, startDate, days);
         if (!layout) return null;
-        const linked =
-          item.kind === 'reservation' && item.roomChange
-            ? roomNumbers.get(item.roomChange.otherRoomId)
-            : undefined;
+        const link = item.kind === 'reservation' ? links.get(item.id) : undefined;
         return (
           <ScheduleItemView
             key={item.id}
@@ -209,12 +209,12 @@ const ScheduleRow = memo(function ScheduleRow({
             dragging={draggingId === item.id}
             label={
               item.kind === 'reservation'
-                ? blockAriaLabel(item, room, linked)
+                ? blockAriaLabel(item, room, link)
                 : closureAriaLabel(item, room)
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
             active={activeItem?.id === item.id}
-            linkedRoomNumber={linked}
+            linkText={link ? segmentBadge(link) : undefined}
           />
         );
       })}
@@ -259,10 +259,7 @@ export default function ScheduleGrid({
   const todayIndex = daysBetween(startDate, today);
   const blocksByRoom = useMemo(() => groupByRoom(data.blocks), [data.blocks]);
   const closuresByRoom = useMemo(() => groupByRoom(data.closures), [data.closures]);
-  const roomNumbers = useMemo(
-    () => new Map(data.rooms.map((r) => [r.id, r.number])),
-    [data.rooms],
-  );
+  const links = useMemo(() => segmentLinks(data.blocks, data.rooms), [data.blocks, data.rooms]);
   const labels = useMemo(
     () => rooms.map((r) => roomRowLabel(r, data.locations, data.roomTypes)),
     [rooms, data.locations, data.roomTypes],
@@ -639,7 +636,7 @@ export default function ScheduleGrid({
       return;
     }
     if (!isDraggable(item)) {
-      setAnnouncement(refusalMessage('checked-out'));
+      setAnnouncement(refusalMessage(item.roomChange ? 'room-changed-stay' : 'checked-out'));
       return;
     }
     const result = evaluate(item, row, 0);
@@ -949,7 +946,7 @@ export default function ScheduleGrid({
                 activeCol={i === cursorRow ? cursor.col : null}
                 draggingId={drag?.item.id ?? null}
                 idPrefix={idPrefix}
-                roomNumbers={roomNumbers}
+                links={links}
                 onItemPointerDown={onItemPointerDown}
               />
             ))}

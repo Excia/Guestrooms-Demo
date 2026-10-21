@@ -26,6 +26,7 @@ import type {
   ScheduleMoveResult,
   ScheduleQuery,
 } from './types';
+import { normalizeRuns } from '../lib/stayPlan';
 import { expectedLeadOccupantName } from './createRules';
 import { ApiError } from './types';
 import {
@@ -123,6 +124,18 @@ function parseReservation(body: unknown, status: number): Reservation {
 const isFlag = (v: unknown): v is boolean => typeof v === 'boolean';
 const ROOM_STATUSES: readonly string[] = ['nyci', 'checked-in', 'checked-out'];
 
+const isPartialStays = (v: unknown) =>
+  v === undefined ||
+  listOf(
+    v,
+    (p) =>
+      isObject(p) &&
+      isString(p.roomId) &&
+      (p.roomNumber === null || isString(p.roomNumber)) &&
+      isString(p.arrival) &&
+      isString(p.departure),
+  );
+
 // Light shape guard on what the details panel reads. A mismatch is an invalid-response error.
 function isReservationDetail(v: unknown): v is ReservationDetail {
   return (
@@ -154,16 +167,8 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(r.departure) &&
         isString(r.status) &&
         ROOM_STATUSES.includes(r.status) &&
-        (r.previousStays === undefined ||
-          listOf(
-            r.previousStays,
-            (p) =>
-              isObject(p) &&
-              isString(p.roomId) &&
-              (p.roomNumber === null || isString(p.roomNumber)) &&
-              isString(p.arrival) &&
-              isString(p.departure),
-          )),
+        isPartialStays(r.previousStays) &&
+        isPartialStays(r.upcomingStays),
     ) &&
     (v.rooms as unknown[]).length >= 1 &&
     isFlag(v.earlyCheckIn) &&
@@ -390,8 +395,15 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     v.version !== '' &&
     (v.roomChange === undefined ||
       (isObject(v.roomChange) &&
-        (v.roomChange.part === 'previous' || v.roomChange.part === 'current') &&
-        isString(v.roomChange.otherRoomId)))
+        (v.roomChange.part === 'previous' ||
+          v.roomChange.part === 'current' ||
+          v.roomChange.part === 'next') &&
+        Number.isInteger(v.roomChange.index) &&
+        Number.isInteger(v.roomChange.count) &&
+        (v.roomChange.index as number) >= 1 &&
+        (v.roomChange.index as number) <= (v.roomChange.count as number) &&
+        isString(v.roomChange.stayId) &&
+        v.roomChange.stayId !== ''))
   );
 }
 
@@ -477,47 +489,75 @@ const parseMove =
     return result;
   };
 
-// The answer must describe the change that was asked for: the block of the request now sits in the
-// new room from the effective date, still checked in, linked back to the old room; every other
-// changed block is an earlier segment of the same stay that ends on or before the effective date;
-// the vacated room is the old one.
+// The answer must describe the change that was asked for: the blocks of the stay are exactly the
+// segments of the normalized plan (one block per run of consecutive nights in one room, from the
+// first remaining night on), the block of the request is the first of them and keeps its id, the
+// earlier blocks are checked-out `previous` segments that end where the plan starts, the parts are
+// numbered consistently, and the vacated room (if any) is the room of the first night.
 const parseChangeRoom =
   (request: ChangeRoomRequest) =>
   (body: unknown, status: number): ChangeRoomResult => {
+    const bad = () => invalid(status, 'room change');
     if (
       !isObject(body) ||
       !listOf(body.blocks, isScheduleBlock) ||
+      !listOf(body.removedBlockIds, isString) ||
       !isObject(body.folio) ||
       !Number.isInteger(body.folio.deltaCents) ||
       !Number.isInteger(body.folio.repricedNights) ||
       (body.folio.repricedNights as number) < 0 ||
       !Number.isInteger(body.folio.roomChargesCents) ||
-      !isObject(body.vacatedRoom) ||
-      body.vacatedRoom.roomId !== request.fromRoomId ||
-      !HOUSEKEEPING.includes(body.vacatedRoom.housekeeping as string) ||
-      body.vacatedRoom.since !== request.effectiveDate
+      !(body.vacatedRoom === null || isObject(body.vacatedRoom))
     ) {
-      throw invalid(status, 'room change');
+      throw bad();
     }
     const result = body as unknown as ChangeRoomResult;
+    const first = request.nights[0];
+    const vacated = result.vacatedRoom;
+    if (
+      vacated &&
+      (vacated.roomId !== request.fromRoomId ||
+        vacated.roomId === first.roomId ||
+        !HOUSEKEEPING.includes(vacated.housekeeping) ||
+        vacated.since !== first.date)
+    ) {
+      throw bad();
+    }
+    const ids = result.blocks.map((b) => b.id);
     const moved = result.blocks.find((b) => b.id === request.reservationRoomId);
+    const sorted = [...result.blocks].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const before = sorted.filter((b) => b.roomChange?.part === 'previous');
+    const after = sorted.filter((b) => b.roomChange?.part !== 'previous');
+    const plan = normalizeRuns(request.nights);
     if (
       !moved ||
-      moved.roomId !== request.toRoomId ||
-      moved.startDate !== request.effectiveDate ||
-      moved.status !== 'checked-in' ||
-      moved.roomChange?.part !== 'current' ||
-      moved.roomChange.otherRoomId !== request.fromRoomId ||
-      new Set(result.blocks.map((b) => b.id)).size !== result.blocks.length ||
-      !result.blocks.every(
-        (b) =>
-          b === moved ||
-          (b.reservationId === moved.reservationId &&
-            b.roomChange?.part === 'previous' &&
-            b.endDate <= request.effectiveDate),
-      )
+      new Set(ids).size !== ids.length ||
+      result.removedBlockIds.some((id) => ids.includes(id)) ||
+      // every block belongs to this stay
+      !sorted.every(
+        (b) => b.reservationId === moved.reservationId && b.roomChange?.stayId === moved.id,
+      ) ||
+      // numbered 1..count in date order
+      !sorted.every(
+        (b, i) => b.roomChange!.index === i + 1 && b.roomChange!.count === sorted.length,
+      ) ||
+      // the stayed part comes first and ends where the plan starts
+      sorted.slice(0, before.length).some((b) => b.roomChange!.part !== 'previous') ||
+      before.some((b) => b.status !== 'checked-out' || b.endDate > first.date) ||
+      (before.length > 0 && before[before.length - 1].endDate !== first.date) ||
+      // the rest equals the plan: same runs, the first is the request's block, the others are `next`
+      after.length !== plan.length ||
+      !after.every(
+        (b, i) =>
+          b.roomId === plan[i].roomId &&
+          b.startDate === plan[i].startDate &&
+          b.endDate === plan[i].endDate &&
+          b.status === 'checked-in' &&
+          b.roomChange!.part === (i === 0 ? 'current' : 'next'),
+      ) ||
+      after[0].id !== request.reservationRoomId
     ) {
-      throw invalid(status, 'room change');
+      throw bad();
     }
     return result;
   };

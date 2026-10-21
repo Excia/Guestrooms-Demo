@@ -1,4 +1,4 @@
-import { nightsOverlap } from '../lib/dates';
+import { addDays, nightsOverlap } from '../lib/dates';
 import { createHttpClient } from './http';
 import { createMockClient } from './mock';
 import type { ApiClient, ChangeRoomRequest, ScheduleBlock } from './types';
@@ -7,127 +7,250 @@ const T = '2026-10-16';
 const mk = (o = {}) => createMockClient({ today: T, ...o });
 const window = { startDate: '2026-10-06', days: 30 } as const;
 
+// Victor Almeida (GR-50271, rr-14): rm-301 Suite (349.00), 10/15 to 10/20, checked in; today is
+// 10/16, so the remaining nights are 10/16 to 10/19. rm-110 is a free Suite (same rate), rm-107 and
+// rm-108 are free Queen Standard rooms (199.00), rm-302 is booked 10/17 to 10/19, rm-208 is closed
+// 10/17 to 10/20.
+// Daniel Whitfield (GR-50240, rr-2): rm-201 King Deluxe, 10/15 to 10/18; remaining 10/16 and 10/17.
+const VICTOR = {
+  id: 'rr-14',
+  room: 'rm-301',
+  nights: ['2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19'],
+};
+const DANIEL = { id: 'rr-2', room: 'rm-201', nights: ['2026-10-16', '2026-10-17'] };
+type Stay = typeof VICTOR;
+
 let serial = 0;
-/** A change request made from the block's current state, as the UI builds it. */
+/** A request made from the block's current state, as the UI builds it. `rooms` overrides nights by date. */
 async function request(
   c: ApiClient,
-  over: Partial<ChangeRoomRequest> & { toRoomId: string },
-  id = 'rr-2',
+  stay: Stay,
+  rooms: Record<string, string>,
+  over: Partial<ChangeRoomRequest> = {},
 ): Promise<ChangeRoomRequest> {
-  const b = (await c.schedule.get(window)).blocks.find((x) => x.id === id)!;
+  const b = (await c.schedule.get(window)).blocks.find((x) => x.id === stay.id)!;
   return {
     requestId: `chg-${++serial}-test`,
-    reservationRoomId: id,
+    reservationRoomId: stay.id,
     fromRoomId: b.roomId,
     version: b.version,
-    effectiveDate: T,
+    nights: stay.nights.map((date) => ({ date, roomId: rooms[date] ?? stay.room })),
     rateChoice: 'update',
     ...over,
   };
 }
-const blocksOf = async (c: ApiClient, reservationId: string) =>
-  (await c.schedule.get(window)).blocks.filter((b) => b.reservationId === reservationId);
+const stayBlocks = async (c: ApiClient, reservationId: string) =>
+  (await c.schedule.get(window)).blocks
+    .filter((b) => b.reservationId === reservationId)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+const shape = (blocks: ScheduleBlock[]) =>
+  blocks.map((b) =>
+    [b.roomChange?.part, b.roomId, b.startDate.slice(5), b.endDate.slice(5)].join(' '),
+  );
 
-// Daniel Whitfield (GR-50240, rr-2): rm-201 King Deluxe, 10/15 to 10/18, checked in, today 10/16.
-// rm-205 Queen Standard is free for 10/16-10/18 (rate 199.00 against 249.00); rm-209 is King Deluxe
-// (same rate) and free; rm-204 is booked from 10/18 (same-day turnover).
-describe('mock reservations.changeRoomDuringStay', () => {
-  it('splits the stay: the nights already stayed stay in the old room, the rest move', async () => {
+describe('mock reservations.changeRoomDuringStay (per night)', () => {
+  it('change only the last night: the stay becomes three parts', async () => {
     const c = mk();
     const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-205' }),
+      await request(c, VICTOR, { '2026-10-19': 'rm-107' }),
     );
-    const current = result.blocks.find((b) => b.id === 'rr-2')!;
+    expect(shape(await stayBlocks(c, 'rs-11'))).toEqual([
+      'previous rm-301 10-15 10-16',
+      'current rm-301 10-16 10-19',
+      'next rm-107 10-19 10-20',
+    ]);
+    const current = result.blocks.find((b) => b.id === 'rr-14')!;
     expect(current).toMatchObject({
-      roomId: 'rm-205',
-      startDate: T,
-      endDate: '2026-10-18',
       status: 'checked-in',
-      roomChange: { part: 'current', otherRoomId: 'rm-201' },
+      roomChange: { part: 'current', index: 2, count: 3, stayId: 'rr-14' },
     });
-    const previous = result.blocks.find((b) => b.id !== 'rr-2')!;
-    expect(previous).toMatchObject({
-      id: 'rr-2~1',
-      roomId: 'rm-201',
-      startDate: '2026-10-15',
-      endDate: T,
-      status: 'checked-out',
-      reservationId: 'rs-2',
-      confirmationNumber: 'GR-50240',
-      roomChange: { part: 'previous', otherRoomId: 'rm-205' },
-    });
-    expect(current.version).not.toBe('v1');
-    // The grid answers both segments, and the stay still occupies every night exactly once.
-    const grid = await blocksOf(c, 'rs-2');
-    expect(grid.map((b) => b.id).sort()).toEqual(['rr-2', 'rr-2~1']);
-    expect(grid.find((b) => b.id === 'rr-2')!.roomCount).toBe(1);
+    // The stayed night is a checked-out block that cannot move; later parts stay checked in.
+    expect(result.blocks.map((b) => b.status)).toEqual(['checked-out', 'checked-in', 'checked-in']);
+    expect(result.blocks.every((b) => b.confirmationNumber === 'GR-50271')).toBe(true);
+    expect(result.blocks.every((b) => b.roomCount === 1)).toBe(true);
+    expect(result.vacatedRoom).toBeNull();
   });
 
-  it('update: the nights not yet stayed take the new rate, stayed nights keep theirs', async () => {
+  it('change a middle night: the remaining stay is three runs, four parts in all', async () => {
     const c = mk();
-    const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-205', rateChoice: 'update' }),
-    );
-    expect(result.folio).toEqual({
-      deltaCents: -10000,
-      repricedNights: 2,
-      roomChargesCents: 24900 + 2 * 19900,
-    });
-    const detail = await c.reservations.getDetail('rs-2');
-    expect(detail.stay.lines.map((l) => [l.date, l.amountCents])).toEqual([
-      ['2026-10-15', 24900],
-      ['2026-10-16', 19900],
-      ['2026-10-17', 19900],
+    await c.reservations.changeRoomDuringStay(await request(c, VICTOR, { '2026-10-17': 'rm-107' }));
+    expect(shape(await stayBlocks(c, 'rs-11'))).toEqual([
+      'previous rm-301 10-15 10-16',
+      'current rm-301 10-16 10-17',
+      'next rm-107 10-17 10-18',
+      'next rm-301 10-18 10-20',
     ]);
   });
 
-  it('retain: every night keeps its price, and the delta is zero', async () => {
+  it('change all remaining nights: two parts, and tonight’s old room is vacated (dirty)', async () => {
     const c = mk();
+    const all = Object.fromEntries(VICTOR.nights.map((d) => [d, 'rm-110']));
     const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-205', rateChoice: 'retain' }),
+      await request(c, VICTOR, all, { rateChoice: null }),
     );
-    expect(result.folio).toEqual({
-      deltaCents: 0,
-      repricedNights: 0,
-      roomChargesCents: 3 * 24900,
-    });
-    const detail = await c.reservations.getDetail('rs-2');
-    expect(detail.stay.lines.map((l) => l.amountCents)).toEqual([24900, 24900, 24900]);
-    expect(detail.stay.lines.map((l) => l.roomType)).toEqual([
-      'King Deluxe',
-      'Queen Standard',
-      'Queen Standard',
+    expect(shape(await stayBlocks(c, 'rs-11'))).toEqual([
+      'previous rm-301 10-15 10-16',
+      'current rm-110 10-16 10-20',
+    ]);
+    expect(result.vacatedRoom).toEqual({ roomId: 'rm-301', housekeeping: 'dirty', since: T });
+    const rooms = (await c.schedule.get(window)).rooms;
+    expect(rooms.find((r) => r.id === 'rm-301')!.housekeeping).toBe('dirty');
+    expect(rooms.find((r) => r.id === 'rm-110')!.housekeeping).toBeUndefined();
+  });
+
+  it('changing tonight and later nights splits at tonight: stayed nights never move', async () => {
+    const c = mk();
+    await c.reservations.changeRoomDuringStay(
+      await request(
+        c,
+        VICTOR,
+        { '2026-10-16': 'rm-110', '2026-10-17': 'rm-110' },
+        { rateChoice: null },
+      ),
+    );
+    expect(shape(await stayBlocks(c, 'rs-11'))).toEqual([
+      'previous rm-301 10-15 10-16',
+      'current rm-110 10-16 10-18',
+      'next rm-301 10-18 10-20',
     ]);
   });
 
-  it('the detail shows the current room and lists the earlier one; the stay stays checked in', async () => {
+  it('a night reverted to its original room merges the parts back and reports the removed blocks', async () => {
     const c = mk();
-    await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
-    const detail = await c.reservations.getDetail('rs-2');
+    await c.reservations.changeRoomDuringStay(await request(c, VICTOR, { '2026-10-19': 'rm-107' }));
+    // Everything back in rm-301: a change (the last night), so it is accepted.
+    const result = await c.reservations.changeRoomDuringStay(
+      await request(c, VICTOR, {}, { rateChoice: 'update' }),
+    );
+    expect(shape(await stayBlocks(c, 'rs-11'))).toEqual([
+      'previous rm-301 10-15 10-16',
+      'current rm-301 10-16 10-20',
+    ]);
+    expect(result.removedBlockIds).toHaveLength(1);
+    expect(result.blocks.map((b) => b.roomChange!.count)).toEqual([2, 2]);
+  });
+
+  it('a plan with no change is refused', async () => {
+    const c = mk();
+    await expect(
+      c.reservations.changeRoomDuringStay(await request(c, VICTOR, {})),
+    ).rejects.toMatchObject({
+      status: 400,
+      code: 'invalid-query',
+      details: { nights: expect.any(Array) },
+    });
+  });
+
+  it('the nights must be exactly the remaining ones (no stayed night, none missing, none extra)', async () => {
+    const c = mk();
+    const base = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
+    const bad = [
+      { ...base, nights: [{ date: '2026-10-15', roomId: 'rm-107' }, ...base.nights] },
+      { ...base, nights: base.nights.slice(0, 3) },
+      { ...base, nights: base.nights.slice(1) },
+      { ...base, nights: [...base.nights, { date: '2026-10-20', roomId: 'rm-107' }] },
+    ];
+    for (const b of bad) {
+      await expect(
+        c.reservations.changeRoomDuringStay({ ...b, requestId: `bad-${++serial}-test` }),
+      ).rejects.toMatchObject({ status: 400 });
+    }
+    expect(shape(await stayBlocks(c, 'rs-11'))).toEqual([' rm-301 10-15 10-20']);
+  });
+
+  describe('rates', () => {
+    const prices = async (c: ApiClient) =>
+      (await c.reservations.getDetail('rs-11')).stay.lines.map((l) => l.amountCents);
+
+    it('update: only the nights whose room changed take the new rate; stayed nights keep theirs', async () => {
+      const c = mk();
+      const result = await c.reservations.changeRoomDuringStay(
+        await request(c, VICTOR, { '2026-10-17': 'rm-107', '2026-10-18': 'rm-107' }),
+      );
+      expect(result.folio).toEqual({
+        deltaCents: -2 * 15000,
+        repricedNights: 2,
+        roomChargesCents: 3 * 34900 + 2 * 19900,
+      });
+      expect(await prices(c)).toEqual([34900, 34900, 19900, 19900, 34900]);
+    });
+
+    it('retain: the changed nights keep their price and the delta is zero', async () => {
+      const c = mk();
+      const result = await c.reservations.changeRoomDuringStay(
+        await request(c, VICTOR, { '2026-10-17': 'rm-107' }, { rateChoice: 'retain' }),
+      );
+      expect(result.folio).toMatchObject({
+        deltaCents: 0,
+        repricedNights: 0,
+        roomChargesCents: 5 * 34900,
+      });
+      expect(await prices(c)).toEqual([34900, 34900, 34900, 34900, 34900]);
+      // A later change keeps the retained price of the night it does not touch.
+      await c.reservations.changeRoomDuringStay(
+        await request(c, VICTOR, { '2026-10-17': 'rm-107', '2026-10-19': 'rm-108' }),
+      );
+      expect(await prices(c)).toEqual([34900, 34900, 34900, 34900, 19900]);
+    });
+
+    it('same rates need no choice; a missing choice is refused when the setting is on and the rates differ', async () => {
+      const c = mk();
+      const same = await c.reservations.changeRoomDuringStay(
+        await request(c, VICTOR, { '2026-10-19': 'rm-110' }, { rateChoice: null }),
+      );
+      expect(same.folio.deltaCents).toBe(0);
+      const before = await stayBlocks(c, 'rs-11');
+      await expect(
+        c.reservations.changeRoomDuringStay(
+          await request(c, VICTOR, { '2026-10-18': 'rm-107' }, { rateChoice: null }),
+        ),
+      ).rejects.toMatchObject({ status: 400, details: { rateChoice: expect.any(Array) } });
+      expect(await stayBlocks(c, 'rs-11')).toEqual(before);
+    });
+
+    it('with the setting off, no choice is needed and the new rates apply', async () => {
+      const c = mk({ roomChangeRule: { askRateOnRoomChange: false } });
+      expect(await c.settings.getRoomChangeRule()).toEqual({ askRateOnRoomChange: false });
+      const result = await c.reservations.changeRoomDuringStay(
+        await request(c, VICTOR, { '2026-10-19': 'rm-107' }, { rateChoice: null }),
+      );
+      expect(result.folio.deltaCents).toBe(-15000);
+    });
+
+    it('the rule defaults to asking', async () => {
+      expect(await mk().settings.getRoomChangeRule()).toEqual({ askRateOnRoomChange: true });
+    });
+  });
+
+  it('the detail shows the current room with the whole stay, and lists earlier and later rooms', async () => {
+    const c = mk();
+    await c.reservations.changeRoomDuringStay(await request(c, VICTOR, { '2026-10-18': 'rm-107' }));
+    const detail = await c.reservations.getDetail('rs-11');
     expect(detail.status).toBe('checked-in');
     expect(detail.rooms).toHaveLength(1);
     expect(detail.rooms[0]).toMatchObject({
-      id: 'rr-2',
-      roomNumber: '205',
+      id: 'rr-14',
+      roomNumber: '301',
       status: 'checked-in',
       arrival: T,
-      departure: '2026-10-18',
-      previousStays: [{ roomId: 'rm-201', roomNumber: '201', arrival: '2026-10-15', departure: T }],
+      departure: '2026-10-20',
+      previousStays: [{ roomNumber: '301', arrival: '2026-10-15', departure: T }],
+      upcomingStays: [
+        { roomNumber: '107', arrival: '2026-10-18', departure: '2026-10-19' },
+        { roomNumber: '301', arrival: '2026-10-19', departure: '2026-10-20' },
+      ],
     });
     expect(detail.arrival).toBe('2026-10-15');
-    expect(detail.nights).toBe(3);
+    expect(detail.nights).toBe(5);
   });
 
-  it('keeps the early and late flags on the stay', async () => {
+  it('early check in stays on the first part and late check out on the last', async () => {
     const c = mk();
     // rs-2 is seeded with early check in.
     const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-205' }),
+      await request(c, DANIEL, { '2026-10-17': 'rm-205' }),
     );
-    // Early Check In stays with the segment that holds the arrival; Late Check Out with the current one.
-    expect(result.blocks.find((b) => b.id === 'rr-2~1')!.earlyCheckIn).toBe(true);
-    expect(result.blocks.find((b) => b.id === 'rr-2')!.earlyCheckIn).toBeUndefined();
-    expect((await c.reservations.getDetail('rs-2')).earlyCheckIn).toBe(true);
+    expect(result.blocks.map((b) => b.earlyCheckIn)).toEqual([true, undefined, undefined]);
     const saved = await c.reservations.getDetail('rs-2');
     await c.reservations.setEarlyLate({
       requestId: 'late-after-change-1',
@@ -135,67 +258,17 @@ describe('mock reservations.changeRoomDuringStay', () => {
       version: saved.version,
       lateCheckOut: true,
     });
-    const grid = await blocksOf(c, 'rs-2');
-    expect(grid.find((b) => b.id === 'rr-2~1')).toMatchObject({ earlyCheckIn: true });
-    expect(grid.find((b) => b.id === 'rr-2~1')!.lateCheckOut).toBeUndefined();
-    expect(grid.find((b) => b.id === 'rr-2')!.lateCheckOut).toBe(true);
-    expect(grid.find((b) => b.id === 'rr-2')!.earlyCheckIn).toBeUndefined();
-  });
-
-  it('marks the vacated room dirty from the effective date', async () => {
-    const c = mk();
-    const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-205' }),
-    );
-    expect(result.vacatedRoom).toEqual({ roomId: 'rm-201', housekeeping: 'dirty', since: T });
-    const rooms = (await c.schedule.get(window)).rooms;
-    expect(rooms.find((r) => r.id === 'rm-201')!.housekeeping).toBe('dirty');
-    expect(rooms.find((r) => r.id === 'rm-205')!.housekeeping).toBeUndefined();
-  });
-
-  it('rates that do not differ need no choice', async () => {
-    const c = mk();
-    const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-209', rateChoice: null }),
-    );
-    expect(result.folio.deltaCents).toBe(0);
-    expect(result.blocks.find((b) => b.id === 'rr-2')!.roomId).toBe('rm-209');
-  });
-
-  it('a missing choice is refused when the setting is on and the rates differ', async () => {
-    const c = mk();
-    const before = await blocksOf(c, 'rs-2');
-    await expect(
-      c.reservations.changeRoomDuringStay(
-        await request(c, { toRoomId: 'rm-205', rateChoice: null }),
-      ),
-    ).rejects.toMatchObject({
-      status: 400,
-      code: 'invalid-query',
-      details: { rateChoice: expect.any(Array) },
-    });
-    expect(await blocksOf(c, 'rs-2')).toEqual(before);
-  });
-
-  it('with the setting off, no choice is needed and the new rates apply', async () => {
-    const c = mk({ roomChangeRule: { askRateOnRoomChange: false } });
-    expect(await c.settings.getRoomChangeRule()).toEqual({ askRateOnRoomChange: false });
-    const result = await c.reservations.changeRoomDuringStay(
-      await request(c, { toRoomId: 'rm-205', rateChoice: null }),
-    );
-    expect(result.folio.deltaCents).toBe(-10000);
-  });
-
-  it('the rule defaults to asking', async () => {
-    expect(await mk().settings.getRoomChangeRule()).toEqual({ askRateOnRoomChange: true });
+    const grid = await stayBlocks(c, 'rs-2');
+    expect(grid.map((b) => b.earlyCheckIn)).toEqual([true, undefined, undefined]);
+    expect(grid.map((b) => b.lateCheckOut)).toEqual([undefined, undefined, true]);
   });
 
   describe('refusals apply nothing', () => {
     it('409 stale: version or room out of date', async () => {
       const c = mk();
-      const base = await request(c, { toRoomId: 'rm-205' });
-      const before = await blocksOf(c, 'rs-2');
-      for (const over of [{ version: 'v99' }, { fromRoomId: 'rm-202' }]) {
+      const base = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
+      const before = await stayBlocks(c, 'rs-11');
+      for (const over of [{ version: 'v99' }, { fromRoomId: 'rm-302' }]) {
         await expect(
           c.reservations.changeRoomDuringStay({
             ...base,
@@ -204,67 +277,68 @@ describe('mock reservations.changeRoomDuringStay', () => {
           }),
         ).rejects.toMatchObject({ status: 409, code: 'stale' });
       }
-      expect(await blocksOf(c, 'rs-2')).toEqual(before);
+      expect(await stayBlocks(c, 'rs-11')).toEqual(before);
     });
 
     it('409 not-movable: only a checked-in room can change during the stay', async () => {
       const c = mk();
-      // rr-5 not yet checked in, rr-1 checked out, rr-3 confirmed.
       for (const id of ['rr-5', 'rr-1', 'rr-3']) {
         await expect(
           c.reservations.changeRoomDuringStay(
             await request(
               c,
-              { toRoomId: 'rm-209', effectiveDate: '2026-10-20', rateChoice: null },
-              id,
+              { id, room: 'rm-209', nights: ['2026-10-20'] },
+              { '2026-10-20': 'rm-110' },
+              { rateChoice: null },
             ),
           ),
         ).rejects.toMatchObject({ status: 409, code: 'not-movable' });
       }
     });
 
-    it('409 conflict: the room is booked or closed on the remaining nights', async () => {
+    it('409 conflict: a changed night in a room that is booked or closed that night', async () => {
       const c = mk();
-      // rm-202 is booked (Thomas Okafor), rm-208 is closed (Fixed Loss).
-      for (const roomId of ['rm-202', 'rm-208']) {
+      // rm-302 is booked 10/17 to 10/19, rm-208 is closed 10/17 to 10/20.
+      for (const [date, roomId] of [
+        ['2026-10-17', 'rm-302'],
+        ['2026-10-18', 'rm-302'],
+        ['2026-10-17', 'rm-208'],
+      ]) {
         await expect(
-          c.reservations.changeRoomDuringStay(await request(c, { toRoomId: roomId })),
-        ).rejects.toMatchObject({
-          status: 409,
-          code: 'conflict',
-          details: { roomId: [roomId] },
-        });
+          c.reservations.changeRoomDuringStay(await request(c, VICTOR, { [date]: roomId })),
+        ).rejects.toMatchObject({ status: 409, code: 'conflict', details: { roomId: [roomId] } });
       }
     });
 
-    it('same-day turnover is not a conflict (rm-204 is booked from the departure day)', async () => {
+    it('the same room is free on the nights around its booking (same-day turnover, half-open nights)', async () => {
+      const c = mk();
+      // rm-302: free on 10/16 (booked from 10/17) and on 10/19 (booked until 10/19).
+      for (const date of ['2026-10-16', '2026-10-19']) {
+        const result = await c.reservations.changeRoomDuringStay(
+          await request(c, VICTOR, { [date]: 'rm-302' }, { rateChoice: 'retain' }),
+        );
+        expect(result.blocks.some((b) => b.roomId === 'rm-302')).toBe(true);
+      }
+    });
+
+    it('a night keeps its own room even if the room is otherwise booked (only changed nights are checked)', async () => {
       const c = mk();
       const result = await c.reservations.changeRoomDuringStay(
-        await request(c, { toRoomId: 'rm-204', rateChoice: null }),
+        await request(c, VICTOR, { '2026-10-19': 'rm-107' }),
       );
-      expect(result.blocks.find((b) => b.id === 'rr-2')!.roomId).toBe('rm-204');
-    });
-
-    it('400: the effective date must be a night that is not stayed yet', async () => {
-      const c = mk();
-      for (const effectiveDate of ['2026-10-15', '2026-10-18', '2026-10-30']) {
-        await expect(
-          c.reservations.changeRoomDuringStay(
-            await request(c, { toRoomId: 'rm-209', rateChoice: null, effectiveDate }),
-          ),
-        ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
-      }
+      expect(result.blocks.length).toBe(3);
     });
 
     it('400: malformed requests', async () => {
       const c = mk();
-      const base = await request(c, { toRoomId: 'rm-205' });
+      const base = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
       for (const bad of [
         { ...base, requestId: 'x' },
         { ...base, version: '' },
-        { ...base, toRoomId: base.fromRoomId },
-        { ...base, toRoomId: '' },
-        { ...base, effectiveDate: '2026-02-30' },
+        { ...base, nights: [] },
+        { ...base, nights: [{ date: '2026-02-30', roomId: 'rm-107' }] },
+        { ...base, nights: [base.nights[0], base.nights[2]] },
+        { ...base, nights: [{ date: base.nights[0].date, roomId: '' }] },
         { ...base, rateChoice: 'both' as never },
         { ...base, rateChoice: undefined as never },
       ]) {
@@ -274,14 +348,17 @@ describe('mock reservations.changeRoomDuringStay', () => {
       }
     });
 
-    it('404: unknown reservation room or room', async () => {
+    it('404: unknown reservation room, or a room that does not exist', async () => {
       const c = mk();
-      const base = await request(c, { toRoomId: 'rm-205' });
+      const base = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
       await expect(
         c.reservations.changeRoomDuringStay({ ...base, reservationRoomId: 'rr-nope' }),
       ).rejects.toMatchObject({ status: 404 });
       await expect(
-        c.reservations.changeRoomDuringStay({ ...base, toRoomId: 'rm-nope' }),
+        c.reservations.changeRoomDuringStay({
+          ...base,
+          nights: [...base.nights.slice(0, 3), { date: '2026-10-19', roomId: 'rm-nope' }],
+        }),
       ).rejects.toMatchObject({ status: 404 });
     });
   });
@@ -289,92 +366,89 @@ describe('mock reservations.changeRoomDuringStay', () => {
   describe('idempotency', () => {
     it('the same request replays the first answer without applying again', async () => {
       const c = mk();
-      const req = await request(c, { toRoomId: 'rm-205' });
+      const req = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
       const first = await c.reservations.changeRoomDuringStay(req);
       const again = await c.reservations.changeRoomDuringStay(req);
       expect(again).toEqual(first);
-      expect((await blocksOf(c, 'rs-2')).map((b) => b.id).sort()).toEqual(['rr-2', 'rr-2~1']);
+      expect(await stayBlocks(c, 'rs-11')).toHaveLength(3);
     });
 
     it('the same id with another body is 409 idempotency-conflict', async () => {
       const c = mk();
-      const req = await request(c, { toRoomId: 'rm-205' });
+      const req = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
       await c.reservations.changeRoomDuringStay(req);
       await expect(
-        c.reservations.changeRoomDuringStay({ ...req, toRoomId: 'rm-209' }),
+        c.reservations.changeRoomDuringStay({
+          ...req,
+          nights: req.nights.map((n) => ({ ...n, roomId: 'rm-110' })),
+        }),
       ).rejects.toMatchObject({ status: 409, code: 'idempotency-conflict' });
     });
 
-    it('a second change after the first needs the new version', async () => {
+    it('a second change made from the old version is stale', async () => {
       const c = mk();
-      const req = await request(c, { toRoomId: 'rm-205' });
+      const req = await request(c, VICTOR, { '2026-10-19': 'rm-107' });
       await c.reservations.changeRoomDuringStay(req);
       await expect(
         c.reservations.changeRoomDuringStay({
           ...req,
           requestId: 'another-request-1',
-          toRoomId: 'rm-209',
+          nights: req.nights.map((n) => ({ ...n, roomId: 'rm-110' })),
         }),
       ).rejects.toMatchObject({ status: 409, code: 'stale' });
     });
   });
 
-  describe('changing again', () => {
-    it('on the same day the whole current segment moves and the earlier one follows it', async () => {
+  describe('a stay with several parts', () => {
+    it('cannot be dragged: moves of any of its parts are not movable', async () => {
       const c = mk();
-      await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
-      const result = await c.reservations.changeRoomDuringStay(
-        await request(c, { toRoomId: 'rm-209', rateChoice: 'update' }),
+      await c.reservations.changeRoomDuringStay(
+        await request(c, VICTOR, { '2026-10-19': 'rm-107' }),
       );
-      expect(result.blocks.map((b) => b.id).sort()).toEqual(['rr-2', 'rr-2~1']);
-      const grid = await blocksOf(c, 'rs-2');
-      expect(grid.find((b) => b.id === 'rr-2')).toMatchObject({
-        roomId: 'rm-209',
-        startDate: T,
-        roomChange: { part: 'current', otherRoomId: 'rm-205' },
-      });
-      // The first change's earlier segment (in rm-201) now continues in rm-209.
-      expect(grid.find((b) => b.id === 'rr-2~1')!.roomChange).toEqual({
-        part: 'previous',
-        otherRoomId: 'rm-209',
-      });
-      expect(grid).toHaveLength(2);
+      for (const b of await stayBlocks(c, 'rs-11')) {
+        await expect(
+          c.schedule.moveRoom({
+            requestId: `drag-${++serial}-test`,
+            reservationRoomId: b.id,
+            toRoomId: 'rm-110',
+            fromRoomId: b.roomId,
+            version: b.version,
+          }),
+        ).rejects.toMatchObject({ status: 409, code: 'not-movable' });
+      }
     });
 
-    it('a drag of the current segment keeps the earlier segment linked', async () => {
-      const c = mk();
-      await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
-      const b = (await c.schedule.get(window)).blocks.find((x) => x.id === 'rr-2')!;
-      const moved = await c.schedule.moveRoom({
-        requestId: 'drag-after-change',
-        reservationRoomId: 'rr-2',
-        toRoomId: 'rm-209',
+    it('a later change counts from today: nights stayed meanwhile become stayed parts', async () => {
+      // Two days later the first remaining nights have been stayed: the plan covers only what is left.
+      const c = mk({ today: '2026-10-18' });
+      const win = { startDate: '2026-10-08', days: 30 } as const;
+      const b = (await c.schedule.get(win)).blocks.find((x) => x.id === 'rr-14')!; // 10/17 to 10/22 here
+      expect(b.status).toBe('checked-in');
+      const nights = Array.from({ length: 4 }, (_, i) => addDays('2026-10-18', i));
+      await c.reservations.changeRoomDuringStay({
+        requestId: 'later-change-1',
+        reservationRoomId: 'rr-14',
         fromRoomId: b.roomId,
         version: b.version,
+        nights: nights.map((date, i) => ({ date, roomId: i === 3 ? 'rm-107' : 'rm-301' })),
+        rateChoice: 'update',
       });
-      expect(moved.blocks.map((x) => x.id).sort()).toEqual(['rr-2', 'rr-2~1']);
-      expect(moved.blocks.find((x) => x.id === 'rr-2~1')!.roomChange!.otherRoomId).toBe('rm-209');
-    });
-
-    it('the stayed segment cannot be moved', async () => {
-      const c = mk();
-      await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
-      const prev = (await c.schedule.get(window)).blocks.find((x) => x.id === 'rr-2~1')!;
-      await expect(
-        c.schedule.moveRoom({
-          requestId: 'move-previous-1',
-          reservationRoomId: prev.id,
-          toRoomId: 'rm-209',
-          fromRoomId: prev.roomId,
-          version: prev.version,
-        }),
-      ).rejects.toMatchObject({ status: 409, code: 'not-movable' });
+      const blocks = (await c.schedule.get(win)).blocks
+        .filter((x) => x.reservationId === 'rs-11')
+        .sort((p, q) => p.startDate.localeCompare(q.startDate));
+      expect(shape(blocks)).toEqual([
+        'previous rm-301 10-17 10-18',
+        'current rm-301 10-18 10-21',
+        'next rm-107 10-21 10-22',
+      ]);
     });
   });
 
   it('never leaves two stays overlapping in a room', async () => {
     const c = mk();
-    await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
+    await c.reservations.changeRoomDuringStay(
+      await request(c, VICTOR, { '2026-10-17': 'rm-107', '2026-10-19': 'rm-108' }),
+    );
     const { blocks, closures } = await c.schedule.get(window);
     const items: { id: string; roomId: string; startDate: string; endDate: string }[] = [
       ...blocks,
@@ -390,8 +464,7 @@ describe('mock reservations.changeRoomDuringStay', () => {
   });
 
   it('error scenario rejects; empty scenario answers 404', async () => {
-    const live = mk();
-    const req = await request(live, { toRoomId: 'rm-205' });
+    const req = await request(mk(), VICTOR, { '2026-10-19': 'rm-107' });
     await expect(
       mk({ scenario: 'error' }).reservations.changeRoomDuringStay(req),
     ).rejects.toMatchObject({ status: 500 });
@@ -407,9 +480,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const http = (fetchMock: typeof fetch) =>
   createHttpClient('https://api.example.com/v1', { fetch: fetchMock });
 
-async function realAnswer() {
+async function realAnswer(rooms: Record<string, string> = { '2026-10-18': 'rm-107' }) {
   const c = mk();
-  const req = await request(c, { toRoomId: 'rm-205' });
+  const req = await request(c, VICTOR, rooms);
   return { req, answer: await c.reservations.changeRoomDuringStay(req) };
 }
 
@@ -418,91 +491,109 @@ describe('http reservations.changeRoomDuringStay', () => {
     const { req, answer } = await realAnswer();
     const fetchMock = vi.fn().mockResolvedValue(json(answer));
     const result = await http(fetchMock).reservations.changeRoomDuringStay(req);
-    expect(result.blocks).toHaveLength(2);
+    expect(result.blocks).toHaveLength(4);
     const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
-    expect(url.pathname).toBe('/v1/reservation-rooms/rr-2/change-room');
+    expect(url.pathname).toBe('/v1/reservation-rooms/rr-14/change-room');
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(req.requestId);
     expect(JSON.parse(init.body as string)).toEqual(req);
+  });
+
+  it('accepts a merge-back answer (fewer parts, removed blocks)', async () => {
+    const c = mk();
+    await c.reservations.changeRoomDuringStay(await request(c, VICTOR, { '2026-10-19': 'rm-107' }));
+    const req = await request(c, VICTOR, {});
+    const answer = await c.reservations.changeRoomDuringStay(req);
+    const got = await http(
+      vi.fn().mockResolvedValue(json(answer)),
+    ).reservations.changeRoomDuringStay(req);
+    expect(got.removedBlockIds).toHaveLength(1);
   });
 
   it('rejects a malformed request before fetching', async () => {
     const { req } = await realAnswer();
     const fetchMock = vi.fn();
     await expect(
-      http(fetchMock).reservations.changeRoomDuringStay({ ...req, effectiveDate: 'soon' }),
+      http(fetchMock).reservations.changeRoomDuringStay({ ...req, nights: [] }),
     ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('rejects an answer that does not match the request', async () => {
+  it('rejects an answer whose segments are not the normalized plan', async () => {
     const { req, answer } = await realAnswer();
-    const tweak = (f: (a: typeof answer) => unknown) => f(structuredClone(answer));
+    type Answer = typeof answer;
+    const edit = (f: (a: Answer) => void) => {
+      const a = structuredClone(answer);
+      f(a);
+      return a;
+    };
+    const find = (a: Answer, id: string) => a.blocks.find((b) => b.id === id)!;
+    const next = (a: Answer) => a.blocks.filter((b) => b.roomChange?.part === 'next');
     const bad: unknown[] = [
       {},
-      tweak((a) => ({ ...a, blocks: [] })),
-      // moved to another room than asked
-      tweak((a) => ({
-        ...a,
-        blocks: a.blocks.map((b: ScheduleBlock) =>
-          b.id === 'rr-2' ? { ...b, roomId: 'rm-209' } : b,
-        ),
-      })),
-      // another effective date
-      tweak((a) => ({
-        ...a,
-        blocks: a.blocks.map((b: ScheduleBlock) =>
-          b.id === 'rr-2' ? { ...b, startDate: '2026-10-17' } : b,
-        ),
-      })),
-      // no longer checked in
-      tweak((a) => ({
-        ...a,
-        blocks: a.blocks.map((b: ScheduleBlock) =>
-          b.id === 'rr-2' ? { ...b, status: 'nyci' } : b,
-        ),
-      })),
-      // not linked back to the old room
-      tweak((a) => ({
-        ...a,
-        blocks: a.blocks.map((b: ScheduleBlock) =>
-          b.id === 'rr-2' ? { ...b, roomChange: undefined } : b,
-        ),
-      })),
-      // an extra block of another reservation
-      tweak((a) => ({
-        ...a,
-        blocks: [...a.blocks, { ...a.blocks[0], id: 'rr-9', reservationId: 'rs-9' }],
-      })),
-      // an earlier segment that runs past the effective date
-      tweak((a) => ({
-        ...a,
-        blocks: a.blocks.map((b: ScheduleBlock) =>
-          b.id !== 'rr-2' ? { ...b, endDate: '2026-10-18' } : b,
-        ),
-      })),
-      // duplicate ids
-      tweak((a) => ({ ...a, blocks: [a.blocks[0], a.blocks[0]] })),
-      // the vacated room is another room, or the date is wrong
-      tweak((a) => ({ ...a, vacatedRoom: { ...a.vacatedRoom, roomId: 'rm-205' } })),
-      tweak((a) => ({ ...a, vacatedRoom: { ...a.vacatedRoom, housekeeping: 'spotless' } })),
-      tweak((a) => ({ ...a, vacatedRoom: { ...a.vacatedRoom, since: '2026-10-17' } })),
+      edit((a) => (a.blocks = [])),
+      // a run in another room than planned, or other dates
+      edit((a) => (next(a)[0].roomId = 'rm-108')),
+      edit((a) => (next(a)[0].startDate = '2026-10-17')),
+      edit((a) => (next(a)[1].endDate = '2026-10-21')),
+      // a run missing, or two runs that should have been merged
+      edit((a) => (a.blocks = a.blocks.filter((b) => b.id !== next(a)[1].id))),
+      edit((a) => (next(a)[1].roomId = next(a)[0].roomId)),
+      // the request's block is not the first remaining run, or not checked in
+      edit((a) => (find(a, 'rr-14').roomChange!.part = 'next')),
+      edit((a) => (find(a, 'rr-14').status = 'nyci')),
+      // stayed part still open or running past the plan
+      edit((a) => (a.blocks[0].status = 'checked-in')),
+      edit((a) => (a.blocks[0].endDate = '2026-10-17')),
+      // numbering, stay link and foreign blocks
+      edit((a) => (a.blocks[1].roomChange!.index = 9)),
+      edit((a) => (a.blocks[1].roomChange!.count = 9)),
+      edit((a) => (a.blocks[1].roomChange!.stayId = 'rr-1')),
+      edit((a) => a.blocks.push({ ...a.blocks[0], id: 'rr-9', reservationId: 'rs-9' })),
+      edit((a) => (a.blocks[1].id = a.blocks[0].id)),
+      edit((a) => (a.removedBlockIds = ['rr-14'])),
+      edit((a) => ((a as { removedBlockIds: unknown }).removedBlockIds = 'x')),
+      // vacated room
+      edit((a) => (a.vacatedRoom = { roomId: 'rm-301', housekeeping: 'dirty', since: T })),
       // money is integer cents
-      tweak((a) => ({ ...a, folio: { ...a.folio, deltaCents: 12.5 } })),
-      tweak((a) => ({ ...a, folio: { ...a.folio, repricedNights: -1 } })),
-      tweak((a) => ({ ...a, folio: undefined })),
-      // a block with a malformed link
-      tweak((a) => ({
-        ...a,
-        blocks: a.blocks.map((b: ScheduleBlock) =>
-          b.id === 'rr-2' ? { ...b, roomChange: { part: 'sideways', otherRoomId: 'rm-201' } } : b,
-        ),
-      })),
+      edit((a) => (a.folio.deltaCents = 12.5)),
+      edit((a) => (a.folio.repricedNights = -1)),
+      edit((a) => ((a as { folio: unknown }).folio = undefined)),
+      edit(
+        (a) =>
+          ((a.blocks[0] as { roomChange: unknown }).roomChange = {
+            part: 'sideways',
+            index: 1,
+            count: 4,
+            stayId: 'rr-14',
+          }),
+      ),
     ];
     for (const body of bad) {
       await expect(
         http(vi.fn().mockResolvedValue(json(body))).reservations.changeRoomDuringStay(req),
       ).rejects.toMatchObject({ status: 200, code: 'invalid-response' });
+    }
+  });
+
+  it('a vacated room must be the old room of the first night and dated like it', async () => {
+    const all = Object.fromEntries(VICTOR.nights.map((d) => [d, 'rm-110']));
+    const { req, answer } = await realAnswer(all);
+    expect(answer.vacatedRoom).not.toBeNull();
+    await http(vi.fn().mockResolvedValue(json(answer))).reservations.changeRoomDuringStay({
+      ...req,
+      rateChoice: req.rateChoice,
+    });
+    for (const vacatedRoom of [
+      { ...answer.vacatedRoom!, roomId: 'rm-110' },
+      { ...answer.vacatedRoom!, since: '2026-10-17' },
+      { ...answer.vacatedRoom!, housekeeping: 'spotless' },
+    ]) {
+      await expect(
+        http(
+          vi.fn().mockResolvedValue(json({ ...answer, vacatedRoom })),
+        ).reservations.changeRoomDuringStay(req),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
     }
   });
 
@@ -544,26 +635,45 @@ describe('http reservations.changeRoomDuringStay', () => {
 
   it('the schedule guard accepts roomChange and housekeeping and rejects bad ones', async () => {
     const c = mk();
-    await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
+    await c.reservations.changeRoomDuringStay(
+      await request(c, VICTOR, Object.fromEntries(VICTOR.nights.map((d) => [d, 'rm-110'])), {
+        rateChoice: null,
+      }),
+    );
     const data = await c.schedule.get(window);
-    const ok = vi.fn().mockResolvedValue(json(data));
-    expect((await http(ok).schedule.get(window)).blocks.some((b) => b.roomChange)).toBe(true);
+    expect(
+      (await http(vi.fn().mockResolvedValue(json(data))).schedule.get(window)).blocks.some(
+        (b) => b.roomChange,
+      ),
+    ).toBe(true);
     const badRoom = { ...data, rooms: data.rooms.map((r) => ({ ...r, housekeeping: 'haunted' })) };
     await expect(
       http(vi.fn().mockResolvedValue(json(badRoom))).schedule.get(window),
     ).rejects.toMatchObject({ code: 'invalid-response' });
+    const badLink = {
+      ...data,
+      blocks: data.blocks.map((b) =>
+        b.roomChange ? { ...b, roomChange: { ...b.roomChange, index: 0 } } : b,
+      ),
+    };
+    await expect(
+      http(vi.fn().mockResolvedValue(json(badLink))).schedule.get(window),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
   });
 
-  it('the detail guard accepts previous stays and stay line room ids', async () => {
+  it('the detail guard accepts earlier and later stays and rejects bad ones', async () => {
     const c = mk();
-    await c.reservations.changeRoomDuringStay(await request(c, { toRoomId: 'rm-205' }));
-    const detail = await c.reservations.getDetail('rs-2');
-    const got = await http(vi.fn().mockResolvedValue(json(detail))).reservations.getDetail('rs-2');
+    await c.reservations.changeRoomDuringStay(await request(c, VICTOR, { '2026-10-19': 'rm-107' }));
+    const detail = await c.reservations.getDetail('rs-11');
+    const got = await http(vi.fn().mockResolvedValue(json(detail))).reservations.getDetail('rs-11');
     expect(got.rooms[0].previousStays).toHaveLength(1);
-    const bad = structuredClone(detail);
-    (bad.rooms[0] as { previousStays: unknown }).previousStays = [{ roomId: 1 }];
-    await expect(
-      http(vi.fn().mockResolvedValue(json(bad))).reservations.getDetail('rs-2'),
-    ).rejects.toMatchObject({ code: 'invalid-response' });
+    expect(got.rooms[0].upcomingStays).toHaveLength(1);
+    for (const key of ['previousStays', 'upcomingStays']) {
+      const bad = structuredClone(detail);
+      (bad.rooms[0] as unknown as Record<string, unknown>)[key] = [{ roomId: 1 }];
+      await expect(
+        http(vi.fn().mockResolvedValue(json(bad))).reservations.getDetail('rs-11'),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
   });
 });
