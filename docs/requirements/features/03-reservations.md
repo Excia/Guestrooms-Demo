@@ -40,8 +40,8 @@ Excia/Guestrooms-Demo#24. Figma: Bulk Action P1 2524:23962, P2 2524:31991, P2 af
   `onSelectionChange` and a `renderBulkActions` slot for 3.2, which owns the CTA and the dialogs. New
   Reservation opens `/schedule?panel=new` (the panel lives on the schedule); Night Audit goes to Night Audit
   History like the schedule's button; the list/calendar toggle links to the schedule.
-- **Newest Figma frame (2524:36149), followed on request:** Night Audit is an outlined `info` (blue) large button on a
-  white (`background.paper`) fill with the shield icon (the frame draws it filled blue; the owner asked for outlined, see figma-deviations) and New Reservation a filled `primary` large button with the plus icon, both 200px
+- **Newest Figma frame (2524:36149), followed on request:** Night Audit is an outlined `info` large button (blue border, white background, on request; Figma shows it filled)
+  with the shield icon and New Reservation a filled `primary` large button with the plus icon, both 200px
   (`spacing(25)`) with a 16px gap. The header has no column filter icons (Q-24-1): only sort, with the arrow
   on the sorted column. The URL filters (`guest`, `status`, `types`, ...) still narrow the query but no
   longer have a header control. `ReservationList` takes `failedIds`: those rows get the `warning.background`
@@ -85,7 +85,26 @@ Excia/Guestrooms-Demo#25. Figma: P1, P2, P2 after attempt, Check In Mixed Result
   updates; highlights clear on refresh. Per-room check-in calls; partial success handled; the dialog
   lists successes and failures with the reason (Unassigned, no payment method). Selection logic is a
   pure function with a test per row type. Consistency with D-008.
-- **Open questions:** Q-25-1, Q-25-2.
+- **Status:** built on branch `feat/25-bulk-checkin` (stacked on 3.1 / `feat/24-reservation-list`; PR pending).
+- **Built:** the "CHECK IN N ROOMS" button under the table (centered, `spacing(40)` wide, primary contained
+  large), built into `ReservationList` (the `renderBulkActions` slot still replaces it). N counts the rooms
+  still not checked in on the selected rows (a partly checked-in reservation counts only its waiting rooms);
+  "CHECK IN 1 ROOM" for one; hidden with nothing to check in. Rules are pure in `src/app/bulkCheckIn.ts`
+  (`roomsToCheckIn`, `checkInLabel`, `failureReason`, `summarizeCheckIn`), with one test per row type; the
+  selection rule itself is `isSelectable` (3.1, P2).
+- **Attempt:** one `reservationList.checkInRoom` call per room, all at once, each succeeding or failing alone
+  (409 `unassigned`, 409 `no-payment-method`, anything else shows "Could not be checked in. Try again.").
+  Then the list is fetched again: fully checked-in rows lose their checkbox (locked) and leave the selection,
+  so the CTA counts only the rooms left; rows with a failed room are tinted orange (`failedIds`) and stay
+  selected for a retry; tint and selection clear on page refresh (they live in component state).
+- **Dialog (Figma 2524:35269):** close X, title "N Rooms Successfully Checked In.", green-check list of
+  "Reservation <Res #> | Room <number>", orange "N rooms could not be checked in:", red-cross list with the reason
+  line (No room assigned. / No payment method on file.). Focus moves into it, Tab is trapped, Escape and the X
+  close it, and a visually hidden status line announces "N rooms checked in. M rooms could not be checked in."
+- **Assumptions:** an all-success or all-failure attempt shows the same dialog with only the applicable list,
+  the first heading being that list's title (Q-25-2, Figma shows only the mixed result); the reservation is
+  printed as its confirmation number without an extra "#" (numbers already carry their prefix).
+- **Open questions:** Q-25-1 (P2 built), Q-25-2 (copy assumed).
 
 ## 3.3 Reservation Hub layout
 

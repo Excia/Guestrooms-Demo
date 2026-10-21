@@ -196,3 +196,57 @@ describe('http reservationList', () => {
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
 });
+
+describe('checkInRoom', () => {
+  const T2 = '2026-10-16';
+  const request = (id: string) => ({ reservationRoomId: id, requestId: `req-${id}-12345678` });
+  const roomsOf = (rowsIn: ReservationListRow[]) => rowsIn.flatMap((r) => r.rooms);
+
+  it('checks a room in, shows it as checked in, and replays a repeated request', async () => {
+    const client = createMockClient({ today: T2 });
+    const page = await client.reservationList.list({ limit: 200 });
+    // Find a room that checks in: try each waiting room until one succeeds.
+    for (const room of roomsOf(page.items).filter((r) => r.status === 'not-checked-in')) {
+      const result = await client.reservationList.checkInRoom(request(room.id)).catch(() => null);
+      if (!result) continue;
+      expect(result).toEqual({ reservationRoomId: room.id, status: 'checked-in' });
+      const after = await client.reservationList.list({ limit: 200 });
+      expect(roomsOf(after.items).find((r) => r.id === room.id)?.status).toBe('checked-in');
+      await expect(client.reservationList.checkInRoom(request(room.id))).resolves.toEqual(result);
+      return;
+    }
+    throw new Error('no room could be checked in');
+  });
+  it('fails an unassigned room with 409 unassigned', async () => {
+    const client = createMockClient({ today: T2 });
+    await expect(client.reservationList.checkInRoom(request('rs-X2-1'))).rejects.toMatchObject({
+      status: 409,
+      code: 'unassigned',
+    });
+  });
+  it('fails a checked-in room with 409 not-checkable and an unknown room with 404', async () => {
+    const client = createMockClient({ today: T2 });
+    const page = await client.reservationList.list({ limit: 200 });
+    const done = roomsOf(page.items).find((r) => r.status === 'checked-in')!;
+    await expect(client.reservationList.checkInRoom(request(done.id))).rejects.toMatchObject({
+      status: 409,
+      code: 'not-checkable',
+    });
+    await expect(client.reservationList.checkInRoom(request('nope'))).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+  it('fails some assigned room with 409 no-payment-method', async () => {
+    const client = createMockClient({ today: T2 });
+    const page = await client.reservationList.list({ limit: 200 });
+    const codes = new Set<string | undefined>();
+    for (const room of roomsOf(page.items).filter(
+      (r) => r.status === 'not-checked-in' && r.roomNumber !== null,
+    )) {
+      await client.reservationList
+        .checkInRoom(request(room.id))
+        .catch((e: { code?: string }) => codes.add(e.code));
+    }
+    expect(codes.has('no-payment-method')).toBe(true);
+  });
+});

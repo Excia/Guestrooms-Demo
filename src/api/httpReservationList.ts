@@ -2,6 +2,7 @@
 // shape guards on the answers, like the rest of http.ts.
 import { LIST_STATUSES } from './reservationListTypes';
 import type {
+  CheckInRoomResult,
   ReservationListOptions,
   ReservationListQuery,
   ReservationListRow,
@@ -84,3 +85,17 @@ export function parseListOptions(body: unknown, status: number): ReservationList
   }
   return body as unknown as ReservationListOptions;
 }
+
+/** The answer names the room it checked in, and says it is checked in. */
+export const parseCheckIn =
+  (reservationRoomId: string) =>
+  (body: unknown, status: number): CheckInRoomResult => {
+    if (
+      !isObject(body) ||
+      body.reservationRoomId !== reservationRoomId ||
+      body.status !== 'checked-in'
+    ) {
+      throw invalid(status, 'check-in');
+    }
+    return { reservationRoomId, status: 'checked-in' };
+  };

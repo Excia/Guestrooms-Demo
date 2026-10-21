@@ -87,7 +87,7 @@ export default function ReservationListToolbar({
           component={RouterLink}
           to={NIGHT_AUDIT_HISTORY_PATH}
           startIcon={<ShieldMoon />}
-          sx={{ ...cta, backgroundColor: 'background.paper' }}
+          sx={[cta, (t) => ({ bgcolor: t.palette.background.paper })]}
         >
           Night Audit
         </Button>

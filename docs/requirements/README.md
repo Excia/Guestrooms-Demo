@@ -134,7 +134,7 @@ Issue Excia/Guestrooms-Demo#23. Epic status: **not started**. Details: [features
 | Ticket                   | Title                                                                                           | Status                                                  | PR  |
 | ------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --- |
 | Excia/Guestrooms-Demo#24 | [3.1] Reservation List with bulk actions                                                        | built on branch `feat/24-reservation-list` (PR pending) |     |
-| Excia/Guestrooms-Demo#25 | [3.2] Bulk check-in: success dialog and mixed-result dialog                                     | not started                                             |     |
+| Excia/Guestrooms-Demo#25 | [3.2] Bulk check-in: success dialog and mixed-result dialog                                     | built on branch `feat/25-bulk-checkin` (PR pending)     |     |
 | Excia/Guestrooms-Demo#26 | [3.3] Reservation Hub layout (left column, guest column, notes column, header, CTAs)            | not started                                             |     |
 | Excia/Guestrooms-Demo#27 | [3.4] Hub states: single room and multi room                                                    | not started                                             |     |
 | Excia/Guestrooms-Demo#28 | [3.5] Check in, including check in after date and failure dialogs                               | not started                                             |     |
