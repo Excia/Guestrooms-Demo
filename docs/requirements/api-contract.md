@@ -121,6 +121,24 @@ Added by Excia/Guestrooms-Demo#119 (not on `main` yet; may change before merge; 
   that PR (Booking Guest TBD, Lead Occupant optional, Unassigned room/location/room type) will change the
   create request shape; update this table when that PR is final (**Unknown** today).
 
+## Reservation List endpoints (ticket 3.1, built on the mock)
+
+Separate from `GET /reservations` so the details panel and dashboard shapes stay as they are. Client:
+`api.reservationList.list(query)` and `getOptions()`; shapes in `src/api/reservationListTypes.ts`. The path is
+the client's choice (Q-G-3).
+
+| #   | Endpoint                        | Request                                                                                                                                                                                                                                                            | Answer                                                                                                                                                                                                                                                                                                      | Errors                   |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 12  | `GET /reservation-list`         | `checkInFrom`, `checkInTo` (inclusive, on arrival), `unassignedOnly=true`, `locationIds`, `roomTypeIds`, `statuses` (comma lists), text filters `guest`, `reserver`, `resNumber`, `block`, `room`, `search`, `sort=<field>:<asc\|desc>`, `page` (1-based), `limit` | `Page<ReservationListRow>`: `items`, `total` of all matches (`nextCursor` unused). Row: id, confirmationNumber, arrival, departure (exclusive), guestName (lead occupant), reserverName, blockName, locationId/Name and roomTypeId/Name of the first room, rooms[] {id, roomNumber or null, status}, status | 400 `invalid-query`, 5xx |
+| 13  | `GET /reservation-list/options` | none                                                                                                                                                                                                                                                               | `{ locations[], roomTypes[] }` (id, name), never narrowed by a query                                                                                                                                                                                                                                        | 5xx                      |
+
+Rules the backend must apply: sort fields `arrival` (default, ascending), `departure`, `confirmationNumber`,
+`guestName`, `reserverName`, `blockName`, `locationName`, `roomTypeName`, `roomNumber`, `status`; ties broken by
+id so paging is stable; text filters are case-insensitive substrings; `search` matches guest, reserver, Res #
+or block; `unassignedOnly` keeps reservations with at least one room without a number. Row `status` is one of
+`not-checked-in`, `checked-in`, `checked-out`, `canceled`, the lowest common denominator of its rooms (see
+3.1 in [features/03-reservations.md](features/03-reservations.md)).
+
 ## Error codes
 
 | Status | Code                   | Meaning                                                                                                                                                       | Client behavior                                                       |
