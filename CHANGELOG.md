@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.5.0...guestrooms-v1.6.0) (2026-10-21)
+
+
+### Features
+
+* add folio line type variations ([#135](https://github.com/Excia/Guestrooms-Demo/issues/135)) ([6467b24](https://github.com/Excia/Guestrooms-Demo/commit/6467b2402f1f7950ec672aa6a3571cccdf6ff941))
+* add online booking header, account menu and return to site tooltip ([#130](https://github.com/Excia/Guestrooms-Demo/issues/130)) ([1519370](https://github.com/Excia/Guestrooms-Demo/commit/1519370d22cc4903bc4315c060fdbfea24e5de1b))
+* add reporting landing page ([#134](https://github.com/Excia/Guestrooms-Demo/issues/134)) ([14060f6](https://github.com/Excia/Guestrooms-Demo/commit/14060f691e69c0a771ff8259404b96a0703c6d6b))
+
 ## [1.5.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.4.0...guestrooms-v1.5.0) (2026-10-21)
 
 

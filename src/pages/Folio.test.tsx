@@ -129,7 +129,7 @@ function setup(folio: FolioData | ApiError = baseFolio()) {
       <ApiProvider client={clientWith(folio)}>
         <MemoryRouter initialEntries={['/reservations/rs-1/folio']}>
           <Routes>
-            <Route path={FOLIO_PATH} element={<FolioPage />} />
+            <Route path={FOLIO_PATH} element={<FolioPage today="2026-10-16" />} />
             <Route path="*" element={<p>Elsewhere</p>} />
           </Routes>
         </MemoryRouter>
@@ -212,10 +212,44 @@ describe('Folio page', () => {
     expect(within(bar).getByRole('button', { name: 'Transfer' })).toBeDisabled();
     await user.click(within(charges()).getByRole('checkbox', { name: 'Select Night A' }));
     expect(within(bar).getByRole('button', { name: 'Transfer' })).toBeEnabled();
-    // An unposted line blocks settle and split.
-    await user.click(within(charges()).getByRole('checkbox', { name: 'Select Late fee' }));
-    expect(within(bar).getByRole('button', { name: /Settle/ })).toBeDisabled();
-    expect(within(bar).getByRole('button', { name: 'Split' })).toBeDisabled();
+    // An unposted manual charge has no checkbox: it must be posted first.
+    expect(within(charges()).queryByRole('checkbox', { name: 'Select Late fee' })).toBeNull();
+  });
+
+  it('refuses split and transfer on a split part with an error, while settle works', async () => {
+    const user = setup(
+      baseFolio({
+        charges: [
+          charge({
+            id: 's',
+            type: 'split-parent',
+            status: 'split',
+            description: 'Custom Selection (2)',
+          }),
+          charge({
+            id: 'k',
+            type: 'split-child',
+            description: 'Split of Night A',
+            amountCents: 5000,
+          }),
+        ],
+      }),
+    );
+    await loaded();
+    await user.click(within(charges()).getByRole('checkbox', { name: 'Select Split of Night A' }));
+    const bar = screen.getByRole('region', { name: 'Selection actions' });
+    expect(within(bar).getByRole('button', { name: /Settle/ })).toBeEnabled();
+    await user.click(within(bar).getByRole('button', { name: 'Split' }));
+    expect((await screen.findAllByText(/cannot be split again/)).length).toBeGreaterThan(0);
+    await user.click(within(bar).getByRole('button', { name: 'Transfer' }));
+    expect((await screen.findAllByText(/cannot be transferred/)).length).toBeGreaterThan(0);
+    // The parent shows its selection name and "Posted - Split", with an edit/undo control.
+    expect(within(charges()).getAllByText('Custom Selection (2)').length).toBe(2);
+    expect(within(charges()).getByText('Posted - Split')).toBeInTheDocument();
+    expect(
+      within(charges()).getByRole('button', { name: 'Edit or undo split Custom Selection (2)' }),
+    ).toBeInTheDocument();
+    expect(within(charges()).queryByRole('checkbox', { name: /Custom Selection/ })).toBeNull();
   });
 
   it('does not act on lines the filter hides', async () => {
@@ -233,7 +267,7 @@ describe('Folio page', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Select all charges' }));
     expect(
       within(screen.getByRole('region', { name: 'Selection actions' })).getByText(
-        'Selection Total $567.50',
+        'Selection Total $542.50',
       ),
     ).toBeInTheDocument();
   });
