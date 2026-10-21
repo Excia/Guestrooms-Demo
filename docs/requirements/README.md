@@ -5,8 +5,9 @@ what the backend must provide and what is still unanswered. When the product is 
 this folder is the one place that captures every system requirement, decision, API need and open
 question.
 
-**Snapshot:** 2026-10-20, `main` at release 1.3.0 (commit 769d488). One PR is open and counted as
-"in review": Excia/Guestrooms-Demo#119 (ticket 2.2) and the branch for ticket 2.3 (PR not opened yet). Tickets are GitHub issues in
+**Snapshot:** 2026-10-21, `main` at commit 288dd56 (package version 1.3.0; PR #119 is merged but not
+yet in a release). No PR is open for a ticket; ticket 2.3 (Excia/Guestrooms-Demo#20) is in progress on
+branch `feat/20-change-room-during-stay`. Tickets are GitHub issues in
 Excia/Guestrooms-Demo; each ticket body is the spec, and its acceptance criteria are the
 definition of done. Figma file: CE Guest Rooms (key `WksR3zAy2S8cDsjrVvRklE`).
 
@@ -33,15 +34,15 @@ the repo). Nothing here is invented: where a value is not known the text says **
 
 ### Vocabulary
 
-| Term                            | Meaning                                                                               |
-| ------------------------------- | ------------------------------------------------------------------------------------- |
-| done                            | merged to `main`                                                                      |
-| in review                       | a PR is open and not merged                                                           |
-| in progress                     | work is under way and not yet in a PR, or a PR is being changed (used inside entries) |
-| not started                     | nothing built beyond a route and a placeholder page                                   |
-| needs design                    | the ticket cannot be built until a Figma design exists                                |
-| requested by owner, in progress | an owner decision that is being implemented now                                       |
-| open / answered                 | state of a question in [open-questions.md](open-questions.md)                         |
+| Term                            | Meaning                                                                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| done                            | merged to `main`                                                                                                                                           |
+| in review                       | a PR is open and not merged                                                                                                                                |
+| in progress                     | work is under way and not yet in a PR, or a PR is being changed (used inside entries)                                                                      |
+| not started                     | nothing built beyond a route and a placeholder page                                                                                                        |
+| needs design                    | the ticket cannot be built until a Figma design exists                                                                                                     |
+| requested by owner, in progress | an owner decision that is being implemented now (none at this snapshot; the ones from PR #119 are "implemented (PR #119)" in [decisions.md](decisions.md)) |
+| open / answered                 | state of a question in [open-questions.md](open-questions.md)                                                                                              |
 
 Numbers: `Excia/Guestrooms-Demo#N` is an issue (ticket) or a pull request in this repository
 (issues and PRs share one number space; issues 1 to 100, PRs 101 and up). Ticket labels such as
@@ -75,8 +76,9 @@ ticked "n/a", the PR description must say why.
 
 | Status        | Tickets |
 | ------------- | ------- |
-| done          | 15      |
-| in review     | 2       |
+| done          | 16      |
+| in review     | 0       |
+| in progress   | 1       |
 | not started   | 71      |
 | total tickets | 88      |
 
@@ -112,13 +114,13 @@ Issue Excia/Guestrooms-Demo#12. Epic status: **done**. Details: [features/01-das
 
 Issue Excia/Guestrooms-Demo#17. Epic status: **in progress**. Details: [features/02-schedule.md](features/02-schedule.md).
 
-| Ticket                   | Title                                           | Status      | PR                                                    |
-| ------------------------ | ----------------------------------------------- | ----------- | ----------------------------------------------------- |
-| Excia/Guestrooms-Demo#18 | [2.1] Schedule grid (rooms by dates)            | done        | Excia/Guestrooms-Demo#118                             |
-| Excia/Guestrooms-Demo#19 | [2.2] Reservation details panel with split CTA  | in review   | Excia/Guestrooms-Demo#119                             |
-| Excia/Guestrooms-Demo#20 | [2.3] Change room during stay (menu and dialog) | in review   | branch `feat/20-change-room-during-stay` (PR to open) |
-| Excia/Guestrooms-Demo#21 | [2.4] Schedule blocks and linked room blocks    | not started |                                                       |
-| Excia/Guestrooms-Demo#22 | [2.5] Reservation menus and multi-room selector | not started |                                                       |
+| Ticket                   | Title                                           | Status      | PR                                                                             |
+| ------------------------ | ----------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
+| Excia/Guestrooms-Demo#18 | [2.1] Schedule grid (rooms by dates)            | done        | Excia/Guestrooms-Demo#118 (merged 2026-10-20)                                  |
+| Excia/Guestrooms-Demo#19 | [2.2] Reservation details panel with split CTA  | done        | Excia/Guestrooms-Demo#119 (merged 2026-10-21)                                  |
+| Excia/Guestrooms-Demo#20 | [2.3] Change room during stay (menu and dialog) | in progress | none yet (branch `feat/20-change-room-during-stay`, complete; PR to be opened) |
+| Excia/Guestrooms-Demo#21 | [2.4] Schedule blocks and linked room blocks    | not started |                                                                                |
+| Excia/Guestrooms-Demo#22 | [2.5] Reservation menus and multi-room selector | not started |                                                                                |
 
 ### Epic Reservations
 
@@ -146,7 +148,7 @@ Issue Excia/Guestrooms-Demo#37. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                 | Status                     | PR  |
 | ------------------------ | --------------------------------------------------------------------- | -------------------------- | --- |
-| Excia/Guestrooms-Demo#38 | [4.1] Folio view: charges, payments, balance summary, occupant filter | not started                |     |
+| Excia/Guestrooms-Demo#38 | [4.1] Folio view: charges, payments, balance summary, occupant filter | in review                  |     |
 | Excia/Guestrooms-Demo#39 | [4.2] Folio line type variations                                      | not started                |     |
 | Excia/Guestrooms-Demo#40 | [4.3] Open Folios list                                                | not started (needs design) |     |
 | Excia/Guestrooms-Demo#41 | [4.4] Unassigned Charges list                                         | not started                |     |
@@ -166,7 +168,7 @@ Issue Excia/Guestrooms-Demo#47. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                              | Status      | PR  |
 | ------------------------ | ---------------------------------------------------------------------------------- | ----------- | --- |
-| Excia/Guestrooms-Demo#48 | [5.1] Online booking header, account menu, return to site tooltip                  | not started |     |
+| Excia/Guestrooms-Demo#48 | [5.1] Online booking header, account menu, return to site tooltip                  | in review   |     |
 | Excia/Guestrooms-Demo#49 | [5.2] Reservation widget and adjust search                                         | not started |     |
 | Excia/Guestrooms-Demo#50 | [5.3] Results cards: member vs non-member, single vs multi room, room vs room type | not started |     |
 | Excia/Guestrooms-Demo#51 | [5.4] Guest selection, name guests, secondary occupant                             | not started |     |
@@ -255,13 +257,13 @@ Issue Excia/Guestrooms-Demo#88. Epic status: **not started**. Details: [features
 
 ### Work without a ticket
 
-| Item                              | What                                                                                                                                                                                | Status                                           | PR                                                                                                         |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Manager agent                     | `/run-manager` command, six specialist agents, `scripts/board.py`, `docs/MANAGER.md`                                                                                                | done                                             | Excia/Guestrooms-Demo#101                                                                                  |
-| Owner UX feedback                 | Themed calendar, one range calendar for check-in/check-out, quantity picker divider, message colors, menu hover tint (follows 1.4, 0.9 and the theme)                               | done                                             | Excia/Guestrooms-Demo#116                                                                                  |
-| Release PRs                       | release-please releases 1.0.0 (#103), 1.1.0 (#105), 1.2.0 (#114), 1.3.0 (#117)                                                                                                      | done                                             | Excia/Guestrooms-Demo#103, Excia/Guestrooms-Demo#105, Excia/Guestrooms-Demo#114, Excia/Guestrooms-Demo#117 |
-| Reservation panel owner decisions | Right side drawer (left configurable), Booking Guest TBD, Lead Occupant optional, Unassigned dropdowns, empty-cell click opens New Reservation, green close X, New Room Closure tab | requested by owner, in progress                  | Excia/Guestrooms-Demo#119                                                                                  |
-| Requirements log                  | this folder                                                                                                                                                                         | in review (this branch, `docs/requirements-log`) |                                                                                                            |
+| Item                              | What                                                                                                                                                                                                                                                                                     | Status | PR                                                                                                         |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| Manager agent                     | `/run-manager` command, six specialist agents, `scripts/board.py`, `docs/MANAGER.md`                                                                                                                                                                                                     | done   | Excia/Guestrooms-Demo#101                                                                                  |
+| Owner UX feedback                 | Themed calendar, one range calendar for check-in/check-out, quantity picker divider, message colors, menu hover tint (follows 1.4, 0.9 and the theme)                                                                                                                                    | done   | Excia/Guestrooms-Demo#116                                                                                  |
+| Release PRs                       | release-please releases 1.0.0 (#103), 1.1.0 (#105), 1.2.0 (#114), 1.3.0 (#117)                                                                                                                                                                                                           | done   | Excia/Guestrooms-Demo#103, Excia/Guestrooms-Demo#105, Excia/Guestrooms-Demo#114, Excia/Guestrooms-Demo#117 |
+| Reservation panel owner decisions | Right side drawer (side is one setting), Booking Guest TBD with member picker, optional Lead Occupant, Unassigned cascading dropdowns, empty-cell click opens New Reservation, green close X, New Room Closure tab, and the other owner feedback (D-057, D-063 to D-069, D-079 to D-085) | done   | Excia/Guestrooms-Demo#119                                                                                  |
+| Requirements log                  | this folder (first version, then updated for PR #119 and #118 on branch `docs/requirements-panel-update`)                                                                                                                                                                                | done   | Excia/Guestrooms-Demo#120 (update not merged yet)                                                          |
 
 ## Build order and epic status
 

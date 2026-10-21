@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.5.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.4.0...guestrooms-v1.5.0) (2026-10-21)
+
+
+### Features
+
+* add primary setup system settings ([#128](https://github.com/Excia/Guestrooms-Demo/issues/128)) ([a952ba6](https://github.com/Excia/Guestrooms-Demo/commit/a952ba6da86973e1d49b2c0668d5ad2320e7448a))
+
+## [1.4.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.3.0...guestrooms-v1.4.0) (2026-10-21)
+
+
+### Features
+
+* add folio view ([#131](https://github.com/Excia/Guestrooms-Demo/issues/131)) ([c381913](https://github.com/Excia/Guestrooms-Demo/commit/c381913568c9d4c3b5ade687b7c90f11b421b03c))
+* add reservation details panel, new reservation panel and split CTA to the schedule ([#119](https://github.com/Excia/Guestrooms-Demo/issues/119)) ([288dd56](https://github.com/Excia/Guestrooms-Demo/commit/288dd569c77aa78c00f330d13eaeac37242abc9e))
+
 ## [1.3.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.2.0...guestrooms-v1.3.0) (2026-10-20)
 
 

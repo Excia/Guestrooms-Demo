@@ -15,6 +15,8 @@ export function createUnavailableClient(error: ApiError): ApiClient {
       changeRoomDuringStay: fail,
     },
     settings: { getBookingHold: fail, getRoomChangeRule: fail },
+    systemSettings: { get: fail, save: fail, getOptions: fail },
+    folios: { get: fail, postCharge: fail },
     members: { search: fail, create: fail },
     permissions: { getGrant: fail },
     schedule: { get: fail, moveRoom: fail, moveDates: fail },

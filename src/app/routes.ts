@@ -25,8 +25,15 @@ export const RESERVATIONS_PATH = '/reservations';
 export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
 /** Open Folios (stub): where "Jump to Folio" and the panel's Folio button go until the folio screens exist. */
 export const OPEN_FOLIOS_PATH = '/open-folios';
+/** Primary Setup / System Settings (ticket 7.1). */
+export const PRIMARY_SETUP_PATH = '/admin/primary-setup';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
+
+/** Folio of one reservation (ticket 4.1). */
+export const FOLIO_PATH = '/reservations/:id/folio';
+export const folioPath = (reservationId: string) =>
+  `/reservations/${encodeURIComponent(reservationId)}/folio`;
 
 // Note: '/admin' (Admin Setup landing) is not a menu link; it opens for anyone who can open an
 // Admin Setup page (see src/app/access.ts).
@@ -47,6 +54,7 @@ export const routes = [
     path: NEW_RESERVATION_RESULTS_PATH,
     title: 'Search Results',
   },
+  { id: 'folio', path: FOLIO_PATH, title: 'Folio' },
   { id: 'open-folios', path: OPEN_FOLIOS_PATH, title: 'Open Folios', section: 'reservation' },
   {
     id: 'unassigned-charges',
@@ -77,7 +85,7 @@ export const routes = [
   },
   { id: 'reporting', path: '/reporting', title: 'Reporting', section: 'reservation' },
   { id: 'admin', path: '/admin', title: 'Admin Setup' },
-  { id: 'primary-setup', path: '/admin/primary-setup', title: 'Primary Setup', section: 'admin' },
+  { id: 'primary-setup', path: PRIMARY_SETUP_PATH, title: 'Primary Setup', section: 'admin' },
   {
     id: 'rate-categories',
     path: '/admin/rate-categories',
