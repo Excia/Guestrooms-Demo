@@ -21,6 +21,9 @@ export const DASHBOARD_PATH = '/dashboard';
 export const ROOM_BLOCKS_PATH = '/room-blocks';
 /** Reservation List (ticket 3.1): the list side of the schedule's list/calendar toggle. */
 export const RESERVATIONS_PATH = '/reservations';
+/** Reservation Hub (ticket 3.3): one reservation. A placeholder page until that ticket lands. */
+export const RESERVATION_HUB_PATH = '/reservations/:id';
+export const reservationHubPath = (id: string) => `/reservations/${encodeURIComponent(id)}`;
 /** Night Audit History; the schedule's Night Audit button opens it until the run screen exists. */
 export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
 /** Open Folios (stub): where "Jump to Folio" and the panel's Folio button go until the folio screens exist. */
