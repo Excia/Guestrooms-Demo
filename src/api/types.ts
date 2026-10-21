@@ -729,6 +729,22 @@ export interface ScheduleApi {
   moveDates(request: MoveDatesRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
 }
 
+// ---- reports ---------------------------------------------------------------------------------
+
+/** A saved custom report as the Reporting landing list shows it (ticket 6.1). */
+export interface CustomReportSummary {
+  id: string;
+  name: string;
+  creatorName: string;
+  /** ISO 8601 instant with offset or "Z"; the list shows it in the viewer's local time. */
+  updatedAt: string;
+}
+
+export interface ReportsApi {
+  /** All saved custom reports, in no guaranteed order (the UI sorts by `updatedAt`, newest first). */
+  listCustom(options?: RequestOptions): Promise<CustomReportSummary[]>;
+}
+
 // ---- client ----------------------------------------------------------------------------------
 
 export interface ApiClient {
@@ -740,6 +756,7 @@ export interface ApiClient {
   systemSettings: SystemSettingsApi;
   members: MembersApi;
   folios: FoliosApi;
+  reports: ReportsApi;
 }
 
 export interface ApiErrorInit {

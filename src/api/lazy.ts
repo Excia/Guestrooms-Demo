@@ -43,5 +43,6 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       getOptions: (o) => client().then((c) => c.systemSettings.getOptions(o)),
     },
     permissions: { getGrant: (o) => client().then((c) => c.permissions.getGrant(o)) },
+    reports: { listCustom: (o) => client().then((c) => c.reports.listCustom(o)) },
   };
 }

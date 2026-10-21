@@ -185,7 +185,7 @@ Issue Excia/Guestrooms-Demo#56. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                                              | Status      | PR  |
 | ------------------------ | -------------------------------------------------------------------------------------------------- | ----------- | --- |
-| Excia/Guestrooms-Demo#57 | [6.1] Reporting landing page                                                                       | not started |     |
+| Excia/Guestrooms-Demo#57 | [6.1] Reporting landing page                                                                       | in review |     |
 | Excia/Guestrooms-Demo#58 | [6.2] Standard report shell: filters, column filter, group-by, view and export options, pagination | not started |     |
 | Excia/Guestrooms-Demo#59 | [6.3] Custom report builder: column list, group-by list, save split menu, save toast               | not started |     |
 | Excia/Guestrooms-Demo#60 | [6.4] Report: Housekeeping (types and statuses logic from the Figma note)                          | not started |     |
