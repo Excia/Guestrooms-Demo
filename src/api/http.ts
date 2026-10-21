@@ -25,6 +25,9 @@ import type {
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
+  RoomSetup,
+  RoomSetupOptions,
+  RoomTypeSetup,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
@@ -398,6 +401,55 @@ function parseSystemSettingsOptions(body: unknown, status: number): SystemSettin
   return body as unknown as SystemSettingsOptions;
 }
 
+const isRoomDetails = (v: unknown) =>
+  isObject(v) &&
+  isCount(v.maxOccupancy) &&
+  isObject(v.bedTypes) &&
+  isString(v.description) &&
+  Array.isArray(v.photos) &&
+  Array.isArray(v.featureIds) &&
+  Array.isArray(v.addOnIds);
+
+const parseRoomSetupOptions = (body: unknown, status: number): RoomSetupOptions => {
+  if (
+    !isObject(body) ||
+    !(['skus', 'features', 'addOns', 'bedSizes', 'members'] as const).every((k) =>
+      listOf(body[k], isLookup),
+    )
+  ) {
+    throw invalid(status, 'room setup options');
+  }
+  return body as unknown as RoomSetupOptions;
+};
+
+const isSetupItem = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.startDate) &&
+  isRoomDetails(v.details);
+
+const parseRoomTypeSetup = (body: unknown, status: number): RoomTypeSetup => {
+  if (!isSetupItem(body)) throw invalid(status, 'room type');
+  return body as unknown as RoomTypeSetup;
+};
+const parseRoomTypeList = (body: unknown, status: number): RoomTypeSetup[] => {
+  if (!Array.isArray(body) || !body.every(isSetupItem)) throw invalid(status, 'room types');
+  return body as unknown as RoomTypeSetup[];
+};
+const parseRoomSetup = (body: unknown, status: number): RoomSetup => {
+  if (!isSetupItem(body) || !Array.isArray((body as { linkedRoomIds?: unknown }).linkedRoomIds)) {
+    throw invalid(status, 'room');
+  }
+  return body as unknown as RoomSetup;
+};
+const parseRoomList = (body: unknown, status: number): RoomSetup[] => {
+  if (!Array.isArray(body)) throw invalid(status, 'rooms');
+  body.forEach((room) => parseRoomSetup(room, status));
+  return body as RoomSetup[];
+};
+const parseNothing = () => undefined;
+
 const STAT_COUNTS = [
   'arrivalsToday',
   'departuresToday',
@@ -608,7 +660,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     params: Record<string, string | undefined>,
     requestOptions: RequestOptions | undefined,
     parse: (body: unknown, status: number) => T,
-    send?: { method: 'POST' | 'PUT'; body: unknown; headers?: Record<string, string> },
+    send?: { method: 'POST' | 'PUT' | 'DELETE'; body?: unknown; headers?: Record<string, string> },
   ): Promise<T> {
     const url = new URL(baseUrl + path, globalThis.location?.origin);
     for (const [key, value] of Object.entries(params)) {
@@ -642,10 +694,10 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         throw new DOMException('The operation was aborted.', 'AbortError');
       response = await (options.fetch ?? fetch)(url, {
         method: send?.method,
-        body: send ? JSON.stringify(send.body) : undefined,
+        body: send?.body !== undefined ? JSON.stringify(send.body) : undefined,
         headers: {
           Accept: 'application/json',
-          ...(send ? { 'Content-Type': 'application/json' } : {}),
+          ...(send?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           ...send?.headers,
           ...extra,
         },
@@ -844,6 +896,31 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       save: (settings, o) =>
         request('/settings/system', {}, o, parseSystemSettings, { method: 'PUT', body: settings }),
       getOptions: (o) => request('/settings/system/options', {}, o, parseSystemSettingsOptions),
+    },
+    roomSetup: {
+      getOptions: (o) => request('/room-setup/options', {}, o, parseRoomSetupOptions),
+      listRoomTypes: (o) => request('/room-types', {}, o, parseRoomTypeList),
+      saveRoomType: (input, o) =>
+        input.id
+          ? request(`/room-types/${encodeURIComponent(input.id)}`, {}, o, parseRoomTypeSetup, {
+              method: 'PUT',
+              body: input,
+            })
+          : request('/room-types', {}, o, parseRoomTypeSetup, { method: 'POST', body: input }),
+      deleteRoomType: (id, o) =>
+        request(`/room-types/${encodeURIComponent(id)}`, {}, o, parseNothing, {
+          method: 'DELETE',
+        }),
+      listRooms: (o) => request('/rooms', {}, o, parseRoomList),
+      saveRoom: (input, o) =>
+        input.id
+          ? request(`/rooms/${encodeURIComponent(input.id)}`, {}, o, parseRoomSetup, {
+              method: 'PUT',
+              body: input,
+            })
+          : request('/rooms', {}, o, parseRoomSetup, { method: 'POST', body: input }),
+      deleteRoom: (id, o) =>
+        request(`/rooms/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },

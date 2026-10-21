@@ -37,6 +37,15 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       postCharge: (r, o) => client().then((c) => c.folios.postCharge(r, o)),
     },
     settings: { getBookingHold: (o) => client().then((c) => c.settings.getBookingHold(o)) },
+    roomSetup: {
+      getOptions: (o) => client().then((c) => c.roomSetup.getOptions(o)),
+      listRoomTypes: (o) => client().then((c) => c.roomSetup.listRoomTypes(o)),
+      saveRoomType: (i, o) => client().then((c) => c.roomSetup.saveRoomType(i, o)),
+      deleteRoomType: (id, o) => client().then((c) => c.roomSetup.deleteRoomType(id, o)),
+      listRooms: (o) => client().then((c) => c.roomSetup.listRooms(o)),
+      saveRoom: (i, o) => client().then((c) => c.roomSetup.saveRoom(i, o)),
+      deleteRoom: (id, o) => client().then((c) => c.roomSetup.deleteRoom(id, o)),
+    },
     systemSettings: {
       get: (o) => client().then((c) => c.systemSettings.get(o)),
       save: (s, o) => client().then((c) => c.systemSettings.save(s, o)),

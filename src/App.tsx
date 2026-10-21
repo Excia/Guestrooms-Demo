@@ -6,6 +6,8 @@ import {
   DASHBOARD_PATH,
   NEW_RESERVATION_RESULTS_PATH,
   PRIMARY_SETUP_PATH,
+  ROOM_TYPES_PATH,
+  ROOMS_PATH,
   FOLIO_PATH,
   routes,
   SCHEDULE_PATH,
@@ -16,6 +18,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
+import RoomTypes from './pages/RoomTypes';
+import Rooms from './pages/Rooms';
 import SystemSettings from './pages/SystemSettings';
 import Reporting from './pages/Reporting';
 import NewReservationResults from './pages/NewReservationResults';
@@ -50,6 +54,8 @@ const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [PRIMARY_SETUP_PATH]: <SystemSettings />,
   [REPORTING_PATH]: <Reporting />,
+  [ROOM_TYPES_PATH]: <RoomTypes />,
+  [ROOMS_PATH]: <Rooms />,
   [FOLIO_PATH]: (
     <Suspense fallback={null}>
       <Folio />
