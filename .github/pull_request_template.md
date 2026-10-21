@@ -14,4 +14,5 @@ Closes #
 - [ ] Responsive behavior checked where Figma shows tablet or mobile
 - [ ] Tests added or updated
 - [ ] `npm run lint`, `npm run typecheck`, `npm test`, `npm run build` pass
-- [ ] Updated `docs/requirements/` (decisions, API contract, open questions, placeholders, feature status), or `n/a: <reason>`
+- [ ] Ran `git fetch origin && git merge origin/main` just before opening (no conflicts left)
+- [ ] Updated `docs/requirements/` (decisions, questions, deviations and placeholders as rows in my `entries/` file; API contract, feature status), or `n/a: <reason>`

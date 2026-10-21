@@ -1,20 +1,20 @@
 import type { ApiClient } from './types';
 import { ApiError } from './types';
 
-/** Client for a misconfigured build: every call rejects with `error`, so nothing fakes success. */
+/**
+ * Client for a misconfigured build: every call rejects with `error`, so nothing fakes success.
+ * Areas and methods are answered by name, so a new endpoint needs no entry here.
+ */
 export function createUnavailableClient(error: ApiError): ApiClient {
   const fail = () => Promise.reject(error);
-  return {
-    dashboard: { getStats: fail, getQuickStats: fail },
-    reservations: { list: fail, get: fail, getDetail: fail, setEarlyLate: fail, create: fail },
-    reservationList: { list: fail, getOptions: fail, checkInRoom: fail },
-    settings: { getBookingHold: fail },
-    systemSettings: { get: fail, save: fail, getOptions: fail },
-    bookingRules: { get: fail, save: fail, getOptions: fail },
-    folios: { get: fail, postCharge: fail },
-    members: { search: fail, create: fail },
-    permissions: { getGrant: fail },
-    reports: { listCustom: fail },
-    schedule: { get: fail, moveRoom: fail, moveDates: fail },
-  };
+  const area = new Proxy(
+    {},
+    {
+      get: (_target, method) =>
+        typeof method === 'symbol' || method === 'then' ? undefined : fail,
+    },
+  );
+  return new Proxy({} as ApiClient, {
+    get: (_target, name) => (typeof name === 'symbol' || name === 'then' ? undefined : area),
+  });
 }
