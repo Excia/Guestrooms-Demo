@@ -7,10 +7,10 @@ import ButtonGroup from '@mui/material/ButtonGroup';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link as RouterLink, useSearchParams } from 'react-router';
+import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import type { ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
-import { HEADER_HEIGHT } from '../app/layout';
+import type { ReservationDetail, ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
+import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
   applyScheduleFilters,
@@ -18,6 +18,8 @@ import {
   shiftScheduleStart,
   type ScheduleStep,
 } from '../app/schedule';
+import { applyPanel, closePanel, parsePanel } from '../app/panelUrl';
+import type { EarlyLateValues } from '../app/earlyLate';
 import { applyMoves, mergeChangedBlocks, moveFailure, revertMoves } from '../app/scheduleGrid';
 import { toMoveDatesRequest, toMoveRoomRequest, type DropResult } from '../app/scheduleDrag';
 import {
@@ -28,6 +30,7 @@ import {
 } from '../app/scheduleUrl';
 import { todayIso, type IsoDate } from '../lib/dates';
 import { newRequestId } from '../lib/requestId';
+import ReservationPanel from '../components/reservation/ReservationPanel';
 import MoveConfirmDialog from '../components/schedule/MoveConfirmDialog';
 import ScheduleControls from '../components/schedule/ScheduleControls';
 import ScheduleFilterPanel from '../components/schedule/ScheduleFilterPanel';
@@ -41,6 +44,8 @@ type Accepted = Extract<DropResult, { ok: true }>;
 export interface ScheduleProps {
   /** Local calendar date treated as "today". Injectable for tests. */
   today?: IsoDate;
+  /** Side the reservation panel flies out from; the one setting in layout.ts by default. Injectable for tests. */
+  panelSide?: PanelSide;
 }
 
 interface Pending {
@@ -58,7 +63,10 @@ interface Toast {
  * the grid. The view (start date, length, filters) lives in the URL. Desktop-first: the controls
  * wrap below 1200px and the grid scrolls inside its own container.
  */
-export default function Schedule({ today: todayProp }: ScheduleProps) {
+export default function Schedule({
+  today: todayProp,
+  panelSide = RESERVATION_PANEL_SIDE,
+}: ScheduleProps) {
   const api = useApi();
   const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
   const [params, setParams] = useSearchParams();
@@ -66,6 +74,14 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
   const start = view.start ?? today;
   const schedule = useSchedule(start, view.days);
   const { setBlocks, retry } = schedule;
+  const navigate = useNavigate();
+  const location = useLocation();
+  const panel = useMemo(() => parsePanel(params), [params]);
+  const locationState = useRef<unknown>(location.state);
+  useEffect(() => {
+    locationState.current = location.state;
+  }, [location.state]);
+  const [justCreated, setJustCreated] = useState<string | undefined>(undefined);
 
   const [filterAnchor, setFilterAnchor] = useState<HTMLElement | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -119,6 +135,89 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
     setToast((t) => ({ id: (t?.id ?? 0) + 1, message }));
     setToastOpen(true);
   }, []);
+
+  // ---- reservation panel (state in the URL: reload, Back and Forward work) ----
+  // Opening adds a history entry that remembers the URL it came from. Closing goes Back when that
+  // entry is still the one on screen, so the history has no panel left over; otherwise (a reload,
+  // a shared link) it replaces the URL with the same view without the panel. Either way the view,
+  // date range and filters are exactly what they were.
+  // What had focus when the panel opened (the grid, or the New Reservation button): focus goes back
+  // there once the panel has closed, however it was closed (the modal's own restore needs the page focused).
+  const panelTrigger = useRef<HTMLElement | null>(null);
+  const restoreFocus = useCallback(() => {
+    const trigger = panelTrigger.current;
+    panelTrigger.current = null;
+    setJustCreated(undefined);
+    if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+  }, []);
+  const openPanel = useCallback(
+    (next: Parameters<typeof applyPanel>[1], trigger?: HTMLElement) => {
+      const active = document.activeElement;
+      panelTrigger.current =
+        trigger ?? (active instanceof HTMLElement && active !== document.body ? active : null);
+      const base = closePanel(latestParams.current);
+      const search = applyPanel(latestParams.current, next);
+      latestParams.current = search;
+      setParams(search, { state: { panelFrom: base.toString() } });
+    },
+    [setParams],
+  );
+  const closeCurrentPanel = useCallback(() => {
+    const base = closePanel(latestParams.current);
+    const from = (location.state as { panelFrom?: string } | null)?.panelFrom;
+    latestParams.current = base;
+    if (from !== undefined && from === base.toString() && location.key !== 'default') {
+      void navigate(-1);
+    } else {
+      setParams(base, { replace: true });
+    }
+  }, [location.state, location.key, navigate, setParams]);
+  const openDetails = useCallback(
+    (block: ScheduleBlock) =>
+      openPanel({
+        kind: 'details',
+        reservationId: block.reservationId,
+        reservationRoomId: block.id,
+      }),
+    [openPanel],
+  );
+  const onCreated = useCallback(
+    (detail: ReservationDetail) => {
+      retry();
+      notify(
+        detail.rooms.every((r) => r.roomId !== null)
+          ? `Reservation ${detail.confirmationNumber} created.`
+          : `Reservation ${detail.confirmationNumber} created without a room. It will not appear on the schedule until a room is assigned.`,
+      );
+      const next = applyPanel(latestParams.current, {
+        kind: 'details',
+        reservationId: detail.id,
+        reservationRoomId: detail.rooms[0]?.id,
+      });
+      latestParams.current = next;
+      setJustCreated(detail.id);
+      // Keep the history state (where the panel was opened from), so closing still goes Back once.
+      setParams(next, { replace: true, state: locationState.current });
+    },
+    [retry, notify, setParams],
+  );
+  const onEarlyLateSaved = useCallback(
+    (reservationId: string, values: EarlyLateValues) => {
+      const range = currentRange.current;
+      setBlocks(range, (blocks) =>
+        blocks.map((b) =>
+          b.reservationId === reservationId
+            ? {
+                ...b,
+                earlyCheckIn: values.earlyCheckIn || undefined,
+                lateCheckOut: values.lateCheckOut || undefined,
+              }
+            : b,
+        ),
+      );
+    },
+    [setBlocks],
+  );
 
   const data = schedule.status === 'success' ? schedule.data : null;
   const liveRooms = useMemo(
@@ -248,6 +347,8 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           setPending({ block, result });
         }}
         onRefuse={notify}
+        onOpen={openDetails}
+        onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
       />
     );
   }
@@ -323,6 +424,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           onToday={() => update({ start: null })}
           onAvailability={(availability) => update({ availability })}
           onToggleFilters={(button) => setFilterAnchor((a) => (a ? null : button))}
+          onNewReservation={(button) => openPanel({ kind: 'new' }, button)}
         />
         <Box
           sx={(t) => ({
@@ -360,6 +462,20 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
           onSplit={() => confirm('this-room')}
         />
       ) : null}
+      <ReservationPanel
+        panel={panel}
+        today={today}
+        data={data}
+        dataFailed={schedule.status === 'error'}
+        onRetryData={retry}
+        onClose={closeCurrentPanel}
+        onCreated={onCreated}
+        onUnknownOutcome={retry}
+        onEarlyLateSaved={onEarlyLateSaved}
+        onExited={restoreFocus}
+        focusTitleFor={justCreated}
+        side={panelSide}
+      />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}
       </Box>
@@ -368,6 +484,7 @@ export default function Schedule({ today: todayProp }: ScheduleProps) {
         onClose={() => setToastOpen(false)}
         message={toast?.message ?? ''}
         saveId={toast?.id}
+        side={toastSideFor(panelSide)}
       />
     </Box>
   );

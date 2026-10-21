@@ -4,8 +4,11 @@ import { canDrop, toMoveDatesRequest } from './scheduleDrag';
 import {
   applyMoves,
   blockAriaLabel,
+  blockMarkers,
   blockSpan,
   clampShift,
+  columnAtX,
+  emptyCellAction,
   itemAtColumn,
   mergeChangedBlocks,
   moveCursor,
@@ -243,5 +246,72 @@ describe('moveFailure', () => {
       'The move could not be completed.',
     );
     expect(moveFailure(new Error('boom')).message).toMatch(/Could not confirm/);
+  });
+});
+
+describe('empty cells', () => {
+  const start = '2026-10-16';
+  const stay = { startDate: '2026-10-17', endDate: '2026-10-19' };
+
+  it('columnAtX maps a position to a date column, null over the room header or outside', () => {
+    // content starts at x=100, 130px room header, 7 columns of 100px
+    expect(columnAtX(200, 100, 130 + 700, 130, 7)).toBeNull(); // over the header
+    expect(columnAtX(231, 100, 830, 130, 7)).toBe(0);
+    expect(columnAtX(330, 100, 830, 130, 7)).toBe(1);
+    expect(columnAtX(929, 100, 830, 130, 7)).toBe(6);
+    expect(columnAtX(931, 100, 830, 130, 7)).toBeNull();
+    expect(columnAtX(300, 100, 100, 130, 7)).toBeNull(); // no room for the dates
+  });
+
+  it('a column is free, closed or occupied', () => {
+    expect(emptyCellAction([stay], [], start, 7, 0)).toEqual({ kind: 'free' });
+    expect(emptyCellAction([stay], [], start, 7, 1)).toEqual({ kind: 'occupied' });
+    expect(emptyCellAction([], [stay], start, 7, 1)).toEqual({ kind: 'closed' });
+    expect(emptyCellAction(undefined, undefined, start, 7, 3)).toEqual({ kind: 'free' });
+    // a closure wins when both cover the column
+    expect(emptyCellAction([stay], [stay], start, 7, 1)).toEqual({ kind: 'closed' });
+  });
+});
+
+describe('blockMarkers', () => {
+  const inView = { continuesBefore: false, continuesAfter: false };
+  const clippedLeft = { continuesBefore: true, continuesAfter: false };
+  const both = { earlyCheckIn: true, lateCheckOut: true };
+
+  it('a real arrival edge gets the early sliver, a real departure edge the late one', () => {
+    expect(blockMarkers({ earlyCheckIn: true }, inView)).toEqual({ left: true, right: false });
+    expect(blockMarkers({ lateCheckOut: true }, inView)).toEqual({ left: false, right: true });
+    expect(blockMarkers(both, inView)).toEqual({ left: true, right: true });
+    expect(blockMarkers({}, inView)).toEqual({ left: false, right: false });
+  });
+
+  it('an in-house stay that arrived before the range still shows its early sliver, as its visible left edge', () => {
+    expect(blockMarkers({ earlyCheckIn: true }, clippedLeft)).toEqual({ left: true, right: false });
+    expect(blockMarkers(both, clippedLeft)).toEqual({ left: true, right: true });
+  });
+
+  it('a clipped left edge without an early check in has no marker', () => {
+    expect(blockMarkers({}, clippedLeft)).toEqual({ left: false, right: false });
+    expect(blockMarkers({ lateCheckOut: true }, clippedLeft)).toEqual({ left: false, right: true });
+  });
+
+  it('a clipped right edge has no late marker (its departure is out of sight)', () => {
+    expect(blockMarkers(both, { continuesBefore: false, continuesAfter: true })).toEqual({
+      left: true,
+      right: false,
+    });
+    expect(blockMarkers(both, { continuesBefore: true, continuesAfter: true })).toEqual({
+      left: true,
+      right: false,
+    });
+  });
+
+  it('follows blockLayout for a stay that arrived yesterday', () => {
+    const layout = blockLayout(
+      { startDate: '2026-10-15', endDate: '2026-10-18' },
+      '2026-10-16',
+      7,
+    )!;
+    expect(blockMarkers({ earlyCheckIn: true }, layout).left).toBe(true);
   });
 });

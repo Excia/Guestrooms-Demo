@@ -19,3 +19,14 @@ export const MENU_INSET = 3;
 
 /** Id of the app header (banner); the menu overlay's Tab loop includes its controls. */
 export const HEADER_ID = 'app-header';
+
+/**
+ * Which side the reservation panel flies out from. The one place to change it: the drawer anchor,
+ * its slide direction and everything positioned from it follow this value.
+ */
+export type PanelSide = 'left' | 'right';
+export const RESERVATION_PANEL_SIDE: PanelSide = 'right';
+
+/** The toast sits on the side the reservation panel does not (it would cover the panel). */
+export const toastSideFor = (panelSide: PanelSide): PanelSide =>
+  panelSide === 'left' ? 'right' : 'left';

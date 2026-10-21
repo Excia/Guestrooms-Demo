@@ -202,16 +202,14 @@ describe('controls', () => {
     expect(screen.getAllByRole('columnheader')).toHaveLength(8);
   });
 
-  it('links Night Audit and New Reservation to their routes and the toggle to the list', async () => {
+  it('links Night Audit to its route and the toggle to the list; New Reservation is a button that opens the panel', async () => {
     await loaded();
     expect(screen.getByRole('link', { name: 'Night Audit' })).toHaveAttribute(
       'href',
       '/night-audit-history',
     );
-    expect(screen.getByRole('link', { name: 'New Reservation' })).toHaveAttribute(
-      'href',
-      '/reservations/new/results',
-    );
+    expect(screen.queryByRole('link', { name: 'New Reservation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Reservation' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'List view' })).toHaveAttribute(
       'href',
       '/reservations',
@@ -351,11 +349,11 @@ describe('keyboard navigation and move', () => {
     expect(active()).toHaveAccessibleName(/Thomas Okafor/);
   });
 
-  it('moves a reservation to another room with Enter, the Room Change dialog and Move to New Room', async () => {
+  it('moves a reservation to another room with Space, the Room Change dialog and Move to New Room', async () => {
     const { client, moveRoom } = spied();
     const user = await loaded('/schedule', client);
     await cursorTo(user, 1, 0); // 202: Thomas Okafor
-    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
     expect(liveText()).toMatch(/Picked up Thomas Okafor/);
     await user.keyboard('{ArrowDown}'.repeat(7)); // 207, free for those nights
     expect(liveText()).toMatch(/Room 207, Friday 10\/16: drop allowed/);
@@ -403,7 +401,7 @@ describe('keyboard navigation and move', () => {
     const user = await loaded('/schedule', client);
     for (const close of ['cancel', 'escape']) {
       await cursorTo(user, 1, 0);
-      await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+      await user.keyboard(' ' + '{ArrowDown}'.repeat(7) + '{Enter}');
       await screen.findByRole('dialog', { name: /Room Change/ });
       if (close === 'cancel') await user.click(screen.getByRole('button', { name: 'Cancel' }));
       else await user.keyboard('{Escape}');
@@ -426,7 +424,7 @@ describe('keyboard navigation and move', () => {
     const { client, moveRoom, moveDates } = spied();
     const user = await loaded(startUrl, client);
     await cursorTo(user, row, col);
-    await user.keyboard('{Enter}' + keys + '{Enter}');
+    await user.keyboard(' ' + keys + '{Enter}');
     expect(await toast(message)).toBeGreaterThan(0);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(moveRoom).not.toHaveBeenCalled();
@@ -452,7 +450,7 @@ describe('keyboard navigation and move', () => {
     const { client } = spied();
     const user = await loaded('/schedule', client);
     await cursorTo(user, 9, 1); // closure in 208
-    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
     expect(liveText()).toMatch(/Closures cannot be moved/);
     expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument();
   });
@@ -460,7 +458,7 @@ describe('keyboard navigation and move', () => {
   it('does not pick up a checked-out reservation', async () => {
     const user = await loaded('/schedule?start=2026-10-10');
     await cursorTo(user, 0, 0); // Sofia Marchetti, checked out
-    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
     expect(liveText()).toMatch(/Checked-out rooms cannot be moved/);
   });
 
@@ -468,7 +466,7 @@ describe('keyboard navigation and move', () => {
     const { client, moveDates } = spied();
     const user = await loaded('/schedule', client);
     await cursorTo(user, 3, 2); // 204: Annika Lindqvist, 3 rooms, 10/18 to 10/21
-    await user.keyboard('{Enter}{ArrowRight}{Enter}');
+    await user.keyboard(' {ArrowRight}{Enter}');
     const dialog = await screen.findByRole('dialog', { name: 'Reservation GR-50321 Date Change' });
     expect(dialog).toHaveTextContent(
       'will change the check in and check out dates for all rooms on the reservation',
@@ -502,7 +500,7 @@ describe('keyboard navigation and move', () => {
     const { client, moveDates } = spied();
     const user = await loaded('/schedule', client);
     await cursorTo(user, 3, 2);
-    await user.keyboard('{Enter}{ArrowRight}{Enter}');
+    await user.keyboard(' {ArrowRight}{Enter}');
     await user.click(
       await screen.findByRole('button', { name: 'split the room from reservation' }),
     );
@@ -531,7 +529,7 @@ describe('keyboard navigation and move', () => {
   it('does not offer the split link for a single-room date change, which has its own dialog', async () => {
     const user = await loaded();
     await cursorTo(user, 1, 0); // Thomas, one room
-    await user.keyboard('{Enter}{ArrowRight}{Enter}');
+    await user.keyboard(' {ArrowRight}{Enter}');
     const dialog = await screen.findByRole('dialog', { name: 'Reservation GR-50310 Date Change' });
     expect(dialog).toHaveTextContent('will change the total rate for the reservation.');
     expect(within(dialog).queryByRole('button', { name: /split/ })).not.toBeInTheDocument();
@@ -544,7 +542,7 @@ describe('keyboard navigation and move', () => {
     );
     const user = await loaded('/schedule', client);
     await cursorTo(user, 1, 0);
-    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+    await user.keyboard(' ' + '{ArrowDown}'.repeat(7) + '{Enter}');
     await user.click(await screen.findByRole('button', { name: 'Move to New Room' }));
     expect(await toast(/no longer free on those dates/)).toBeGreaterThan(0);
     expect(
@@ -730,7 +728,8 @@ describe('pointer drag', () => {
     fireEvent.pointerUp(window, { clientX: 700, clientY: rowY(1), pointerType: 'mouse' });
     fireEvent.click(el);
     expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument();
-    expect(grid()).toHaveFocus();
+    // A click is not a drag: it selects the block and opens its details.
+    expect(url()).toContain('res=rs-5');
   });
 });
 
@@ -759,7 +758,7 @@ function gatedMove(options: Parameters<typeof createMockClient>[0] = {}) {
 /** Pick up Thomas Okafor (room 202) and drop him on 207, confirming the dialog. */
 async function confirmThomasTo207(user: ReturnType<typeof userEvent.setup>) {
   await cursorTo(user, 1, 0);
-  await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+  await user.keyboard(' ' + '{ArrowDown}'.repeat(7) + '{Enter}');
   await user.click(await screen.findByRole('button', { name: 'Move to New Room' }));
 }
 
@@ -797,13 +796,13 @@ describe('a move racing with navigation', () => {
     await confirmThomasTo207(user);
     // the cursor followed Thomas to 207; walk it to Annika in 204
     await user.keyboard('{Home}' + '{ArrowUp}'.repeat(5) + '{ArrowRight}'.repeat(2));
-    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
     expect(liveText()).toMatch(/schedule is updating/i);
     expect(liveText()).not.toMatch(/Picked up Annika/);
     await act(async () => release('apply'));
     await waitFor(() => expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument());
     // unlocked again
-    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
     expect(liveText()).toMatch(/Picked up Annika/);
   });
 
@@ -824,7 +823,7 @@ describe('a move racing with navigation', () => {
     dragItem(item('Thomas Okafor'), { y: rowY(8) }, { release: false });
     expect(screen.queryByTestId('drag-ghost')).not.toBeInTheDocument();
     await cursorTo(user, 1, 0);
-    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
     expect(liveText()).toMatch(/schedule is updating/i);
   });
 });
@@ -927,7 +926,7 @@ describe('rows stay while a move is confirmed', () => {
     const rowsNow = () => rows().map((r) => r.textContent?.slice(0, 3));
     expect(rowsNow()).toContain('203');
     await cursorTo(user, 2, 0); // Henry Lowell, the only booking in 203
-    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(6) + '{Enter}'); // to 207
+    await user.keyboard(' ' + '{ArrowDown}'.repeat(6) + '{Enter}'); // to 207
     const dialog = await screen.findByRole('dialog', { name: /Room Change/ });
     expect(rowsNow()).toContain('203'); // dialog open
     await user.click(within(dialog).getByRole('button', { name: 'Move to New Room' }));
@@ -971,7 +970,7 @@ describe('cancelled drags', () => {
   it('a keyboard pick-up is cancelled when focus leaves the grid', async () => {
     const user = await loaded();
     await cursorTo(user, 1, 0);
-    await user.keyboard('{Enter}{ArrowDown}');
+    await user.keyboard(' {ArrowDown}');
     expect(screen.getByTestId('drop-indicator')).toBeInTheDocument();
     await user.tab();
     await waitFor(() => expect(screen.queryByTestId('drop-indicator')).not.toBeInTheDocument());
@@ -991,7 +990,7 @@ describe('cancelled drags', () => {
   it('Cancel and Escape in the confirm dialog announce that the move was cancelled', async () => {
     const user = await loaded();
     await cursorTo(user, 1, 0);
-    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+    await user.keyboard(' ' + '{ArrowDown}'.repeat(7) + '{Enter}');
     await screen.findByRole('dialog');
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(liveText()).toMatch(/Move cancelled/));
@@ -1147,7 +1146,7 @@ describe('submit and navigation guards', () => {
     const s = spied();
     const user = await loaded('/schedule', s.client);
     await cursorTo(user, 1, 0);
-    await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+    await user.keyboard(' ' + '{ArrowDown}'.repeat(7) + '{Enter}');
     const button = await screen.findByRole('button', { name: 'Move to New Room' });
     act(() => {
       for (let i = 0; i < 5; i++) button.click();
@@ -1177,7 +1176,7 @@ describe('submit and navigation guards', () => {
         screen.getAllByRole('status').find((s) => s.textContent === 'Move cancelled.');
       const cancelOnce = async () => {
         await cursorTo(user, 1, 0);
-        await user.keyboard('{Enter}' + '{ArrowDown}'.repeat(7) + '{Enter}');
+        await user.keyboard(' ' + '{ArrowDown}'.repeat(7) + '{Enter}');
         await user.click(await screen.findByRole('button', { name: 'Cancel' }));
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
       };

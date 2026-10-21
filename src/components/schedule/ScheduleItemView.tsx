@@ -7,7 +7,7 @@ import Typography from '@mui/material/Typography';
 import { memo, type PointerEventHandler } from 'react';
 import type { ScheduleBlock, ScheduleClosure } from '../../api';
 import type { IsoDate } from '../../lib/dates';
-import { blockSpan } from '../../app/scheduleGrid';
+import { blockMarkers, blockSpan } from '../../app/scheduleGrid';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
 import {
@@ -84,6 +84,7 @@ export default memo(function ScheduleItemView({
   const marker = (side: 'left' | 'right') => (
     <Box
       aria-hidden
+      data-marker={side}
       sx={(t) => ({
         position: 'absolute',
         top: 0,
@@ -102,6 +103,7 @@ export default memo(function ScheduleItemView({
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
   const settled = !isClosure && (block.status === 'checked-in' || block.status === 'checked-out');
+  const markers = isClosure ? { left: false, right: false } : blockMarkers(block, layout);
   return (
     <Box
       id={id}
@@ -118,70 +120,87 @@ export default memo(function ScheduleItemView({
         width: dateAreaWidth(span.end - span.start, theme.spacing(0.25)),
       }}
       onPointerDown={onPointerDown}
-      sx={(t) => {
-        const near = t.spacing(0.625);
-        const far = t.spacing(0.375);
-        // Checked-in and checked-out blocks round the left corners more; others the right (Figma).
-        const [left, right] = settled || isClosure ? [near, far] : [far, near];
-        const cl = layout.continuesBefore ? 0 : left;
-        const cr = layout.continuesAfter ? 0 : right;
-        return {
-          position: 'absolute',
-          top: t.spacing(BLOCK_TOP),
-          height: t.spacing(BLOCK_HEIGHT),
-          marginLeft: t.spacing(0.125),
-          boxSizing: 'border-box',
-          px: 0.75,
-          py: 0.25,
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          gap: 0.25,
-          overflow: 'hidden',
-          bgcolor: fill(item, today, t),
-          border: isClosure || settled ? 'none' : `0.5px solid ${t.palette.schedule.nyciBorder}`,
-          borderRadius: `${cl} ${cr} ${cr} ${cl}`,
-          boxShadow: t.shadows[1],
-          cursor: ghost ? 'grabbing' : 'grab',
-          touchAction: 'auto',
-          opacity: dragging ? 0.4 : ghost ? 0.9 : 1,
-          zIndex: ghost ? 20 : 2,
-          pointerEvents: ghost ? 'none' : 'auto',
-          '&:hover': ghost ? {} : { filter: 'brightness(0.97)' },
-        };
-      }}
+      sx={(t) => ({
+        position: 'absolute',
+        top: t.spacing(BLOCK_TOP),
+        height: t.spacing(BLOCK_HEIGHT),
+        marginLeft: t.spacing(0.125),
+        boxSizing: 'border-box',
+        cursor: ghost ? 'grabbing' : 'grab',
+        touchAction: 'auto',
+        opacity: dragging ? 0.4 : ghost ? 0.9 : 1,
+        zIndex: ghost ? 20 : 2,
+        pointerEvents: ghost ? 'none' : 'auto',
+        '&:hover > [data-body]': ghost ? {} : { filter: 'brightness(0.97)' },
+      })}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-        {isClosure ? null : <TypeIcon type={block.guestType} />}
-        <Typography
-          variant="subtitle2"
-          component="span"
-          noWrap
-          sx={(t) => ({
-            fontWeight: 500,
-            color: isClosure ? t.palette.grey[900] : NAME_COLOR(t, block),
-            minWidth: 0,
-          })}
-        >
-          {isClosure ? closure.reason : block.guestName}
-        </Typography>
+      <Box
+        data-body
+        sx={(t) => {
+          const near = t.spacing(0.625);
+          const far = t.spacing(0.375);
+          // Checked-in and checked-out blocks round the left corners more; others the right (Figma).
+          const [left, right] = settled || isClosure ? [near, far] : [far, near];
+          // A block clipped at the left edge is flat there to show it goes on, unless it carries the
+          // early check in sliver: then the sliver is its left edge, a rounded card like any other.
+          const cl = layout.continuesBefore && !markers.left ? 0 : left;
+          const cr = layout.continuesAfter ? 0 : right;
+          return {
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            boxSizing: 'border-box',
+            px: 0.75,
+            py: 0.25,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: 0.25,
+            overflow: 'hidden',
+            bgcolor: fill(item, today, t),
+            border: isClosure || settled ? 'none' : `0.5px solid ${t.palette.schedule.nyciBorder}`,
+            borderRadius: `${cl} ${cr} ${cr} ${cl}`,
+            boxShadow: t.shadows[1],
+          };
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+          {isClosure ? null : <TypeIcon type={block.guestType} />}
+          <Typography
+            variant="subtitle2"
+            component="span"
+            noWrap
+            sx={(t) => ({
+              fontWeight: 500,
+              color: isClosure ? t.palette.grey[900] : NAME_COLOR(t, block),
+              minWidth: 0,
+            })}
+          >
+            {isClosure ? closure.reason : block.guestName}
+          </Typography>
+        </Box>
+        {isClosure ? null : (
+          <Typography
+            variant="caption"
+            component="span"
+            noWrap
+            sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
+          >
+            {block.confirmationNumber}
+          </Typography>
+        )}
+        {isClosure && closure.endMarker ? (
+          <>
+            {layout.continuesBefore ? null : marker('left')}
+            {layout.continuesAfter ? null : marker('right')}
+          </>
+        ) : null}
+        {/* Early Check In / Late Check Out edge markers at a real arrival / departure edge. */}
+        {markers.left ? marker('left') : null}
+        {markers.right ? marker('right') : null}
       </Box>
-      {isClosure ? null : (
-        <Typography
-          variant="caption"
-          component="span"
-          noWrap
-          sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
-        >
-          {block.confirmationNumber}
-        </Typography>
-      )}
-      {isClosure && closure.endMarker ? (
-        <>
-          {layout.continuesBefore ? null : marker('left')}
-          {layout.continuesAfter ? null : marker('right')}
-        </>
-      ) : null}
     </Box>
   );
 });

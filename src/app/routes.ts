@@ -23,6 +23,8 @@ export const ROOM_BLOCKS_PATH = '/room-blocks';
 export const RESERVATIONS_PATH = '/reservations';
 /** Night Audit History; the schedule's Night Audit button opens it until the run screen exists. */
 export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
+/** Open Folios (stub): where "Jump to Folio" and the panel's Folio button go until the folio screens exist. */
+export const OPEN_FOLIOS_PATH = '/open-folios';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -45,7 +47,7 @@ export const routes = [
     path: NEW_RESERVATION_RESULTS_PATH,
     title: 'Search Results',
   },
-  { id: 'open-folios', path: '/open-folios', title: 'Open Folios', section: 'reservation' },
+  { id: 'open-folios', path: OPEN_FOLIOS_PATH, title: 'Open Folios', section: 'reservation' },
   {
     id: 'unassigned-charges',
     path: '/unassigned-charges',

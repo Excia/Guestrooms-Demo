@@ -28,6 +28,8 @@ export interface SaveToastProps {
   autoHideDuration?: number;
   /** Change it for each save: the toast restarts its timer and is announced again. */
   saveId?: string | number;
+  /** Which bottom corner it sits in; left by default (Figma). */
+  side?: 'left' | 'right';
 }
 
 // Save Confirmation toast (Figma 69:4219).
@@ -41,6 +43,7 @@ export default function SaveToast({
   onUndo,
   autoHideDuration = 5000,
   saveId = 0,
+  side = 'left',
 }: SaveToastProps) {
   const handleClose = (_: unknown, reason?: SnackbarCloseReason) => {
     // A click elsewhere on the page must not dismiss it.
@@ -59,7 +62,7 @@ export default function SaveToast({
         open={open}
         onClose={handleClose}
         autoHideDuration={onUndo ? null : autoHideDuration}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: side }}
       >
         <SnackbarContent
           role="group"

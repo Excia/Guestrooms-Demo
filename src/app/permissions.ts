@@ -15,15 +15,21 @@ import { routes, type PageId } from './routes';
 export type PermissionPageId = Exclude<PageId, 'admin'>;
 export type PagePermission = `page.${PermissionPageId}`;
 export type AdminPermission = 'admin';
-// Room for non-page permissions (e.g. 'reservation.create') once the Permissions page is designed.
-export type Permission = PagePermission | AdminPermission;
+// `reservation.edit` lets a user change a reservation in the details panel (Early/Late saves) and
+// create one; without it the panel is read-only. More action permissions follow once the
+// Permissions page is designed.
+export type ReservationPermission = 'reservation.edit';
+export type Permission = PagePermission | AdminPermission | ReservationPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 
 export const pagePermission = (id: PermissionPageId): PagePermission => `page.${id}`;
 
+export const RESERVATION_EDIT_PERMISSION: ReservationPermission = 'reservation.edit';
+
 export const ALL_PERMISSIONS: readonly Permission[] = [
   ADMIN_PERMISSION,
+  RESERVATION_EDIT_PERMISSION,
   ...routes.filter((r) => r.id !== 'admin').map((r) => pagePermission(r.id as PermissionPageId)),
 ];
 

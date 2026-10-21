@@ -148,7 +148,12 @@ export default function DateField({
     }
   };
 
-  const candidate = range ? draft.from || value : value;
+  // The check-out field opens on the current check-out; the first date picked on a calendar opens on it.
+  const candidate = range
+    ? range.role === 'to' && range.to
+      ? range.to
+      : draft.from || value
+    : value;
   const initial = clampDate(isValidIsoDate(candidate) ? candidate : today, bounds.min, bounds.max);
   const hasValue = range ? current.from !== '' : value !== '';
   const clear = () => {
