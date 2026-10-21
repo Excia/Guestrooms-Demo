@@ -142,7 +142,7 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
 - **Stubs (each shows a polite notice, none is a silent no-op):** Check In / Check Out variants,
   Manage Reservation, Edit Room, Print Registration Card, Edit Guests, add-ons, Edit notes, Payment.
   Most notices say "ticket 3.12" (developer wording; the log lists 3.12 as Early/Late and the Hub as
-  3.3 and 3.4, so the number may be wrong: Q-19-13). Jump to Folio goes to `/open-folios` (stub route).
+  3.3 and 3.4, so the number may be wrong: Q-19-13). Jump to Folio (and the Folio button of the Rates & Payment section) go to the reservation's folio view `/reservations/:id/folio` since ticket 4.1 (PR #131) exists; before that they went to the `/open-folios` stub (changed in the ticket 2.3 branch when it was merged with main).
   A read-only user (no `reservation.edit`) still sees the primary CTA enabled (stubs); the reason is
   shown at the top of both panels (Q-19-12).
 - **Placeholders:** hold minutes 15 / 10 / 10; the member directory (25 people); placeholder nightly

@@ -157,7 +157,7 @@ Added by the Folio view (Excia/Guestrooms-Demo#38). Both are in `createHttpClien
 
 ## Change room during stay (ticket 2.3, branch `feat/20-change-room-during-stay`)
 
-Per-night model (D-087 to D-093); see also [02-schedule.md](features/02-schedule.md#23-change-room-during-stay-menu-and-dialog).
+Per-night model (D-086 to D-095); see also [02-schedule.md](features/02-schedule.md#23-change-room-during-stay-menu-and-dialog).
 
 | #   | Method and path                            | Request                                                                                                                                                 | Response                                                                                                                                                  | Errors                                                                                                                                                                                                                                          |
 | --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

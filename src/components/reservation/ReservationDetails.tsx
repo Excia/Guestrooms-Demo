@@ -36,7 +36,7 @@ import {
   stepRoomIndex,
 } from '../../app/reservationPanel';
 import { formatPanelDate } from '../../app/newReservation';
-import { OPEN_FOLIOS_PATH } from '../../app/routes';
+import { folioPath } from '../../app/routes';
 import { splitCta, STUB_TICKETS, type CtaActionId } from '../../app/splitCta';
 import { useAccess } from '../../app/useAccess';
 import { todayIso, type IsoDate } from '../../lib/dates';
@@ -431,7 +431,7 @@ function Loaded({
 
   const run = (actionId: CtaActionId) => {
     if (actionId === 'jump-to-folio') {
-      void navigate(OPEN_FOLIOS_PATH);
+      void navigate(folioPath(detail.id));
       return;
     }
     say(STUB_TICKETS[actionId] ?? 'This action arrives in a later ticket.');
