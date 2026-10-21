@@ -89,3 +89,5 @@ with itself).
 | Annotations that link to the older Figma file (`kfShjVI0o5MY5KpGEmsgpw`)                                                                                               | Tickets 3.12 and others         | ignore (D-012)                    |
 | Migration Tool frame includes reference mockups that look like another product's                                                                                       | Ticket 7.7                      | D-017                             |
 | Quick Stats Day/Week/Month frames compared by the author only; QA had no Figma access                                                                                  | Ticket 1.2                      | visual pass pending (Q-G-19)      |
+| Reporting landing (310:7003) is drawn with a header breadcrumb "Guest Rooms / Reporting"; none is built | Ticket 6.1 | D-020 (no header breadcrumbs); the page has a visually hidden h1 "Reporting" |
+| Custom report subtitle shows two spaces before the time ("XX/XX/XX  XX:XX XM"); HTML collapses them to one | Ticket 6.1 | single space |

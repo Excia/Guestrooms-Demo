@@ -2,6 +2,7 @@ import type {
   ApiClient,
   BookingHold,
   CreateMemberRequest,
+  CustomReportSummary,
   Member,
   MemberQuery,
   CreateReservationRequest,
@@ -339,6 +340,19 @@ function parseBookingHold(body: unknown, status: number): BookingHold {
     throw invalid(status, 'booking hold');
   }
   return body as unknown as BookingHold;
+}
+
+const isCustomReport = (v: unknown): v is CustomReportSummary =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.creatorName) &&
+  isString(v.updatedAt) &&
+  !Number.isNaN(Date.parse(v.updatedAt));
+
+function parseCustomReports(body: unknown, status: number): CustomReportSummary[] {
+  if (!Array.isArray(body) || !body.every(isCustomReport)) throw invalid(status, 'custom reports');
+  return body;
 }
 
 const isLookup = (v: unknown) => isObject(v) && isString(v.id) && isString(v.label);
@@ -830,5 +844,6 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       getOptions: (o) => request('/settings/system/options', {}, o, parseSystemSettingsOptions),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
+    reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
   };
 }
