@@ -247,9 +247,11 @@ export default memo(function ScheduleItemView({
       })}
     >
       {tipArmed && tip ? (
+        // The title is an element, not a string: MUI then adds neither a native `title` (the browser's
+        // own tooltip) nor an aria-label to the body, and the popper is hidden from assistive
+        // technology (the cell's aria-label already says it all).
         <Tooltip
-          title={tip}
-          describeChild
+          title={<span>{tip}</span>}
           open={tipOpen}
           disableInteractive
           slotProps={{ popper: { 'aria-hidden': true } }}

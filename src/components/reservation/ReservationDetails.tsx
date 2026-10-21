@@ -417,6 +417,9 @@ function Loaded({
     busy: roomChangeBusy,
   });
   const multi = detail.rooms.length > 1;
+  // The dialog cannot render (the date or the action is gone after a reload): forget that it was
+  // asked for, so it cannot pop open later.
+  if (changing && (!roomChange.effectiveDate || !onChangeRoom)) setChanging(null);
   // A change that failed because the data drifted reopens the dialog on step 1 (set state while
   // rendering, the documented pattern for state derived from a prop).
   if (

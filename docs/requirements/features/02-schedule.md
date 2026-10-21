@@ -230,7 +230,7 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
   - **Drift (D-095):** the server owns the effective date (the club's today). When what the user saw drifted
     (409 `stale`, a different effective date, 400 about the nights or the rate choice) the page reverts the
     optimistic change, reloads, adopts the server's today and reopens the dialog on step 1 with the choices that
-    are still valid and "The schedule changed while you were editing. Review the plan."
+    are still valid and "The schedule changed while you were editing. Review the plan." (for a 400 about the plan or the rate question the cause is not known, so: "Something changed while you were editing. Review the plan.")
   - **Readability (D-096):** the reason a Change Room action is unavailable is visible text under the button
     (not only a tooltip); disabled room options keep their reason at normal secondary contrast; blocks have a
     lazily created tooltip with the full text (guest, confirmation number, part n of m, room and neighbours)
@@ -265,8 +265,7 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
 - **Stubs and placeholders:** the setting `askRateOnRoomChange` (default on) and `ScheduleRoom.housekeeping` are
   placeholders; the housekeeping state is not shown anywhere yet (Housekeeping report 6.4, "H" blocks); nightly
   rates are the placeholder room type rates ([placeholders.md](../placeholders.md)).
-- **Known limits:** when the focused row of the windowed night list (stays of more than 60 remaining nights) is
-  scrolled out and unmounts, focus falls back to the dialog container; the part label of an optimistic block
+- **Known limits:** the part label of an optimistic block
   ("part n of m") can differ from the committed one when an earlier part lies outside the loaded date range (the
   server's answer replaces it); a stayed block that ends where the visible range starts is not drawn (at start = today a
   stayed part has no column; the panel lists it under "Earlier in this stay"); the windowed list of a very long

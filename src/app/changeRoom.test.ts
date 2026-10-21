@@ -12,6 +12,7 @@ import {
   keepValidEdits,
   stayedPlan,
   REVIEW_PLAN,
+  REVIEW_PLAN_UNKNOWN,
   changeRoomAvailability,
   changeRoomFailure,
   changeToast,
@@ -712,7 +713,7 @@ describe('changeRoomFailure', () => {
         changeRoomFailure(
           new ApiError(400, 'x', { code: 'invalid-query', details: { [key]: ['x'] } }),
         ),
-      ).toMatchObject({ reopen: true, message: REVIEW_PLAN });
+      ).toMatchObject({ reopen: true, message: REVIEW_PLAN_UNKNOWN });
     }
     // Other errors do not reopen.
     for (const e of [

@@ -617,6 +617,7 @@ describe('Cancel leaves everything unchanged', () => {
 });
 
 const REVIEW = 'The schedule changed while you were editing. Review the plan.';
+const REVIEW_UNKNOWN = 'Something changed while you were editing. Review the plan.';
 
 describe('failures', () => {
   async function run(error: ApiError) {
@@ -682,7 +683,7 @@ describe('failures', () => {
       string[]
     >[]) {
       await run(new ApiError(400, 'x', { code: 'invalid-query', details }));
-      expect((await screen.findAllByText(REVIEW)).length).toBeGreaterThan(0);
+      expect((await screen.findAllByText(REVIEW_UNKNOWN)).length).toBeGreaterThan(0);
       expect(
         await screen.findByRole('dialog', { name: 'Change Room During Stay' }),
       ).toBeInTheDocument();
@@ -846,6 +847,101 @@ describe('the tooltip of the block under the grid cursor follows the input modal
 
 const user_wait = () => new Promise((r) => setTimeout(r, 50));
 
+describe('a long stay (windowed night list)', () => {
+  // Victor Almeida's stay is stretched to 100 more nights: the dialog lists its nights in a scrolling,
+  // windowed container.
+  function longStay(): ApiClient {
+    const base = createMockClient({ today: TODAY });
+    const END = '2027-01-24';
+    return {
+      ...base,
+      schedule: {
+        ...base.schedule,
+        get: async (q, o) => {
+          const d = await base.schedule.get(q, o);
+          return {
+            ...d,
+            blocks: d.blocks.map((b) => (b.id === 'rr-14' ? { ...b, endDate: END } : b)),
+          };
+        },
+      },
+      reservations: {
+        ...base.reservations,
+        getDetail: async (id, o) => {
+          const d = await base.reservations.getDetail(id, o);
+          return {
+            ...d,
+            departure: END,
+            nights: 101,
+            rooms: d.rooms.map((r) => (r.id === 'rr-14' ? { ...r, departure: END } : r)),
+          };
+        },
+      },
+    };
+  }
+
+  async function openLong() {
+    const ctx = await openPanel(longStay());
+    await ctx.user.click(within(ctx.dialog).getByRole('button', { name: 'Change Room' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    const region = await within(dlg).findByRole('region', {
+      name: /Remaining nights, scroll for more/,
+    });
+    return { ...ctx, dlg, region };
+  }
+  const inputs = (root: HTMLElement) => within(root).queryAllByRole('combobox');
+  // jsdom has no layout: give the scroll container a scrollTop it keeps.
+  const scrollTo = (region: HTMLElement, top: number) => {
+    Object.defineProperty(region, 'scrollTop', { configurable: true, value: top });
+    fireEvent.scroll(region);
+  };
+
+  it('renders only the rows in view and focuses the first menu once, when step 1 first shows', async () => {
+    const { region } = await openLong();
+    expect(inputs(region).length).toBeLessThan(20);
+    await waitFor(() => expect(inputs(region)[0]).toHaveFocus());
+  });
+
+  it('scrolling back up does not pull focus into the first row again', async () => {
+    const { dlg, region } = await openLong();
+    await waitFor(() => expect(inputs(region)[0]).toHaveFocus());
+    // Focus a row further down, then scroll to the end and back to the top.
+    const lower = inputs(region)[3];
+    lower.focus();
+    scrollTo(region, 8000);
+    // Rows far down are rendered now (night 80 or later), and the focused row is still there too.
+    await waitFor(() =>
+      expect(
+        inputs(region).some((i) =>
+          /night (7[5-9]|8\d|9\d|10\d),/.test(i.getAttribute('aria-label') ?? ''),
+        ),
+      ).toBe(true),
+    );
+    expect(lower).toBeInTheDocument();
+    scrollTo(region, 0);
+    await waitFor(() => expect(inputs(region).length).toBeGreaterThan(0));
+    // The row that had focus stayed rendered while it was scrolled out of view: focus never moved.
+    expect(lower).toBeInTheDocument();
+    expect(lower).toHaveFocus();
+    expect(dlg).toContainElement(document.activeElement as HTMLElement);
+  });
+
+  it('with focus outside the list, scrolling away and back leaves focus alone', async () => {
+    const { dlg, region } = await openLong();
+    await waitFor(() => expect(inputs(region)[0]).toHaveFocus());
+    const cancel = within(dlg).getByRole('button', { name: 'Cancel' });
+    cancel.focus();
+    scrollTo(region, 8000);
+    await waitFor(() =>
+      expect(within(region).queryAllByRole('combobox').length).toBeGreaterThan(0),
+    );
+    // The first row is gone (nothing in it had focus any more); scrolling back must not refocus it.
+    scrollTo(region, 0);
+    await waitFor(() => expect(inputs(region).length).toBeGreaterThan(0));
+    expect(cancel).toHaveFocus();
+  });
+});
+
 describe('long block text', () => {
   it('no tooltip lingers on the block under the keyboard cursor while a panel is open (the grid has no focus)', async () => {
     await openPanel(createMockClient({ today: TODAY }));
@@ -861,8 +957,9 @@ describe('long block text', () => {
     const label = cell.getAttribute('aria-label');
     // Nothing is created before the first hover.
     expect(screen.queryAllByRole('tooltip', { hidden: true })).toHaveLength(0);
-    // Not cut off: no tooltip.
+    // Not cut off: no tooltip, and no native title either (the browser would show its own).
     await user.hover(cell);
+    expect(cell.querySelectorAll('[title]')).toHaveLength(0);
     expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument();
     await user.unhover(cell);
     // Cut off (the ellipsis shows): the tooltip names guest, confirmation number and room.
@@ -871,6 +968,9 @@ describe('long block text', () => {
     await user.hover(cell);
     // The tooltip is hidden from assistive technology: the cell's own name already says it all.
     const tip = await screen.findByRole('tooltip', { hidden: true });
+    // Never the browser's own tooltip: no native `title`, anywhere on the block, open or closed.
+    expect(cell.querySelectorAll('[title]')).toHaveLength(0);
+    expect(cell).not.toHaveAttribute('title');
     expect(tip).toHaveTextContent('Victor Almeida, GR-50271, Room 301');
     // The accessible name is unchanged and the cell is not described twice.
     expect(cell.getAttribute('aria-label')).toBe(label);

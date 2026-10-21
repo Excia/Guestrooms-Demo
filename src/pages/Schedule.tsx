@@ -125,6 +125,8 @@ export default function Schedule({
   } | null>(null);
   // The server owns "today" (the club's): when it differs from this browser's, the panel follows it.
   const [serverToday, setServerToday] = useState<IsoDate | undefined>(undefined);
+  // It lasts while the panel it was learned for is open.
+  if (!panel && serverToday !== undefined) setServerToday(undefined);
   // The blocks on screen, readable from callbacks that outlive a render.
   const loadedBlocks = useRef<ScheduleBlock[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);

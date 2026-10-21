@@ -32,8 +32,9 @@ export interface SaveToastProps {
   side?: 'left' | 'right';
   /**
    * What the message is: 'success' (the green Figma toast, default), 'warning' (something could not
-   * be confirmed or the user should look again) or 'error' (it failed). Colors come from the theme;
-   * the live-region behavior is the same for all.
+   * be confirmed or the user should look again) or 'error' (it failed). Colors come from the theme.
+   * An error is announced assertively (`role="alert"`); the others politely (`role="status"`). Each
+   * toast has exactly one live region.
    */
   severity?: 'success' | 'warning' | 'error';
 }
@@ -65,7 +66,7 @@ export default function SaveToast({
   };
   return (
     <>
-      <Box role="status" sx={visuallyHidden}>
+      <Box role={severity === 'error' ? 'alert' : 'status'} sx={visuallyHidden}>
         {open ? <span key={`${saveId}:${message}`}>{message}</span> : null}
       </Box>
       {/* Keyed on saveId only: a new message while open updates in place (the live region above

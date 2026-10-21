@@ -18,7 +18,7 @@ import Skeleton from '@mui/material/Skeleton';
 import { useTheme } from '@mui/material/styles';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { memo, useCallback, useId, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type {
   ChangeRoomRequest,
   NightRoom,
@@ -99,7 +99,6 @@ interface NightRowProps {
   currentRoomId: string;
   index: NightIndex;
   filter: RoomFilter;
-  autoFocus: boolean;
   dialogId: string;
   onPick: (date: IsoDate, roomId: string) => void;
 }
@@ -115,7 +114,6 @@ const NightRow = memo(function NightRow({
   currentRoomId,
   index,
   filter,
-  autoFocus,
   dialogId,
   onPick,
 }: NightRowProps) {
@@ -229,7 +227,6 @@ const NightRow = memo(function NightRow({
             {...params}
             hiddenLabel
             placeholder="Search by room number, location or room type"
-            autoFocus={autoFocus}
             slotProps={{
               ...params.slotProps,
               htmlInput: {
@@ -283,12 +280,28 @@ export default function ChangeRoomDialog({
   const [answer, setAnswer] = useState<RateChoice>('retain');
   const [scrollTop, setScrollTop] = useState(0);
   const submitted = useRef(false);
+  // Focus goes to the first night's menu ONCE, when step 1 first shows its nights (not each time the
+  // first row of a windowed list is rendered again by scrolling back up).
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const focusedFirst = useRef(false);
+  // The row that has focus stays rendered while the windowed list scrolls past it.
+  const [focusedRow, setFocusedRow] = useState<number | null>(null);
   const onPick = useCallback(
     (date: IsoDate, roomId: string) => setEdits((e) => ({ ...e, [date]: roomId })),
     [],
   );
 
   const ready = data.status === 'ready' ? data : null;
+  useEffect(() => {
+    if (focusedFirst.current || !ready || step !== 'plan') return;
+    const first = bodyRef.current?.querySelector<HTMLElement>(
+      'input[aria-label^="Room for night"]',
+    );
+    if (first) {
+      first.focus();
+      focusedFirst.current = true;
+    }
+  });
   const current: NightRoom[] = useMemo(
     () =>
       ready
@@ -384,7 +397,6 @@ export default function ChangeRoomDialog({
         currentRoomId={current[i].roomId}
         index={index}
         filter={filter}
-        autoFocus={i === 0}
         dialogId={id}
         onPick={onPick}
       />
@@ -400,7 +412,7 @@ export default function ChangeRoomDialog({
       slotProps={{ paper: { sx: { maxWidth: (t) => t.spacing(60) } } }}
     >
       <DialogTitle id={`${id}-title`}>{title}</DialogTitle>
-      <DialogContent>
+      <DialogContent ref={bodyRef}>
         {data.status === 'loading' ? (
           <Box role="status" aria-busy="true" aria-label="Loading rooms">
             <Skeleton width="70%" />
@@ -498,26 +510,32 @@ export default function ChangeRoomDialog({
                   aria-label="Remaining nights"
                   style={{ height: plan.length * rowPx, position: 'relative' }}
                 >
-                  {plan.slice(rows.first, rows.last).map((n, k) => {
-                    const i = rows.first + k;
-                    return (
-                      <Box
-                        role="listitem"
-                        key={n.date}
-                        aria-posinset={i + 1}
-                        aria-setsize={plan.length}
-                        style={{
-                          position: 'absolute',
-                          top: i * rowPx,
-                          left: 0,
-                          right: 0,
-                          height: rowPx,
-                        }}
-                      >
-                        {row(n, i)}
-                      </Box>
-                    );
-                  })}
+                  {plan
+                    .map((n, i) => ({ n, i }))
+                    .filter(({ i }) => (i >= rows.first && i < rows.last) || i === focusedRow)
+                    .map(({ n, i }) => {
+                      return (
+                        <Box
+                          role="listitem"
+                          key={n.date}
+                          aria-posinset={i + 1}
+                          aria-setsize={plan.length}
+                          onFocus={() => setFocusedRow(i)}
+                          onBlur={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget)) setFocusedRow(null);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: i * rowPx,
+                            left: 0,
+                            right: 0,
+                            height: rowPx,
+                          }}
+                        >
+                          {row(n, i)}
+                        </Box>
+                      );
+                    })}
                 </Box>
               </Box>
             ) : (

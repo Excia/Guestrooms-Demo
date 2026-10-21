@@ -121,9 +121,18 @@ describe('SaveToast severity', () => {
     expect(new Set([green, orange, red]).size).toBe(3);
   });
 
-  it('keeps the same live region for every severity', () => {
-    render(<SaveToast open onClose={vi.fn()} message="Failed" severity="error" />);
-    expect(screen.getAllByRole('status')).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Failed');
+  it('announces an error assertively (alert) and success or warning politely (status): one live region each', () => {
+    const { rerender } = render(
+      <SaveToast open onClose={vi.fn()} message="Failed" severity="error" />,
+    );
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    for (const severity of ['success', 'warning'] as const) {
+      rerender(<SaveToast open onClose={vi.fn()} message="Look" severity={severity} />);
+      expect(screen.getAllByRole('status')).toHaveLength(1);
+      expect(screen.getByRole('status')).toHaveTextContent('Look');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    }
   });
 });

@@ -603,6 +603,8 @@ export interface RoomChangeFailure {
 export const UNKNOWN_ROOM_CHANGE =
   'Could not confirm the room change. Showing the latest schedule.';
 export const REVIEW_PLAN = 'The schedule changed while you were editing. Review the plan.';
+/** A 400 about the plan or the rate question: the cause is not known, so none is claimed. */
+export const REVIEW_PLAN_UNKNOWN = 'Something changed while you were editing. Review the plan.';
 
 const COPY: Record<string, string> = {
   conflict:
@@ -645,7 +647,7 @@ export function changeRoomFailure(error: unknown): RoomChangeFailure {
     return {
       revert: true,
       refetch: true,
-      message: REVIEW_PLAN,
+      message: status === 409 ? REVIEW_PLAN : REVIEW_PLAN_UNKNOWN,
       reopen: true,
       serverToday: today && parseIsoDate(today) ? today : undefined,
     };
