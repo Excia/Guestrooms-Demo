@@ -12,12 +12,14 @@ import {
   routes,
   SCHEDULE_PATH,
 } from './app/routes';
+import { REPORTING_PATH } from './app/reports';
 import AppShell from './AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
 import SystemSettings from './pages/SystemSettings';
+import Reporting from './pages/Reporting';
 import NewReservationResults from './pages/NewReservationResults';
 import ReservationList from './pages/ReservationList';
 import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
@@ -50,6 +52,7 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [PRIMARY_SETUP_PATH]: <SystemSettings />,
+  [REPORTING_PATH]: <Reporting />,
   [FOLIO_PATH]: (
     <Suspense fallback={null}>
       <Folio />

@@ -313,7 +313,16 @@ export interface ReservationsApi {
 // ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----
 
 export type FolioLineType =
-  'room-rate' | 'mpos' | 'manual' | 'add-on' | 'surcharge' | 'service-fee';
+  | 'room-rate'
+  | 'mpos'
+  | 'manual'
+  | 'add-on'
+  | 'surcharge'
+  | 'service-fee'
+  /** The line that was split (status `split`); its description names the item or selection. */
+  | 'split-parent'
+  /** One part of a split (Figma "Split Item Child"). */
+  | 'split-child';
 
 /**
  * `posted`: on the folio and owed; `unposted`: waiting for Night Audit; `settled`: paid, with the
@@ -731,6 +740,22 @@ export interface ScheduleApi {
   moveDates(request: MoveDatesRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
 }
 
+// ---- reports ---------------------------------------------------------------------------------
+
+/** A saved custom report as the Reporting landing list shows it (ticket 6.1). */
+export interface CustomReportSummary {
+  id: string;
+  name: string;
+  creatorName: string;
+  /** ISO 8601 instant with offset or "Z"; the list shows it in the viewer's local time. */
+  updatedAt: string;
+}
+
+export interface ReportsApi {
+  /** All saved custom reports, in no guaranteed order (the UI sorts by `updatedAt`, newest first). */
+  listCustom(options?: RequestOptions): Promise<CustomReportSummary[]>;
+}
+
 // ---- client ----------------------------------------------------------------------------------
 
 export interface ApiClient {
@@ -743,6 +768,7 @@ export interface ApiClient {
   systemSettings: SystemSettingsApi;
   members: MembersApi;
   folios: FoliosApi;
+  reports: ReportsApi;
 }
 
 export interface ApiErrorInit {
