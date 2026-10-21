@@ -17,6 +17,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { ReservationDetail, ReservationRoomDetail } from '../../api';
@@ -392,6 +393,7 @@ function Loaded({
   );
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
   const say = (text: string) => setNotice((n) => ({ id: (n?.id ?? 0) + 1, text }));
+  const changeRoomId = useId();
   const [changingRoom, setChangingRoom] = useState(false);
   const cta = splitCta(detail);
   const room = detail.rooms[Math.min(roomIndex, detail.rooms.length - 1)];
@@ -497,6 +499,11 @@ function Loaded({
         ) : null}
         {onChangeRoom ? (
           <Box sx={{ mt: 1 }}>
+            {roomChange.reason ? (
+              <Box component="span" id={`${changeRoomId}-reason`} sx={visuallyHidden}>
+                {roomChange.reason}
+              </Box>
+            ) : null}
             <Tooltip
               title={roomChange.reason ?? ''}
               describeChild
@@ -507,6 +514,7 @@ function Loaded({
                 size="small"
                 startIcon={<SwapHoriz />}
                 aria-disabled={!roomChange.available}
+                aria-describedby={roomChange.available ? undefined : `${changeRoomId}-reason`}
                 onClick={() =>
                   roomChange.available ? setChangingRoom(true) : say(roomChange.reason ?? '')
                 }

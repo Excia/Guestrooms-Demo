@@ -208,6 +208,8 @@ export default function ChangeRoomDialog({
               options={choices}
               value={picked}
               onChange={(_, choice) => {
+                // A disabled room cannot be chosen, however the event arrives.
+                if (choice?.disabled) return;
                 setPicked(choice);
                 setAnswer('retain');
               }}
@@ -226,7 +228,6 @@ export default function ChangeRoomDialog({
               }}
               noOptionsText="No rooms match."
               autoHighlight
-              openOnFocus
               renderGroup={(params) => (
                 <li key={params.key}>
                   <ListSubheader component="div" sx={{ top: -8 }}>
