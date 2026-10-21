@@ -8,6 +8,8 @@ import {
   mockStats,
   noGrant,
 } from './mockData';
+import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
+import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
@@ -17,6 +19,7 @@ import { queryReservations } from './reservationQuery';
 import { createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
+import { validateSystemSettings } from '../app/systemSettings';
 import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
 import { ApiError } from './types';
 import {
@@ -26,6 +29,7 @@ import {
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
+  assertPostChargeRequest,
   assertQuickStatsQuery,
   assertReservationListQuery,
   assertResourceId,
@@ -68,6 +72,8 @@ export function createMockClient({
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
   const members = seedMembers();
+  let systemSettings = mockSystemSettings();
+  const folioStore: FolioStore = new Map();
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {
@@ -212,6 +218,31 @@ export function createMockClient({
           o,
         ),
     },
+    folios: {
+      get: (id, o) =>
+        respond(
+          () => {
+            assertResourceId(id, 'reservation');
+            return getFolio(schedule, folioStore, id);
+          },
+          () => {
+            throw notFound();
+          },
+          o,
+        ),
+      postCharge: (request, o) =>
+        respond(
+          () => {
+            assertPostChargeRequest(request);
+            return replayable(request, () => postCharge(schedule, folioStore, request));
+          },
+          () => {
+            assertPostChargeRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+    },
     schedule: {
       get: (query, o) =>
         respond(
@@ -287,6 +318,33 @@ export function createMockClient({
         respond(
           () => ({ ...MOCK_BOOKING_HOLD }),
           () => ({ ...MOCK_BOOKING_HOLD }),
+          o,
+        ),
+    },
+    systemSettings: {
+      get: (o) =>
+        respond(
+          () => structuredClone(systemSettings),
+          () => structuredClone(systemSettings),
+          o,
+        ),
+      save: (settings, o) =>
+        respond(
+          () => {
+            const errors = validateSystemSettings(settings);
+            if (Object.keys(errors).length > 0) {
+              throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
+            }
+            systemSettings = structuredClone(settings);
+            return structuredClone(systemSettings);
+          },
+          () => structuredClone(settings),
+          o,
+        ),
+      getOptions: (o) =>
+        respond(
+          () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
+          () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
           o,
         ),
     },

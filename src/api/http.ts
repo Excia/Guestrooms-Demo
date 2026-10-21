@@ -8,6 +8,8 @@ import type {
   DashboardStats,
   EarlyLateRequest,
   EarlyLateResult,
+  Folio,
+  PostChargeRequest,
   ReservationDetail,
   Page,
   PermissionGrant,
@@ -22,6 +24,8 @@ import type {
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
+  SystemSettings,
+  SystemSettingsOptions,
 } from './types';
 import { expectedLeadOccupantName } from './createRules';
 import { listParams, parseListOptions, parseListPage } from './httpReservationList';
@@ -33,6 +37,7 @@ import {
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
+  assertPostChargeRequest,
   assertQuickStatsQuery,
   assertReservationListQuery,
   assertResourceId,
@@ -178,6 +183,76 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
   );
 }
 
+const CHECK_IN_STATUSES: readonly string[] = ['not-checked-in', 'checked-in', 'checked-out'];
+const CHARGE_TYPES: readonly string[] = [
+  'room-rate',
+  'mpos',
+  'manual',
+  'add-on',
+  'surcharge',
+  'service-fee',
+];
+const CHARGE_STATUSES: readonly string[] = ['posted', 'unposted', 'settled', 'split'];
+const isNullableString = (v: unknown) => v === null || isString(v);
+
+// Light shape guard on what the folio screen reads.
+function isFolio(v: unknown): v is Folio {
+  return (
+    isObject(v) &&
+    isString(v.reservationId) &&
+    isString(v.confirmationNumber) &&
+    isString(v.checkInStatus) &&
+    CHECK_IN_STATUSES.includes(v.checkInStatus) &&
+    isFlag(v.open) &&
+    isFlag(v.mposVisible) &&
+    isCount(v.nights) &&
+    isCount(v.guests) &&
+    listOf(v.rooms, (r) => isObject(r) && isString(r.id) && isNullableString(r.number)) &&
+    listOf(
+      v.occupants,
+      (o) => isObject(o) && isString(o.id) && isString(o.name) && isString(o.roomId),
+    ) &&
+    listOf(
+      v.charges,
+      (c) =>
+        isObject(c) &&
+        isString(c.id) &&
+        isString(c.type) &&
+        CHARGE_TYPES.includes(c.type) &&
+        isString(c.date) &&
+        isString(c.description) &&
+        isCount(c.amountCents) &&
+        isString(c.status) &&
+        CHARGE_STATUSES.includes(c.status) &&
+        Array.isArray(c.references) &&
+        c.references.every(isString) &&
+        isNullableString(c.roomId) &&
+        isNullableString(c.occupantId),
+    ) &&
+    listOf(
+      v.payments,
+      (p) =>
+        isObject(p) &&
+        isString(p.id) &&
+        isString(p.typeLabel) &&
+        isString(p.date) &&
+        isString(p.reference) &&
+        isNullableString(p.ticket) &&
+        isString(p.description) &&
+        isCount(p.amountCents) &&
+        isString(p.status),
+    )
+  );
+}
+
+// The answer must be for the reservation that was asked for.
+const parseFolio =
+  (reservationId: string) =>
+  (body: unknown, status: number): Folio => {
+    if (!isFolio(body) || body.reservationId !== reservationId) throw invalid(status, 'folio');
+    return body;
+  };
+
 // The answer must be for the reservation that was asked for.
 const parseDetail =
   (id: string) =>
@@ -266,6 +341,47 @@ function parseBookingHold(body: unknown, status: number): BookingHold {
     throw invalid(status, 'booking hold');
   }
   return body as unknown as BookingHold;
+}
+
+const isLookup = (v: unknown) => isObject(v) && isString(v.id) && isString(v.label);
+
+// Checks the shape the form relies on; the rules themselves are the backend's to enforce.
+function parseSystemSettings(body: unknown, status: number): SystemSettings {
+  if (
+    !isObject(body) ||
+    !isString(body.timeZone) ||
+    !isString(body.checkInTime) ||
+    !isString(body.checkOutTime) ||
+    !isString(body.lateCheckOutTime) ||
+    typeof body.earlyLateEnabled !== 'boolean' ||
+    !isObject(body.mposVisibleBefore) ||
+    !isObject(body.mposVisibleAfter) ||
+    !isObject(body.closeSettledFolios) ||
+    !isString(body.nightAuditRunTime) ||
+    (body.nightAudit !== 'manual' && body.nightAudit !== 'automatic') ||
+    !isObject(body.alternativeBaseRate1) ||
+    !isObject(body.alternativeBaseRate2) ||
+    !isString(body.serviceChargeLabel) ||
+    !isObject(body.folio) ||
+    !(body.transferItem === null || isLookup(body.transferItem)) ||
+    !(body.guestRoomsArea === null || isLookup(body.guestRoomsArea)) ||
+    !(body.guestMember === null || isLookup(body.guestMember))
+  ) {
+    throw invalid(status, 'system settings');
+  }
+  return body as unknown as SystemSettings;
+}
+
+function parseSystemSettingsOptions(body: unknown, status: number): SystemSettingsOptions {
+  if (
+    !isObject(body) ||
+    !(['timeZones', 'cardReaders', 'items', 'areas', 'members'] as const).every((k) =>
+      listOf(body[k], isLookup),
+    )
+  ) {
+    throw invalid(status, 'system settings options');
+  }
+  return body as unknown as SystemSettingsOptions;
 }
 
 const STAT_COUNTS = [
@@ -478,7 +594,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     params: Record<string, string | undefined>,
     requestOptions: RequestOptions | undefined,
     parse: (body: unknown, status: number) => T,
-    send?: { method: 'POST'; body: unknown; headers?: Record<string, string> },
+    send?: { method: 'POST' | 'PUT'; body: unknown; headers?: Record<string, string> },
   ): Promise<T> {
     const url = new URL(baseUrl + path, globalThis.location?.origin);
     for (const [key, value] of Object.entries(params)) {
@@ -696,8 +812,32 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           });
         }),
     },
+    folios: {
+      get: (id, o) =>
+        Promise.resolve().then(() => {
+          assertResourceId(id, 'reservation');
+          return request(`/reservations/${encodeURIComponent(id)}/folio`, {}, o, parseFolio(id));
+        }),
+      postCharge: (r: PostChargeRequest, o) =>
+        Promise.resolve().then(() => {
+          assertPostChargeRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/folio/post`,
+            {},
+            o,
+            parseFolio(r.reservationId),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+    },
     settings: {
       getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
+    },
+    systemSettings: {
+      get: (o) => request('/settings/system', {}, o, parseSystemSettings),
+      save: (settings, o) =>
+        request('/settings/system', {}, o, parseSystemSettings, { method: 'PUT', body: settings }),
+      getOptions: (o) => request('/settings/system/options', {}, o, parseSystemSettingsOptions),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
   };

@@ -310,6 +310,93 @@ export interface ReservationsApi {
   create(request: CreateReservationRequest, options?: RequestOptions): Promise<ReservationDetail>;
 }
 
+// ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----
+
+export type FolioLineType =
+  'room-rate' | 'mpos' | 'manual' | 'add-on' | 'surcharge' | 'service-fee';
+
+/**
+ * `posted`: on the folio and owed; `unposted`: waiting for Night Audit; `settled`: paid, with the
+ * settle `references`; `split`: replaced by its split lines (ticket 4.13).
+ */
+export type FolioChargeStatus = 'posted' | 'unposted' | 'settled' | 'split';
+
+export interface FolioCharge {
+  id: string;
+  type: FolioLineType;
+  date: IsoDate;
+  description: string;
+  /** Total for the line: includes taxes and service charges (doc 32.13.2.1). */
+  amountCents: Cents;
+  status: FolioChargeStatus;
+  /** Payment reference numbers of the settlement(s); empty unless `settled`. */
+  references: string[];
+  /** The reservation room the line belongs to; null for a line on the reservation as a whole. */
+  roomId: string | null;
+  /** The occupant it is charged to; null for a room-level line. */
+  occupantId: string | null;
+}
+
+export interface FolioPayment {
+  id: string;
+  /** Shown in the Type column, e.g. "Credit Card", "Member Charge", "MPOS Payment". */
+  typeLabel: string;
+  date: IsoDate;
+  reference: string;
+  /** MPOS ticket number, null for a payment made in Guest Rooms. */
+  ticket: string | null;
+  description: string;
+  amountCents: Cents;
+  /** E.g. "Settled (Successful)". */
+  status: string;
+}
+
+export interface FolioOccupant {
+  id: string;
+  name: string;
+  roomId: string;
+}
+
+export interface FolioRoom {
+  id: string;
+  /** "UNASSIGNED" is shown when null. */
+  number: string | null;
+}
+
+export interface Folio {
+  reservationId: string;
+  confirmationNumber: string;
+  /** Follows the reservation's check in and check out (doc 32.3.1.2). */
+  checkInStatus: 'not-checked-in' | 'checked-in' | 'checked-out';
+  /** Closed folios disable the action buttons. */
+  open: boolean;
+  /** The folio is visible in MPOS (the POS chip). */
+  mposVisible: boolean;
+  nights: number;
+  guests: number;
+  rooms: FolioRoom[];
+  occupants: FolioOccupant[];
+  charges: FolioCharge[];
+  payments: FolioPayment[];
+}
+
+/** Posts one unposted charge (the "Post via Night Audit" dialog); `requestId` is the idempotency key. */
+export interface PostChargeRequest {
+  requestId: string;
+  reservationId: string;
+  chargeId: string;
+}
+
+export interface FoliosApi {
+  /** 404 when the reservation is unknown. */
+  get(reservationId: string, options?: RequestOptions): Promise<Folio>;
+  /**
+   * Returns the folio after posting. Errors: 400 `invalid-id`; 404; 409 `folio-closed`; 409
+   * `not-unposted` (the charge is not waiting for Night Audit); 409 `idempotency-conflict`.
+   */
+  postCharge(request: PostChargeRequest, options?: RequestOptions): Promise<Folio>;
+}
+
 // ---- members (guest directory; placeholder until the Member Directory ticket) ------------------
 
 /** A person in the guest directory: a member, or a guest added from the New Reservation panel. */
@@ -360,6 +447,101 @@ export interface BookingHold {
 
 export interface SettingsApi {
   getBookingHold(options?: RequestOptions): Promise<BookingHold>;
+}
+
+// ---- system settings (Primary Setup, ticket 7.1) ---------------------------------------------
+
+/** A looked-up record (item, area, member) kept as id plus the label the field shows. */
+export interface LookupRef {
+  id: string;
+  label: string;
+}
+
+/** Folio Details tab; also the header of the printed folio (shared with the folio print, ticket 4.1). */
+export interface FolioDetails {
+  streetAddress: string;
+  city: string;
+  /** Two-letter state code, or '' when none is chosen. */
+  state: string;
+  zip: string;
+  email: string;
+  phone: string;
+  /** Printed under the header. */
+  customText: string;
+  /** Logo as a data URL; the backend decides storage later. Null when there is none. */
+  logo: string | null;
+}
+
+export interface AlternativeBaseRate {
+  enabled: boolean;
+  /** The rate applies from this many nights ("N or more nights"). */
+  minNights: number;
+}
+
+export type DurationUnit = 'hours' | 'days';
+
+/** A whole number of hours or days (0 to 31), counted from the check in or checkout time. */
+export interface Duration {
+  amount: number;
+  unit: DurationUnit;
+}
+
+export type NightAuditMode = 'manual' | 'automatic';
+export type RateChangeHandling = 'time-of-booking' | 'time-of-stay';
+
+/**
+ * System-wide settings of one club (Figma System Settings 11895:16081). Times are 24-hour
+ * `HH:mm` strings in the club's time zone, always on a 5-minute step.
+ */
+export interface SystemSettings {
+  /** IANA zone id, e.g. `America/New_York`. */
+  timeZone: string;
+  checkInTime: string;
+  checkOutTime: string;
+  /** "Enable Early Check In and Late Check Out". When off, the late checkout time is unused. */
+  earlyLateEnabled: boolean;
+  lateCheckOutTime: string;
+  /** MPOS: the folio becomes visible this long before the check-in time on the day of check in. */
+  mposVisibleBefore: Duration;
+  /** MPOS: the folio stays visible this long after the checkout time on the day of checkout. */
+  mposVisibleAfter: Duration;
+  /** A settled folio closes this long after the checkout time. */
+  closeSettledFolios: Duration;
+  nightAudit: NightAuditMode;
+  /** Daily run time of an automatic night audit; unused while the audit runs manually. */
+  nightAuditRunTime: string;
+  alternativeBaseRate1: AlternativeBaseRate;
+  alternativeBaseRate2: AlternativeBaseRate;
+  /** New cards are authorized for $0.01. */
+  creditCardAuthorization: boolean;
+  cardPresentEnabled: boolean;
+  /** Id of the default card reader; only used while card present transactions are enabled. */
+  defaultCardReaderId: string | null;
+  rateChangeHandling: RateChangeHandling;
+  /** Enables the Room Owner field (ticket 7.3) and owner indicators (ticket 3.11). */
+  roomOwnerFieldEnabled: boolean;
+  /** At most 15 characters. */
+  serviceChargeLabel: string;
+  transferItem: LookupRef | null;
+  guestRoomsArea: LookupRef | null;
+  guestMember: LookupRef | null;
+  folio: FolioDetails;
+}
+
+/** Choices for the System Settings selects and lookups. */
+export interface SystemSettingsOptions {
+  timeZones: LookupRef[];
+  cardReaders: LookupRef[];
+  items: LookupRef[];
+  areas: LookupRef[];
+  members: LookupRef[];
+}
+
+export interface SystemSettingsApi {
+  get(options?: RequestOptions): Promise<SystemSettings>;
+  /** Replaces all settings; answers with what was stored. The backend re-checks the rules. */
+  save(settings: SystemSettings, options?: RequestOptions): Promise<SystemSettings>;
+  getOptions(options?: RequestOptions): Promise<SystemSettingsOptions>;
 }
 
 // ---- permissions -----------------------------------------------------------------------------
@@ -558,7 +740,9 @@ export interface ApiClient {
   permissions: PermissionsApi;
   schedule: ScheduleApi;
   settings: SettingsApi;
+  systemSettings: SystemSettingsApi;
   members: MembersApi;
+  folios: FoliosApi;
 }
 
 export interface ApiErrorInit {

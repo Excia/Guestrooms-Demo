@@ -10,6 +10,7 @@ import App from './App';
 import DemoDataChip from './components/DemoDataChip';
 import { ApiProvider, createApiClientFromEnvironment } from './api';
 import { AccessProvider } from './app/AccessProvider';
+import { SystemSettingsProvider } from './app/SystemSettingsProvider';
 import { theme } from './theme';
 
 // Dev only; production builds drop the switcher and its chunk.
@@ -26,7 +27,9 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <ApiProvider client={apiClient}>
           <AccessProvider>
-            <App />
+            <SystemSettingsProvider>
+              <App />
+            </SystemSettingsProvider>
           </AccessProvider>
           {demo && <DemoDataChip />}
           {DevUserSwitcher && devMock && (

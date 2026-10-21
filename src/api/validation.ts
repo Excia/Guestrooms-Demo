@@ -6,6 +6,7 @@ import type {
   MoveDatesRequest,
   MoveGuard,
   MoveRoomRequest,
+  PostChargeRequest,
   QuickStatsQuery,
   ScheduleQuery,
 } from './types';
@@ -215,4 +216,10 @@ export function assertReservationListQuery(query: ReservationListQuery): void {
   ) {
     throw invalidQuery('reservation list query');
   }
+}
+
+export function assertPostChargeRequest(request: PostChargeRequest): void {
+  assertRequestId(request.requestId);
+  assertResourceId(request.reservationId, 'reservation');
+  assertResourceId(request.chargeId, 'charge');
 }
