@@ -116,7 +116,9 @@ Copy `.env.example` to `.env.local` to override.
   `POST /reservation-rooms/:id/change-room`, `GET /settings/room-change-rule`): per night. The request is the
   whole remaining plan (`nights: [{date, roomId}]`, one room per night from today to the night before the
   departure); the backend merges consecutive nights in one room into segments (`ScheduleBlock.roomChange`
-  `{part, index, count, stayId}`) and answers the whole stay plus `removedBlockIds`. Same safety as the schedule
+  `{part, index, count, stayId}`, absent when the result is one block; runs in the same room are always merged)
+  and answers the whole stay plus `removedBlockIds`. The server owns the effective date (409 `stale` with
+  `details.reason` `effective-date` and `details.today`), 403 without `reservation.edit`. Same safety as the schedule
   moves (`version`, `fromRoomId`, `requestId` / `Idempotency-Key`, 409 `stale` / `conflict` / `not-movable` /
   `idempotency-conflict`, unknown-outcome semantics); the answer must equal the normalized plan. Nights before
   today never change; only changed, not-yet-stayed nights are repriced (`rateChoice` `retain|update|null`,

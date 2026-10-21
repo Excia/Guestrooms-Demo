@@ -149,7 +149,10 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
     (27.9.1.2.3.1; keeps each night's own room). Continue is disabled with the reason "Choose a different room for
     at least one night." until a night differs (putting a night back disables it again). The inventory for the
     remaining nights comes from `schedule.get` windows, not the page's own window. "Apply this room to all
-    remaining nights" is not built (Figma does not show it).
+    remaining nights" is not built (Figma does not show it). Each menu's options are built only when it opens,
+    from an index of the inventory made once; a stay of more than 60 remaining nights lists its nights in a
+    windowed scrolling container (only the rows in view are rendered); the dialog asks for at most 13 schedule
+    windows. Focusing a menu selects its text so typing a room number replaces it.
   - **Confirmation:** step 2 states "New room plan effective 10/16/2026 through 10/20/2026:" and lists the plan
     with consecutive nights in one room grouped ("Room 107: 10/21/2026 to 10/22/2026 (1 night) (changed)"), how
     many nights change room, that the reservation stays checked in and that the nights already stayed keep their
@@ -163,14 +166,29 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
   - **Rate rules (pure):** `src/lib/roomChangeRates.ts` (per-night outcome in integer cents excluding taxes: nights
     before today never repriced; only changed nights repriced; retain or update; weighted average untouched) and
     `src/lib/stayPlan.ts` (plan normalization into runs, plan validation, changed nights); shared with the mock.
-  - **Segments (D-084):** the stay becomes N parts, one block per run of consecutive nights in one room, same
-    reservation id and confirmation number, linked by `roomChange {part, index, count, stayId}`; nights already
-    stayed are checked-out `previous` blocks, the block with the first remaining night keeps the reservation-room
-    id (`current`), later runs are `next`. The grid shows "GR-50271 · 3/5 ← 301 → 301" and the aria label ends
+  - **Segments (D-084):** the stay becomes one block per run of consecutive nights in one room, same
+    reservation id and confirmation number, linked by `roomChange {part, index, count, stayId}`. Runs in the same
+    room are always one block: a stayed night in the same room as the first remaining night belongs to the
+    current, checked-in block, so `previous` (checked-out) blocks exist only where the room really differs, and
+    **a stay that ends up as one block carries no link at all** (it is unsplit again, also after reverting every
+    night, and can be dragged like any stay). The block with the first remaining night keeps the
+    reservation-room id (`current`), later runs are `next`. The grid shows "GR-50271 · 3/5 ← 301 → 301" and the aria label ends
     "part 3 of 5, moved from Room 301, continues in Room 107" (a neighbour in the same room is not mentioned).
     Early Check In stays on the first part, Late Check Out on the last.
-  - **Dragging (D-089):** no part of a split stay can be dragged (reason in the refusal message, and the server
-    answers 409 `not-movable`); Q-20-5 stays open for unsplit stays.
+  - **Dragging (D-089):** no block of a stay that has several blocks can be dragged (reason in the refusal
+    message, and the server answers 409 `not-movable`); a single-block stay, including one that was split and
+    merged back, can; Q-20-5 stays open for single-block stays.
+  - **Multi-room reservations:** a click on any block of a split room opens that room (the details are selected
+    by the reservation-room id, which every block of the stay carries as `stayId`); after the reload the same room
+    stays selected and the order of the rooms does not change.
+  - **Drift (D-091):** the server owns the effective date (the club's today). When what the user saw drifted
+    (409 `stale`, a different effective date, 400 about the nights or the rate choice) the page reverts the
+    optimistic change, reloads, adopts the server's today and reopens the dialog on step 1 with the choices that
+    are still valid and "The schedule changed while you were editing. Review the plan."
+  - **Readability (D-092):** the reason a Change Room action is unavailable is visible text under the button
+    (not only a tooltip); disabled room options keep their reason at normal secondary contrast; blocks have a
+    lazily created tooltip with the full text (guest, confirmation number, part n of m, room and neighbours)
+    on hover (only when cut off) or grid keyboard focus, the aria-label unchanged.
   - **Optimistic update and refresh:** the grid shows the plan at once (`applyRoomPlan`), then confirms or rolls
     back like a drag (409/404/400 revert; no response, 408, 5xx or an unusable 2xx reload with a neutral
     message). After success the schedule is refetched, the open details reload in place and a toast says "Moved to
@@ -182,19 +200,25 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
     `src/components/reservation/ChangeRoomDialog.tsx`, `useChangeRoomData.ts`, API
     `reservations.changeRoomDuringStay` and `settings.getRoomChangeRule` (`src/api/*`), optional
     `ScheduleBlock.roomChange`, `ScheduleRoom.housekeeping`, `ReservationRoomDetail.previousStays` /
-    `upcomingStays` and `ReservationStayLine.reservationRoomId`, `segmentLinks` in `src/app/scheduleGrid.ts`.
+    `upcomingStays` and the required `ReservationStayLine.reservationRoomId`, `segmentLinks` in `src/app/scheduleGrid.ts`.
 - **Deviations from Figma:** Figma draws the feature as a switch inside the room editor (the Edit panel of the
   Reservation Hub, not built; Q-20-7); the build keeps the per-night lines and the Select look but opens them in a
   dialog from a "Change Room" button. Extras Figma does not show: the optional Location and Room Type filter
   (from 27.9.1.2.3.1), the confirmation step with the room plan, the rate question and the "Update Reservation"
   CTA (from 27.9.1.3). The menus are searchable listboxes grouped "location | room type" (Figma's menu groups by
   room type only, Q-20-13). See [figma-deviations.md](../figma-deviations.md).
-- **Assumptions and defaults chosen:** D-083 to D-090; setting off applies the new rates silently (Q-20-2); the room
+- **Assumptions and defaults chosen:** D-083 to D-092; setting off applies the new rates silently (Q-20-2); the room
   the guest sleeps in tonight becomes `dirty` when it changes (Q-20-1); stayed means before today (Q-20-8);
   dragging an unsplit checked-in block still moves the whole stay (D-050, Q-20-5).
 - **Stubs and placeholders:** the setting `askRateOnRoomChange` (default on) and `ScheduleRoom.housekeeping` are
   placeholders; the housekeeping state is not shown anywhere yet (Housekeeping report 6.4, "H" blocks); nightly
   rates are the placeholder room type rates ([placeholders.md](../placeholders.md)).
+- **Known limits:** a stayed block that ends where the visible range starts is not drawn (at start = today a
+  stayed part has no column; the panel lists it under "Earlier in this stay"); the windowed list of a very long
+  stay is reached by scrolling (Tab does not visit rows that are not rendered).
+- **Performance (200 rooms, a 365-night stay, Chrome, mock latency excluded):** opening the dialog costs about
+  100 ms of work after the data arrives (the 13 windows load in parallel); opening a night's menu with 200
+  rooms about 100 ms; typing a character in a menu 6 to 56 ms; 8 night rows are rendered instead of 364.
 - **Not built (follow-up candidates from requirements 15 to 20 and 27, not covered by Figma or the ticket):**
   Edit panel with Check-in Date, Check out Date, Location, Room Type, Room and the unified Update Reservation
   (27.9.1, 27.9.2 multi-room dates with unassigned rooms, 27.9.3); rate detail with lock / override PIN
@@ -207,7 +231,7 @@ menu 2623:11665. "ARCHIVE Change Room During Stay/On" is superseded.
 - **Permissions:** `reservation.edit` (no new permission). Not exercised in the browser: no mock user lacks it, so
   the read-only state is covered by tests only.
 - **Open questions:** Q-20-1, Q-20-2 (built defaults), Q-20-3 (answered: per night), Q-20-4, Q-20-5, Q-20-6 to Q-20-13
-  (gaps and conflicts between the requirements, Figma and the ticket).
+  (gaps and conflicts between the requirements, Figma and the ticket), Q-20-14 (which clock decides today), Q-20-15 (segments in reporting).
 - **Status:** in review (branch complete; PR link to be added when it is opened), 2026-10-20.
 
 ## 2.4 Schedule blocks and linked room blocks
