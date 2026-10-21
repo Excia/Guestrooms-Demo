@@ -1,0 +1,229 @@
+# API contract (what the backend must provide)
+
+Derived from `src/api/types.ts` (the typed contract), `src/api/http.ts` (the real client: paths,
+headers, guards), `src/api/validation.ts`, the mock in `src/api/mock.ts`, the README "API
+conventions" and the tickets. **No backend exists yet** (D-001); all paths below are the client's
+choice and the backend must confirm them (D-038, Q-G-3). Back to the [index](README.md).
+
+Sections: [Conventions](#conventions) · [Implemented endpoints](#implemented-endpoints) ·
+[Reservation panel endpoints (PR 119)](#reservation-panel-endpoints-in-review) ·
+[Error codes](#error-codes) · [Concurrency and idempotency](#concurrency-and-idempotency) ·
+[Shape guards](#shape-guards-and-their-limits) · [Server-side enforcement](#server-side-enforcement) ·
+[Planned endpoints](#planned-endpoints).
+
+## Conventions
+
+| Topic        | Rule                                                                                                                                                                                                                                                                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Base URL     | `VITE_API_URL` (absolute http(s); query and hash dropped; trailing slashes trimmed). Paths below are appended to it                                                                                                                                                                                                                                    |
+| Format       | JSON in and out. Requests send `Accept: application/json`; bodies send `Content-Type: application/json`. A 204 or empty body parses as `undefined` and each endpoint decides whether that is valid (all current ones require a body)                                                                                                                   |
+| Auth         | Not designed. The client sends `credentials: 'same-origin'` by default (`'include'` is an option for a cross-origin cookie API). Hooks `getHeaders` (extra headers; a failure is `ApiError` code `headers`) and `onUnauthorized` (called on any 401) exist and nothing uses them yet. CSRF protection and credentials are the auth layer's job (Q-G-4) |
+| Timeout      | 15 s per request; the client then rejects with status 0, code `timeout`                                                                                                                                                                                                                                                                                |
+| Abort        | Every method takes `{ signal }` last; aborting rejects with an `AbortError` (not an `ApiError`)                                                                                                                                                                                                                                                        |
+| Ids in paths | Encoded with `encodeURIComponent`; empty ids, `.` and `..` are rejected client-side (`invalid-id`, 400)                                                                                                                                                                                                                                                |
+| Money        | **Integer cents** (`Cents`). Revenue excludes taxes and service charges (D-004). Average rate is weighted: total revenue divided by total nights, rounded to whole cents; `null` when there are no nights (D-005)                                                                                                                                      |
+| Dates        | ISO `YYYY-MM-DD` strings (`IsoDate`); months `YYYY-MM`. A stay occupies the nights `[startDate, endDate)`: `endDate` is the departure day and is not occupied, so a departure on another stay's arrival day is a same-day turnover, not an overlap                                                                                                     |
+| Lists        | `{ items, total, nextCursor? }`; `total` counts all matches; cursors are opaque; `nextCursor` is absent on the last page                                                                                                                                                                                                                               |
+| Errors       | Non-2xx: JSON body `{ message?, error?, code?, details? }`; `details` is `Record<string, string[]>` (field errors). Non-JSON bodies keep the status text. `message` and `details` are **untrusted text** and are rendered as text, never HTML                                                                                                          |
+| Status 0     | Not an HTTP status: the client got no response (`network` or `timeout`)                                                                                                                                                                                                                                                                                |
+
+## Implemented endpoints
+
+All present in `createHttpClient` (`src/api/http.ts`) and in the mock.
+
+| #   | Method and path              | Query / body                                                                                                                  | Response                                                                                                                                                                           | Errors                                                                     |
+| --- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| 1   | `GET /permissions/me`        | none                                                                                                                          | `PermissionGrant { role: string, permissions: string[] \| 'all' }`                                                                                                                 | 401, 5xx                                                                   |
+| 2   | `GET /dashboard/stats`       | none                                                                                                                          | `DashboardStats` (date, arrivalsToday, departuresToday, inHouse, occupancyPercent, rateCategories[], roomBlocks[], unassignedChargesCount, totalRevenue, totalNights, averageRate) | 5xx                                                                        |
+| 3   | `GET /dashboard/quick-stats` | `view=day\|week\|month` plus `date` (day), `startDate` (week) or `month` (`YYYY-MM`)                                          | `QuickStats` (see below)                                                                                                                                                           | 400 `invalid-query`, 5xx                                                   |
+| 4   | `GET /reservations`          | `status`, `search`, `arrivalFrom`, `arrivalTo`, `departureFrom`, `departureTo`, `sort=<field>:<asc\|desc>`, `cursor`, `limit` | `Page<Reservation>`                                                                                                                                                                | 5xx                                                                        |
+| 5   | `GET /reservations/{id}`     | none                                                                                                                          | `Reservation`                                                                                                                                                                      | 400 `invalid-id`, 404                                                      |
+| 6   | `GET /schedule`              | `startDate`, `days` (7, 14 or 30)                                                                                             | `ScheduleData`                                                                                                                                                                     | 400 `invalid-query`                                                        |
+| 7   | `POST /schedule/move-room`   | `MoveRoomRequest`; header `Idempotency-Key`                                                                                   | `{ blocks: ScheduleBlock[] }`                                                                                                                                                      | 400, 404, 409 (`conflict`, `not-movable`, `stale`, `idempotency-conflict`) |
+| 8   | `POST /schedule/move-dates`  | `MoveDatesRequest`; header `Idempotency-Key`                                                                                  | `{ blocks: ScheduleBlock[] }`                                                                                                                                                      | same as 7                                                                  |
+
+Notes on `Reservation` (list/get): `id`, `confirmationNumber`, `guestName`, `roomType`, `roomNumber`
+(null until a room is assigned), `arrival`, `departure`, `adults`, `children`, `status`
+(`pending`, `confirmed`, `checked-in`, `checked-out`, `cancelled`), `rateCategoryId`,
+`hasUnassignedCharges`. `search` matches guest name or confirmation number, case-insensitively; bounds are
+inclusive; default sort is arrival ascending, ties broken by id so paging is stable; the server applies its
+own default and maximum `limit`. Sort fields: `arrival`, `departure`, `guestName`, `confirmationNumber`.
+
+### Quick Stats (`GET /dashboard/quick-stats`)
+
+- The answer's `view` and echoed period (`date`, `startDate` or `month`) **must equal the query**, else
+  the client raises `invalid-response`. "(to date)" in the UI is a label only; the query carries the month.
+- Every answer has `occupancy {booked, available, percent}` and `revenue {rows[], totalRevenue,
+totalNights, averageRate}`; rows are one per rate category in the data (not a fixed list), each
+  `{id, name, nights, revenue}`.
+- Day and month add `roomBlocks[] {id, name, nights, startDate, counts}` and `roomBlocksTotal`; week adds
+  `days[] {date, counts}` and `daysTotal`.
+- Percent is 0 to 100 with at most one decimal. **The backend owns rounding; the UI never recomputes a
+  percent.** In every TOTAL row (`roomBlocksTotal`, `daysTotal`, the summary bar) the percent is the mean of
+  the row percents, not total booked over total rooms (D-043). Totals sum booked and available.
+- **Empty** means no revenue rows and no `roomBlocks` (day, month) or `days` (week). A week with no data
+  must answer `days: []`, not seven zero days; a period with rows but all zeros is not empty (D-045).
+
+### Schedule (`GET /schedule`)
+
+- Takes **only** `startDate` and `days`; it always answers **every room** (filtering is client-side, D-053).
+  The answer must echo `startDate` and `days`; `locations` and `roomTypes` are the full option lists;
+  `rooms` are in display order; `blocks` and `closures` overlap `[startDate, startDate + days)`.
+- `ScheduleBlock`: `kind: 'reservation'`, `id` (the reservation-room id), `reservationId`,
+  `confirmationNumber`, `guestName`, `guestType` (`guest|member|owner|none`), `roomId`, `startDate`,
+  `endDate` (exclusive), `status` (`confirmed`, `nyci` = Not Yet Checked In with arrival reached,
+  `checked-in`, `checked-out`; a "due out" block is a checked-in one ending today), `roomCount`
+  (rooms on the reservation; blocks with the same `reservationId` move together), `roomTypeLocked`,
+  `version` (opaque, never parsed or compared by the client).
+- `ScheduleClosure`: `kind: 'closure'`, `id`, `roomId`, `startDate`, `endDate`, `reason`, `endMarker`.
+- Every block and closure must sit in a listed room; **ids must be unique across blocks and closures**
+  (the grid looks items up by id); rooms unique. "Empty" means no rooms.
+- The client's drag rules only see the loaded window; the server's 409 stays authoritative (a long stay
+  shifted past the window, or a booking outside it).
+
+### Schedule moves
+
+- `MoveRoomRequest`: `reservationRoomId`, `toRoomId`, `fromRoomId`, `version`, `requestId`.
+- `MoveDatesRequest`: `reservationRoomId`, `fromStartDate`, `toStartDate`, `scope` (`all-rooms` shifts
+  every room of the reservation by the same number of days; `this-room` splits the room off and its
+  `roomCount` becomes 1), optional `toRoomId` (room and dates in one atomic call), `fromRoomId`, `version`,
+  `requestId`. A `toStartDate` equal to `fromStartDate` is a room change only (allowed for checked-in rooms).
+- Answer: the changed blocks only. For `all-rooms` with new dates the answer must contain **all** rooms of
+  the reservation with a consistent `roomCount`; for `this-room` with new dates the moved block must have
+  `roomCount` 1; a room-only move may answer with just the moved block.
+- Rules the server enforces (409 `not-movable` unless noted): checked-out rooms cannot move; a locked room
+  type cannot leave its room type; **no room's new arrival may be in the past** (every moving room, not
+  only the dragged one); a checked-in or checked-out room cannot change dates (a sibling in either state
+  blocks an `all-rooms` shift); a target room booked or closed on any of the nights is 409 `conflict` with
+  `details.roomId` listing the rooms (including two rooms of one reservation landing in one room).
+  Unknown reservation room or room: 404. Nothing is applied on any error.
+- `fromRoomId` and, for dates, `fromStartDate`, plus `version`, must still match, else 409 `stale`.
+
+## Reservation panel endpoints (in review)
+
+Added by Excia/Guestrooms-Demo#119 (not on `main` yet; may change before merge; see also
+[02-schedule.md](features/02-schedule.md#22-reservation-details-panel-with-split-cta)).
+
+| #   | Method and path                      | Request                                                                                                                                                                                | Response                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Errors                                                                                                    |
+| --- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 9   | `GET /reservations/{id}/detail`      | none (must not change anything)                                                                                                                                                        | `ReservationDetail` (id, confirmationNumber, status, arrival, departure, nights, adults, children, leadOccupant {name, memberNumber, guestType}, rooms[] {id, roomId, roomNumber, locationName, roomTypeName, status `nyci\|checked-in\|checked-out`, arrival, departure}, earlyCheckIn, lateCheckOut, addOns[] {id, name, quantity, priceCents per unit excluding taxes and service charges}, publicNotes, privateNotes, stay {lines[] {roomType, date, amountCents}, folioTotalCents excluding taxes and service charges}, version) | 400, 404                                                                                                  |
+| 10  | `POST /reservations/{id}/early-late` | `EarlyLateRequest {requestId, reservationId, version, earlyCheckIn?, lateCheckOut?}` (send only the changed flags); `Idempotency-Key`                                                  | `{ earlyCheckIn, lateCheckOut, version }` (the flags must match what was asked, else the client treats it as a failed save)                                                                                                                                                                                                                                                                                                                                                                                                           | 400, 404, 409 `stale`, 409 `not-editable` (checked out or cancelled), 409 `idempotency-conflict`          |
+| 11  | `POST /reservations`                 | `CreateReservationRequest {requestId, roomId, arrival, departure, adults, children, guestName, bookingGuestRole `occupant\|reserver`, publicNotes?, privateNotes?}`; `Idempotency-Key` | `ReservationDetail` of the new one-room reservation (must echo adults, children, guest name, one room, roomId, arrival, departure)                                                                                                                                                                                                                                                                                                                                                                                                    | 400 `invalid-query`, 404 unknown room, 409 `conflict` (room booked or closed), 409 `idempotency-conflict` |
+| 12  | `GET /settings/booking-hold`         | none                                                                                                                                                                                   | `BookingHold { employee, member, nonMember }`, each an integer 1 to 99 (minutes; "Reservation Hold" of Booking Rules)                                                                                                                                                                                                                                                                                                                                                                                                                 | 5xx                                                                                                       |
+
+- `ReservationDetail.version` is separate from schedule block versions. Early/late check order: validate,
+  404, 409 `stale`, then 409 `not-editable`.
+- A create retried after an unknown outcome (status 0, 408, 5xx) reuses its `requestId`; the backend must
+  replay instead of duplicating. 409 `conflict` and other 4xx applied nothing.
+- **Backend need:** nothing holds the room while the New Reservation timer runs. A real backend needs a
+  hold/reserve call when the panel opens and a hold token sent with create (Q-19-3).
+- New permission `reservation.edit` ([permissions.md](permissions.md)). The owner requests in progress on
+  that PR (Booking Guest TBD, Lead Occupant optional, Unassigned room/location/room type) will change the
+  create request shape; update this table when that PR is final (**Unknown** today).
+
+## Error codes
+
+| Status | Code                   | Meaning                                                                                                                                                       | Client behavior                                                       |
+| ------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| 0      | `network`              | no response (connection failure)                                                                                                                              | Schedule move: unknown outcome, refetch, neutral message              |
+| 0      | `timeout`              | no response within 15 s                                                                                                                                       | same                                                                  |
+| 0      | `headers`              | `getHeaders` threw                                                                                                                                            | failure                                                               |
+| 0      | `misconfigured`        | production build with no API URL and no mock flag                                                                                                             | every call rejects; "Site not configured"                             |
+| any    | `invalid-response`     | non-JSON body, or a body that fails the shape guard or does not match the query                                                                               | treated as unusable; a 2xx unusable move answer is an unknown outcome |
+| 400    | `invalid-id`           | empty id, `.` or `..` (also raised client-side)                                                                                                               |                                                                       |
+| 400    | `invalid-query`        | malformed query or body (date, month, view, `days` not 7/14/30, request id not 8 to 128 URL-safe characters, version empty or over 128 characters, bad scope) |                                                                       |
+| 401    | (any)                  | not signed in                                                                                                                                                 | `onUnauthorized` hook, then error                                     |
+| 404    | (none)                 | unknown reservation, reservation room or room                                                                                                                 | Schedule: revert and refetch                                          |
+| 408    | (none)                 | request timeout                                                                                                                                               | unknown outcome                                                       |
+| 409    | `conflict`             | target room booked or closed on those nights; `details.roomId` lists rooms                                                                                    | revert and refetch                                                    |
+| 409    | `not-movable`          | checked out, locked room type, arrival in the past, dates of a checked-in room                                                                                | revert and refetch                                                    |
+| 409    | `stale`                | `version` or `from*` no longer matches                                                                                                                        | revert and refetch                                                    |
+| 409    | `idempotency-conflict` | `requestId` reused with a different request                                                                                                                   |                                                                       |
+| 409    | `not-editable`         | (PR 119) reservation checked out or cancelled                                                                                                                 |                                                                       |
+| 5xx    | (any)                  | server error                                                                                                                                                  | Schedule move: unknown outcome (reload, no revert)                    |
+
+## Concurrency and idempotency
+
+- **Optimistic concurrency:** every `ScheduleBlock` has an opaque `version` that changes whenever its room
+  or dates change, **also when a sibling's move changes it**. A move sends it back with `fromRoomId` (and
+  `fromStartDate` for dates). If the reservation room changed since, answer 409 `stale` and apply nothing.
+- **Idempotency:** each move carries a client-generated `requestId` (UUID via `crypto.randomUUID`, with a
+  fallback), sent in the body **and** as the `Idempotency-Key` header. The same id with the same body
+  replays the first result without applying again; the same id with another body is 409
+  `idempotency-conflict`.
+- **Backend requirements that follow:** idempotency records need a TTL long enough to cover client
+  retries (e.g. 24 h); only a failure that applied nothing (a clear 4xx) may be retried with the same
+  `requestId`, an unknown outcome is resolved by reloading, not by blind retry; the `Idempotency-Key`
+  header is authoritative and a body `requestId` that differs from it is a 400; for `all-rooms` only the
+  named block's `version` is checked (a reservation-level version would be safer and is the recommended
+  follow-up); ids must be unique across blocks AND closures.
+- **Unknown-outcome semantics:** the client treats status 0, 408, 5xx and an unusable 2xx answer as an
+  unknown outcome: the move may have been applied, so it refetches instead of rolling back and shows a
+  neutral message. Only a 4xx other than 408 means nothing applied (revert, refetch).
+- Mutations elsewhere ("deferred to the tickets that need them") should follow the same pattern:
+  `requestId` + `Idempotency-Key` + a version/expected-state guard.
+
+## Shape guards and their limits
+
+- Responses get **light shape guards** on the fields consumers rely on (ids, statuses, counts, list
+  shapes), not full schema validation; a mismatch is an `invalid-response` error. A backend that adds
+  fields is fine; one that changes or omits a guarded field breaks the UI.
+- Extra checks that go beyond shape: Quick Stats view/period echo; schedule `startDate`/`days` echo, unique
+  ids, blocks and closures inside listed rooms, `startDate < endDate`; move answer contains the moved block
+  at the requested place and consistent `roomCount`; early/late echo; created reservation echoes the request.
+- `permissionsFromGrant` keeps only permissions the app knows; unknown strings are dropped; anything that
+  is not `'all'` or an array denies everything.
+
+## Server-side enforcement
+
+UI hiding is **not** authorization (Excia/Guestrooms-Demo#110). The backend must enforce, on every
+request:
+
+1. Page and action access from the user's grant (`admin`, `page.<id>`, `reservation.edit`, later action
+   permissions): list and detail reads, schedule reads, every mutation.
+2. All schedule-move rules above (past arrivals, locked room types, checked-in/out dates, conflicts with
+   reservations and closures) because the client sees only the loaded window.
+3. Concurrency (`stale`) and idempotency (`requestId`) on every mutation, plus the idempotency TTL.
+4. Private notes visible and editable only to admins (3.3).
+5. Permission checks for money actions: manual charges and credits, refunds, negative payments, rate
+   adjustments (the permission names are **Unknown**, Q-91-2, Q-44-3, Q-31-1).
+6. Booking Rules (hold length, cancellation period, booking opens/closes, excluded room types, max rooms)
+   for employee, member and non-member audiences; online cancellation window (D-007).
+7. Unique notification names, unique custom report names per owner, unique encoder keys, and similar
+   uniqueness rules stated in tickets.
+8. Revenue and rate rules (excluding taxes and service charges; weighted average) wherever aggregates are
+   computed (D-004, D-005).
+9. File uploads (type, size) and generated documents (PDFs) (D-003).
+
+## Planned endpoints
+
+Implied by the tickets that are not built. Method, path and shapes are **Unknown** unless stated; this
+list records only what each ticket needs. Mutations should follow the concurrency/idempotency pattern.
+
+| Area (ticket)                   | Backend need                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reservations list (3.1)         | Server-side sort, filter and pagination with filters for check-in range, unassigned only, location; default range today + 7 days, sort check-in ascending (D-013); status of a multi-room reservation is the lowest common denominator of its rooms. Existing `GET /reservations` needs more fields (reserver, block, location, room type, +N rooms)                                                                                                           |
+| Check in / out (3.2, 3.5)       | Per-room check-in with reasons for failure (`unassigned`, no payment method, a reservation still checked in to the assigned room); check in after the arrival date (rules Unknown); undo check in (rejected after night audit)                                                                                                                                                                                                                                 |
+| Reservation Hub (3.3, 3.4)      | Reservation read/update (guests, notes public/private, Lead Occupant/Reserver rules), assign room, cancel, add another room, print registration card (PDF)                                                                                                                                                                                                                                                                                                     |
+| Keycards (3.6, 7.6)             | Encode, deactivate, list active keys behind an encoder interface; retrieve encoders from Visionline; save encoder keys                                                                                                                                                                                                                                                                                                                                         |
+| Contact info (3.7)              | Update reservation-only email/phone (up to 3 emails per guest) and the non-member record name                                                                                                                                                                                                                                                                                                                                                                  |
+| Rate adjust (3.8)               | Adjust a night or charge line ($ or %), result never below 0                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Payments (3.9, 4.11, 4.12, 5.6) | Payments interface (hosted-field placeholders): list methods per guest, add a credit card, penny auth ($0.01) with processing/declined results, charge, quick split settle; gateway **Unknown** (D-002)                                                                                                                                                                                                                                                        |
+| Add-ons (3.10, 7.4)             | List add-ons with single price and remaining nightly quantity per night; add/edit/remove on a reservation until check out; folio fee posting                                                                                                                                                                                                                                                                                                                   |
+| Owner/Member (3.11)             | Room owner per room; reserver-is-owner flag per reservation                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Early/Late (3.12)               | System setting (late checkout time), checkboxes saved per reservation (PR 119), a job that auto-checks-out at the Late Checkout Time for flagged reservations and keeps flagged ones checked in at the system checkout time                                                                                                                                                                                                                                    |
+| Manual send (3.13, 8.x)         | Send a confirmation or guest-card notification for a reservation to a guest's emails; sending logged (Q-36-1)                                                                                                                                                                                                                                                                                                                                                  |
+| Folios (4.1 to 4.13)            | Folio read (posted/unposted balances, charges, payments, status, closed flag), settle lines (reference numbers, surcharge for MPOS card present, service fee for card on file), split/undo split, transfer to a folio or Unassigned (with reasons per item), delete unassigned charge, remove member charge, refund (full/partial, remaining value), manual charge/credit (SKU lookup, Ask for Price), deposit/payment, print/email folio (PDF by the backend) |
+| Unassigned charges (4.4)        | List/search/count (the dashboard badge reads the count)                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Night audit (4.8, 4.9)          | List pending room charges for a post date; post selected charges (with extra charges and payments) to CMA with per-row results; history by post date with batches; reverse selected items; business date state (Undo Check In disappears after a run)                                                                                                                                                                                                          |
+| Online booking (5.x)            | Availability search by guests, nights, location and audience; pricing/stay summary; hold create/reset/release; tenant config (club name, favicon, URLs); sign-in with Core (non-member) and Axis (member), session handling; payment methods via Paycloud; create/edit/cancel reservation online; My Reservations upcoming/past; folio PDF                                                                                                                     |
+| Reporting (6.x)                 | A report query endpoint per standard report with typed `ReportQuery` (date range, compare, filters, group by, columns, sort, totals) and CSV/PDF export by the backend; custom report CRUD with creator and updated time; unique names                                                                                                                                                                                                                         |
+| System settings (7.1, 7.8, 7.9) | Read/write settings (time zone, times, mobile POS visibility hours, close settled folios, night audit mode, alternative base rates, card options, rate change handling, owner enable, labels, SKUs/lookups, folio details with logo, registration card items, online booking texts); a settings change log retained one year                                                                                                                                   |
+| Rate categories (7.2)           | CRUD managed in Guest Rooms (not synced from CMA)                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Room types and rooms (7.3)      | CRUD with associations (features, add-ons, linked rooms), photos upload, duplicate, delete rules (Unknown), owner member lookup                                                                                                                                                                                                                                                                                                                                |
+| Booking rules (7.5)             | Read/write the rules matrix per audience and unique member-type rules; extends `GET /settings/booking-hold`                                                                                                                                                                                                                                                                                                                                                    |
+| Migration (7.7)                 | Template, upload and validate (.csv/.xlsx/.xls), column match, review, import (unassigned, future only, idempotent by reservation number), failed rows export                                                                                                                                                                                                                                                                                                  |
+| Change log (7.10)               | List by admin page with sort/filter and the event type list                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Notifications (8.x)             | CRUD for triggered and scheduled notifications (unique names), recipients, attachments upload, content/snippets, a trigger engine and scheduler, a prompt-before-sending signal at trigger time                                                                                                                                                                                                                                                                |
+| Members / locations / SKUs      | Lookups for members (autocomplete), locations (replaces the placeholder list), SKUs, employees by role                                                                                                                                                                                                                                                                                                                                                         |
+| Generic                         | `GET /locations` (the mock has no locations endpoint; the dashboard uses placeholders)                                                                                                                                                                                                                                                                                                                                                                         |
