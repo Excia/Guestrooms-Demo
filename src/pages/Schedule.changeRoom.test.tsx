@@ -655,7 +655,10 @@ describe('failures', () => {
   });
 
   it('a plan or rate question that no longer fits (400 with details) reopens the same way', async () => {
-    for (const details of [{ rateChoice: ['Required'] }, { nights: ['x'] }]) {
+    for (const details of [{ rateChoice: ['Required'] }, { nights: ['x'] }] as Record<
+      string,
+      string[]
+    >[]) {
       await run(new ApiError(400, 'x', { code: 'invalid-query', details }));
       expect((await screen.findAllByText(REVIEW)).length).toBeGreaterThan(0);
       expect(
@@ -781,6 +784,12 @@ describe('a split stay inside a multi-room reservation', () => {
 });
 
 describe('long block text', () => {
+  it('no tooltip lingers on the block under the keyboard cursor while a panel is open (the grid has no focus)', async () => {
+    await openPanel(createMockClient({ today: TODAY }));
+    // (A closing tooltip stays in the DOM for its exit transition.)
+    await waitFor(() => expect(screen.queryAllByRole('tooltip', { hidden: true })).toHaveLength(0));
+  });
+
   it('shows the full text in a tooltip on hover only when cut off, created lazily, without a second announcement', async () => {
     const user = userEvent.setup();
     setup(createMockClient({ today: TODAY }));

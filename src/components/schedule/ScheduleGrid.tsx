@@ -119,6 +119,8 @@ interface RowProps {
   idPrefix: string;
   /** Place of each part of a stay that changed room: "part 2 of 3" and the rooms next to it. */
   links: ReadonlyMap<string, SegmentLink>;
+  /** The grid has keyboard focus: the block under the cursor then shows its tooltip. */
+  focused: boolean;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
 }
 
@@ -138,6 +140,7 @@ const ScheduleRow = memo(function ScheduleRow({
   draggingId,
   idPrefix,
   links,
+  focused,
   onItemPointerDown,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
@@ -215,6 +218,7 @@ const ScheduleRow = memo(function ScheduleRow({
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
             active={activeItem?.id === item.id}
+            tipFocused={focused && activeItem?.id === item.id}
             linkText={link ? segmentBadge(link) : undefined}
             tip={
               item.kind === 'reservation'
@@ -282,6 +286,7 @@ export default function ScheduleGrid({
   const [cursor, setCursor] = useState<GridCursor>({ row: 0, col: 0 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const [gridFocused, setGridFocused] = useState(false);
 
   // Virtualization window. The scroll handler only stores the row range when it changes.
   const range = useMemo(
@@ -799,7 +804,9 @@ export default function ScheduleGrid({
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
+        onFocus={() => setGridFocused(true)}
         onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) setGridFocused(false);
           // Leaving the grid abandons a keyboard pick-up.
           if (drag?.mode === 'keyboard' && !e.currentTarget.contains(e.relatedTarget)) {
             setDrag(null);
@@ -953,6 +960,7 @@ export default function ScheduleGrid({
                 draggingId={drag?.item.id ?? null}
                 idPrefix={idPrefix}
                 links={links}
+                focused={gridFocused}
                 onItemPointerDown={onItemPointerDown}
               />
             ))}

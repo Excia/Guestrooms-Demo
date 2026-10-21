@@ -42,6 +42,8 @@ export interface ScheduleItemViewProps {
    * needed; the accessible name stays `label` (the tooltip is not announced a second time).
    */
   tip?: string;
+  /** The grid has focus and the keyboard cursor is on this block: show the tooltip like hover does. */
+  tipFocused?: boolean;
   onPointerDown?: PointerEventHandler<HTMLElement>;
 }
 
@@ -89,6 +91,7 @@ export default memo(function ScheduleItemView({
   active,
   linkText,
   tip,
+  tipFocused,
   onPointerDown,
 }: ScheduleItemViewProps) {
   const theme = useTheme();
@@ -117,8 +120,8 @@ export default memo(function ScheduleItemView({
     />
   );
   // Keyboard focus (the grid's cursor) shows the full text like hover does; hover only when cut off.
-  const tipArmed = armed || Boolean(active);
-  const tipOpen = Boolean(active) || (hover && cutOff);
+  const tipArmed = armed || Boolean(tipFocused);
+  const tipOpen = Boolean(tipFocused) || (hover && cutOff);
   const isClosure = item.kind === 'closure';
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;

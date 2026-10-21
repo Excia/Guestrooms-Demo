@@ -234,6 +234,14 @@ const NightRow = memo(function NightRow({
               htmlInput: {
                 ...params.slotProps?.htmlInput,
                 'aria-label': `Room for night ${nightNo}, ${dateLabel(date)}`,
+                // Focusing a menu (Tab, or the dialog opening on it) selects its text, so typing a
+                // room number replaces "Room 210" instead of being appended to it.
+                onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
+                  (
+                    params.slotProps?.htmlInput as { onFocus?: (e: unknown) => void } | undefined
+                  )?.onFocus?.(e);
+                  e.currentTarget.select();
+                },
               },
             }}
             helperText={changed ? `Was Room ${wasNumber}` : undefined}
