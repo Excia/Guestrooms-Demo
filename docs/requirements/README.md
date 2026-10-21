@@ -146,7 +146,7 @@ Issue Excia/Guestrooms-Demo#37. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                 | Status                     | PR  |
 | ------------------------ | --------------------------------------------------------------------- | -------------------------- | --- |
-| Excia/Guestrooms-Demo#38 | [4.1] Folio view: charges, payments, balance summary, occupant filter | not started                |     |
+| Excia/Guestrooms-Demo#38 | [4.1] Folio view: charges, payments, balance summary, occupant filter | in review                  |     |
 | Excia/Guestrooms-Demo#39 | [4.2] Folio line type variations                                      | not started                |     |
 | Excia/Guestrooms-Demo#40 | [4.3] Open Folios list                                                | not started (needs design) |     |
 | Excia/Guestrooms-Demo#41 | [4.4] Unassigned Charges list                                         | not started                |     |

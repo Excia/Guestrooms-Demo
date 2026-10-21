@@ -23,12 +23,29 @@ export interface ScheduleColors {
   dropRefused: string;
 }
 
+/** Folio screen colors (Figma Balance Summary 16575:25666 and the status chips 12050:11503). */
+export interface FolioColors {
+  /** Balance Summary fills: grey (also the closed state), yellow, green, red. */
+  balanceGrey: string;
+  balanceYellow: string;
+  balanceGreen: string;
+  balanceRed: string;
+  /** "Not Checked In" chip fill. */
+  notCheckedIn: string;
+  /** Selection/action bar under the charges (light green). */
+  actionBar: string;
+  /** Manual Charge, Add Deposit and Jump buttons (Figma #47566b, not a variable). */
+  slateButton: string;
+}
+
 declare module '@mui/material/styles' {
   interface Palette {
     schedule: ScheduleColors;
+    folio: FolioColors;
   }
   interface PaletteOptions {
     schedule?: ScheduleColors;
+    folio?: FolioColors;
   }
   // tint and outlinedBorder are set on palette.primary only (the Figma tokens exist for primary).
   interface PaletteColor {
@@ -94,6 +111,15 @@ const base = createTheme({
     text: { primary: '#000000de', secondary: '#00000099' },
     action: { active: '#0000008f' },
     background: { default: '#f1f1f1', paper: '#ffffff' },
+    folio: {
+      balanceGrey: '#d9d9d9',
+      balanceYellow: '#fff59d',
+      balanceGreen: '#a5d6a7',
+      balanceRed: '#ef9a9a',
+      notCheckedIn: '#fff9c4',
+      actionBar: '#e8f3e8',
+      slateButton: '#47566b',
+    },
     schedule: {
       nyci: 'rgba(250, 250, 250, 0.8)',
       nyciBorder: 'rgba(56, 142, 60, 0.8)',

@@ -121,6 +121,22 @@ Added by Excia/Guestrooms-Demo#119 (not on `main` yet; may change before merge; 
   that PR (Booking Guest TBD, Lead Occupant optional, Unassigned room/location/room type) will change the
   create request shape; update this table when that PR is final (**Unknown** today).
 
+## Folio endpoints (ticket 4.1)
+
+Added by the Folio view (Excia/Guestrooms-Demo#38). Both are in `createHttpClient` and the mock.
+
+| #   | Method and path                      | Request                                                                     | Response                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Errors                                                                       |
+| --- | ------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 13  | `GET /reservations/{id}/folio`       | none (must not change anything)                                             | `Folio` (reservationId, confirmationNumber, checkInStatus `not-checked-in\|checked-in\|checked-out`, open, mposVisible, nights, guests, rooms[] {id, number}, occupants[] {id, name, roomId}, charges[] {id, type `room-rate\|mpos\|manual\|add-on\|surcharge\|service-fee`, date, description, amountCents (total incl. taxes and service charges), status `posted\|unposted\|settled\|split`, references[], roomId, occupantId}, payments[] {id, typeLabel, date, reference, ticket, description, amountCents, status}) | 400, 404                                                                     |
+| 14  | `POST /reservations/{id}/folio/post` | `PostChargeRequest {requestId, reservationId, chargeId}`; `Idempotency-Key` | the updated `Folio`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | 400, 404, 409 `folio-closed`, 409 `not-unposted`, 409 `idempotency-conflict` |
+
+- Balances are not sent: the client derives Posted Balance (posted lines) and Unposted Balance
+  (unposted lines) from `charges` (D-077). A backend that wants to own the numbers should add them to
+  `Folio` and the client will prefer them.
+- Surcharge (MPOS card present) and service fee (card on file) arrive as `charges` of those types with
+  the settle reference; `references` holds every payment reference of a split settlement.
+- Posting is idempotent by `requestId`. Print and Email are not endpoints yet (D-003, Q-38-2).
+
 ## Error codes
 
 | Status | Code                   | Meaning                                                                                                                                                       | Client behavior                                                       |
@@ -139,6 +155,8 @@ Added by Excia/Guestrooms-Demo#119 (not on `main` yet; may change before merge; 
 | 409    | `not-movable`          | checked out, locked room type, arrival in the past, dates of a checked-in room                                                                                | revert and refetch                                                    |
 | 409    | `stale`                | `version` or `from*` no longer matches                                                                                                                        | revert and refetch                                                    |
 | 409    | `idempotency-conflict` | `requestId` reused with a different request                                                                                                                   |                                                                       |
+| 409    | `folio-closed`         | (ticket 4.1) posting to a closed folio                                                                                                                        |                                                                       |
+| 409    | `not-unposted`         | (ticket 4.1) the charge is not waiting for Night Audit                                                                                                        |                                                                       |
 | 409    | `not-editable`         | (PR 119) reservation checked out or cancelled                                                                                                                 |                                                                       |
 | 5xx    | (any)                  | server error                                                                                                                                                  | Schedule move: unknown outcome (reload, no revert)                    |
 
