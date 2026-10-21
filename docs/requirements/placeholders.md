@@ -23,6 +23,7 @@ data is added or a placeholder is replaced (see the PR checklist).
 | Mock folios: one per scheduled reservation, built from its stay lines (nightly lines posted before today, unposted from today), an MPOS charge ($42.50) and a manual charge ($25.00) on every second reservation, a $100 deposit on some, settled and closed folios for checked-out stays (service fee 3%), confirmation and reference numbers derived from the id                                                          | `src/api/folioData.ts`                                                                                              | Replace with the folio endpoints                                                                                                                                                     | tickets 4.1, 4.5, 4.10 to 4.13                      |
 | System Settings sample values (Eastern Standard Time, check in 4:00 PM, checkout 12:00 PM, late checkout 3:00 PM, folio address 4111 Clubessential Drive Cincinnati OH 45238, email@email.com, XXX-XXX-XXXX), time zones, card readers, items, areas and members offered in the lookups                                                                                                                                     | `src/api/systemSettingsData.ts`                                                                                     | `GET /settings/system` and `/settings/system/options`                                                                                                                                | System Settings 7.1 (Excia/Guestrooms-Demo#70)      |
 | Reservation List mock rows (`src/api/reservationListData.ts`): built from the schedule state; Block names ("Member-Guest Weekend", "Spring Invitational", "Ladies Golf Association") assigned to about a quarter of reservations by a hash of the id; three list-only reservations GR-50401 (canceled), GR-50402 (unassigned) and GR-50403 (unassigned plus a second room) that are not on the schedule and have no details | Replace with backend data                                                                                           |
+| Booking Rules sample values (6 and 12 month windows, hold 15 / 10 / 10 minutes, $99 deposit, a Junior Member rule), room types and member types offered in the lookups                                                                                                                                                                                             | `src/api/bookingRulesData.ts`                                                                                       | `GET /settings/booking-rules` and `/options`                                                                                                                                         | Booking Rules 7.5 (Excia/Guestrooms-Demo#74)        |
 
 ## UI placeholders and stand-ins
 
@@ -66,6 +67,10 @@ data is added or a placeholder is replaced (see the PR checklist).
   the designer or owner (see [open-questions.md](open-questions.md)).
 - Default notification templates (page 85 of the requirements document, not available to the team).
 - The Migration Tool frame includes reference mockups that look like examples from another product.
+- Payment methods in the mock (ticket 3.2): the mock has none, so a stable hash of the reservation id leaves
+  about one reservation in five without one; its rooms fail bulk check-in with 409 `no-payment-method`.
+  Replaced when payment methods exist (ticket 3.5). Checking in a list-only mock reservation (the
+  `rs-X*` seeds) is remembered by the mock client but is not on the schedule.
 
 ## Reporting landing (ticket 6.1)
 

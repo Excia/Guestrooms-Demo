@@ -7,7 +7,7 @@ export function createUnavailableClient(error: ApiError): ApiClient {
   return {
     dashboard: { getStats: fail, getQuickStats: fail },
     reservations: { list: fail, get: fail, getDetail: fail, setEarlyLate: fail, create: fail },
-    reservationList: { list: fail, getOptions: fail },
+    reservationList: { list: fail, getOptions: fail, checkInRoom: fail },
     settings: { getBookingHold: fail },
     systemSettings: { get: fail, save: fail, getOptions: fail },
     roomSetup: {
@@ -19,6 +19,7 @@ export function createUnavailableClient(error: ApiError): ApiClient {
       saveRoom: fail,
       deleteRoom: fail,
     },
+    bookingRules: { get: fail, save: fail, getOptions: fail },
     folios: { get: fail, postCharge: fail },
     members: { search: fail, create: fail },
     permissions: { getGrant: fail },

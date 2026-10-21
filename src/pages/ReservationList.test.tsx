@@ -228,7 +228,7 @@ describe('ReservationList', () => {
     expect(screen.getByRole('button', { name: /^Check In/ })).toBeInTheDocument();
   });
 
-  it('renders Night Audit as an outlined blue button on white and New Reservation as a filled green button, both 200px', async () => {
+  it('renders Night Audit (blue outline, white fill) and New Reservation (filled) as 200px buttons', async () => {
     setup();
     await bodyRows();
     const audit = screen.getByRole('link', { name: 'Night Audit' });

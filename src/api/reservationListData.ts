@@ -4,13 +4,16 @@ import { addDays } from '../lib/dates';
 import { extrasFor } from './reservationDetailData';
 import { deriveListStatus } from './reservationListRules';
 import type {
+  CheckInRoomRequest,
+  CheckInRoomResult,
   ListStatus,
   ReservationListOptions,
   ReservationListRoom,
   ReservationListRow,
 } from './reservationListTypes';
-import type { ScheduleState } from './scheduleData';
+import { bump, type ScheduleState } from './scheduleData';
 import type { ScheduleBlock, ScheduleBlockStatus } from './types';
+import { ApiError } from './types';
 
 const STATUS: Record<ScheduleBlockStatus, ListStatus> = {
   confirmed: 'not-checked-in',
@@ -29,7 +32,11 @@ function blockFor(reservationId: string): string | null {
 }
 
 /** One row per reservation, from the grid's blocks and the unassigned list. */
-export function buildListRows(state: ScheduleState): ReservationListRow[] {
+export function buildListRows(
+  state: ScheduleState,
+  /** Reservation rooms checked in through the list that are not on the schedule (see `EXTRA_SEEDS`). */
+  checkedInExtras: ReadonlySet<string> = new Set(),
+): ReservationListRow[] {
   const groups = new Map<string, ScheduleBlock[]>();
   for (const block of [...state.blocks, ...state.unassigned]) {
     const group = groups.get(block.reservationId);
@@ -63,7 +70,7 @@ export function buildListRows(state: ScheduleState): ReservationListRow[] {
       status: deriveListStatus(rooms),
     } satisfies ReservationListRow;
   });
-  return [...rows, ...extraRows(state)];
+  return [...rows, ...extraRows(state, checkedInExtras)];
 }
 
 interface Seed {
@@ -109,13 +116,13 @@ const EXTRA_SEEDS: Seed[] = [
   },
 ];
 
-function extraRows(state: ScheduleState): ReservationListRow[] {
+function extraRows(state: ScheduleState, checkedIn: ReadonlySet<string>): ReservationListRow[] {
   return EXTRA_SEEDS.flatMap((seed) => {
     const rooms: ReservationListRoom[] = seed.roomIds.map((roomId, i) => ({
       id: `${seed.id}-${i + 1}`,
       roomNumber:
         roomId === null ? null : (state.rooms.find((r) => r.id === roomId)?.number ?? null),
-      status: seed.status,
+      status: checkedIn.has(`${seed.id}-${i + 1}`) ? 'checked-in' : seed.status,
     }));
     const firstRoom = state.rooms.find((r) => r.id === seed.roomIds[0]);
     const location = state.locations.find((l) => l.id === firstRoom?.locationId);
@@ -145,4 +152,55 @@ export function listOptions(state: ScheduleState): ReservationListOptions {
     locations: structuredClone(state.locations),
     roomTypes: structuredClone(state.roomTypes),
   };
+}
+
+// PLACEHOLDER: the mock has no payment methods yet (ticket 3.5). A stable hash of the reservation
+// id leaves about one reservation in five without one, so the "No payment method" failure shows.
+export function hasPaymentOnFile(reservationId: string): boolean {
+  let h = 7;
+  for (const ch of reservationId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 5 !== 0;
+}
+
+const checkInFailure = (code: string, message: string) => new ApiError(409, message, { code });
+
+/**
+ * Checks in one reservation room as the backend would: the room needs a room number and the
+ * reservation a payment method (D-008). A room already checked in answers 409 `not-checkable`.
+ * Unknown ids are 404.
+ */
+export function checkInRoom(
+  state: ScheduleState,
+  checkedInExtras: Set<string>,
+  request: CheckInRoomRequest,
+): CheckInRoomResult {
+  const id = request.reservationRoomId;
+  const block = [...state.blocks, ...state.unassigned].find((b) => b.id === id);
+  const seed = EXTRA_SEEDS.find((s) => s.roomIds.some((_, i) => `${s.id}-${i + 1}` === id));
+  if (!block && !seed) throw new ApiError(404, 'Reservation room not found');
+  const reservationId = block?.reservationId ?? seed!.id;
+  const roomId = block
+    ? block.roomId
+    : seed!.roomIds[Number(id.slice(id.lastIndexOf('-') + 1)) - 1];
+  const status = block
+    ? STATUS[block.status]
+    : checkedInExtras.has(id)
+      ? 'checked-in'
+      : seed!.status;
+  if (status !== 'not-checked-in') {
+    throw checkInFailure('not-checkable', 'This room is not waiting for check in');
+  }
+  if (!roomId || state.unassigned.includes(block as ScheduleBlock)) {
+    throw checkInFailure('unassigned', 'No room assigned');
+  }
+  if (!hasPaymentOnFile(reservationId)) {
+    throw checkInFailure('no-payment-method', 'No payment method on file');
+  }
+  if (block) {
+    block.status = 'checked-in';
+    bump(state, block);
+  } else {
+    checkedInExtras.add(id);
+  }
+  return { reservationRoomId: id, status: 'checked-in' };
 }

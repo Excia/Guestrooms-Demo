@@ -98,8 +98,28 @@ export interface ReservationListOptions {
   roomTypes: ScheduleRoomType[];
 }
 
+/** Check in one reservation room (ticket 3.2). `requestId` makes a repeat harmless (8 to 128 URL-safe characters). */
+export interface CheckInRoomRequest {
+  reservationRoomId: string;
+  requestId: string;
+}
+
+export interface CheckInRoomResult {
+  reservationRoomId: string;
+  status: 'checked-in';
+}
+
+/**
+ * Why a room could not be checked in, as the `code` of a 409 answer: no room is assigned yet, or no
+ * payment method is on file (check-in requires one, decision D-008).
+ */
+export const CHECK_IN_FAILURES = ['unassigned', 'no-payment-method'] as const;
+export type CheckInFailure = (typeof CHECK_IN_FAILURES)[number];
+
 export interface ReservationListApi {
   /** `total` counts all matches; `nextCursor` is not used (paging is by page number). */
   list(query?: ReservationListQuery, options?: RequestOptions): Promise<Page<ReservationListRow>>;
   getOptions(options?: RequestOptions): Promise<ReservationListOptions>;
+  /** Rejects with 409 `unassigned` or `no-payment-method` when the room cannot be checked in. */
+  checkInRoom(request: CheckInRoomRequest, options?: RequestOptions): Promise<CheckInRoomResult>;
 }
