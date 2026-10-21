@@ -30,6 +30,8 @@ export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
 export const OPEN_FOLIOS_PATH = '/open-folios';
 /** Primary Setup / System Settings (ticket 7.1). */
 export const PRIMARY_SETUP_PATH = '/admin/primary-setup';
+/** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
+export const BOOKING_RULES_PATH = '/admin/booking-rules';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -89,6 +91,13 @@ export const routes = [
   { id: 'reporting', path: '/reporting', title: 'Reporting', section: 'reservation' },
   { id: 'admin', path: '/admin', title: 'Admin Setup' },
   { id: 'primary-setup', path: PRIMARY_SETUP_PATH, title: 'Primary Setup', section: 'admin' },
+  {
+    id: 'booking-rules',
+    path: BOOKING_RULES_PATH,
+    title: 'Booking Rules',
+    section: 'admin',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
+  },
   {
     id: 'rate-categories',
     path: '/admin/rate-categories',

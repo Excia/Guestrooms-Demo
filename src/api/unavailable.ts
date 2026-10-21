@@ -10,6 +10,7 @@ export function createUnavailableClient(error: ApiError): ApiClient {
     reservationList: { list: fail, getOptions: fail },
     settings: { getBookingHold: fail },
     systemSettings: { get: fail, save: fail, getOptions: fail },
+    bookingRules: { get: fail, save: fail, getOptions: fail },
     folios: { get: fail, postCharge: fail },
     members: { search: fail, create: fail },
     permissions: { getGrant: fail },

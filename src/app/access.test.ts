@@ -8,6 +8,7 @@ import {
 
 const ADMIN_IDS = [
   'primary-setup',
+  'booking-rules',
   'rate-categories',
   'room-types',
   'rooms',
@@ -66,7 +67,7 @@ describe('canAccessPage', () => {
 });
 
 describe('summarizeAccess', () => {
-  it('lists all six pages for an administrator', () => {
+  it('lists all admin pages for an administrator', () => {
     const s = summarizeAccess(admin.can);
     expect(s.canSeeAdminSetup).toBe(true);
     expect(s.adminPages.map((r) => r.id)).toEqual(ADMIN_IDS);
