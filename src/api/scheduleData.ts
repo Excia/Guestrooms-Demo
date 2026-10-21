@@ -2,14 +2,7 @@
 // move mutations applied to that in-memory state. Replaced by the backend later.
 import { addDays, daysBetween, nightsOverlap } from '../lib/dates';
 import { rateOutcome } from '../lib/roomChangeRates';
-import {
-  changedNights,
-  normalizeRuns,
-  planFromBlocks,
-  planProblem,
-  stayOf,
-  type Run,
-} from '../lib/stayPlan';
+import { changedNights, normalizeRuns, planFromBlocks, planProblem, stayOf } from '../lib/stayPlan';
 import type {
   ChangeRoomRequest,
   ChangeRoomResult,
@@ -846,6 +839,13 @@ export function changeRoomDuringStay(
   const start = chain[0].startDate;
   const end = chain.reduce((max, b) => (b.endDate > max ? b.endDate : max), block.endDate);
   const from = state.today > block.startDate ? state.today : block.startDate;
+  // The server owns "today" (the club's, from its time zone): the client's effective date is advisory.
+  if (from < end && request.nights[0].date !== from) {
+    throw new ApiError(409, 'The effective date changed', {
+      code: 'stale',
+      details: { reason: ['effective-date'], today: [state.today] },
+    });
+  }
   if (from >= end || planProblem(request.nights, from, end) !== null) {
     throw invalidChange({ nights: ['Must list every night not yet stayed, once, in order'] });
   }
@@ -903,9 +903,10 @@ export function changeRoomDuringStay(
   }
 
   // ---- apply: rebuild the stay as runs ----
-  const stayed: Run[] = normalizeRuns(planFromBlocks(chain, start, from));
-  const remaining = normalizeRuns(request.nights);
-  const runs = [...stayed, ...remaining];
+  // Every night of the stay, stayed ones included, merged by room: a stayed night in the same room as
+  // the first remaining night belongs to the same block (which keeps its checked-in status).
+  const runs = normalizeRuns([...planFromBlocks(chain, start, from), ...request.nights]);
+  const currentIndex = runs.findIndex((r) => r.startDate <= from && from < r.endDate);
   const template = structuredClone(block);
   const early = chain.some((b) => b.earlyCheckIn);
   const late = chain.some((b) => b.lateCheckOut);
@@ -915,40 +916,47 @@ export function changeRoomDuringStay(
     if (chain.some((b) => key.startsWith(`${b.id}|`))) delete state.rateOverrides[key];
   }
 
-  const firstRemaining = stayed.length; // index of the run that keeps the id
   const next: ScheduleBlock[] = runs.map((run, i) => {
     const reused = old.get(`${run.roomId}|${run.startDate}|${run.endDate}`);
-    const isCurrent = i === firstRemaining;
+    const isCurrent = i === currentIndex;
+    // Ids of new blocks are opaque to clients; nothing parses them.
     const id = isCurrent
       ? block.id
       : reused && reused.id !== block.id
         ? reused.id
         : `${block.id}~${++state.segmentSeq}`;
-    return {
+    const out: ScheduleBlock = {
       ...template,
       id,
       roomId: run.roomId,
       startDate: run.startDate,
       endDate: run.endDate,
-      status: i < firstRemaining ? 'checked-out' : 'checked-in',
+      status: i < currentIndex ? 'checked-out' : 'checked-in',
       earlyCheckIn: (early && i === 0) || undefined,
       lateCheckOut: (late && i === runs.length - 1) || undefined,
-      roomChange: {
-        part: i < firstRemaining ? 'previous' : isCurrent ? 'current' : 'next',
+    };
+    // A stay that is a single block again carries no link at all.
+    if (runs.length > 1) {
+      out.roomChange = {
+        part: i < currentIndex ? 'previous' : isCurrent ? 'current' : 'next',
         index: i + 1,
         count: runs.length,
         stayId: block.id,
-      },
-    };
+      };
+    } else {
+      delete out.roomChange;
+    }
+    return out;
   });
   // The ids that disappear, and the ones that stay (their stored price overrides move with them).
   const nextIds = new Set(next.map((b) => b.id));
   const removedBlockIds = chain.filter((b) => !nextIds.has(b.id)).map((b) => b.id);
+  // The rebuilt blocks take the place of the old ones, so the order of the grid and of the rooms of a
+  // multi-room reservation does not change.
+  const at = state.blocks.findIndex((b) => own.has(b.id));
   state.blocks = state.blocks.filter((b) => !own.has(b.id));
-  for (const b of next) {
-    bump(state, b);
-    state.blocks.push(b);
-  }
+  for (const b of next) bump(state, b);
+  state.blocks.splice(at, 0, ...next);
   // Prices: a night whose price differs from its room type's rate (a retained rate, or an earlier
   // retained one) is stored as an override under the block that now holds it.
   const after = new Map(outcome.nights.map((n) => [n.date, n.amountCents]));

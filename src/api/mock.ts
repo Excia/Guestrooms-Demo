@@ -9,6 +9,8 @@ import {
   mockStats,
   noGrant,
 } from './mockData';
+import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
+import { permissionsFromGrant } from './grant';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
@@ -195,6 +197,9 @@ export function createMockClient({
         respond(
           () => {
             assertChangeRoomRequest(request);
+            if (!permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
             return replayable(request, () =>
               changeRoomDuringStay(schedule, request, roomChangeRule),
             );

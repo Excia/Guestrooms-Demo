@@ -193,7 +193,8 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(l.roomType) &&
         isString(l.date) &&
         isCount(l.amountCents) &&
-        (l.reservationRoomId === undefined || isString(l.reservationRoomId)),
+        isString(l.reservationRoomId) &&
+        l.reservationRoomId !== '',
     ) &&
     isString(v.version) &&
     v.version !== ''
@@ -490,10 +491,12 @@ const parseMove =
   };
 
 // The answer must describe the change that was asked for: the blocks of the stay are exactly the
-// segments of the normalized plan (one block per run of consecutive nights in one room, from the
-// first remaining night on), the block of the request is the first of them and keeps its id, the
-// earlier blocks are checked-out `previous` segments that end where the plan starts, the parts are
-// numbered consistently, and the vacated room (if any) is the room of the first night.
+// segments of the normalized plan. From the first remaining night on there is one block per run of
+// the plan (the first, which keeps the request's id, may also hold earlier nights spent in the same
+// room); stayed nights in another room are checked-out `previous` blocks that end where it begins
+// and never share its room (runs in one room are merged). Several blocks are numbered 1..count and
+// linked by `stayId`; a single block carries no `roomChange`. The vacated room (if any) is the room
+// of the first night.
 const parseChangeRoom =
   (request: ChangeRoomRequest) =>
   (body: unknown, status: number): ChangeRoomResult => {
@@ -529,31 +532,37 @@ const parseChangeRoom =
     const before = sorted.filter((b) => b.roomChange?.part === 'previous');
     const after = sorted.filter((b) => b.roomChange?.part !== 'previous');
     const plan = normalizeRuns(request.nights);
+    const single = sorted.length === 1;
     if (
       !moved ||
       new Set(ids).size !== ids.length ||
       result.removedBlockIds.some((id) => ids.includes(id)) ||
-      // every block belongs to this stay
-      !sorted.every(
-        (b) => b.reservationId === moved.reservationId && b.roomChange?.stayId === moved.id,
-      ) ||
-      // numbered 1..count in date order
-      !sorted.every(
-        (b, i) => b.roomChange!.index === i + 1 && b.roomChange!.count === sorted.length,
-      ) ||
-      // the stayed part comes first and ends where the plan starts
-      sorted.slice(0, before.length).some((b) => b.roomChange!.part !== 'previous') ||
-      before.some((b) => b.status !== 'checked-out' || b.endDate > first.date) ||
-      (before.length > 0 && before[before.length - 1].endDate !== first.date) ||
-      // the rest equals the plan: same runs, the first is the request's block, the others are `next`
+      sorted.some((b) => b.reservationId !== moved.reservationId) ||
+      // one block has no link; several are numbered 1..count in date order and share the stay id
+      (single
+        ? moved.roomChange !== undefined
+        : !sorted.every(
+            (b, i) =>
+              b.roomChange?.stayId === moved.id &&
+              b.roomChange.index === i + 1 &&
+              b.roomChange.count === sorted.length,
+          )) ||
+      // the stayed part comes first and ends where the rest begins, in another room
+      sorted.slice(0, before.length).some((b) => b.roomChange?.part !== 'previous') ||
+      before.some((b) => b.status !== 'checked-out') ||
+      after.length === 0 ||
+      (before.length > 0 &&
+        (before[before.length - 1].endDate !== after[0].startDate ||
+          before[before.length - 1].roomId === after[0].roomId)) ||
+      // the rest equals the plan: the first run may start earlier (earlier nights in the same room)
       after.length !== plan.length ||
       !after.every(
         (b, i) =>
           b.roomId === plan[i].roomId &&
-          b.startDate === plan[i].startDate &&
           b.endDate === plan[i].endDate &&
+          (i === 0 ? b.startDate <= plan[0].startDate : b.startDate === plan[i].startDate) &&
           b.status === 'checked-in' &&
-          b.roomChange!.part === (i === 0 ? 'current' : 'next'),
+          (single || b.roomChange?.part === (i === 0 ? 'current' : 'next')),
       ) ||
       after[0].id !== request.reservationRoomId
     ) {
