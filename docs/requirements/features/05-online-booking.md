@@ -56,6 +56,16 @@ Update-search notice 12136:20607.
   guests, max rooms and the nights label.
 - **Related built code:** the admin New Reservation search (ticket 1.4) is a different, staff-side
   form with different limits (D-042).
+- **Built (PR for #49):** `ReservationWidget` (Search X Night Stay, opens the results in a new tab) and
+  `AdjustSearch` (collapsible panel with the summary line, Update Search and the changed-options notice)
+  in `src/components/onlineBooking/`, both on one shared `ReservationForm`; rules in
+  `src/app/bookingSearch.ts`. Guests: a room's adults plus children never exceed the highest Max
+  Occupancy (default 4, a prop until the rooms data exists), at least 1 adult, new rooms start at 1 adult
+  and 0 children. Rooms: Remove deletes the latest set; the maximum is a prop until Booking Rules (7.5)
+  exists (default 3). Location is hidden when the club has one location. The results route
+  (`/book/results`) and the 150-character global message setting (7.9) are not built: the widget takes the
+  message as a prop and opens the URL. The embeddable web-component wrapper (D-011) is not built; the React
+  component is the unit it will wrap. Not wired into a product route yet; the dev-only mock page `/dev/online-booking` (`src/pages/OnlineBookingDemo.tsx`, dropped from production builds like `/dev/components`) shows the widget on a stand-in club page and the header with Adjust Search, with a signed-out / non-member / member switch. Open: Q-49-1. Deviations 54 to 56.
 
 ## 5.3 Results cards
 

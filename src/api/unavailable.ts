@@ -7,6 +7,7 @@ export function createUnavailableClient(error: ApiError): ApiClient {
   return {
     dashboard: { getStats: fail, getQuickStats: fail },
     reservations: { list: fail, get: fail, getDetail: fail, setEarlyLate: fail, create: fail },
+    reservationList: { list: fail, getOptions: fail },
     settings: { getBookingHold: fail },
     systemSettings: { get: fail, save: fail, getOptions: fail },
     roomSetup: {
