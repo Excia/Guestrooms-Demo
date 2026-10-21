@@ -11,6 +11,8 @@ import {
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
+import { buildListRows, listOptions } from './reservationListData';
+import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
 import { createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
@@ -25,6 +27,7 @@ import {
   assertMoveDatesRequest,
   assertMoveRoomRequest,
   assertQuickStatsQuery,
+  assertReservationListQuery,
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
@@ -44,6 +47,8 @@ export interface MockOptions {
 }
 
 export const MOCK_PAGE_SIZE = 4;
+/** Reservation List default page size, as the backend would apply it. */
+const LIST_PAGE_SIZE = 25;
 
 const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
 
@@ -184,6 +189,26 @@ export function createMockClient({
             assertCreateReservationRequest(request);
             throw new ApiError(404, 'Room not found');
           },
+          o,
+        ),
+    },
+    reservationList: {
+      list: (query, o) =>
+        respond(
+          () => {
+            assertReservationListQuery(query ?? {});
+            return queryReservationList(buildListRows(schedule), query, LIST_PAGE_SIZE);
+          },
+          () => {
+            assertReservationListQuery(query ?? {});
+            return { items: [], total: 0 };
+          },
+          o,
+        ),
+      getOptions: (o) =>
+        respond(
+          () => listOptions(schedule),
+          () => ({ locations: [], roomTypes: [] }),
           o,
         ),
     },

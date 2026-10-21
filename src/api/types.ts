@@ -1,3 +1,5 @@
+import type { ReservationListApi } from './reservationListTypes';
+
 /** ISO calendar date, `YYYY-MM-DD`. */
 export type IsoDate = string;
 /** Money is always integer cents; the backend owns currency formatting rules. */
@@ -552,6 +554,7 @@ export interface ScheduleApi {
 export interface ApiClient {
   dashboard: DashboardApi;
   reservations: ReservationsApi;
+  reservationList: ReservationListApi;
   permissions: PermissionsApi;
   schedule: ScheduleApi;
   settings: SettingsApi;
