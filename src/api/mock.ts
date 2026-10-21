@@ -9,6 +9,7 @@ import {
   noGrant,
 } from './mockData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
+import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
@@ -26,6 +27,7 @@ import {
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
+  assertPostChargeRequest,
   assertQuickStatsQuery,
   assertResourceId,
   assertScheduleQuery,
@@ -66,6 +68,7 @@ export function createMockClient({
   const schedule = createScheduleState(today, scheduleSize);
   const members = seedMembers();
   let systemSettings = mockSystemSettings();
+  const folioStore: FolioStore = new Map();
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {
@@ -186,6 +189,31 @@ export function createMockClient({
           () => {
             assertCreateReservationRequest(request);
             throw new ApiError(404, 'Room not found');
+          },
+          o,
+        ),
+    },
+    folios: {
+      get: (id, o) =>
+        respond(
+          () => {
+            assertResourceId(id, 'reservation');
+            return getFolio(schedule, folioStore, id);
+          },
+          () => {
+            throw notFound();
+          },
+          o,
+        ),
+      postCharge: (request, o) =>
+        respond(
+          () => {
+            assertPostChargeRequest(request);
+            return replayable(request, () => postCharge(schedule, folioStore, request));
+          },
+          () => {
+            assertPostChargeRequest(request);
+            throw notFound();
           },
           o,
         ),

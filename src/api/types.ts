@@ -308,6 +308,93 @@ export interface ReservationsApi {
   create(request: CreateReservationRequest, options?: RequestOptions): Promise<ReservationDetail>;
 }
 
+// ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----
+
+export type FolioLineType =
+  'room-rate' | 'mpos' | 'manual' | 'add-on' | 'surcharge' | 'service-fee';
+
+/**
+ * `posted`: on the folio and owed; `unposted`: waiting for Night Audit; `settled`: paid, with the
+ * settle `references`; `split`: replaced by its split lines (ticket 4.13).
+ */
+export type FolioChargeStatus = 'posted' | 'unposted' | 'settled' | 'split';
+
+export interface FolioCharge {
+  id: string;
+  type: FolioLineType;
+  date: IsoDate;
+  description: string;
+  /** Total for the line: includes taxes and service charges (doc 32.13.2.1). */
+  amountCents: Cents;
+  status: FolioChargeStatus;
+  /** Payment reference numbers of the settlement(s); empty unless `settled`. */
+  references: string[];
+  /** The reservation room the line belongs to; null for a line on the reservation as a whole. */
+  roomId: string | null;
+  /** The occupant it is charged to; null for a room-level line. */
+  occupantId: string | null;
+}
+
+export interface FolioPayment {
+  id: string;
+  /** Shown in the Type column, e.g. "Credit Card", "Member Charge", "MPOS Payment". */
+  typeLabel: string;
+  date: IsoDate;
+  reference: string;
+  /** MPOS ticket number, null for a payment made in Guest Rooms. */
+  ticket: string | null;
+  description: string;
+  amountCents: Cents;
+  /** E.g. "Settled (Successful)". */
+  status: string;
+}
+
+export interface FolioOccupant {
+  id: string;
+  name: string;
+  roomId: string;
+}
+
+export interface FolioRoom {
+  id: string;
+  /** "UNASSIGNED" is shown when null. */
+  number: string | null;
+}
+
+export interface Folio {
+  reservationId: string;
+  confirmationNumber: string;
+  /** Follows the reservation's check in and check out (doc 32.3.1.2). */
+  checkInStatus: 'not-checked-in' | 'checked-in' | 'checked-out';
+  /** Closed folios disable the action buttons. */
+  open: boolean;
+  /** The folio is visible in MPOS (the POS chip). */
+  mposVisible: boolean;
+  nights: number;
+  guests: number;
+  rooms: FolioRoom[];
+  occupants: FolioOccupant[];
+  charges: FolioCharge[];
+  payments: FolioPayment[];
+}
+
+/** Posts one unposted charge (the "Post via Night Audit" dialog); `requestId` is the idempotency key. */
+export interface PostChargeRequest {
+  requestId: string;
+  reservationId: string;
+  chargeId: string;
+}
+
+export interface FoliosApi {
+  /** 404 when the reservation is unknown. */
+  get(reservationId: string, options?: RequestOptions): Promise<Folio>;
+  /**
+   * Returns the folio after posting. Errors: 400 `invalid-id`; 404; 409 `folio-closed`; 409
+   * `not-unposted` (the charge is not waiting for Night Audit); 409 `idempotency-conflict`.
+   */
+  postCharge(request: PostChargeRequest, options?: RequestOptions): Promise<Folio>;
+}
+
 // ---- members (guest directory; placeholder until the Member Directory ticket) ------------------
 
 /** A person in the guest directory: a member, or a guest added from the New Reservation panel. */
@@ -652,6 +739,7 @@ export interface ApiClient {
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
   members: MembersApi;
+  folios: FoliosApi;
 }
 
 export interface ApiErrorInit {

@@ -30,6 +30,11 @@ export const PRIMARY_SETUP_PATH = '/admin/primary-setup';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
+/** Folio of one reservation (ticket 4.1). */
+export const FOLIO_PATH = '/reservations/:id/folio';
+export const folioPath = (reservationId: string) =>
+  `/reservations/${encodeURIComponent(reservationId)}/folio`;
+
 // Note: '/admin' (Admin Setup landing) is not a menu link; it opens for anyone who can open an
 // Admin Setup page (see src/app/access.ts).
 export const routes = [
@@ -49,6 +54,7 @@ export const routes = [
     path: NEW_RESERVATION_RESULTS_PATH,
     title: 'Search Results',
   },
+  { id: 'folio', path: FOLIO_PATH, title: 'Folio' },
   { id: 'open-folios', path: OPEN_FOLIOS_PATH, title: 'Open Folios', section: 'reservation' },
   {
     id: 'unassigned-charges',

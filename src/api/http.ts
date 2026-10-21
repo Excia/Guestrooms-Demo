@@ -8,6 +8,8 @@ import type {
   DashboardStats,
   EarlyLateRequest,
   EarlyLateResult,
+  Folio,
+  PostChargeRequest,
   ReservationDetail,
   Page,
   PermissionGrant,
@@ -34,6 +36,7 @@ import {
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
+  assertPostChargeRequest,
   assertQuickStatsQuery,
   assertResourceId,
   assertScheduleQuery,
@@ -177,6 +180,76 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     v.version !== ''
   );
 }
+
+const CHECK_IN_STATUSES: readonly string[] = ['not-checked-in', 'checked-in', 'checked-out'];
+const CHARGE_TYPES: readonly string[] = [
+  'room-rate',
+  'mpos',
+  'manual',
+  'add-on',
+  'surcharge',
+  'service-fee',
+];
+const CHARGE_STATUSES: readonly string[] = ['posted', 'unposted', 'settled', 'split'];
+const isNullableString = (v: unknown) => v === null || isString(v);
+
+// Light shape guard on what the folio screen reads.
+function isFolio(v: unknown): v is Folio {
+  return (
+    isObject(v) &&
+    isString(v.reservationId) &&
+    isString(v.confirmationNumber) &&
+    isString(v.checkInStatus) &&
+    CHECK_IN_STATUSES.includes(v.checkInStatus) &&
+    isFlag(v.open) &&
+    isFlag(v.mposVisible) &&
+    isCount(v.nights) &&
+    isCount(v.guests) &&
+    listOf(v.rooms, (r) => isObject(r) && isString(r.id) && isNullableString(r.number)) &&
+    listOf(
+      v.occupants,
+      (o) => isObject(o) && isString(o.id) && isString(o.name) && isString(o.roomId),
+    ) &&
+    listOf(
+      v.charges,
+      (c) =>
+        isObject(c) &&
+        isString(c.id) &&
+        isString(c.type) &&
+        CHARGE_TYPES.includes(c.type) &&
+        isString(c.date) &&
+        isString(c.description) &&
+        isCount(c.amountCents) &&
+        isString(c.status) &&
+        CHARGE_STATUSES.includes(c.status) &&
+        Array.isArray(c.references) &&
+        c.references.every(isString) &&
+        isNullableString(c.roomId) &&
+        isNullableString(c.occupantId),
+    ) &&
+    listOf(
+      v.payments,
+      (p) =>
+        isObject(p) &&
+        isString(p.id) &&
+        isString(p.typeLabel) &&
+        isString(p.date) &&
+        isString(p.reference) &&
+        isNullableString(p.ticket) &&
+        isString(p.description) &&
+        isCount(p.amountCents) &&
+        isString(p.status),
+    )
+  );
+}
+
+// The answer must be for the reservation that was asked for.
+const parseFolio =
+  (reservationId: string) =>
+  (body: unknown, status: number): Folio => {
+    if (!isFolio(body) || body.reservationId !== reservationId) throw invalid(status, 'folio');
+    return body;
+  };
 
 // The answer must be for the reservation that was asked for.
 const parseDetail =
@@ -727,6 +800,24 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             body: r,
             headers: { 'Idempotency-Key': r.requestId },
           });
+        }),
+    },
+    folios: {
+      get: (id, o) =>
+        Promise.resolve().then(() => {
+          assertResourceId(id, 'reservation');
+          return request(`/reservations/${encodeURIComponent(id)}/folio`, {}, o, parseFolio(id));
+        }),
+      postCharge: (r: PostChargeRequest, o) =>
+        Promise.resolve().then(() => {
+          assertPostChargeRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/folio/post`,
+            {},
+            o,
+            parseFolio(r.reservationId),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
         }),
     },
     settings: {

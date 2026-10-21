@@ -140,7 +140,7 @@ Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.
   99, deposit amount required when Deposit is selected. The rules are exposed as a typed object consumed by
   Epic 5 and the admin New Reservation search.
 - **Existing groundwork:** `GET /settings/booking-hold` and `BookingHold { employee, member, nonMember }`
-  (1 to 99 minutes) in PR Excia/Guestrooms-Demo#119.
+  (1 to 99 minutes) on `main` (PR Excia/Guestrooms-Demo#119); the New Reservation panel uses the employee value (placeholder 15 minutes).
 - **Open questions:** Q-74-1, Q-74-2.
 
 ## 7.6 Keycard Integration settings

@@ -32,6 +32,10 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       search: (q, o) => client().then((c) => c.members.search(q, o)),
       create: (r, o) => client().then((c) => c.members.create(r, o)),
     },
+    folios: {
+      get: (id, o) => client().then((c) => c.folios.get(id, o)),
+      postCharge: (r, o) => client().then((c) => c.folios.postCharge(r, o)),
+    },
     settings: { getBookingHold: (o) => client().then((c) => c.settings.getBookingHold(o)) },
     systemSettings: {
       get: (o) => client().then((c) => c.systemSettings.get(o)),
