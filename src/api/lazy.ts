@@ -26,6 +26,7 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
     reservationList: {
       list: (q, o) => client().then((c) => c.reservationList.list(q, o)),
       getOptions: (o) => client().then((c) => c.reservationList.getOptions(o)),
+      checkInRoom: (r, o) => client().then((c) => c.reservationList.checkInRoom(r, o)),
     },
     schedule: {
       get: (q, o) => client().then((c) => c.schedule.get(q, o)),
