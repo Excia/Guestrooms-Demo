@@ -1,15 +1,11 @@
 import CallSplit from '@mui/icons-material/CallSplit';
-import Delete from '@mui/icons-material/Delete';
-import Edit from '@mui/icons-material/Edit';
 import FilterAlt from '@mui/icons-material/FilterAlt';
-import GppMaybeOutlined from '@mui/icons-material/GppMaybeOutlined';
 import SwapHoriz from '@mui/icons-material/SwapHoriz';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import Divider from '@mui/material/Divider';
 import FormControl from '@mui/material/FormControl';
-import IconButton from '@mui/material/IconButton';
 import InputLabel from '@mui/material/InputLabel';
 import Link from '@mui/material/Link';
 import MenuItem from '@mui/material/MenuItem';
@@ -20,33 +16,34 @@ import TableCell from '@mui/material/TableCell';
 import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useId, useMemo, useState } from 'react';
-import type { Folio, FolioCharge } from '../../api';
+import type { Folio, FolioCharge, IsoDate } from '../../api';
 import {
   ALL_OCCUPANTS,
-  CHARGE_TYPE_LABELS,
   chargeCountText,
-  chargeStatusLabel,
   filterCharges,
   isFilterApplied,
-  isSelectable,
   occupantFilterOptions,
-  rowActions,
-  selectionActions,
   selectionTotalCents,
   type OccupantFilter,
 } from '../../app/folio';
-import { formatDisplayDate } from '../../app/folioFormat';
+import { lineActions, selectionActions } from '../../app/folioLine';
 import { formatMoney } from '../../app/quickStats';
+import FolioLine from './FolioLine';
 import { tableBorder } from './tableStyles';
+
+// Placeholder copy until the dialogs of tickets 4.5 (transfer) and 4.13 (split) exist (Q-42-1).
+const SPLIT_ERROR = 'A part of a split cannot be split again. Undo the split first.';
+const TRANSFER_ERROR = 'A part of a split cannot be transferred. Undo the split first.';
 
 export interface ChargesTableProps {
   folio: Folio;
   labelledBy: string;
   /** Opens the "Post via Night Audit" dialog for one charge. */
   onPost: (charge: FolioCharge) => void;
+  /** The folio's date today: an unposted room rate on or before it can be posted, a later one cannot. */
+  today: IsoDate;
   /** Actions whose dialogs belong to later tickets report here. */
   onStub: (message: string) => void;
 }
@@ -106,85 +103,14 @@ function OccupantFilterSelect({
   );
 }
 
-function StatusCell({
-  charge,
-  open,
+// Charges table with the occupant filter, row selection and the action bar (Figma 12047:7965).
+export default function ChargesTable({
+  folio,
+  labelledBy,
+  today,
   onPost,
   onStub,
-}: {
-  charge: FolioCharge;
-  open: boolean;
-  onPost: (charge: FolioCharge) => void;
-  onStub: (message: string) => void;
-}) {
-  const status = chargeStatusLabel(charge);
-  const actions = rowActions(charge);
-  const name = charge.description;
-  const text = status.full ? (
-    <Tooltip title={status.full}>
-      <span tabIndex={0} aria-label={status.full}>
-        {status.text}
-      </span>
-    </Tooltip>
-  ) : (
-    status.text
-  );
-  return (
-    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-      <Box component="span" sx={{ minWidth: 0 }}>
-        {text}
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-        {actions.post ? (
-          <Button
-            size="small"
-            color="info"
-            startIcon={<GppMaybeOutlined />}
-            disabled={!open}
-            aria-label={`Post ${name}`}
-            onClick={() => onPost(charge)}
-          >
-            Post
-          </Button>
-        ) : null}
-        {actions.edit ? (
-          <IconButton
-            size="small"
-            color="info"
-            disabled={!open}
-            aria-label={`Edit ${name}`}
-            onClick={() => onStub('Editing a room rate arrives with the line types ticket.')}
-          >
-            <Edit fontSize="small" />
-          </IconButton>
-        ) : null}
-        {actions.remove ? (
-          <IconButton
-            size="small"
-            disabled={!open}
-            aria-label={`Delete ${name}`}
-            onClick={() => onStub('Deleting a charge arrives with the line types ticket.')}
-          >
-            <Delete fontSize="small" />
-          </IconButton>
-        ) : null}
-        {actions.transfer ? (
-          <IconButton
-            size="small"
-            disabled={!open}
-            aria-label={`Transfer ${name}`}
-            onClick={() => onStub('Transfer arrives with the item transfer ticket.')}
-          >
-            <SwapHoriz fontSize="small" />
-          </IconButton>
-        ) : null}
-      </Box>
-    </Box>
-  );
-}
-
-// Charges table with the occupant filter, row selection and the action bar (Figma 12047:7965).
-export default function ChargesTable({ folio, labelledBy, onPost, onStub }: ChargesTableProps) {
+}: ChargesTableProps) {
   const [filter, setFilter] = useState<OccupantFilter>(ALL_OCCUPANTS);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
   const options = useMemo(
@@ -196,11 +122,12 @@ export default function ChargesTable({ folio, labelledBy, onPost, onStub }: Char
     () => filterCharges(folio.charges, applied ? filter : ALL_OCCUPANTS),
     [folio.charges, filter, applied],
   );
-  const selectable = visible.filter(isSelectable);
+  const context = { today };
+  const selectable = visible.filter((c) => lineActions(c, context).select);
   // A line hidden by the filter is not selected: the bar must only act on what the user can see.
   const selected = selectable.filter((c) => selectedIds.has(c.id));
   const total = selectionTotalCents(selected);
-  const actions = selectionActions(selected, folio.open);
+  const actions = selectionActions(selected, folio.open, context);
   const filterLabel = options.find((o) => o.value === filter)?.label ?? 'All';
 
   const toggle = (id: string) =>
@@ -254,38 +181,18 @@ export default function ChargesTable({ folio, labelledBy, onPost, onStub }: Char
                 </TableCell>
               </TableRow>
             ) : (
-              visible.map((c) => {
-                const settled = c.status === 'settled' || c.status === 'split';
-                return (
-                  <TableRow
-                    key={c.id}
-                    selected={selectedIds.has(c.id) && isSelectable(c)}
-                    sx={settled ? { fontStyle: 'italic', '& td': { fontStyle: 'italic' } } : {}}
-                  >
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 28 }}>
-                        {isSelectable(c) ? (
-                          <Checkbox
-                            size="small"
-                            checked={selectedIds.has(c.id)}
-                            onChange={() => toggle(c.id)}
-                            slotProps={{ input: { 'aria-label': `Select ${c.description}` } }}
-                          />
-                        ) : (
-                          <Box sx={{ width: 38, flexShrink: 0 }} />
-                        )}
-                        {CHARGE_TYPE_LABELS[c.type]}
-                      </Box>
-                    </TableCell>
-                    <TableCell>{formatDisplayDate(c.date)}</TableCell>
-                    <TableCell>{c.description}</TableCell>
-                    <TableCell>{formatMoney(c.amountCents)}</TableCell>
-                    <TableCell>
-                      <StatusCell charge={c} open={folio.open} onPost={onPost} onStub={onStub} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })
+              visible.map((c) => (
+                <FolioLine
+                  key={c.id}
+                  charge={c}
+                  actions={lineActions(c, context)}
+                  open={folio.open}
+                  selected={selectedIds.has(c.id)}
+                  onToggle={toggle}
+                  onPost={onPost}
+                  onStub={onStub}
+                />
+              ))
             )}
           </TableBody>
         </Table>
@@ -332,16 +239,28 @@ export default function ChargesTable({ folio, labelledBy, onPost, onStub }: Char
           <Box sx={{ display: 'flex', gap: 5 }}>
             <Button
               startIcon={<CallSplit />}
-              disabled={!actions.split}
-              onClick={() => onStub('Split arrives with the split item ticket.')}
+              disabled={actions.split === 'no'}
+              onClick={() =>
+                onStub(
+                  actions.split === 'error'
+                    ? SPLIT_ERROR
+                    : 'Split arrives with the split item ticket.',
+                )
+              }
             >
               Split
             </Button>
             <Button
               color="inherit"
               startIcon={<SwapHoriz />}
-              disabled={!actions.transfer}
-              onClick={() => onStub('Transfer arrives with the item transfer ticket.')}
+              disabled={actions.transfer === 'no'}
+              onClick={() =>
+                onStub(
+                  actions.transfer === 'error'
+                    ? TRANSFER_ERROR
+                    : 'Transfer arrives with the item transfer ticket.',
+                )
+              }
             >
               Transfer
             </Button>

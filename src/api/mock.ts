@@ -9,11 +9,14 @@ import {
   noGrant,
 } from './mockData';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
+import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
+import { buildListRows, listOptions } from './reservationListData';
+import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
 import { createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
@@ -31,6 +34,7 @@ import {
   assertMoveRoomRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
+  assertReservationListQuery,
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
@@ -50,6 +54,8 @@ export interface MockOptions {
 }
 
 export const MOCK_PAGE_SIZE = 4;
+/** Reservation List default page size, as the backend would apply it. */
+const LIST_PAGE_SIZE = 25;
 
 const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
 
@@ -193,6 +199,26 @@ export function createMockClient({
             assertCreateReservationRequest(request);
             throw new ApiError(404, 'Room not found');
           },
+          o,
+        ),
+    },
+    reservationList: {
+      list: (query, o) =>
+        respond(
+          () => {
+            assertReservationListQuery(query ?? {});
+            return queryReservationList(buildListRows(schedule), query, LIST_PAGE_SIZE);
+          },
+          () => {
+            assertReservationListQuery(query ?? {});
+            return { items: [], total: 0 };
+          },
+          o,
+        ),
+      getOptions: (o) =>
+        respond(
+          () => listOptions(schedule),
+          () => ({ locations: [], roomTypes: [] }),
           o,
         ),
     },
@@ -350,6 +376,14 @@ export function createMockClient({
         respond(
           () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
           () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
+          o,
+        ),
+    },
+    reports: {
+      listCustom: (o) =>
+        respond(
+          () => mockCustomReports(),
+          () => [],
           o,
         ),
     },

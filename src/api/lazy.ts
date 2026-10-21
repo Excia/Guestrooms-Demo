@@ -23,6 +23,10 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       setEarlyLate: (r, o) => client().then((c) => c.reservations.setEarlyLate(r, o)),
       create: (r, o) => client().then((c) => c.reservations.create(r, o)),
     },
+    reservationList: {
+      list: (q, o) => client().then((c) => c.reservationList.list(q, o)),
+      getOptions: (o) => client().then((c) => c.reservationList.getOptions(o)),
+    },
     schedule: {
       get: (q, o) => client().then((c) => c.schedule.get(q, o)),
       moveRoom: (r, o) => client().then((c) => c.schedule.moveRoom(r, o)),
@@ -48,5 +52,6 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       getOptions: (o) => client().then((c) => c.bookingRules.getOptions(o)),
     },
     permissions: { getGrant: (o) => client().then((c) => c.permissions.getGrant(o)) },
+    reports: { listCustom: (o) => client().then((c) => c.reports.listCustom(o)) },
   };
 }
