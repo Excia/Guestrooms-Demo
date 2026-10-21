@@ -22,6 +22,8 @@ import type {
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
+  SystemSettings,
+  SystemSettingsOptions,
 } from './types';
 import { expectedLeadOccupantName } from './createRules';
 import { ApiError } from './types';
@@ -266,6 +268,46 @@ function parseBookingHold(body: unknown, status: number): BookingHold {
   return body as unknown as BookingHold;
 }
 
+const isLookup = (v: unknown) => isObject(v) && isString(v.id) && isString(v.label);
+
+// Checks the shape the form relies on; the rules themselves are the backend's to enforce.
+function parseSystemSettings(body: unknown, status: number): SystemSettings {
+  if (
+    !isObject(body) ||
+    !isString(body.timeZone) ||
+    !isString(body.checkInTime) ||
+    !isString(body.checkOutTime) ||
+    !isString(body.lateCheckOutTime) ||
+    typeof body.earlyLateEnabled !== 'boolean' ||
+    !isCount(body.mposVisibleHoursBefore) ||
+    !isCount(body.mposVisibleHoursAfter) ||
+    !isCount(body.closeSettledFoliosHours) ||
+    (body.nightAudit !== 'manual' && body.nightAudit !== 'automatic') ||
+    !isObject(body.alternativeBaseRate1) ||
+    !isObject(body.alternativeBaseRate2) ||
+    !isString(body.serviceChargeLabel) ||
+    !isObject(body.folio) ||
+    !(body.transferItem === null || isLookup(body.transferItem)) ||
+    !(body.guestRoomsArea === null || isLookup(body.guestRoomsArea)) ||
+    !(body.guestMember === null || isLookup(body.guestMember))
+  ) {
+    throw invalid(status, 'system settings');
+  }
+  return body as unknown as SystemSettings;
+}
+
+function parseSystemSettingsOptions(body: unknown, status: number): SystemSettingsOptions {
+  if (
+    !isObject(body) ||
+    !(['timeZones', 'cardReaders', 'items', 'areas', 'members'] as const).every((k) =>
+      listOf(body[k], isLookup),
+    )
+  ) {
+    throw invalid(status, 'system settings options');
+  }
+  return body as unknown as SystemSettingsOptions;
+}
+
 const STAT_COUNTS = [
   'arrivalsToday',
   'departuresToday',
@@ -476,7 +518,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     params: Record<string, string | undefined>,
     requestOptions: RequestOptions | undefined,
     parse: (body: unknown, status: number) => T,
-    send?: { method: 'POST'; body: unknown; headers?: Record<string, string> },
+    send?: { method: 'POST' | 'PUT'; body: unknown; headers?: Record<string, string> },
   ): Promise<T> {
     const url = new URL(baseUrl + path, globalThis.location?.origin);
     for (const [key, value] of Object.entries(params)) {
@@ -688,6 +730,12 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     settings: {
       getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
+    },
+    systemSettings: {
+      get: (o) => request('/settings/system', {}, o, parseSystemSettings),
+      save: (settings, o) =>
+        request('/settings/system', {}, o, parseSystemSettings, { method: 'PUT', body: settings }),
+      getOptions: (o) => request('/settings/system/options', {}, o, parseSystemSettingsOptions),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
   };

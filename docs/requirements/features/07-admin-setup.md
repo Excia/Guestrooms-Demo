@@ -40,6 +40,29 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
   Switch behavior propagates through a settings context. Early/late off: no field, checkboxes or
   indicators (3.12). Member Owners on enables the Room Owner field (7.3, 3.11). A setting controls
   whether Print Registration Card appears (7.8). The Change Log button opens the overlay (7.10).
+- **Implemented (Excia/Guestrooms-Demo#70, in review):** `src/pages/SystemSettings.tsx` at `/admin/primary-setup`
+  inside the new Admin Setup shell `src/components/admin/AdminShell.tsx` (left navigation from
+  `src/app/adminNav.ts`; entries without a page are disabled; stacks below 1200px). Tabs Settings and Folio
+  Details (the "Default Rate Categories" tab is shown disabled: no content until 7.2). Every Settings field and
+  the Folio Details fields above; one draft for both tabs; "Save System Settings" is enabled only while the draft
+  differs from what is saved. Pure rules in `src/app/systemSettings.ts` (5-minute step, late checkout options,
+  cross-field validation, dirty check, logo file check), unit-tested. Close Settled Folios can show both of its
+  messages at once, as in Figma 11964:13239. A refused save focuses the first invalid field (switching tab when
+  needed); the API's 422 shows an inline alert. Settings context: `SystemSettingsProvider` (mounted in
+  `src/main.tsx`) and `useSystemSettings()`; the first consumer starts the fetch and a save updates every
+  consumer at once. Confirm Leaving (`useLeaveGuard`, `src/app/leaveGuard.ts`) holds in-app link clicks and
+  asks the browser to confirm reload or tab close. The folio details and logo are the shared `FolioDetails`
+  type for the printed folio (4.1).
+  - **Built defaults (see Q-70-1 to Q-70-3):** "extend past the Late Checkout Time" is strict (the hours after
+    checkout, times 60, must be larger than the minutes between checkout and late checkout); ranges are
+    visible-before 0 to 24 h, visible-after 0 to 48 h, close settled 1 to 72 h, alternative rate 2 to 30 nights;
+    all settings are system-wide (not per location). The unit select next to the hour fields has one option,
+    Hours.
+  - **Not built here:** the Change Log button (7.10), the Print Registration Card setting (7.8, which owns its
+    tab), consumers of the settings (3.11, 3.12, 7.3 still read their own defaults). Browser Back is not
+    intercepted by Confirm Leaving (the app has no data router); the main menu's links are.
+  - **Backend:** `GET` and `PUT /settings/system`, `GET /settings/system/options` (see
+    [api-contract.md](../api-contract.md)).
 - **Open questions:** Q-70-1 to Q-70-3.
 
 ## 7.2 Rate Categories
