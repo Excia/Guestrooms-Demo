@@ -4,7 +4,7 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import { useId, useRef } from 'react';
+import { useId, useState } from 'react';
 import type { DeleteCheck } from '../../../app/roomSetup';
 import { focusOnMount } from '../../shared/focusOnMount';
 
@@ -31,9 +31,8 @@ export default function DeleteSetupDialog({
 }: DeleteSetupDialogProps) {
   const id = useId();
   // Keep the last content while the dialog fades out, so it does not flash empty.
-  const last = useRef(check);
-  if (check) last.current = check;
-  const shown = check ?? last.current;
+  const [shown, setShown] = useState(check);
+  if (check && check !== shown) setShown(check);
   const blocked = shown?.kind === 'blocked';
   return (
     <Dialog
