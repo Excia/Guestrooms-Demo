@@ -710,7 +710,10 @@ describe('the time limit pauses on the New Room Closure tab', () => {
     const base = createMockClient({ today: TODAY });
     setup('/schedule?panel=new', {
       ...base,
-      settings: { getBookingHold: async () => ({ employee: 2, member: 2, nonMember: 2 }) },
+      settings: {
+        ...base.settings,
+        getBookingHold: async () => ({ employee: 2, member: 2, nonMember: 2 }),
+      },
     });
     const timer = await screen.findByRole('timer');
     await waitFor(() => expect(timer).toHaveTextContent('Time left: 02:00'));

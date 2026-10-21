@@ -22,6 +22,8 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       getDetail: (id, o) => client().then((c) => c.reservations.getDetail(id, o)),
       setEarlyLate: (r, o) => client().then((c) => c.reservations.setEarlyLate(r, o)),
       create: (r, o) => client().then((c) => c.reservations.create(r, o)),
+      changeRoomDuringStay: (r, o) =>
+        client().then((c) => c.reservations.changeRoomDuringStay(r, o)),
     },
     schedule: {
       get: (q, o) => client().then((c) => c.schedule.get(q, o)),
@@ -32,7 +34,10 @@ export function createLazyClient(load: () => Promise<ApiClient>): ApiClient {
       search: (q, o) => client().then((c) => c.members.search(q, o)),
       create: (r, o) => client().then((c) => c.members.create(r, o)),
     },
-    settings: { getBookingHold: (o) => client().then((c) => c.settings.getBookingHold(o)) },
+    settings: {
+      getBookingHold: (o) => client().then((c) => c.settings.getBookingHold(o)),
+      getRoomChangeRule: (o) => client().then((c) => c.settings.getRoomChangeRule(o)),
+    },
     permissions: { getGrant: (o) => client().then((c) => c.permissions.getGrant(o)) },
   };
 }

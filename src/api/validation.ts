@@ -1,5 +1,6 @@
 import { isValidMonth, parseIsoDate } from '../lib/dates';
 import type {
+  ChangeRoomRequest,
   CreateMemberRequest,
   CreateReservationRequest,
   EarlyLateRequest,
@@ -78,6 +79,21 @@ export function assertMoveDatesRequest(request: MoveDatesRequest): void {
     (request.scope !== 'all-rooms' && request.scope !== 'this-room')
   ) {
     throw invalidQuery('move dates request');
+  }
+}
+
+export function assertChangeRoomRequest(request: ChangeRoomRequest): void {
+  assertMoveGuard(request);
+  assertResourceId(request.reservationRoomId, 'reservation room');
+  assertResourceId(request.toRoomId, 'room');
+  if (
+    parseIsoDate(request.effectiveDate) === null ||
+    request.toRoomId === request.fromRoomId ||
+    (request.rateChoice !== null &&
+      request.rateChoice !== 'retain' &&
+      request.rateChoice !== 'update')
+  ) {
+    throw invalidQuery('room change request');
   }
 }
 

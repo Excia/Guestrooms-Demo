@@ -1,10 +1,14 @@
 // Mock schedule: a small realistic inventory and a deterministic 200-room generator, plus the
 // move mutations applied to that in-memory state. Replaced by the backend later.
 import { addDays, daysBetween, nightsOverlap } from '../lib/dates';
+import { rateOutcome } from '../lib/roomChangeRates';
 import type {
+  ChangeRoomRequest,
+  ChangeRoomResult,
   IsoDate,
   MoveDatesRequest,
   MoveRoomRequest,
+  RoomChangeRule,
   ScheduleBlock,
   ScheduleBlockStatus,
   ScheduleClosure,
@@ -51,6 +55,13 @@ export interface ScheduleState {
   createdSeq: number;
   /** Reservations created without a room: no lane on the grid, so never in `blocks`. */
   unassigned: ScheduleBlock[];
+  /**
+   * Nightly prices that differ from the room type's rate (a retained rate after a room change),
+   * keyed `<reservation room id>|<date>`. Cents, excluding taxes.
+   */
+  rateOverrides: Record<string, number>;
+  /** Source of the ids of "previous" segments created by room changes. */
+  segmentSeq: number;
 }
 
 /** Details-panel data of one reservation (the mock's stand-in for the reservation record). */
@@ -498,6 +509,8 @@ function defaultState(today: IsoDate): ScheduleState {
     extras: seedExtras(),
     createdSeq: 0,
     unassigned: [],
+    rateOverrides: {},
+    segmentSeq: 0,
   };
 }
 
@@ -596,6 +609,8 @@ function largeState(today: IsoDate): ScheduleState {
     extras: {},
     createdSeq: 0,
     unassigned: [],
+    rateOverrides: {},
+    segmentSeq: 0,
   };
 }
 
@@ -709,7 +724,40 @@ function relocate(state: ScheduleState, block: ScheduleBlock, toRoomId: string):
   ]);
   block.roomId = toRoomId;
   bump(state, block);
-  return [structuredClone(block)];
+  // A segment that follows an earlier room (ticket 2.3) is linked to it: keep both ends consistent.
+  const relinked = relink(state, block, toRoomId);
+  return [structuredClone(block), ...relinked.map((b) => structuredClone(b))];
+}
+
+/** The "previous" segments that end where `block` begins now point at the room it is in. */
+function relink(state: ScheduleState, block: ScheduleBlock, roomId: string): ScheduleBlock[] {
+  if (block.roomChange?.part !== 'current') return [];
+  block.roomChange = { part: 'current', otherRoomId: block.roomChange.otherRoomId };
+  const touched: ScheduleBlock[] = [];
+  for (const b of state.blocks) {
+    if (
+      b.roomChange?.part === 'previous' &&
+      stayOf(b) === block.id &&
+      b.endDate === block.startDate &&
+      b.roomChange.otherRoomId !== roomId
+    ) {
+      b.roomChange = { part: 'previous', otherRoomId: roomId };
+      bump(state, b);
+      touched.push(b);
+    }
+  }
+  return touched;
+}
+
+/** The reservation room a segment belongs to: a "previous" segment's id is `<room id>~<n>`. */
+export const stayOf = (block: Pick<ScheduleBlock, 'id'>): string => block.id.split('~')[0];
+
+/** The price of one night of a block: a retained rate, else the nightly rate of its room type. */
+export function nightRate(state: ScheduleState, block: ScheduleBlock, date: IsoDate): number {
+  const kept = state.rateOverrides[`${block.id}|${date}`];
+  if (kept !== undefined) return kept;
+  const room = state.rooms.find((r) => r.id === block.roomId);
+  return state.roomTypes.find((t) => t.id === room?.roomTypeId)?.nightlyRate ?? 0;
 }
 
 /** Validates then applies; nothing changes when it throws. Returns the changed blocks (copies). */
@@ -770,4 +818,114 @@ export function moveDates(state: ScheduleState, request: MoveDatesRequest): Sche
     }
   }
   return [...changed].map((b) => structuredClone(b));
+}
+
+const invalidChange = (details?: Record<string, string[]>) =>
+  new ApiError(400, 'Invalid room change request', { code: 'invalid-query', details });
+
+/**
+ * Change the room of a checked-in reservation room for the rest of its stay (ticket 2.3). Checks, in
+ * order: 404, 409 `stale`, 409 `not-movable` (not checked in, locked room type), 400 (effective
+ * date outside the remaining nights, rate choice missing), 409 `conflict`. Nothing changes when it
+ * throws. The block keeps its id and moves to the new room from the effective date; the nights
+ * already stayed become a new `previous` segment (a checked-out block) in the old room.
+ */
+export function changeRoomDuringStay(
+  state: ScheduleState,
+  request: ChangeRoomRequest,
+  rule: RoomChangeRule,
+): ChangeRoomResult {
+  const block = findBlock(state, request.reservationRoomId);
+  const toRoom = findRoom(state, request.toRoomId);
+  assertCurrent(block, request);
+  if (block.status !== 'checked-in') {
+    throw notMovable('Only a checked-in room can change room during the stay');
+  }
+  assertRoomTypeAllowed(state, block, request.toRoomId);
+  const effective = request.effectiveDate;
+  if (effective < state.today || effective < block.startDate || effective >= block.endDate) {
+    throw invalidChange({ effectiveDate: ['Must be a night of the stay that is not stayed yet'] });
+  }
+  assertFree(state, [{ block, roomId: toRoom.id, startDate: effective, endDate: block.endDate }]);
+
+  const oldRoomId = block.roomId;
+  const oldStart = block.startDate;
+  const nights = Array.from({ length: daysBetween(oldStart, block.endDate) }, (_, i) => {
+    const date = addDays(oldStart, i);
+    return { date, amountCents: nightRate(state, block, date) };
+  });
+  const newRate = state.roomTypes.find((t) => t.id === toRoom.roomTypeId)?.nightlyRate ?? 0;
+  const outcome = rateOutcome({
+    nights,
+    newRateCents: newRate,
+    effectiveDate: effective,
+    today: state.today,
+    choice: request.rateChoice,
+  });
+  if (rule.askRateOnRoomChange && outcome.ratesDiffer && request.rateChoice === null) {
+    throw invalidChange({ rateChoice: ['Required when the rates differ'] });
+  }
+
+  const changed: ScheduleBlock[] = [];
+  let past: ScheduleBlock | undefined;
+  if (effective > oldStart) {
+    past = {
+      ...structuredClone(block),
+      id: `${block.id}~${++state.segmentSeq}`,
+      endDate: effective,
+      status: 'checked-out',
+      roomChange: { part: 'previous', otherRoomId: toRoom.id },
+    };
+    bump(state, past);
+    state.blocks.push(past);
+    changed.push(past);
+    // The nights already stayed keep their price under the new segment's id.
+    for (const n of nights) {
+      const key = `${block.id}|${n.date}`;
+      if (n.date < effective && key in state.rateOverrides) {
+        state.rateOverrides[`${past.id}|${n.date}`] = state.rateOverrides[key];
+        delete state.rateOverrides[key];
+      }
+    }
+  } else {
+    // The whole current segment moves: earlier segments now continue in the new room.
+    for (const b of state.blocks) {
+      if (b.roomChange?.part === 'previous' && stayOf(b) === block.id && b.endDate === effective) {
+        b.roomChange = { part: 'previous', otherRoomId: toRoom.id };
+        bump(state, b);
+        changed.push(b);
+      }
+    }
+  }
+  // Nights from the effective date: a retained rate is kept as an override, an updated one is the
+  // new room type's rate again.
+  const after = new Map(outcome.nights.map((n) => [n.date, n.amountCents]));
+  for (const n of nights) {
+    if (n.date < effective) continue;
+    const key = `${block.id}|${n.date}`;
+    if (request.rateChoice === 'retain' && after.get(n.date) !== newRate) {
+      state.rateOverrides[key] = after.get(n.date) ?? newRate;
+    } else {
+      delete state.rateOverrides[key];
+    }
+  }
+
+  block.roomId = toRoom.id;
+  block.startDate = effective;
+  block.roomChange = { part: 'current', otherRoomId: oldRoomId };
+  bump(state, block);
+  changed.push(block);
+
+  // The vacated room needs housekeeping (PLACEHOLDER until ticket 6.4).
+  const vacated = findRoom(state, oldRoomId);
+  vacated.housekeeping = 'dirty';
+  return {
+    blocks: changed.map((b) => structuredClone(b)),
+    folio: {
+      deltaCents: outcome.deltaCents,
+      repricedNights: outcome.repricedNights,
+      roomChargesCents: outcome.nights.reduce((sum, n) => sum + n.amountCents, 0),
+    },
+    vacatedRoom: { roomId: oldRoomId, housekeeping: 'dirty', since: effective },
+  };
 }

@@ -2,7 +2,7 @@
 // in-memory state. Replaced by the backend later.
 import { addDays, daysBetween } from '../lib/dates';
 import { expectedLeadOccupantName } from './createRules';
-import { assertFree, bump, findRoom } from './scheduleData';
+import { assertFree, bump, findRoom, nightRate, stayOf } from './scheduleData';
 import type { ReservationExtras, ScheduleState } from './scheduleData';
 import type {
   CreateReservationRequest,
@@ -53,10 +53,23 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
   const group = stayBlocks(state, reservationId);
   if (group.length === 0) throw notFound();
   const extras = extrasFor(state, reservationId);
-  const lead = group[0];
+  // After a room change during the stay (ticket 2.3) a stay is several segments; the panel shows
+  // the current room and lists the earlier ones.
+  const current = group.filter((b) => b.roomChange?.part !== 'previous');
+  const lead = current[0] ?? group[0];
   const typeName = (id: string) => state.roomTypes.find((t) => t.id === id);
-  const rooms: ReservationRoomDetail[] = group.map((b) => {
+  const roomNumber = (id: string) => state.rooms.find((r) => r.id === id)?.number ?? null;
+  const rooms: ReservationRoomDetail[] = current.map((b) => {
     const room = state.rooms.find((r) => r.id === b.roomId);
+    const earlier = group
+      .filter((p) => p.roomChange?.part === 'previous' && stayOf(p) === b.id)
+      .sort((x, y) => x.startDate.localeCompare(y.startDate))
+      .map((p) => ({
+        roomId: p.roomId,
+        roomNumber: roomNumber(p.roomId),
+        arrival: p.startDate,
+        departure: p.endDate,
+      }));
     return {
       id: b.id,
       roomId: room?.id ?? null,
@@ -66,19 +79,26 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
       status: b.status === 'checked-in' || b.status === 'checked-out' ? b.status : 'nyci',
       arrival: b.startDate,
       departure: b.endDate,
+      ...(earlier.length ? { previousStays: earlier } : {}),
     };
   });
   const arrival = group.reduce((min, b) => (b.startDate < min ? b.startDate : min), lead.startDate);
   const departure = group.reduce((max, b) => (b.endDate > max ? b.endDate : max), lead.endDate);
-  const lines = group.flatMap((b) => {
-    const room = state.rooms.find((r) => r.id === b.roomId);
-    const type = typeName(room?.roomTypeId ?? '');
-    return Array.from({ length: daysBetween(b.startDate, b.endDate) }, (_, i) => ({
-      roomType: type?.name ?? 'Room',
-      date: addDays(b.startDate, i),
-      amountCents: type?.nightlyRate ?? 0,
-    }));
-  });
+  const lines = group
+    .flatMap((b) => {
+      const room = state.rooms.find((r) => r.id === b.roomId);
+      const type = typeName(room?.roomTypeId ?? '');
+      return Array.from({ length: daysBetween(b.startDate, b.endDate) }, (_, i) => {
+        const date = addDays(b.startDate, i);
+        return {
+          roomType: type?.name ?? 'Room',
+          date,
+          amountCents: nightRate(state, b, date),
+          reservationRoomId: stayOf(b),
+        };
+      });
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
   const addOnTotal = extras.addOns.reduce((sum, a) => sum + a.quantity * a.priceCents, 0);
   return {
     id: reservationId,

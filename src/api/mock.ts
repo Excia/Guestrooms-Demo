@@ -3,6 +3,7 @@ import {
   emptyStats,
   fullGrant,
   MOCK_BOOKING_HOLD,
+  MOCK_ROOM_CHANGE_RULE,
   MOCK_TODAY,
   mockReservations,
   mockStats,
@@ -12,12 +13,13 @@ import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { queryReservations } from './reservationQuery';
-import { createScheduleState, moveDates, moveRoom } from './scheduleData';
+import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
-import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
+import type { ApiClient, IsoDate, PermissionGrant, RequestOptions, RoomChangeRule } from './types';
 import { ApiError } from './types';
 import {
+  assertChangeRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
   assertMemberQuery,
@@ -41,6 +43,8 @@ export interface MockOptions {
   today?: IsoDate;
   /** Schedule inventory: `default` (about 30 rooms) or `large` (200 rooms, for performance). */
   scheduleSize?: ScheduleSize;
+  /** The room-change rate setting (ticket 2.3); defaults to asking (PLACEHOLDER until ticket 7.1). */
+  roomChangeRule?: RoomChangeRule;
 }
 
 export const MOCK_PAGE_SIZE = 4;
@@ -59,6 +63,7 @@ export function createMockClient({
   grant = fullGrant,
   today = MOCK_TODAY,
   scheduleSize = 'default',
+  roomChangeRule = MOCK_ROOM_CHANGE_RULE,
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
@@ -186,6 +191,20 @@ export function createMockClient({
           },
           o,
         ),
+      changeRoomDuringStay: (request, o) =>
+        respond(
+          () => {
+            assertChangeRoomRequest(request);
+            return replayable(request, () =>
+              changeRoomDuringStay(schedule, request, roomChangeRule),
+            );
+          },
+          () => {
+            assertChangeRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
     },
     schedule: {
       get: (query, o) =>
@@ -262,6 +281,12 @@ export function createMockClient({
         respond(
           () => ({ ...MOCK_BOOKING_HOLD }),
           () => ({ ...MOCK_BOOKING_HOLD }),
+          o,
+        ),
+      getRoomChangeRule: (o) =>
+        respond(
+          () => ({ ...roomChangeRule }),
+          () => ({ ...roomChangeRule }),
           o,
         ),
     },

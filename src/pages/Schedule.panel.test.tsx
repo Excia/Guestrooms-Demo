@@ -551,7 +551,10 @@ describe('hold timer', () => {
     const base = createMockClient({ today: TODAY });
     return {
       ...base,
-      settings: { getBookingHold: async () => ({ employee: minutes, member: 99, nonMember: 98 }) },
+      settings: {
+        ...base.settings,
+        getBookingHold: async () => ({ employee: minutes, member: 99, nonMember: 98 }),
+      },
     };
   }
   beforeEach(() => {
@@ -623,7 +626,7 @@ describe('hold timer', () => {
     const base = createMockClient({ today: TODAY });
     setup('/schedule?panel=new', {
       ...base,
-      settings: { getBookingHold: () => Promise.reject(new ApiError(500, 'x')) },
+      settings: { ...base.settings, getBookingHold: () => Promise.reject(new ApiError(500, 'x')) },
     });
     expect(await screen.findByText(/time limit could not be loaded/)).toBeInTheDocument();
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
@@ -911,7 +914,10 @@ describe('the time limit stops with the panel', () => {
     const base = createMockClient({ today: TODAY });
     setup('/schedule?panel=new', {
       ...base,
-      settings: { getBookingHold: async () => ({ employee: 1, member: 1, nonMember: 1 }) },
+      settings: {
+        ...base.settings,
+        getBookingHold: async () => ({ employee: 1, member: 1, nonMember: 1 }),
+      },
     });
     await screen.findByRole('timer');
     fireEvent.click(await screen.findByRole('button', { name: 'Back to schedule' }));

@@ -1,6 +1,8 @@
 import type {
   ApiClient,
   BookingHold,
+  ChangeRoomRequest,
+  ChangeRoomResult,
   CreateMemberRequest,
   Member,
   MemberQuery,
@@ -16,6 +18,7 @@ import type {
   Reservation,
   ReservationQuery,
   RequestOptions,
+  RoomChangeRule,
   MoveDatesRequest,
   MoveRoomRequest,
   ScheduleBlock,
@@ -26,6 +29,7 @@ import type {
 import { expectedLeadOccupantName } from './createRules';
 import { ApiError } from './types';
 import {
+  assertChangeRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
   assertMemberQuery,
@@ -149,7 +153,17 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(r.arrival) &&
         isString(r.departure) &&
         isString(r.status) &&
-        ROOM_STATUSES.includes(r.status),
+        ROOM_STATUSES.includes(r.status) &&
+        (r.previousStays === undefined ||
+          listOf(
+            r.previousStays,
+            (p) =>
+              isObject(p) &&
+              isString(p.roomId) &&
+              (p.roomNumber === null || isString(p.roomNumber)) &&
+              isString(p.arrival) &&
+              isString(p.departure),
+          )),
     ) &&
     (v.rooms as unknown[]).length >= 1 &&
     isFlag(v.earlyCheckIn) &&
@@ -169,7 +183,12 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     isCount(v.stay.folioTotalCents) &&
     listOf(
       v.stay.lines,
-      (l) => isObject(l) && isString(l.roomType) && isString(l.date) && isCount(l.amountCents),
+      (l) =>
+        isObject(l) &&
+        isString(l.roomType) &&
+        isString(l.date) &&
+        isCount(l.amountCents) &&
+        (l.reservationRoomId === undefined || isString(l.reservationRoomId)),
     ) &&
     isString(v.version) &&
     v.version !== ''
@@ -266,6 +285,13 @@ function parseBookingHold(body: unknown, status: number): BookingHold {
   return body as unknown as BookingHold;
 }
 
+function parseRoomChangeRule(body: unknown, status: number): RoomChangeRule {
+  if (!isObject(body) || !isFlag(body.askRateOnRoomChange)) {
+    throw invalid(status, 'room change rule');
+  }
+  return { askRateOnRoomChange: body.askRateOnRoomChange };
+}
+
 const STAT_COUNTS = [
   'arrivalsToday',
   'departuresToday',
@@ -337,6 +363,7 @@ const parseQuickStats =
     return body as unknown as QuickStats;
   };
 
+const HOUSEKEEPING: readonly string[] = ['clean', 'dirty'];
 const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
 const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
 const isDated = (v: Record<string, unknown>) =>
@@ -360,7 +387,11 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     v.roomCount >= 1 &&
     typeof v.roomTypeLocked === 'boolean' &&
     isString(v.version) &&
-    v.version !== ''
+    v.version !== '' &&
+    (v.roomChange === undefined ||
+      (isObject(v.roomChange) &&
+        (v.roomChange.part === 'previous' || v.roomChange.part === 'current') &&
+        isString(v.roomChange.otherRoomId)))
   );
 }
 
@@ -383,7 +414,8 @@ const parseSchedule =
           isString(r.id) &&
           isString(r.number) &&
           isString(r.locationId) &&
-          isString(r.roomTypeId),
+          isString(r.roomTypeId) &&
+          (r.housekeeping === undefined || HOUSEKEEPING.includes(r.housekeeping as string)),
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
       listOf(
@@ -441,6 +473,51 @@ const parseMove =
       if (rule.scope === 'this-room' && rule.shifted && moved.roomCount !== 1) {
         throw invalid(status, 'move');
       }
+    }
+    return result;
+  };
+
+// The answer must describe the change that was asked for: the block of the request now sits in the
+// new room from the effective date, still checked in, linked back to the old room; every other
+// changed block is an earlier segment of the same stay that ends on or before the effective date;
+// the vacated room is the old one.
+const parseChangeRoom =
+  (request: ChangeRoomRequest) =>
+  (body: unknown, status: number): ChangeRoomResult => {
+    if (
+      !isObject(body) ||
+      !listOf(body.blocks, isScheduleBlock) ||
+      !isObject(body.folio) ||
+      !Number.isInteger(body.folio.deltaCents) ||
+      !Number.isInteger(body.folio.repricedNights) ||
+      (body.folio.repricedNights as number) < 0 ||
+      !Number.isInteger(body.folio.roomChargesCents) ||
+      !isObject(body.vacatedRoom) ||
+      body.vacatedRoom.roomId !== request.fromRoomId ||
+      !HOUSEKEEPING.includes(body.vacatedRoom.housekeeping as string) ||
+      body.vacatedRoom.since !== request.effectiveDate
+    ) {
+      throw invalid(status, 'room change');
+    }
+    const result = body as unknown as ChangeRoomResult;
+    const moved = result.blocks.find((b) => b.id === request.reservationRoomId);
+    if (
+      !moved ||
+      moved.roomId !== request.toRoomId ||
+      moved.startDate !== request.effectiveDate ||
+      moved.status !== 'checked-in' ||
+      moved.roomChange?.part !== 'current' ||
+      moved.roomChange.otherRoomId !== request.fromRoomId ||
+      new Set(result.blocks.map((b) => b.id)).size !== result.blocks.length ||
+      !result.blocks.every(
+        (b) =>
+          b === moved ||
+          (b.reservationId === moved.reservationId &&
+            b.roomChange?.part === 'previous' &&
+            b.endDate <= request.effectiveDate),
+      )
+    ) {
+      throw invalid(status, 'room change');
     }
     return result;
   };
@@ -626,6 +703,17 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             headers: { 'Idempotency-Key': r.requestId },
           });
         }),
+      changeRoomDuringStay: (r: ChangeRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertChangeRoomRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/change-room`,
+            {},
+            o,
+            parseChangeRoom(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
     },
     schedule: {
       get: (q, o) =>
@@ -688,6 +776,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     settings: {
       getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
+      getRoomChangeRule: (o) => request('/settings/room-change-rule', {}, o, parseRoomChangeRule),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
   };
