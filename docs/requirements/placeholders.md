@@ -41,12 +41,12 @@ data is added or a placeholder is replaced (see the PR checklist).
 
 ## Placeholders in ticket 2.3 (branch `feat/20-change-room-during-stay`)
 
-| Placeholder                                                                                                                                            | How to replace                                                      | Owner                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | -------------------------------------------------- |
-| Room-change rate setting `askRateOnRoomChange` (default on) from `settings.getRoomChangeRule()`; the mock exposes `roomChangeRule`                     | `GET /settings/room-change-rule` backed by System Settings (Q-20-2) | System Settings 7.1 (Excia/Guestrooms-Demo#70)     |
-| `ScheduleRoom.housekeeping` (`clean` or `dirty`): the vacated room becomes `dirty` in the mock; nothing displays it                                    | Real housekeeping types and statuses, "H" blocks (Q-20-1)           | Housekeeping report 6.4 (Excia/Guestrooms-Demo#60) |
-| Rate question copy and the room-change confirmation copy (Figma has no frame)                                                                          | Final copy from the designer (Q-20-4)                               | Design                                             |
-| Nightly rates used to price a change are the placeholder room type rates (24900, 19900, 34900, 42900 cents); retained rates are kept as mock overrides | Rates from Rate Categories; the backend stores per-night prices     | Rate Categories 7.2                                |
+| Placeholder                                                                                                                                                                 | How to replace                                                      | Owner                                              |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------- |
+| Room-change rate setting `askRateOnRoomChange` (default on) from `settings.getRoomChangeRule()`; the mock exposes `roomChangeRule`                                          | `GET /settings/room-change-rule` backed by System Settings (Q-20-2) | System Settings 7.1 (Excia/Guestrooms-Demo#70)     |
+| `ScheduleRoom.housekeeping` (`clean` or `dirty`): the room the guest sleeps in tonight becomes `dirty` in the mock when it changes; nothing displays it                     | Real housekeeping types and statuses, "H" blocks (Q-20-1)           | Housekeeping report 6.4 (Excia/Guestrooms-Demo#60) |
+| Rate question copy, the "Update Reservation" confirm label and the room-change confirmation copy (Figma has no frame); the Location and Room Type filter of the night menus | Final copy from the designer (Q-20-4)                               | Design                                             |
+| Nightly rates used to price a change are the placeholder room type rates (24900, 19900, 34900, 42900 cents); retained rates are kept as mock overrides                      | Rates from Rate Categories; the backend stores per-night prices     | Rate Categories 7.2                                |
 
 ## Placeholders in PR Excia/Guestrooms-Demo#119 (in review)
 

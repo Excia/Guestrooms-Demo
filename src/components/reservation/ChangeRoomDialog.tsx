@@ -74,6 +74,8 @@ export interface ChangeRoomDialogProps {
 }
 
 const dateLabel = formatPanelDate;
+/** "$199.00 per night", or "varies by night" as it is. */
+const perNight = (rate: string) => (rate.startsWith('$') ? `${rate} per night` : rate);
 
 /**
  * Change Room During Stay (Figma 1326:19431 and the room menu 2623:14538; requirements 27.9.1.2).
@@ -417,14 +419,14 @@ export default function ChangeRoomDialog({
                   <FormControlLabel
                     value="retain"
                     control={<Radio />}
-                    label={`Retain the current rate (${question.currentRate} per night)`}
+                    label={`Retain the current rate (${perNight(question.currentRate)})`}
                   />
                   <FormControlLabel
                     value="update"
                     control={<Radio />}
                     label={
                       question.newRate
-                        ? `Update to the new rooms' rates (${question.newRate} per night, ${signedMoney(question.updateDeltaCents)} for ${nightsText(question.repricedNights)})`
+                        ? `Update to the new rooms' rates (${perNight(question.newRate)}, ${signedMoney(question.updateDeltaCents)} for ${nightsText(question.repricedNights)})`
                         : "Update to the new rooms' rates"
                     }
                   />
@@ -432,7 +434,7 @@ export default function ChangeRoomDialog({
               </FormControl>
             ) : question.ratesDiffer && question.newRate ? (
               <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-                The new rooms&apos; rate ({question.newRate} per night) applies to the{' '}
+                The new rooms&apos; rate ({perNight(question.newRate)}) applies to the{' '}
                 {nightsText(question.changedNights)} that change room.
               </Typography>
             ) : null}

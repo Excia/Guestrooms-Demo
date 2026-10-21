@@ -382,7 +382,8 @@ describe('applying the plan', () => {
     expect(labels.find((l) => l.includes('part 1 of 3'))).toContain(
       'checked out, Room 301, 10/15/2026 to 10/16/2026',
     );
-    expect(labels.find((l) => l.includes('part 1 of 3'))).toContain('continues in Room 301');
+    // A neighbour in the same room is not mentioned.
+    expect(labels.find((l) => l.includes('part 1 of 3'))).not.toContain('continues in');
     expect(labels.find((l) => l.includes('part 2 of 3'))).toContain(
       'checked in, Room 301, 10/16/2026 to 10/19/2026',
     );

@@ -308,8 +308,10 @@ export function segmentLinks(
       links.set(b.id, {
         index,
         count,
-        fromRoomNumber: before ? number.get(before.roomId) : undefined,
-        toRoomNumber: after ? number.get(after.roomId) : undefined,
+        // A neighbour in the same room is not a room change: nothing to point at.
+        fromRoomNumber:
+          before && before.roomId !== b.roomId ? number.get(before.roomId) : undefined,
+        toRoomNumber: after && after.roomId !== b.roomId ? number.get(after.roomId) : undefined,
       });
     }
   }
