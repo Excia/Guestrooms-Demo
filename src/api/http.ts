@@ -189,6 +189,8 @@ const CHARGE_TYPES: readonly string[] = [
   'add-on',
   'surcharge',
   'service-fee',
+  'split-parent',
+  'split-child',
 ];
 const CHARGE_STATUSES: readonly string[] = ['posted', 'unposted', 'settled', 'split'];
 const isNullableString = (v: unknown) => v === null || isString(v);
