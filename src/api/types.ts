@@ -447,6 +447,101 @@ export interface SettingsApi {
   getBookingHold(options?: RequestOptions): Promise<BookingHold>;
 }
 
+// ---- system settings (Primary Setup, ticket 7.1) ---------------------------------------------
+
+/** A looked-up record (item, area, member) kept as id plus the label the field shows. */
+export interface LookupRef {
+  id: string;
+  label: string;
+}
+
+/** Folio Details tab; also the header of the printed folio (shared with the folio print, ticket 4.1). */
+export interface FolioDetails {
+  streetAddress: string;
+  city: string;
+  /** Two-letter state code, or '' when none is chosen. */
+  state: string;
+  zip: string;
+  email: string;
+  phone: string;
+  /** Printed under the header. */
+  customText: string;
+  /** Logo as a data URL; the backend decides storage later. Null when there is none. */
+  logo: string | null;
+}
+
+export interface AlternativeBaseRate {
+  enabled: boolean;
+  /** The rate applies from this many nights ("N or more nights"). */
+  minNights: number;
+}
+
+export type DurationUnit = 'hours' | 'days';
+
+/** A whole number of hours or days (0 to 31), counted from the check in or checkout time. */
+export interface Duration {
+  amount: number;
+  unit: DurationUnit;
+}
+
+export type NightAuditMode = 'manual' | 'automatic';
+export type RateChangeHandling = 'time-of-booking' | 'time-of-stay';
+
+/**
+ * System-wide settings of one club (Figma System Settings 11895:16081). Times are 24-hour
+ * `HH:mm` strings in the club's time zone, always on a 5-minute step.
+ */
+export interface SystemSettings {
+  /** IANA zone id, e.g. `America/New_York`. */
+  timeZone: string;
+  checkInTime: string;
+  checkOutTime: string;
+  /** "Enable Early Check In and Late Check Out". When off, the late checkout time is unused. */
+  earlyLateEnabled: boolean;
+  lateCheckOutTime: string;
+  /** MPOS: the folio becomes visible this long before the check-in time on the day of check in. */
+  mposVisibleBefore: Duration;
+  /** MPOS: the folio stays visible this long after the checkout time on the day of checkout. */
+  mposVisibleAfter: Duration;
+  /** A settled folio closes this long after the checkout time. */
+  closeSettledFolios: Duration;
+  nightAudit: NightAuditMode;
+  /** Daily run time of an automatic night audit; unused while the audit runs manually. */
+  nightAuditRunTime: string;
+  alternativeBaseRate1: AlternativeBaseRate;
+  alternativeBaseRate2: AlternativeBaseRate;
+  /** New cards are authorized for $0.01. */
+  creditCardAuthorization: boolean;
+  cardPresentEnabled: boolean;
+  /** Id of the default card reader; only used while card present transactions are enabled. */
+  defaultCardReaderId: string | null;
+  rateChangeHandling: RateChangeHandling;
+  /** Enables the Room Owner field (ticket 7.3) and owner indicators (ticket 3.11). */
+  roomOwnerFieldEnabled: boolean;
+  /** At most 15 characters. */
+  serviceChargeLabel: string;
+  transferItem: LookupRef | null;
+  guestRoomsArea: LookupRef | null;
+  guestMember: LookupRef | null;
+  folio: FolioDetails;
+}
+
+/** Choices for the System Settings selects and lookups. */
+export interface SystemSettingsOptions {
+  timeZones: LookupRef[];
+  cardReaders: LookupRef[];
+  items: LookupRef[];
+  areas: LookupRef[];
+  members: LookupRef[];
+}
+
+export interface SystemSettingsApi {
+  get(options?: RequestOptions): Promise<SystemSettings>;
+  /** Replaces all settings; answers with what was stored. The backend re-checks the rules. */
+  save(settings: SystemSettings, options?: RequestOptions): Promise<SystemSettings>;
+  getOptions(options?: RequestOptions): Promise<SystemSettingsOptions>;
+}
+
 // ---- permissions -----------------------------------------------------------------------------
 
 /**
@@ -642,6 +737,7 @@ export interface ApiClient {
   permissions: PermissionsApi;
   schedule: ScheduleApi;
   settings: SettingsApi;
+  systemSettings: SystemSettingsApi;
   members: MembersApi;
   folios: FoliosApi;
 }

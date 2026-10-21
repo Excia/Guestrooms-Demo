@@ -23,6 +23,8 @@ export interface SelectProps<T extends string | number = string> {
   helperText?: string;
   /** Accessible name when it must differ from the visible label (the visible one stays). */
   ariaLabel?: string;
+  /** Id of an element outside the select that describes it (e.g. an error list). */
+  describedBy?: string;
   error?: boolean;
   disabled?: boolean;
   required?: boolean;
@@ -50,6 +52,7 @@ export default function Select<T extends string | number = string>({
   placeholder,
   helperText,
   ariaLabel,
+  describedBy,
   error,
   disabled,
   required,
@@ -106,7 +109,8 @@ export default function Select<T extends string | number = string>({
         notched={variant === 'outlined' ? true : undefined}
         inputProps={inputProps}
         SelectDisplayProps={{
-          'aria-describedby': helperText ? helperId : undefined,
+          'aria-describedby':
+            [helperText ? helperId : undefined, describedBy].filter(Boolean).join(' ') || undefined,
           ...(ariaLabel ? { 'aria-label': ariaLabel, 'aria-labelledby': undefined } : {}),
         }}
       >
