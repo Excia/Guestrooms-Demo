@@ -37,6 +37,8 @@ export interface ReservationListProps {
   onSelectionChange?: (rows: ReservationListRow[]) => void;
   /** Slot under the table for the bulk action button (ticket 3.2). */
   renderBulkActions?: (selected: ReservationListRow[]) => ReactNode;
+  /** Rows a bulk action could not process (ticket 3.2): tinted orange until the page is refreshed. */
+  failedIds?: ReadonlySet<string>;
 }
 
 const NO_OPTIONS = { locations: [], roomTypes: [] };
@@ -50,6 +52,7 @@ export default function ReservationList({
   today: todayProp,
   onSelectionChange,
   renderBulkActions,
+  failedIds,
 }: ReservationListProps) {
   const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
   const [params, setParams] = useSearchParams();
@@ -205,13 +208,7 @@ export default function ReservationList({
           refreshing={list.status === 'success' && list.refreshing}
           sort={view.sort}
           onSort={(field) => update({ sort: nextSort(view.sort, field) })}
-          text={view.text}
-          onText={(key, value) => update({ text: { ...view.text, [key]: value } })}
-          statuses={view.statuses}
-          onStatuses={(statuses) => update({ statuses })}
-          roomTypeIds={view.roomTypeIds}
-          onRoomTypes={(roomTypeIds) => update({ roomTypeIds })}
-          options={options}
+          failedIds={failedIds}
           search={view.search}
           onSearch={onSearch}
           selected={selected}

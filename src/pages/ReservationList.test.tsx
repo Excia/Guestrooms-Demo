@@ -189,7 +189,6 @@ describe('ReservationList', () => {
       expect.anything(),
     );
     expect(screen.getByLabelText('Check in From')).toHaveValue('2026-10-01');
-    expect(screen.getByRole('button', { name: 'Filter Status, active' })).toBeInTheDocument();
   });
 
   it('changes the date range through the fields and returns to page 1', async () => {
@@ -222,34 +221,32 @@ describe('ReservationList', () => {
     );
   });
 
-  it('filters by a text column through its header popover', async () => {
-    const user = userEvent.setup();
-    const { client, list } = spied();
-    setup('/reservations', client);
+  it('has no column filter icons, only sorting (Figma 2524:36168)', async () => {
+    setup();
     await bodyRows();
-    await user.click(screen.getByRole('button', { name: 'Filter Guest' }));
-    await user.type(screen.getByRole('textbox', { name: 'Filter Guest' }), 'lindqvist{Enter}');
-    await waitFor(() => expect(url()).toBe('/reservations?guest=lindqvist'));
-    expect(list).toHaveBeenLastCalledWith(
-      expect.objectContaining({ guest: 'lindqvist' }),
-      expect.anything(),
-    );
-    const rows = await bodyRows();
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveTextContent('Annika Lindqvist');
+    expect(screen.queryByRole('button', { name: /^Filter / })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Check In/ })).toBeInTheDocument();
   });
 
-  it('filters by a value list (Status)', async () => {
-    const user = userEvent.setup();
-    setup('/reservations?from=&to=');
+  it('renders Night Audit and New Reservation as filled 200px buttons', async () => {
+    setup();
     await bodyRows();
-    await user.click(screen.getByRole('button', { name: 'Filter Status' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Canceled' }));
-    await user.keyboard('{Escape}');
-    await waitFor(() => expect(url()).toContain('status=canceled'));
-    const rows = await bodyRows();
-    expect(rows.length).toBeGreaterThan(0);
-    for (const r of rows) expect(r).toHaveTextContent('Canceled');
+    const audit = screen.getByRole('link', { name: 'Night Audit' });
+    const create = screen.getByRole('button', { name: 'New Reservation' });
+    expect(audit).toHaveClass('MuiButton-contained', 'MuiButton-colorInfo');
+    expect(create).toHaveClass('MuiButton-contained', 'MuiButton-colorPrimary');
+    for (const b of [audit, create]) expect(b).toHaveStyle({ width: '200px' });
+  });
+
+  it('tints rows a bulk action failed on, with a non-color cue, and leaves others alone', async () => {
+    setup('/reservations', undefined, { failedIds: new Set(['rs-5']) });
+    const failed = await rowFor('GR-50310');
+    expect(failed).toHaveStyle({ backgroundColor: theme.palette.warning.background });
+    expect(failed).toHaveTextContent('could not be checked in');
+    const others = (await bodyRows()).filter((r) => r !== failed);
+    for (const r of others) {
+      expect(r).not.toHaveStyle({ backgroundColor: theme.palette.warning.background });
+    }
   });
 
   it('searches from the search button', async () => {

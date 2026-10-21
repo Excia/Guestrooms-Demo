@@ -18,14 +18,7 @@ import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
-import type {
-  ListStatus,
-  ReservationListOptions,
-  ReservationListRow,
-  ReservationListSort,
-  ReservationListSortField,
-} from '../../api';
-import { LIST_STATUSES } from '../../api';
+import type { ReservationListRow, ReservationListSort, ReservationListSortField } from '../../api';
 import {
   formatListDate,
   headerCheckState,
@@ -36,41 +29,26 @@ import {
   selectableRows,
 } from '../../app/reservationList';
 import { reservationHubPath } from '../../app/routes';
-import type { TextFilterKey } from '../../app/reservationListUrl';
-import ColumnFilter from './ColumnFilter';
-
-type FilterSpec = { kind: 'text'; key: TextFilterKey } | { kind: 'status' } | { kind: 'roomType' };
 
 interface Column {
   id: string;
   label: string;
   sort: ReservationListSortField;
-  filter?: FilterSpec;
 }
 
-// Figma column order. Check In, Check Out and Location are filtered by the toolbar (date range,
-// Location select), so their header carries no filter icon (see figma-deviations.md).
+// Figma column order (2524:36168). The newest frame has no filter icons: the header only sorts, and
+// filtering is the toolbar's dates, Unassigned Only and Location plus the search pop-up.
 export const COLUMNS: readonly Column[] = [
   { id: 'arrival', label: 'Check In', sort: 'arrival' },
   { id: 'departure', label: 'Check Out', sort: 'departure' },
-  {
-    id: 'res',
-    label: 'Res #',
-    sort: 'confirmationNumber',
-    filter: { kind: 'text', key: 'resNumber' },
-  },
-  { id: 'guest', label: 'Guest', sort: 'guestName', filter: { kind: 'text', key: 'guest' } },
-  {
-    id: 'reserver',
-    label: 'Reserver',
-    sort: 'reserverName',
-    filter: { kind: 'text', key: 'reserver' },
-  },
-  { id: 'block', label: 'Block', sort: 'blockName', filter: { kind: 'text', key: 'block' } },
+  { id: 'res', label: 'Res #', sort: 'confirmationNumber' },
+  { id: 'guest', label: 'Guest', sort: 'guestName' },
+  { id: 'reserver', label: 'Reserver', sort: 'reserverName' },
+  { id: 'block', label: 'Block', sort: 'blockName' },
   { id: 'location', label: 'Location', sort: 'locationName' },
-  { id: 'roomType', label: 'Room Type', sort: 'roomTypeName', filter: { kind: 'roomType' } },
-  { id: 'room', label: 'Room', sort: 'roomNumber', filter: { kind: 'text', key: 'room' } },
-  { id: 'status', label: 'Status', sort: 'status', filter: { kind: 'status' } },
+  { id: 'roomType', label: 'Room Type', sort: 'roomTypeName' },
+  { id: 'room', label: 'Room', sort: 'roomNumber' },
+  { id: 'status', label: 'Status', sort: 'status' },
 ];
 
 const SKELETON_ROWS = 8;
@@ -84,13 +62,8 @@ export interface ReservationListTableProps {
   refreshing: boolean;
   sort: ReservationListSort;
   onSort: (field: ReservationListSortField) => void;
-  text: Record<TextFilterKey, string>;
-  onText: (key: TextFilterKey, value: string) => void;
-  statuses: readonly ListStatus[];
-  onStatuses: (value: ListStatus[]) => void;
-  roomTypeIds: readonly string[];
-  onRoomTypes: (value: string[]) => void;
-  options: ReservationListOptions;
+  /** Ids of rows a bulk action could not process: tinted until the next refresh (Figma 2524:36173). */
+  failedIds?: ReadonlySet<string>;
   search: string;
   onSearch: (value: string) => void;
   selected: ReadonlySet<string>;
@@ -155,6 +128,7 @@ export default function ReservationListTable(props: ReservationListTableProps) {
                   <TableSortLabel
                     active={sort.field === c.sort}
                     direction={sort.field === c.sort ? sort.direction : 'asc'}
+                    hideSortIcon
                     onClick={() => props.onSort(c.sort)}
                   >
                     {c.label}
@@ -164,7 +138,6 @@ export default function ReservationListTable(props: ReservationListTableProps) {
                       </Box>
                     ) : null}
                   </TableSortLabel>
-                  {c.filter ? <HeaderFilter column={c} {...props} /> : null}
                 </Box>
               </TableCell>
             ))}
@@ -188,50 +161,6 @@ export default function ReservationListTable(props: ReservationListTableProps) {
         </TableBody>
       </Table>
     </TableContainer>
-  );
-}
-
-function HeaderFilter({
-  column,
-  text,
-  onText,
-  statuses,
-  onStatuses,
-  roomTypeIds,
-  onRoomTypes,
-  options,
-}: { column: Column } & ReservationListTableProps) {
-  const filter = column.filter;
-  if (!filter) return null;
-  if (filter.kind === 'text') {
-    return (
-      <ColumnFilter
-        kind="text"
-        label={column.label}
-        value={text[filter.key]}
-        onChange={(v) => onText(filter.key, v)}
-      />
-    );
-  }
-  if (filter.kind === 'status') {
-    return (
-      <ColumnFilter
-        kind="list"
-        label="Status"
-        options={LIST_STATUSES.map((s) => ({ value: s, label: LIST_STATUS_LABELS[s] }))}
-        value={statuses}
-        onChange={(v) => onStatuses(v as ListStatus[])}
-      />
-    );
-  }
-  return (
-    <ColumnFilter
-      kind="list"
-      label="Room Type"
-      options={options.roomTypes.map((t) => ({ value: t.id, label: t.name }))}
-      value={roomTypeIds}
-      onChange={onRoomTypes}
-    />
   );
 }
 
@@ -264,7 +193,9 @@ function ListRow({
   onToggleRow,
   onOpen,
   showLocation,
+  failedIds,
 }: { row: ReservationListRow } & ReservationListTableProps) {
+  const failed = failedIds?.has(row.id) ?? false;
   const canceled = isCanceled(row);
   const room = roomLabel(row);
   const canSelect = isSelectable(row);
@@ -277,6 +208,12 @@ function ListRow({
       sx={{
         cursor: 'pointer',
         fontStyle: canceled ? 'italic' : undefined,
+        // Failed bulk-action rows: orange tint that wins over the selected and hover shades.
+        ...(failed && {
+          '&.MuiTableRow-root, &.Mui-selected, &.Mui-selected:hover, &.MuiTableRow-hover:hover': {
+            backgroundColor: 'warning.background',
+          },
+        }),
         '& > .MuiTableCell-root': { fontStyle: 'inherit' },
       }}
     >
@@ -298,6 +235,11 @@ function ListRow({
           <Typography variant="body2" component="span" sx={{ whiteSpace: 'nowrap' }}>
             {formatListDate(row.arrival)}
           </Typography>
+          {failed ? (
+            <Box component="span" sx={visuallyHidden}>
+              , could not be checked in
+            </Box>
+          ) : null}
         </Box>
       </TableCell>
       <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatListDate(row.departure)}</TableCell>

@@ -34,10 +34,13 @@ declare module '@mui/material/styles' {
   interface PaletteColor {
     tint?: string;
     outlinedBorder?: string;
+    /** Light tint of the color for row and banner backgrounds (Figma warning/background). */
+    background?: string;
   }
   interface SimplePaletteColorOptions {
     tint?: string;
     outlinedBorder?: string;
+    background?: string;
   }
   interface TypographyVariants {
     h4_fixed: CSSProperties;
@@ -65,7 +68,7 @@ declare module '@mui/material/Typography' {
   }
 }
 
-// Not in Figma variables, intentionally left at MUI defaults: secondary, info, success, divider,
+// Not in Figma variables, intentionally left at MUI defaults: secondary, success, divider,
 // text.disabled. Figma has one unnamed "Secondary" #545454; add it once its role is confirmed.
 const fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
 const primaryMain = '#2e7d32';
@@ -89,7 +92,9 @@ const base = createTheme({
       tint: '#eaf2ea',
       outlinedBorder: alpha(primaryMain, 0.5),
     },
-    warning: { main: '#c24e00' },
+    // Figma info/main #0057b2 (Night Audit button); warning/background #f9ede5 (failed list rows).
+    info: { main: '#0057b2', contrastText: '#ffffff' },
+    warning: { main: '#c24e00', background: '#f9ede5' },
     error: { main: errorMain },
     text: { primary: '#000000de', secondary: '#00000099' },
     action: { active: '#0000008f' },

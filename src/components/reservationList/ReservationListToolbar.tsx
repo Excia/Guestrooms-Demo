@@ -1,8 +1,10 @@
+import AddCircle from '@mui/icons-material/AddCircle';
 import ShieldMoon from '@mui/icons-material/ShieldMoon';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
+import type { Theme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router';
 import type { ScheduleLocation } from '../../api';
 import { ALL_LOCATIONS_LABEL } from '../../app/locationSelection';
@@ -39,7 +41,8 @@ export default function ReservationListToolbar({
   onLocations,
   onNewReservation,
 }: ReservationListToolbarProps) {
-  const outlined = { borderColor: 'primary.outlinedBorder', whiteSpace: 'nowrap' } as const;
+  // Figma 14041:71098: both buttons 200px wide with a 16px gap.
+  const cta = { width: (t: Theme) => t.spacing(25), whiteSpace: 'nowrap' } as const;
   return (
     <Box
       sx={(t) => ({
@@ -78,16 +81,24 @@ export default function ReservationListToolbar({
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <Button
-          variant="outlined"
+          variant="contained"
+          color="info"
           size="large"
           component={RouterLink}
           to={NIGHT_AUDIT_HISTORY_PATH}
           startIcon={<ShieldMoon />}
-          sx={outlined}
+          sx={cta}
         >
           Night Audit
         </Button>
-        <Button variant="outlined" size="large" onClick={onNewReservation} sx={outlined}>
+        <Button
+          variant="contained"
+          color="primary"
+          size="large"
+          onClick={onNewReservation}
+          startIcon={<AddCircle />}
+          sx={cta}
+        >
           New Reservation
         </Button>
       </Box>
