@@ -2,7 +2,13 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { lazy, type ReactElement, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router';
-import { DASHBOARD_PATH, NEW_RESERVATION_RESULTS_PATH, routes, SCHEDULE_PATH } from './app/routes';
+import {
+  DASHBOARD_PATH,
+  FOLIO_PATH,
+  NEW_RESERVATION_RESULTS_PATH,
+  routes,
+  SCHEDULE_PATH,
+} from './app/routes';
 import AppShell from './AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
@@ -16,6 +22,7 @@ import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
 export const COMPONENTS_DEMO_PATH = '/dev/components';
 // The schedule (grid, drag and drop, dialogs) is the largest page: its code loads on demand.
 const Schedule = lazy(() => import('./pages/Schedule'));
+const Folio = lazy(() => import('./pages/Folio'));
 const ComponentsDemo = import.meta.env.DEV ? lazy(() => import('./pages/ComponentsDemo')) : null;
 
 function PagePlaceholder({ title }: { title: string }) {
@@ -37,6 +44,11 @@ function RedirectToSchedule() {
 // Real pages by route path; routes without an entry show the placeholder. Page tickets add theirs here.
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
+  [FOLIO_PATH]: (
+    <Suspense fallback={null}>
+      <Folio />
+    </Suspense>
+  ),
   [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
   [SCHEDULE_PATH]: (
     <Suspense fallback={<ScheduleSkeleton />}>

@@ -4,8 +4,8 @@ Epic issue: Excia/Guestrooms-Demo#37. Figma pages: Folio / Night Audit, Unassign
 Refund Payments, Audit Results. Back to the [index](../README.md). Entry fields are described in
 [00-foundation.md](00-foundation.md).
 
-**Current code for the whole epic:** the routes `/open-folios`, `/unassigned-charges` and
-`/night-audit-history` exist and show placeholder pages. The dashboard badge reads
+**Current code for the whole epic:** the Folio view (4.1) exists at `/reservations/:id/folio`; the routes `/open-folios`, `/unassigned-charges` and
+`/night-audit-history` show placeholder pages. The dashboard badge reads
 `dashboard.getStats().unassignedChargesCount` (mock 3). There is no folio, charge, payment or night
 audit API yet; the needs are listed in [api-contract.md](../api-contract.md#planned-endpoints).
 All tickets are **not started** unless stated. Shared decisions: D-002 (mock payments interface), D-003
@@ -35,7 +35,35 @@ Excia/Guestrooms-Demo#38. Figma: Folio 12054:62479, Exploration 16477:82054, Bal
   dialogs, buttons marked in the Exploration). Unposted lines have a Post action: "Post [Description]
   via Night Audit?" (Go Back / Post Charge) with a link to the wizard; only that charge posts. Print
   and Email are stubs; PDFs by the backend (D-003).
-- **Open questions:** Q-38-1, Q-38-2.
+- **Implemented:** route `/reservations/:id/folio` (route id `folio`, `src/pages/Folio.tsx`, lazy
+  loaded); components in `src/components/folio/` (`BalanceSummary`, `ChargesTable` with the occupant
+  filter, selection and action bar, `PaymentsTable`, `PostChargeDialog`, `useFolio`); pure rules in
+  `src/app/folio.ts` (`folioBalances`, `balanceTone`, `occupantFilterOptions`, `filterCharges`,
+  `selectionActions`, `rowActions`, `referenceDisplay`) with tests; API `folios.get` and
+  `folios.postCharge` with mock data (`src/api/folioData.ts`) and an HTTP implementation. Title shows
+  the confirmation number; chips: check-in status, POS (when the folio is visible in MPOS), Folio
+  Open or Closed. Charges and Payments sections collapse. Selection is limited to the lines the
+  occupant filter shows. Settled lines show "Settled - Ref #..." (three numbers, then "…" with the full
+  list in a hover tooltip); surcharge and service-fee lines are ordinary charge lines supplied by the API.
+  Post opens the "Post [Description] via Night Audit?" dialog and posts only that charge.
+- **Deviations from Figma or the ticket:** see figma-deviations.md rows 51 to 53: no Type filter or
+  search button in the table headers, no checkbox on payment rows, no restore icon on posted
+  room-rate rows (their meaning is not annotated). Plain MUI Table instead of DataGrid (D-076).
+- **Assumptions and defaults chosen:** D-076, D-077, D-078. The Balance Summary also carries a
+  screen-reader label for its color. The entry points (the details panel's Folio button and "Jump to
+  Folio") still go to the Open Folios placeholder: rewiring them touches the schedule panel code and
+  its tests (ticket 2.x) and is left to a follow-up.
+- **Stubs and placeholders:** Quick Settle, Quick Split, Split, Transfer, Settle, Manual Charge /
+  Credit, Add Deposit / Payment, row Edit and Delete show a notice (their dialogs are tickets 4.5,
+  4.10 to 4.13); Print and Email show a notice (PDF by the backend, D-003; copy and behavior are
+  Q-38-2); "Run Night Audit Wizard" opens Night Audit History in a new tab until the wizard exists.
+  Mock folio data: [placeholders.md](../placeholders.md).
+- **API:** `GET /reservations/{id}/folio`, `POST /reservations/{id}/folio/post`
+  ([api-contract.md](../api-contract.md#folio-endpoints-ticket-41)).
+- **Permissions:** route permission `page.folio` (no action permissions yet; closed-folio and
+  reopen permissions arrive with their tickets).
+- **Open questions:** Q-38-1 (default built), Q-38-2 (open), Q-38-3 (default built).
+- **Status:** in review, not yet merged, 2026-10-20.
 
 ## 4.2 Folio line type variations
 
