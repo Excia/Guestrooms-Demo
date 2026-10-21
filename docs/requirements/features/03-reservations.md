@@ -9,7 +9,7 @@ shows a placeholder page. `api.reservations.list` and `get` exist (`Reservation`
 confirmationNumber, guestName, roomType, roomNumber, arrival, departure, adults, children, status,
 rateCategoryId, hasUnassignedCharges) with six placeholder rows; the Hub route
 `/reservations/:id` does not exist. The reservation details panel of ticket 2.2 (PR
-Excia/Guestrooms-Demo#119) is the only reservation UI. Every ticket below is **not started** unless
+Excia/Guestrooms-Demo#119, merged) is the only reservation UI. Every ticket below is **not started** unless
 stated. Shared decisions: D-008 (check in needs a payment method), D-013, D-014.
 
 ## 3.1 Reservation List with bulk actions
@@ -212,7 +212,7 @@ Excia/Guestrooms-Demo#35. Figma: Late Checkout System Setting 12369:20668, Hub L
   Schedule: Not Yet Checked In shows only early; Checked In and Checked Out show only late, even when
   both are selected. The details panel checkboxes auto-save.
 - **Existing groundwork:** the details panel checkboxes and the `POST /reservations/:id/early-late`
-  contract are in PR Excia/Guestrooms-Demo#119 (D-058); the system setting, hub checkboxes, validation
+  contract are on `main` (PR Excia/Guestrooms-Demo#119, D-058); the system setting, hub checkboxes, validation
   and the auto-checkout job are not built. Annotations reference another Figma file key; ignore (D-012).
 - **Open questions:** Q-35-1, Q-35-2 (build the setting once with ticket 7.1).
 

@@ -46,7 +46,7 @@ Excia/Guestrooms-Demo#38. Figma: Folio 12054:62479, Exploration 16477:82054, Bal
   occupant filter shows. Settled lines show "Settled - Ref #..." (three numbers, then "…" with the full
   list in a hover tooltip); surcharge and service-fee lines are ordinary charge lines supplied by the API.
   Post opens the "Post [Description] via Night Audit?" dialog and posts only that charge.
-- **Deviations from Figma or the ticket:** see figma-deviations.md rows 51 to 53: no Type filter or
+- **Deviations from Figma or the ticket:** see figma-deviations.md rows 39 to 41: no Type filter or
   search button in the table headers, no checkbox on payment rows, no restore icon on posted
   room-rate rows (their meaning is not annotated). Plain MUI Table instead of DataGrid (D-076).
 - **Assumptions and defaults chosen:** D-076, D-077, D-078. The Balance Summary also carries a
