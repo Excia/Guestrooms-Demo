@@ -30,7 +30,20 @@ export interface SaveToastProps {
   saveId?: string | number;
   /** Which bottom corner it sits in; left by default (Figma). */
   side?: 'left' | 'right';
+  /**
+   * What the message is: 'success' (the green Figma toast, default), 'warning' (something could not
+   * be confirmed or the user should look again) or 'error' (it failed). Colors come from the theme.
+   * An error is announced assertively (`role="alert"`); the others politely (`role="status"`). Each
+   * toast has exactly one live region.
+   */
+  severity?: 'success' | 'warning' | 'error';
 }
+
+const SEVERITY_COLOR = {
+  success: 'primary.main',
+  warning: 'warning.main',
+  error: 'error.main',
+} as const;
 
 // Save Confirmation toast (Figma 69:4219).
 // Screen readers: the live region below is always mounted (a region that appears together with its
@@ -44,6 +57,7 @@ export default function SaveToast({
   autoHideDuration = 5000,
   saveId = 0,
   side = 'left',
+  severity = 'success',
 }: SaveToastProps) {
   const handleClose = (_: unknown, reason?: SnackbarCloseReason) => {
     // A click elsewhere on the page must not dismiss it.
@@ -52,7 +66,7 @@ export default function SaveToast({
   };
   return (
     <>
-      <Box role="status" sx={visuallyHidden}>
+      <Box role={severity === 'error' ? 'alert' : 'status'} sx={visuallyHidden}>
         {open ? <span key={`${saveId}:${message}`}>{message}</span> : null}
       </Box>
       {/* Keyed on saveId only: a new message while open updates in place (the live region above
@@ -94,8 +108,8 @@ export default function SaveToast({
           }
           sx={{
             width: (t) => t.spacing(40),
-            bgcolor: 'primary.main',
-            color: 'primary.contrastText',
+            bgcolor: SEVERITY_COLOR[severity],
+            color: `${severity === 'success' ? 'primary' : severity}.contrastText`,
             boxShadow: 4,
             '& .MuiSnackbarContent-message': { typography: 'body1', fontWeight: 'fontWeightBold' },
           }}

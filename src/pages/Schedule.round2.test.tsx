@@ -252,7 +252,7 @@ describe('Location, Room Type and Room', () => {
     expect(location()).toHaveTextContent('Unassigned');
   });
 
-  it('clearing the room (Clear button or the Unassigned entry) undoes what it filled in; explicit choices stay', async () => {
+  it('clearing the room (Clear button) undoes what it filled in', async () => {
     const { user, dialog, location, type, room } = await open();
     await user.click(room());
     await user.click(await screen.findByRole('option', { name: 'Room 302' }));
@@ -262,7 +262,10 @@ describe('Location, Room Type and Room', () => {
     expect(type()).toHaveTextContent('Unassigned');
     await user.click(room());
     expect(options()).toHaveLength(31); // the list widened again
-    await user.keyboard('{Escape}');
+  });
+
+  it('an explicit location stays when the room goes; the Unassigned entry clears the room too', async () => {
+    const { user, location, type, room } = await open();
     // the user chose the location: it stays when the room goes; the Unassigned entry clears too
     await user.click(location());
     await user.click(await screen.findByRole('option', { name: 'North Lodge' }));
@@ -710,7 +713,10 @@ describe('the time limit pauses on the New Room Closure tab', () => {
     const base = createMockClient({ today: TODAY });
     setup('/schedule?panel=new', {
       ...base,
-      settings: { getBookingHold: async () => ({ employee: 2, member: 2, nonMember: 2 }) },
+      settings: {
+        ...base.settings,
+        getBookingHold: async () => ({ employee: 2, member: 2, nonMember: 2 }),
+      },
     });
     const timer = await screen.findByRole('timer');
     await waitFor(() => expect(timer).toHaveTextContent('Time left: 02:00'));

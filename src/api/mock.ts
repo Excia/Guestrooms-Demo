@@ -3,11 +3,14 @@ import {
   emptyStats,
   fullGrant,
   MOCK_BOOKING_HOLD,
+  MOCK_ROOM_CHANGE_RULE,
   MOCK_TODAY,
   mockReservations,
   mockStats,
   noGrant,
 } from './mockData';
+import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
+import { permissionsFromGrant } from './grant';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
 import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
@@ -19,7 +22,7 @@ import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
-import { createScheduleState, moveDates, moveRoom } from './scheduleData';
+import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
@@ -31,9 +34,10 @@ import {
   validateRoomType,
   withoutRoom,
 } from '../app/roomSetup';
-import type { ApiClient, IsoDate, PermissionGrant, RequestOptions } from './types';
+import type { ApiClient, IsoDate, PermissionGrant, RequestOptions, RoomChangeRule } from './types';
 import { ApiError } from './types';
 import {
+  assertChangeRoomRequest,
   assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
@@ -60,6 +64,8 @@ export interface MockOptions {
   today?: IsoDate;
   /** Schedule inventory: `default` (about 30 rooms) or `large` (200 rooms, for performance). */
   scheduleSize?: ScheduleSize;
+  /** The room-change rate setting (ticket 2.3); defaults to asking (PLACEHOLDER until ticket 7.1). */
+  roomChangeRule?: RoomChangeRule;
 }
 
 export const MOCK_PAGE_SIZE = 4;
@@ -80,6 +86,7 @@ export function createMockClient({
   grant = fullGrant,
   today = MOCK_TODAY,
   scheduleSize = 'default',
+  roomChangeRule = MOCK_ROOM_CHANGE_RULE,
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
@@ -211,6 +218,23 @@ export function createMockClient({
           () => {
             assertCreateReservationRequest(request);
             throw new ApiError(404, 'Room not found');
+          },
+          o,
+        ),
+      changeRoomDuringStay: (request, o) =>
+        respond(
+          () => {
+            assertChangeRoomRequest(request);
+            if (!permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () =>
+              changeRoomDuringStay(schedule, request, roomChangeRule),
+            );
+          },
+          () => {
+            assertChangeRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
           },
           o,
         ),
@@ -352,6 +376,12 @@ export function createMockClient({
         respond(
           () => holdFromRules(bookingRules),
           () => ({ ...MOCK_BOOKING_HOLD }),
+          o,
+        ),
+      getRoomChangeRule: (o) =>
+        respond(
+          () => ({ ...roomChangeRule }),
+          () => ({ ...roomChangeRule }),
           o,
         ),
     },

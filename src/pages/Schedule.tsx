@@ -18,6 +18,8 @@ import {
   shiftScheduleStart,
   type ScheduleStep,
 } from '../app/schedule';
+import { applyRoomPlan, changeRoomFailure, mergeRoomPlan, revertRoomPlan } from '../app/changeRoom';
+import { stayOf } from '../lib/stayPlan';
 import { applyPanel, closePanel, parsePanel } from '../app/panelUrl';
 import type { EarlyLateValues } from '../app/earlyLate';
 import { applyMoves, mergeChangedBlocks, moveFailure, revertMoves } from '../app/scheduleGrid';
@@ -30,6 +32,7 @@ import {
 } from '../app/scheduleUrl';
 import { todayIso, type IsoDate } from '../lib/dates';
 import { newRequestId } from '../lib/requestId';
+import type { RoomChangeSubmission } from '../components/reservation/ChangeRoomDialog';
 import ReservationPanel from '../components/reservation/ReservationPanel';
 import MoveConfirmDialog from '../components/schedule/MoveConfirmDialog';
 import ScheduleControls from '../components/schedule/ScheduleControls';
@@ -53,9 +56,12 @@ interface Pending {
   result: Accepted;
 }
 
+type ToastSeverity = 'success' | 'warning' | 'error';
+
 interface Toast {
   id: number;
   message: string;
+  severity: ToastSeverity;
 }
 
 /**
@@ -107,6 +113,22 @@ export default function Schedule({
   useEffect(() => {
     currentRange.current = { startDate: start, days: view.days };
   }, [start, view.days]);
+  // A room change during a stay is in flight (ticket 2.3); `detailRefresh` reloads the open details.
+  const [roomChanging, setRoomChanging] = useState(false);
+  const [detailRefresh, setDetailRefresh] = useState(0);
+  const changeSubmitted = useRef(false);
+  // The dialog reopens on its first step when what the user saw has drifted (see changeRoomFailure).
+  const [reopen, setReopen] = useState<{
+    stayId: string;
+    edits: Record<IsoDate, string>;
+    nonce: number;
+  } | null>(null);
+  // The server owns "today" (the club's): when it differs from this browser's, the panel follows it.
+  const [serverToday, setServerToday] = useState<IsoDate | undefined>(undefined);
+  // It lasts while the panel it was learned for is open.
+  if (!panel && serverToday !== undefined) setServerToday(undefined);
+  // The blocks on screen, readable from callbacks that outlive a render.
+  const loadedBlocks = useRef<ScheduleBlock[]>([]);
   const [toast, setToast] = useState<Toast | null>(null);
   const [toastOpen, setToastOpen] = useState(false);
 
@@ -131,8 +153,8 @@ export default function Schedule({
     },
     [setParams],
   );
-  const notify = useCallback((message: string) => {
-    setToast((t) => ({ id: (t?.id ?? 0) + 1, message }));
+  const notify = useCallback((message: string, severity: ToastSeverity = 'success') => {
+    setToast((t) => ({ id: (t?.id ?? 0) + 1, message, severity }));
     setToastOpen(true);
   }, []);
 
@@ -177,7 +199,8 @@ export default function Schedule({
       openPanel({
         kind: 'details',
         reservationId: block.reservationId,
-        reservationRoomId: block.id,
+        // A part of a stay that changed room belongs to the reservation room of the whole stay.
+        reservationRoomId: stayOf(block),
       }),
     [openPanel],
   );
@@ -204,6 +227,12 @@ export default function Schedule({
   const onEarlyLateSaved = useCallback(
     (reservationId: string, values: EarlyLateValues) => {
       const range = currentRange.current;
+      // A stay that changed room is several blocks and the markers sit on only some of them: the
+      // server knows which, so load the schedule again instead of guessing.
+      if (loadedBlocks.current.some((b) => b.reservationId === reservationId && b.roomChange)) {
+        retry();
+        return;
+      }
       setBlocks(range, (blocks) =>
         blocks.map((b) =>
           b.reservationId === reservationId
@@ -216,10 +245,13 @@ export default function Schedule({
         ),
       );
     },
-    [setBlocks],
+    [setBlocks, retry],
   );
 
   const data = schedule.status === 'success' ? schedule.data : null;
+  useEffect(() => {
+    loadedBlocks.current = data?.blocks ?? [];
+  }, [data]);
   const liveRooms = useMemo(
     () =>
       data
@@ -278,8 +310,62 @@ export default function Schedule({
         const reverted =
           failure.revert && inRange() && setBlocks(range, (blocks) => revertMoves(blocks, moves));
         if (failure.refetch || (failure.revert && !reverted)) retry();
-        notify(failure.message);
+        // An unknown outcome is a warning (look again); a clear failure is an error.
+        notify(failure.message, failure.revert ? 'error' : 'warning');
         settle();
+      },
+    );
+  };
+
+  /**
+   * A confirmed room change during the stay. Shown at once on the grid (the block moves and the
+   * nights already stayed stay behind in the old room), then confirmed or rolled back like a drag:
+   * a clear 4xx reverts, an unknown outcome (no response, 408, 5xx, unusable answer) reloads and
+   * says so neutrally. After success the schedule and the open details reload.
+   */
+  const submitRoomChange = (submission: RoomChangeSubmission) => {
+    if (changeSubmitted.current) return;
+    changeSubmitted.current = true;
+    setRoomChanging(true);
+    const { request, block, plan, stayed, toast } = submission;
+    const stayId = block.id;
+    const range = { ...currentRange.current };
+    const inRange = () =>
+      currentRange.current.startDate === range.startDate &&
+      currentRange.current.days === range.days;
+    // What is on screen for this stay now: what a rollback puts back.
+    const snapshot = loadedBlocks.current.filter((b) => stayOf(b) === stayId);
+    setBlocks(range, (blocks) => applyRoomPlan(blocks, { stayId, plan, stayed }));
+    const finish = () => {
+      changeSubmitted.current = false;
+      setRoomChanging(false);
+      setDetailRefresh((n) => n + 1);
+    };
+    api.reservations.changeRoomDuringStay(request).then(
+      (answer) => {
+        if (inRange()) {
+          setBlocks(range, (blocks) => mergeRoomPlan({ ...range, blocks }, stayId, answer.blocks));
+        }
+        retry();
+        notify(toast);
+        finish();
+      },
+      (error: unknown) => {
+        const failure = changeRoomFailure(error);
+        if (failure.revert && inRange()) {
+          setBlocks(range, (blocks) => revertRoomPlan(blocks, snapshot, stayId));
+        }
+        if (failure.refetch || (failure.revert && !inRange())) retry();
+        notify(failure.message, failure.reopen || !failure.revert ? 'warning' : 'error');
+        if (failure.reopen) {
+          if (failure.serverToday) setServerToday(failure.serverToday);
+          setReopen((r) => ({
+            stayId,
+            edits: Object.fromEntries(plan.map((n) => [n.date, n.roomId])),
+            nonce: (r?.nonce ?? 0) + 1,
+          }));
+        }
+        finish();
       },
     );
   };
@@ -346,7 +432,7 @@ export default function Schedule({
           setFrozenRooms(liveRooms);
           setPending({ block, result });
         }}
-        onRefuse={notify}
+        onRefuse={(message) => notify(message, 'warning')}
         onOpen={openDetails}
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
       />
@@ -453,6 +539,7 @@ export default function Schedule({
           block={pending.block}
           result={pending.result}
           toRoomNumber={toRoom?.number ?? ''}
+          today={today}
           onCancel={() => {
             setPending(null);
             setFrozenRooms(null);
@@ -464,7 +551,7 @@ export default function Schedule({
       ) : null}
       <ReservationPanel
         panel={panel}
-        today={today}
+        today={serverToday ?? today}
         data={data}
         dataFailed={schedule.status === 'error'}
         onRetryData={retry}
@@ -472,6 +559,10 @@ export default function Schedule({
         onCreated={onCreated}
         onUnknownOutcome={retry}
         onEarlyLateSaved={onEarlyLateSaved}
+        onChangeRoom={submitRoomChange}
+        reopenChange={reopen}
+        roomChangeBusy={roomChanging}
+        detailRefresh={detailRefresh}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}
@@ -484,6 +575,7 @@ export default function Schedule({
         onClose={() => setToastOpen(false)}
         message={toast?.message ?? ''}
         saveId={toast?.id}
+        severity={toast?.severity}
         side={toastSideFor(panelSide)}
       />
     </Box>

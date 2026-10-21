@@ -6,6 +6,7 @@ import Close from '@mui/icons-material/Close';
 import Edit from '@mui/icons-material/Edit';
 import EventAvailable from '@mui/icons-material/EventAvailable';
 import EventBusy from '@mui/icons-material/EventBusy';
+import SwapHoriz from '@mui/icons-material/SwapHoriz';
 import Undo from '@mui/icons-material/Undo';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -18,6 +19,7 @@ import Typography from '@mui/material/Typography';
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { ReservationDetail, ReservationRoomDetail } from '../../api';
+import { changeRoomAvailability } from '../../app/changeRoom';
 import { type EarlyLateValues } from '../../app/earlyLate';
 import { RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
 import {
@@ -34,11 +36,13 @@ import {
   stepRoomIndex,
 } from '../../app/reservationPanel';
 import { formatPanelDate } from '../../app/newReservation';
-import { OPEN_FOLIOS_PATH } from '../../app/routes';
+import { folioPath } from '../../app/routes';
 import { splitCta, STUB_TICKETS, type CtaActionId } from '../../app/splitCta';
 import { useAccess } from '../../app/useAccess';
+import { todayIso, type IsoDate } from '../../lib/dates';
 import { focusOnMount } from '../shared/focusOnMount';
 import SplitButton from '../shared/SplitButton';
+import ChangeRoomDialog, { type RoomChangeSubmission } from './ChangeRoomDialog';
 import DetailsAccordion from './DetailsAccordion';
 import EarlyLateToggles from './EarlyLateToggles';
 import { useEarlyLate } from './useEarlyLate';
@@ -54,6 +58,16 @@ export interface ReservationDetailsProps {
   onClose: () => void;
   /** A save was confirmed (or the flags were reloaded): the schedule redraws its edge markers. */
   onEarlyLateSaved: (reservationId: string, values: EarlyLateValues) => void;
+  /** Local calendar date treated as "today" (the first night a room change may move). */
+  today?: IsoDate;
+  /** A confirmed room change; the schedule page applies and sends it (ticket 2.3). Absent hides the action. */
+  onChangeRoom?: (submission: RoomChangeSubmission) => void;
+  /** A room change is being saved: the action is unavailable until it settles. */
+  roomChangeBusy?: boolean;
+  /** Raised after a room change settles: the detail reloads in place. */
+  refreshToken?: number;
+  /** Reopens the Change Room dialog on its first step (the data drifted); a new `nonce` each time. */
+  reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
 }
 
 function Loading() {
@@ -267,8 +281,13 @@ export default function ReservationDetails({
   focusTitle,
   onClose,
   onEarlyLateSaved,
+  today,
+  onChangeRoom,
+  roomChangeBusy,
+  refreshToken,
+  reopenChange,
 }: ReservationDetailsProps) {
-  const state = useReservationDetail(reservationId);
+  const state = useReservationDetail(reservationId, refreshToken);
   const closeButton = (
     <IconButton
       aria-label="Close reservation details"
@@ -331,6 +350,10 @@ export default function ReservationDetails({
       closeButton={closeButton}
       onReloaded={state.replace}
       onEarlyLateSaved={onEarlyLateSaved}
+      today={today}
+      onChangeRoom={onChangeRoom}
+      roomChangeBusy={roomChangeBusy}
+      reopenChange={reopenChange}
     />
   );
 }
@@ -343,6 +366,10 @@ function Loaded({
   closeButton,
   onReloaded,
   onEarlyLateSaved,
+  today,
+  onChangeRoom,
+  roomChangeBusy,
+  reopenChange,
 }: {
   detail: ReservationDetail;
   reservationRoomId?: string;
@@ -351,6 +378,10 @@ function Loaded({
   closeButton: React.ReactNode;
   onReloaded: (d: ReservationDetail) => void;
   onEarlyLateSaved: ReservationDetailsProps['onEarlyLateSaved'];
+  today?: IsoDate;
+  onChangeRoom?: ReservationDetailsProps['onChangeRoom'];
+  roomChangeBusy?: boolean;
+  reopenChange?: ReservationDetailsProps['reopenChange'];
 }) {
   const navigate = useNavigate();
   const { can } = useAccess();
@@ -361,18 +392,49 @@ function Loaded({
     onSaved: (values) => onEarlyLateSaved(detail.id, values),
     onReloaded,
   });
-  const [roomIndex, setRoomIndex] = useState(() =>
-    initialRoomIndex(detail.rooms, reservationRoomId),
+  // The room shown is chosen by its reservation-room id, not its position: after a reload (a room
+  // change rebuilds the stay's blocks) the same room stays selected.
+  const [selectedRoomId, setSelectedRoomId] = useState(
+    () => detail.rooms[initialRoomIndex(detail.rooms, reservationRoomId)].id,
+  );
+  const roomIndex = Math.max(
+    0,
+    detail.rooms.findIndex((r) => r.id === selectedRoomId),
   );
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
   const say = (text: string) => setNotice((n) => ({ id: (n?.id ?? 0) + 1, text }));
+  const changeRoomId = useId();
+  // The Change Room dialog: closed (null), or open with the choices to start from.
+  const [changing, setChanging] = useState<{ edits?: Record<string, string> } | null>(null);
+  const [seenReopen, setSeenReopen] = useState(reopenChange?.nonce ?? 0);
   const cta = splitCta(detail);
-  const room = detail.rooms[Math.min(roomIndex, detail.rooms.length - 1)];
+  const room = detail.rooms[roomIndex];
+  const todayDate = today ?? todayIso();
+  const roomChange = changeRoomAvailability({
+    room,
+    today: todayDate,
+    canEdit,
+    busy: roomChangeBusy,
+  });
   const multi = detail.rooms.length > 1;
+  // The dialog cannot render (the date or the action is gone after a reload): forget that it was
+  // asked for, so it cannot pop open later.
+  if (changing && (!roomChange.effectiveDate || !onChangeRoom)) setChanging(null);
+  // A change that failed because the data drifted reopens the dialog on step 1 (set state while
+  // rendering, the documented pattern for state derived from a prop).
+  if (
+    reopenChange &&
+    reopenChange.nonce !== seenReopen &&
+    detail.rooms.some((r) => r.id === reopenChange.stayId)
+  ) {
+    setSeenReopen(reopenChange.nonce);
+    setSelectedRoomId(reopenChange.stayId);
+    setChanging({ edits: reopenChange.edits });
+  }
 
   const run = (actionId: CtaActionId) => {
     if (actionId === 'jump-to-folio') {
-      void navigate(OPEN_FOLIOS_PATH);
+      void navigate(folioPath(detail.id));
       return;
     }
     say(STUB_TICKETS[actionId] ?? 'This action arrives in a later ticket.');
@@ -438,7 +500,7 @@ function Loaded({
             <RoomSelector
               rooms={detail.rooms}
               index={roomIndex}
-              onIndex={setRoomIndex}
+              onIndex={(i) => setSelectedRoomId(detail.rooms[i].id)}
               onStub={say}
             />
           ) : (
@@ -450,6 +512,52 @@ function Loaded({
             />
           )}
         </Box>
+        {room.previousStays?.length || room.upcomingStays?.length ? (
+          <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
+            {[
+              ['Earlier in this stay', room.previousStays],
+              ['Later in this stay', room.upcomingStays],
+            ]
+              .filter(([, parts]) => (parts as unknown[] | undefined)?.length)
+              .map(([label, parts]) => {
+                const list = parts as NonNullable<ReservationRoomDetail['previousStays']>;
+                return `${label}: ${list
+                  .map(
+                    (p) =>
+                      `Room ${p.roomNumber ?? ''} (${formatPanelDate(p.arrival)} to ${formatPanelDate(p.departure)})`,
+                  )
+                  .join(', ')}`;
+              })
+              .join('. ')}
+          </Typography>
+        ) : null}
+        {onChangeRoom ? (
+          <Box sx={{ mt: 1 }}>
+            <Button
+              size="small"
+              startIcon={<SwapHoriz />}
+              aria-disabled={!roomChange.available}
+              aria-describedby={roomChange.available ? undefined : `${changeRoomId}-reason`}
+              onClick={() =>
+                roomChange.available ? setChanging({}) : say(roomChange.reason ?? '')
+              }
+              // Unavailable: the text stays readable (secondary, not the 0.38 disabled opacity).
+              sx={roomChange.available ? undefined : { color: 'text.secondary' }}
+            >
+              Change Room
+            </Button>
+            {roomChange.reason ? (
+              <Typography
+                id={`${changeRoomId}-reason`}
+                variant="caption"
+                component="p"
+                sx={{ color: 'text.secondary', mt: 0.25 }}
+              >
+                {roomChange.reason}
+              </Typography>
+            ) : null}
+          </Box>
+        ) : null}
         {detail.rooms.some((r) => r.roomId === null) ? (
           <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
             Not shown on the schedule until a room is assigned.
@@ -497,6 +605,20 @@ function Loaded({
         ) : null}
       </Box>
       <DetailsAccordion detail={detail} onStub={say} />
+      {changing && roomChange.effectiveDate && onChangeRoom ? (
+        <ChangeRoomDialog
+          detail={detail}
+          room={room}
+          effectiveDate={roomChange.effectiveDate}
+          today={todayDate}
+          initialEdits={changing.edits}
+          onCancel={() => setChanging(null)}
+          onSubmit={(submission) => {
+            setChanging(null);
+            onChangeRoom(submission);
+          }}
+        />
+      ) : null}
     </Box>
   );
 }

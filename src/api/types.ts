@@ -203,6 +203,24 @@ export interface ReservationRoomDetail {
   arrival: IsoDate;
   /** Departure, exclusive. */
   departure: IsoDate;
+  /**
+   * When the stay has several parts (ticket 2.3) `roomId` / `roomNumber` are the room of the first
+   * night not yet stayed, `arrival` is where that run of nights starts and `departure` is the
+   * departure of the whole stay (also when later nights are in other rooms). The two lists below are
+   * absent whenever the stay is a single block.
+   */
+  previousStays?: ReservationPartialStay[];
+  /** Rooms of the nights after the current run, oldest first (planned room changes). */
+  upcomingStays?: ReservationPartialStay[];
+}
+
+/** A run of consecutive nights in one room: [arrival, departure). */
+export interface ReservationPartialStay {
+  roomId: string;
+  roomNumber: string | null;
+  arrival: IsoDate;
+  /** Departure from that room, exclusive. */
+  departure: IsoDate;
 }
 
 export interface ReservationAddOn {
@@ -216,7 +234,14 @@ export interface ReservationAddOn {
 export interface ReservationStayLine {
   roomType: string;
   date: IsoDate;
+  /** Per night, excluding taxes and service charges. */
   amountCents: Cents;
+  /**
+   * The reservation room (the id of its `current` schedule block, the "stay id") the night belongs
+   * to, so a multi-room reservation's lines can be told apart: the change-room dialog prices the
+   * remaining nights of one room. Required; the backend sums nights and revenue per night, not per block.
+   */
+  reservationRoomId: string;
 }
 
 /**
@@ -300,6 +325,70 @@ export interface CreateReservationRequest {
   privateNotes?: string;
 }
 
+/** Which rate a room change keeps for the nights whose room changed (ticket 2.3, decision D-015). */
+export type RateChoice = 'retain' | 'update';
+
+/** One night of a stay and the room it is spent in. */
+export interface NightRoom {
+  /** The night's date (the stay occupies [arrival, departure)). */
+  date: IsoDate;
+  roomId: string;
+}
+
+/**
+ * Change the rooms of a checked-in reservation room for the rest of its stay, night by night (ticket
+ * 2.3; Figma 1326:19431, requirements 27.9.1.2). `nights` is the **whole remaining stay**: one entry
+ * per night from the first night not yet stayed (today, or the arrival if later) to the night before
+ * the departure, in date order, each with the room it should be spent in (unchanged nights repeat
+ * their current room). Nights before that are stayed and cannot be changed. The backend merges
+ * consecutive nights in one room into segments.
+ * - `requestId`: idempotency key (body and `Idempotency-Key` header), as for the schedule moves.
+ * - `reservationRoomId`, `fromRoomId`, `version`: the schedule block as the user saw it (the room of
+ *   the first remaining night); 409 `stale` when its room or version has changed since.
+ * - `rateChoice`: 'retain' keeps the current nightly price of the nights whose room changed, 'update'
+ *   uses their new rooms' rates, `null` means the question was not asked (the "ask" setting is off, or
+ *   the rates do not differ): the new rates apply. When the setting is on and the rates differ, the
+ *   backend answers 400 `invalid-query` (details.rateChoice) for `null`.
+ */
+export interface ChangeRoomRequest {
+  requestId: string;
+  reservationRoomId: string;
+  fromRoomId: string;
+  nights: NightRoom[];
+  rateChoice: RateChoice | null;
+  version: string;
+}
+
+/**
+ * Housekeeping state of a room. PLACEHOLDER until the Housekeeping report (ticket 6.4) defines the
+ * real types and statuses (the requirements call the state after a checkout "Needs Cleaning").
+ */
+export type HousekeepingStatus = 'clean' | 'dirty';
+
+/**
+ * What the change did. `blocks` is the whole stay of that reservation room after the change: one
+ * block per run of consecutive nights in one room, oldest first (see `ScheduleBlock.roomChange`);
+ * the block with the request's `reservationRoomId` is the run holding the first remaining night.
+ * `removedBlockIds` are blocks of the stay that no longer exist (merged or replaced). `folio`
+ * summarizes the room charges (integer cents, excluding taxes and service charges): `deltaCents` is
+ * the change of this reservation room's total, `repricedNights` how many nights got another price.
+ * `vacatedRoom` is the room the guest sleeps in tonight when it changed (dirty from that night), else
+ * null. When every night ends up in one room the answer is a single block without `roomChange`.
+ * Errors: 400 `invalid-id` / `invalid-query` (`details.nights`, `details.rateChoice`); 403 (no
+ * `reservation.edit`); 404; 409 `stale` (the block's version or room changed, or the effective date
+ * differs: `details.reason` ['effective-date'] and `details.today`, the club's today, which the
+ * server owns); 409 `not-movable` (not checked in, locked room type); 409 `conflict` (a room is
+ * booked or closed on a night it was given, `details.roomId`); 409 `idempotency-conflict`. Nothing
+ * is applied on an error. A replay of the same request returns the original answer (versions and
+ * `removedBlockIds` included).
+ */
+export interface ChangeRoomResult {
+  blocks: ScheduleBlock[];
+  removedBlockIds: string[];
+  folio: { deltaCents: Cents; repricedNights: number; roomChargesCents: Cents };
+  vacatedRoom: { roomId: string; housekeeping: HousekeepingStatus; since: IsoDate } | null;
+}
+
 export interface ReservationsApi {
   list(query?: ReservationQuery, options?: RequestOptions): Promise<Page<Reservation>>;
   /** Rejects with an ApiError of status 404 when the id is unknown. */
@@ -308,6 +397,11 @@ export interface ReservationsApi {
   getDetail(id: string, options?: RequestOptions): Promise<ReservationDetail>;
   setEarlyLate(request: EarlyLateRequest, options?: RequestOptions): Promise<EarlyLateResult>;
   create(request: CreateReservationRequest, options?: RequestOptions): Promise<ReservationDetail>;
+  /** Change room during the stay (ticket 2.3). Idempotent on `requestId`. */
+  changeRoomDuringStay(
+    request: ChangeRoomRequest,
+    options?: RequestOptions,
+  ): Promise<ChangeRoomResult>;
 }
 
 // ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----
@@ -454,8 +548,18 @@ export interface BookingHold {
   nonMember: number;
 }
 
+/**
+ * Whether a room change during a stay asks "retain the current rate or update to the new room's
+ * rate" (decision D-015, ticket 2.3). PLACEHOLDER: name, default (true) and home (probably System
+ * Settings, ticket 7.1) are not decided; read-only here.
+ */
+export interface RoomChangeRule {
+  askRateOnRoomChange: boolean;
+}
+
 export interface SettingsApi {
   getBookingHold(options?: RequestOptions): Promise<BookingHold>;
+  getRoomChangeRule(options?: RequestOptions): Promise<RoomChangeRule>;
 }
 
 // ---- system settings (Primary Setup, ticket 7.1) ---------------------------------------------
@@ -771,6 +875,11 @@ export interface ScheduleRoom {
   number: string;
   locationId: string;
   roomTypeId: string;
+  /**
+   * PLACEHOLDER until the Housekeeping report (ticket 6.4): absent means not tracked. A room
+   * vacated by a room change during a stay becomes `dirty`.
+   */
+  housekeeping?: HousekeepingStatus;
 }
 
 /**
@@ -814,6 +923,24 @@ export interface ScheduleBlock {
   /** Early Check In / Late Check Out were requested: the orange edge markers (Figma). */
   earlyCheckIn?: boolean;
   lateCheckOut?: boolean;
+  /**
+   * Set only while the stay has SEVERAL blocks (ticket 2.3); absent whenever the stay is a single
+   * block, also after a change that put every night back in one room. The blocks share the
+   * `reservationId` and confirmation number, one per run of consecutive nights in one room (runs in
+   * the same room are always merged, whatever their status), linked by `stayId` (the id of the
+   * `current` block, which keeps the reservation-room id). `previous` blocks hold nights already
+   * stayed in ANOTHER room (they are `checked-out`, never movable), `current` is the run holding the
+   * first night not yet stayed (it also holds earlier nights spent in the same room; `checked-in`) and
+   * `next` the later runs (planned rooms; `checked-in` like the stay). `index` (1-based) and `count`
+   * give "part 2 of 3". `roomCount` still counts rooms of the reservation, not segments. Segment ids
+   * on the wire are opaque. A stay with several blocks cannot be dragged.
+   */
+  roomChange?: {
+    part: 'previous' | 'current' | 'next';
+    index: number;
+    count: number;
+    stayId: string;
+  };
 }
 
 /** A gray closure block (e.g. "Reserved: Fixed Loss"). Same half-open dates as `ScheduleBlock`. */

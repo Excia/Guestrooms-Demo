@@ -1,5 +1,6 @@
-import { isValidMonth, parseIsoDate } from '../lib/dates';
+import { daysBetween, isValidMonth, parseIsoDate } from '../lib/dates';
 import type {
+  ChangeRoomRequest,
   CreateMemberRequest,
   CreateReservationRequest,
   EarlyLateRequest,
@@ -87,6 +88,37 @@ export function assertMoveDatesRequest(request: MoveDatesRequest): void {
   ) {
     throw invalidQuery('move dates request');
   }
+}
+
+/** A stay has at most this many nights in a plan (the New Reservation limit is 365). */
+export const MAX_PLAN_NIGHTS = 400;
+
+export function assertChangeRoomRequest(request: ChangeRoomRequest): void {
+  assertMoveGuard(request);
+  assertResourceId(request.reservationRoomId, 'reservation room');
+  if (
+    !Array.isArray(request.nights) ||
+    request.nights.length === 0 ||
+    request.nights.length > MAX_PLAN_NIGHTS ||
+    (request.rateChoice !== null &&
+      request.rateChoice !== 'retain' &&
+      request.rateChoice !== 'update')
+  ) {
+    throw invalidQuery('room change request');
+  }
+  request.nights.forEach((night, i) => {
+    if (typeof night !== 'object' || night === null || typeof night.date !== 'string') {
+      throw invalidQuery('room change request');
+    }
+    assertResourceId(night.roomId, 'room');
+    // One night per day, in date order: a plan names every remaining night exactly once.
+    if (
+      parseIsoDate(night.date) === null ||
+      (i > 0 && daysBetween(request.nights[i - 1].date, night.date) !== 1)
+    ) {
+      throw invalidQuery('room change request');
+    }
+  });
 }
 
 export function assertEarlyLateRequest(request: EarlyLateRequest): void {

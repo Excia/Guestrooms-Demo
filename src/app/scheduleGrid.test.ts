@@ -315,3 +315,113 @@ describe('blockMarkers', () => {
     expect(blockMarkers({ earlyCheckIn: true }, layout).left).toBe(true);
   });
 });
+
+describe('segmentLinks (ticket 2.3)', () => {
+  const rooms = [
+    { id: 'a', number: '201' },
+    { id: 'b', number: '205' },
+    { id: 'c', number: '207' },
+  ];
+  const seg = (id: string, roomId: string, index: number, part: 'previous' | 'current' | 'next') =>
+    ({
+      kind: 'reservation',
+      id,
+      reservationId: 'rs',
+      confirmationNumber: 'GR-1',
+      guestName: 'G',
+      guestType: 'guest',
+      roomId,
+      startDate: `2026-10-${15 + index}`,
+      endDate: `2026-10-${16 + index}`,
+      status: 'checked-in',
+      roomCount: 1,
+      roomTypeLocked: false,
+      version: 'v',
+      roomChange: { part, index: index + 1, count: 3, stayId: 'cur' },
+    }) as ScheduleBlock;
+  const blocks = [
+    seg('p', 'a', 0, 'previous'),
+    seg('cur', 'b', 1, 'current'),
+    seg('n', 'c', 2, 'next'),
+  ];
+
+  it('knows the place of each part and the rooms of its neighbours', async () => {
+    const { segmentLinks, segmentBadge, segmentText } = await import('./scheduleGrid');
+    const links = segmentLinks(blocks, rooms);
+    expect(links.get('p')).toEqual({
+      index: 1,
+      count: 3,
+      fromRoomNumber: undefined,
+      toRoomNumber: '205',
+    });
+    expect(links.get('cur')).toMatchObject({
+      index: 2,
+      fromRoomNumber: '201',
+      toRoomNumber: '207',
+    });
+    expect(links.get('n')).toMatchObject({
+      index: 3,
+      fromRoomNumber: '205',
+      toRoomNumber: undefined,
+    });
+    expect(segmentBadge(links.get('cur')!)).toBe('2/3 ← 201 → 207');
+    expect(segmentText(links.get('cur')!)).toBe(
+      'part 2 of 3, moved from Room 201, continues in Room 207',
+    );
+    expect(blockAriaLabel(blocks[1], rooms[1], links.get('cur'))).toContain('part 2 of 3');
+  });
+  it('a part whose neighbour is not loaded still says its place', async () => {
+    const { segmentLinks } = await import('./scheduleGrid');
+    expect(segmentLinks([blocks[2]], rooms).get('n')).toMatchObject({
+      index: 3,
+      count: 3,
+      fromRoomNumber: undefined,
+    });
+  });
+  it('stays without a room change have no links', async () => {
+    const { segmentLinks } = await import('./scheduleGrid');
+    expect(segmentLinks([{ ...blocks[0], roomChange: undefined }], rooms).size).toBe(0);
+  });
+});
+
+describe('moveDialogCopy for a checked-in stay (D-050, Q-20-5)', () => {
+  it('says the whole stay moves, including the nights already stayed, and points to Change Room', () => {
+    const block = {
+      confirmationNumber: 'GR-1',
+      status: 'checked-in' as const,
+      startDate: '2026-10-14',
+    };
+    const result = {
+      ok: true,
+      kind: 'room-change',
+      dialog: 'room-change',
+      moves: [
+        {
+          blockId: 'b',
+          fromRoomId: 'a',
+          toRoomId: 'c',
+          fromStart: '2026-10-14',
+          toStart: '2026-10-14',
+          fromEnd: '2026-10-18',
+          toEnd: '2026-10-18',
+        },
+      ],
+      splitMoves: null,
+    } as unknown as Parameters<typeof moveDialogCopy>[0];
+    const copy = moveDialogCopy(result, block, '204', '2026-10-16');
+    expect(copy.body).toBe(
+      'Please confirm moving the whole stay to Room 204 for dates 10/14/2026 to 10/18/2026. This includes the 2 nights already stayed. To change only the nights not yet stayed, use Change Room During Stay in the reservation details.',
+    );
+    expect(moveDialogCopy(result, block, '204', '2026-10-15').body).toContain(
+      'includes the 1 night already stayed',
+    );
+    // Arrival today, a not yet checked-in room, or no "today": the plain copy.
+    expect(
+      moveDialogCopy(result, { ...block, startDate: '2026-10-16' }, '204', '2026-10-16').body,
+    ).toBe('Please confirm moving this room to Room 204 for dates 10/14/2026 to 10/18/2026.');
+    expect(
+      moveDialogCopy(result, { ...block, status: 'confirmed' as never }, '204', '2026-10-16').body,
+    ).toMatch(/^Please confirm moving this room/);
+    expect(moveDialogCopy(result, block, '204').body).toMatch(/^Please confirm moving this room/);
+  });
+});

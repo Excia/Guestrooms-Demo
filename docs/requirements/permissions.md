@@ -58,6 +58,10 @@ page and two columns otherwise; "Return to Site" shows in the menu only in the o
 CTA enabled (the CTAs are stubs; Q-19-12). The Check In / Check Out CTAs and the other menu actions have
 no permission of their own yet.
 
+**Used by ticket 2.3:** the "Change Room" action needs `reservation.edit` as well (shown disabled with the reason
+"You do not have permission to change this reservation."). No mock user lacks it, so that state is covered by
+tests only.
+
 ## Mock users (`src/api/mockUsers.ts`)
 
 | User id     | Label                       | Role string           | Grant                                                                                                                                                                                                                                            | Who gets it                                       |

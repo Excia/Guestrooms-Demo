@@ -46,6 +46,8 @@ export type ConfirmDialog = 'room-change' | 'date-change-single' | 'date-change-
 export type DropRefusal =
   /** Closures cannot be dragged. */
   | 'closure'
+  /** The stay changed room during the stay: its parts are edited with Change Room During Stay. */
+  | 'room-changed-stay'
   | 'checked-out'
   /** The new arrival is before today. */
   | 'past'
@@ -96,7 +98,7 @@ const refuse = (
 
 /** Whether a drag may start: reservations that are not checked out. */
 export const isDraggable = (item: ScheduleItem): boolean =>
-  item.kind === 'reservation' && item.status !== 'checked-out';
+  item.kind === 'reservation' && item.status !== 'checked-out' && !item.roomChange;
 
 interface Conflicts {
   reservations: string[];
@@ -172,6 +174,9 @@ export function canDrop(
   state: ScheduleDragState,
 ): DropResult {
   if (source.kind === 'closure') return refuse('closure');
+  // A stay with several parts (ticket 2.3) cannot be dragged, whichever part it is: dragging a part
+  // would break the room plan. It is changed with Change Room During Stay in the details panel.
+  if (source.roomChange) return refuse('room-changed-stay');
   if (source.status === 'checked-out') return refuse('checked-out');
   if (!isValidIsoDate(target.startDate)) return refuse('invalid-date');
   const sourceRoom = state.rooms.find((r) => r.id === source.roomId);

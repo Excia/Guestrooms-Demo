@@ -16,7 +16,7 @@ import type { ReservationDetail } from '../../api';
 import { formatPanelDate } from '../../app/newReservation';
 import { guestCountText } from '../../app/reservationPanel';
 import { formatMoney } from '../../app/quickStats';
-import { OPEN_FOLIOS_PATH } from '../../app/routes';
+import { folioPath } from '../../app/routes';
 
 type SectionId = 'guests' | 'add-ons' | 'notes' | 'rates';
 
@@ -176,7 +176,7 @@ function Rates({ detail, onStub }: { detail: ReservationDetail; onStub: (m: stri
         >
           Payment
         </Button>
-        <Button variant="contained" fullWidth component={RouterLink} to={OPEN_FOLIOS_PATH}>
+        <Button variant="contained" fullWidth component={RouterLink} to={folioPath(detail.id)}>
           Folio
         </Button>
       </Box>

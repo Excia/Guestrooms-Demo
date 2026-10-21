@@ -7,6 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Link from '@mui/material/Link';
 import { useId } from 'react';
 import type { ScheduleBlock } from '../../api';
+import type { IsoDate } from '../../lib/dates';
 import type { DropResult } from '../../app/scheduleDrag';
 import { moveDialogCopy } from '../../app/scheduleGrid';
 import { focusOnMount } from '../shared/focusOnMount';
@@ -18,6 +19,8 @@ export interface MoveConfirmDialogProps {
   result: Accepted;
   /** Room number the reservation room moves to. */
   toRoomNumber: string;
+  /** The schedule's today, so the copy can say a checked-in stay includes nights already stayed. */
+  today?: IsoDate;
   onCancel: () => void;
   /** "Move to New Room" / "Move to New Dates": every room of the reservation moves. */
   onConfirm: () => void;
@@ -33,12 +36,13 @@ export default function MoveConfirmDialog({
   block,
   result,
   toRoomNumber,
+  today,
   onCancel,
   onConfirm,
   onSplit,
 }: MoveConfirmDialogProps) {
   const id = useId();
-  const copy = moveDialogCopy(result, block, toRoomNumber);
+  const copy = moveDialogCopy(result, block, toRoomNumber, today);
   return (
     <Dialog
       open

@@ -1,6 +1,8 @@
 import type {
   ApiClient,
   BookingHold,
+  ChangeRoomRequest,
+  ChangeRoomResult,
   CreateMemberRequest,
   CustomReportSummary,
   Member,
@@ -19,6 +21,7 @@ import type {
   Reservation,
   ReservationQuery,
   RequestOptions,
+  RoomChangeRule,
   MoveDatesRequest,
   MoveRoomRequest,
   ScheduleBlock,
@@ -33,11 +36,13 @@ import type {
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
+import { normalizeRuns } from '../lib/stayPlan';
 import { expectedLeadOccupantName } from './createRules';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError } from './types';
 import {
+  assertChangeRoomRequest,
   assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
@@ -134,6 +139,18 @@ function parseReservation(body: unknown, status: number): Reservation {
 const isFlag = (v: unknown): v is boolean => typeof v === 'boolean';
 const ROOM_STATUSES: readonly string[] = ['nyci', 'checked-in', 'checked-out'];
 
+const isPartialStays = (v: unknown) =>
+  v === undefined ||
+  listOf(
+    v,
+    (p) =>
+      isObject(p) &&
+      isString(p.roomId) &&
+      (p.roomNumber === null || isString(p.roomNumber)) &&
+      isString(p.arrival) &&
+      isString(p.departure),
+  );
+
 // Light shape guard on what the details panel reads. A mismatch is an invalid-response error.
 function isReservationDetail(v: unknown): v is ReservationDetail {
   return (
@@ -164,7 +181,9 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(r.arrival) &&
         isString(r.departure) &&
         isString(r.status) &&
-        ROOM_STATUSES.includes(r.status),
+        ROOM_STATUSES.includes(r.status) &&
+        isPartialStays(r.previousStays) &&
+        isPartialStays(r.upcomingStays),
     ) &&
     (v.rooms as unknown[]).length >= 1 &&
     isFlag(v.earlyCheckIn) &&
@@ -184,7 +203,13 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     isCount(v.stay.folioTotalCents) &&
     listOf(
       v.stay.lines,
-      (l) => isObject(l) && isString(l.roomType) && isString(l.date) && isCount(l.amountCents),
+      (l) =>
+        isObject(l) &&
+        isString(l.roomType) &&
+        isString(l.date) &&
+        isCount(l.amountCents) &&
+        isString(l.reservationRoomId) &&
+        l.reservationRoomId !== '',
     ) &&
     isString(v.version) &&
     v.version !== ''
@@ -351,6 +376,13 @@ function parseBookingHold(body: unknown, status: number): BookingHold {
     throw invalid(status, 'booking hold');
   }
   return body as unknown as BookingHold;
+}
+
+function parseRoomChangeRule(body: unknown, status: number): RoomChangeRule {
+  if (!isObject(body) || !isFlag(body.askRateOnRoomChange)) {
+    throw invalid(status, 'room change rule');
+  }
+  return { askRateOnRoomChange: body.askRateOnRoomChange };
 }
 
 const isCustomReport = (v: unknown): v is CustomReportSummary =>
@@ -551,6 +583,7 @@ const parseQuickStats =
     return body as unknown as QuickStats;
   };
 
+const HOUSEKEEPING: readonly string[] = ['clean', 'dirty'];
 const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
 const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
 const isDated = (v: Record<string, unknown>) =>
@@ -574,7 +607,18 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     v.roomCount >= 1 &&
     typeof v.roomTypeLocked === 'boolean' &&
     isString(v.version) &&
-    v.version !== ''
+    v.version !== '' &&
+    (v.roomChange === undefined ||
+      (isObject(v.roomChange) &&
+        (v.roomChange.part === 'previous' ||
+          v.roomChange.part === 'current' ||
+          v.roomChange.part === 'next') &&
+        Number.isInteger(v.roomChange.index) &&
+        Number.isInteger(v.roomChange.count) &&
+        (v.roomChange.index as number) >= 1 &&
+        (v.roomChange.index as number) <= (v.roomChange.count as number) &&
+        isString(v.roomChange.stayId) &&
+        v.roomChange.stayId !== ''))
   );
 }
 
@@ -597,7 +641,8 @@ const parseSchedule =
           isString(r.id) &&
           isString(r.number) &&
           isString(r.locationId) &&
-          isString(r.roomTypeId),
+          isString(r.roomTypeId) &&
+          (r.housekeeping === undefined || HOUSEKEEPING.includes(r.housekeeping as string)),
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
       listOf(
@@ -655,6 +700,87 @@ const parseMove =
       if (rule.scope === 'this-room' && rule.shifted && moved.roomCount !== 1) {
         throw invalid(status, 'move');
       }
+    }
+    return result;
+  };
+
+// The answer must describe the change that was asked for: the blocks of the stay are exactly the
+// segments of the normalized plan. From the first remaining night on there is one block per run of
+// the plan (the first, which keeps the request's id, may also hold earlier nights spent in the same
+// room); stayed nights in another room are checked-out `previous` blocks that end where it begins
+// and never share its room (runs in one room are merged). Several blocks are numbered 1..count and
+// linked by `stayId`; a single block carries no `roomChange`. The vacated room (if any) is the room
+// of the first night.
+const parseChangeRoom =
+  (request: ChangeRoomRequest) =>
+  (body: unknown, status: number): ChangeRoomResult => {
+    const bad = () => invalid(status, 'room change');
+    if (
+      !isObject(body) ||
+      !listOf(body.blocks, isScheduleBlock) ||
+      !listOf(body.removedBlockIds, isString) ||
+      !isObject(body.folio) ||
+      !Number.isInteger(body.folio.deltaCents) ||
+      !Number.isInteger(body.folio.repricedNights) ||
+      (body.folio.repricedNights as number) < 0 ||
+      !Number.isInteger(body.folio.roomChargesCents) ||
+      !(body.vacatedRoom === null || isObject(body.vacatedRoom))
+    ) {
+      throw bad();
+    }
+    const result = body as unknown as ChangeRoomResult;
+    const first = request.nights[0];
+    const vacated = result.vacatedRoom;
+    if (
+      vacated &&
+      (vacated.roomId !== request.fromRoomId ||
+        vacated.roomId === first.roomId ||
+        !HOUSEKEEPING.includes(vacated.housekeeping) ||
+        vacated.since !== first.date)
+    ) {
+      throw bad();
+    }
+    const ids = result.blocks.map((b) => b.id);
+    const moved = result.blocks.find((b) => b.id === request.reservationRoomId);
+    const sorted = [...result.blocks].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const before = sorted.filter((b) => b.roomChange?.part === 'previous');
+    const after = sorted.filter((b) => b.roomChange?.part !== 'previous');
+    const plan = normalizeRuns(request.nights);
+    const single = sorted.length === 1;
+    if (
+      !moved ||
+      new Set(ids).size !== ids.length ||
+      result.removedBlockIds.some((id) => ids.includes(id)) ||
+      sorted.some((b) => b.reservationId !== moved.reservationId) ||
+      // one block has no link; several are numbered 1..count in date order and share the stay id
+      (single
+        ? moved.roomChange !== undefined
+        : !sorted.every(
+            (b, i) =>
+              b.roomChange?.stayId === moved.id &&
+              b.roomChange.index === i + 1 &&
+              b.roomChange.count === sorted.length,
+          )) ||
+      // the stayed part comes first and ends where the rest begins, in another room
+      sorted.slice(0, before.length).some((b) => b.roomChange?.part !== 'previous') ||
+      before.some((b) => b.status !== 'checked-out') ||
+      after.length === 0 ||
+      (before.length > 0 &&
+        (before[before.length - 1].endDate !== after[0].startDate ||
+          before[before.length - 1].roomId === after[0].roomId)) ||
+      // the rest equals the plan: the first run may start earlier (earlier nights in the same room)
+      after.length !== plan.length ||
+      !after.every(
+        (b, i) =>
+          b.roomId === plan[i].roomId &&
+          b.endDate === plan[i].endDate &&
+          (i === 0 ? b.startDate <= plan[0].startDate : b.startDate === plan[i].startDate) &&
+          b.status === 'checked-in' &&
+          (single || b.roomChange?.part === (i === 0 ? 'current' : 'next')),
+      ) ||
+      after[0].id !== request.reservationRoomId
+    ) {
+      throw bad();
     }
     return result;
   };
@@ -840,6 +966,17 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             headers: { 'Idempotency-Key': r.requestId },
           });
         }),
+      changeRoomDuringStay: (r: ChangeRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertChangeRoomRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/change-room`,
+            {},
+            o,
+            parseChangeRoom(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
     },
     reservationList: {
       list: (q = {}, o) =>
@@ -939,6 +1076,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     settings: {
       getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
+      getRoomChangeRule: (o) => request('/settings/room-change-rule', {}, o, parseRoomChangeRule),
     },
     bookingRules: {
       get: (o) => request('/settings/booking-rules', {}, o, parseBookingRules),
