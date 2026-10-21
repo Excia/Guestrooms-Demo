@@ -33,7 +33,7 @@ Excia/Guestrooms-Demo#48. Figma: Online Booking Navigation 13189:62842, GR Onlin
   (also `true` or `app`) and hides the header entirely; the name is a placeholder pending Q-48-2. Account
   and Payment Methods URLs are props pending Q-48-1. Below `md` the header shows the favicon, the current
   page and icon-only Sign In/Account and Return to Site. Not wired into a route yet (the online booking
-  routes arrive with 5.2 and later). Deviations: figma-deviations 39 to 41.
+  routes arrive with 5.2 and later). Deviations: figma-deviations 51 to 53.
 - **Open questions:** Q-48-1, Q-48-2.
 
 ## 5.2 Reservation widget and adjust search
