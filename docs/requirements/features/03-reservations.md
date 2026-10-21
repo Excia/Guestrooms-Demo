@@ -40,8 +40,8 @@ Excia/Guestrooms-Demo#24. Figma: Bulk Action P1 2524:23962, P2 2524:31991, P2 af
   `onSelectionChange` and a `renderBulkActions` slot for 3.2, which owns the CTA and the dialogs. New
   Reservation opens `/schedule?panel=new` (the panel lives on the schedule); Night Audit goes to Night Audit
   History like the schedule's button; the list/calendar toggle links to the schedule.
-- **Newest Figma frame (2524:36149), followed on request:** Night Audit is a filled `info` large button
-  with the shield icon and New Reservation a filled `primary` large button with the plus icon, both 200px
+- **Newest Figma frame (2524:36149), followed on request:** Night Audit is an outlined `info` (blue) large button on a
+  white (`background.paper`) fill with the shield icon (the frame draws it filled blue; the owner asked for outlined, see figma-deviations) and New Reservation a filled `primary` large button with the plus icon, both 200px
   (`spacing(25)`) with a 16px gap. The header has no column filter icons (Q-24-1): only sort, with the arrow
   on the sorted column. The URL filters (`guest`, `status`, `types`, ...) still narrow the query but no
   longer have a header control. `ReservationList` takes `failedIds`: those rows get the `warning.background`

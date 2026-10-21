@@ -81,13 +81,13 @@ export default function ReservationListToolbar({
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <Button
-          variant="contained"
+          variant="outlined"
           color="info"
           size="large"
           component={RouterLink}
           to={NIGHT_AUDIT_HISTORY_PATH}
           startIcon={<ShieldMoon />}
-          sx={cta}
+          sx={{ ...cta, backgroundColor: 'background.paper' }}
         >
           Night Audit
         </Button>

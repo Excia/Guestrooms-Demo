@@ -228,12 +228,13 @@ describe('ReservationList', () => {
     expect(screen.getByRole('button', { name: /^Check In/ })).toBeInTheDocument();
   });
 
-  it('renders Night Audit and New Reservation as filled 200px buttons', async () => {
+  it('renders Night Audit as an outlined blue button on white and New Reservation as a filled green button, both 200px', async () => {
     setup();
     await bodyRows();
     const audit = screen.getByRole('link', { name: 'Night Audit' });
     const create = screen.getByRole('button', { name: 'New Reservation' });
-    expect(audit).toHaveClass('MuiButton-contained', 'MuiButton-colorInfo');
+    expect(audit).toHaveClass('MuiButton-outlined', 'MuiButton-colorInfo');
+    expect(audit).toHaveStyle({ backgroundColor: theme.palette.background.paper });
     expect(create).toHaveClass('MuiButton-contained', 'MuiButton-colorPrimary');
     for (const b of [audit, create]) expect(b).toHaveStyle({ width: '200px' });
   });
