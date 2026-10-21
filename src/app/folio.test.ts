@@ -5,14 +5,12 @@ import {
   balanceTone,
   chargeCountText,
   chargeStatusLabel,
+  chargeTypeLabel,
   filterCharges,
   folioBalances,
   isFilterApplied,
-  isSelectable,
   occupantFilterOptions,
   referenceDisplay,
-  rowActions,
-  selectionActions,
   selectionTotalCents,
 } from './folio';
 
@@ -135,72 +133,12 @@ describe('occupant filter', () => {
   });
 });
 
-describe('selection', () => {
-  it('only posted and unposted lines have a checkbox', () => {
-    expect(isSelectable(charge({ status: 'posted' }))).toBe(true);
-    expect(isSelectable(charge({ status: 'unposted' }))).toBe(true);
-    expect(isSelectable(charge({ status: 'settled' }))).toBe(false);
-    expect(isSelectable(charge({ status: 'split' }))).toBe(false);
-  });
+describe('selectionTotalCents', () => {
   it('totals the selected lines', () => {
     expect(selectionTotalCents([])).toBe(0);
     expect(selectionTotalCents([charge({ amountCents: 1050 }), charge({ amountCents: 250 })])).toBe(
       1300,
     );
-  });
-  it('enables nothing without a selection or on a closed folio', () => {
-    expect(selectionActions([], true)).toEqual({ split: false, transfer: false, settle: false });
-    expect(selectionActions([charge()], false)).toEqual({
-      split: false,
-      transfer: false,
-      settle: false,
-    });
-  });
-  it('enables split and settle for posted lines, transfer only for manual and MPOS ones', () => {
-    expect(selectionActions([charge()], true)).toEqual({
-      split: true,
-      settle: true,
-      transfer: false,
-    });
-    expect(selectionActions([charge({ type: 'mpos' }), charge({ type: 'manual' })], true)).toEqual({
-      split: true,
-      settle: true,
-      transfer: true,
-    });
-  });
-  it('disables all three when an unposted line is in the selection', () => {
-    expect(
-      selectionActions([charge({ type: 'manual' }), charge({ status: 'unposted' })], true),
-    ).toEqual({ split: false, settle: false, transfer: false });
-  });
-});
-
-describe('rowActions', () => {
-  it('offers Post, and Edit or Delete by type, on unposted lines', () => {
-    expect(rowActions(charge({ status: 'unposted' }))).toEqual({
-      post: true,
-      edit: true,
-      remove: false,
-      transfer: false,
-    });
-    expect(rowActions(charge({ status: 'unposted', type: 'manual' }))).toMatchObject({
-      post: true,
-      remove: true,
-      edit: false,
-    });
-  });
-  it('offers Transfer on posted and settled MPOS lines', () => {
-    expect(rowActions(charge({ type: 'mpos' })).transfer).toBe(true);
-    expect(rowActions(charge({ type: 'mpos', status: 'settled' })).transfer).toBe(true);
-    expect(rowActions(charge({ type: 'room-rate' })).transfer).toBe(false);
-  });
-  it('offers nothing on a settled room rate', () => {
-    expect(rowActions(charge({ status: 'settled' }))).toEqual({
-      post: false,
-      edit: false,
-      remove: false,
-      transfer: false,
-    });
   });
 });
 
@@ -219,6 +157,15 @@ describe('referenceDisplay', () => {
       text: 'Ref #1, #2, #3, …',
       full: 'Ref #1, #2, #3, #4, #5',
     });
+  });
+  it('labels a split parent and a split child', () => {
+    expect(chargeStatusLabel(charge({ type: 'split-parent', status: 'split' })).text).toBe(
+      'Posted - Split',
+    );
+    expect(
+      chargeTypeLabel(charge({ type: 'split-parent', description: 'Custom Selection (3)' })),
+    ).toBe('Custom Selection (3)');
+    expect(chargeTypeLabel(charge({ type: 'split-child' }))).toBe('Split');
   });
   it('labels a settled line with its references', () => {
     expect(chargeStatusLabel(charge({ status: 'settled', references: ['456'] }))).toEqual({
