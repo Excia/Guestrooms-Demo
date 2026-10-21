@@ -166,7 +166,7 @@ Issue Excia/Guestrooms-Demo#47. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                              | Status      | PR  |
 | ------------------------ | ---------------------------------------------------------------------------------- | ----------- | --- |
-| Excia/Guestrooms-Demo#48 | [5.1] Online booking header, account menu, return to site tooltip                  | not started |     |
+| Excia/Guestrooms-Demo#48 | [5.1] Online booking header, account menu, return to site tooltip                  | in review   |     |
 | Excia/Guestrooms-Demo#49 | [5.2] Reservation widget and adjust search                                         | not started |     |
 | Excia/Guestrooms-Demo#50 | [5.3] Results cards: member vs non-member, single vs multi room, room vs room type | not started |     |
 | Excia/Guestrooms-Demo#51 | [5.4] Guest selection, name guests, secondary occupant                             | not started |     |
