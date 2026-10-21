@@ -30,6 +30,10 @@ export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
 export const OPEN_FOLIOS_PATH = '/open-folios';
 /** Primary Setup / System Settings (ticket 7.1). */
 export const PRIMARY_SETUP_PATH = '/admin/primary-setup';
+/** Room Types and Rooms (ticket 7.3). */
+export const ROOM_TYPES_PATH = '/admin/room-types';
+export const ROOMS_PATH = '/admin/rooms';
+
 /** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
 export const BOOKING_RULES_PATH = '/admin/booking-rules';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
@@ -104,8 +108,8 @@ export const routes = [
     title: 'Rate Categories',
     section: 'admin',
   },
-  { id: 'room-types', path: '/admin/room-types', title: 'Room Types', section: 'admin' },
-  { id: 'rooms', path: '/admin/rooms', title: 'Rooms', section: 'admin' },
+  { id: 'room-types', path: ROOM_TYPES_PATH, title: 'Room Types', section: 'admin' },
+  { id: 'rooms', path: ROOMS_PATH, title: 'Rooms', section: 'admin' },
   { id: 'add-on-items', path: '/admin/add-on-items', title: 'Add-On Items', section: 'admin' },
   {
     id: 'notifications',

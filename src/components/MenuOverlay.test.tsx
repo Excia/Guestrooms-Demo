@@ -256,9 +256,10 @@ describe('MenuOverlay closing (in the app shell)', () => {
   it('choosing a link navigates, closes and returns focus to the button', async () => {
     const user = setup();
     await user.click(screen.getByRole('button', { name: 'Open menu' }));
-    await user.click(screen.getByRole('link', { name: 'Rooms' }));
+    // A route that still renders the placeholder page: its heading is there at once.
+    await user.click(screen.getByRole('link', { name: 'Rate Categories' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Rooms' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Rate Categories' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open menu' })).toHaveFocus();
   });
 

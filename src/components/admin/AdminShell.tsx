@@ -9,6 +9,13 @@ import { useAccess } from '../../app/useAccess';
 export interface AdminShellProps {
   /** Label of the current left-navigation item. */
   active: string;
+  /**
+   * Pages whose left column is a list of their own items (Room Types, Rooms: Figma 11905:19464)
+   * pass it here; it replaces the Admin Setup links inside the same navigation landmark.
+   */
+  sidebar?: ReactNode;
+  /** Accessible name of the navigation landmark when `sidebar` is given. */
+  sidebarLabel?: string;
   /** Page title (Figma "Section Header"). */
   title: string;
   /** The page's primary save button. */
@@ -19,7 +26,14 @@ export interface AdminShellProps {
 // Admin Setup shell (Figma 11964:11725): left navigation, then a white panel with the page title,
 // the primary save button and the content. Desktop-first: below 1200px (lg) the navigation stacks
 // above the panel as a wrapping row (decision D-010).
-export default function AdminShell({ active, title, actions, children }: AdminShellProps) {
+export default function AdminShell({
+  active,
+  sidebar,
+  sidebarLabel,
+  title,
+  actions,
+  children,
+}: AdminShellProps) {
   const { canAccessPage } = useAccess();
   return (
     <Box
@@ -35,7 +49,7 @@ export default function AdminShell({ active, title, actions, children }: AdminSh
     >
       <Box
         component="nav"
-        aria-label="Admin Setup"
+        aria-label={sidebar ? sidebarLabel : 'Admin Setup'}
         sx={(t) => ({
           flexShrink: 0,
           borderBottom: `1px solid ${t.palette.divider}`,
@@ -48,55 +62,57 @@ export default function AdminShell({ active, title, actions, children }: AdminSh
           },
         })}
       >
-        <Box
-          component="ul"
-          sx={(t) => ({
-            listStyle: 'none',
-            m: 0,
-            p: 0,
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 1,
-            [t.breakpoints.up('lg')]: { flexDirection: 'column', flexWrap: 'nowrap', gap: 0 },
-          })}
-        >
-          {ADMIN_NAV.map((item) => {
-            const isActive = item.label === active;
-            const available = item.path !== undefined && (!item.id || canAccessPage(item.id));
-            return (
-              <Box component="li" key={item.label} sx={{ display: 'flex' }}>
-                <Button
-                  fullWidth
-                  size="large"
-                  variant={isActive ? 'contained' : 'text'}
-                  color={isActive ? 'primary' : 'inherit'}
-                  disabled={!available}
-                  {...(available ? { component: RouterLink, to: item.path as string } : {})}
-                  aria-current={isActive ? 'page' : undefined}
-                  sx={(t) => ({
-                    justifyContent: 'flex-start',
-                    minHeight: t.spacing(7.375),
-                    color: isActive ? undefined : 'text.secondary',
-                    [t.breakpoints.up('lg')]: { minHeight: t.spacing(7.375) },
-                  })}
-                >
-                  {item.label}
-                </Button>
-                {isActive ? (
-                  <Box
-                    aria-hidden
+        {sidebar ?? (
+          <Box
+            component="ul"
+            sx={(t) => ({
+              listStyle: 'none',
+              m: 0,
+              p: 0,
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              [t.breakpoints.up('lg')]: { flexDirection: 'column', flexWrap: 'nowrap', gap: 0 },
+            })}
+          >
+            {ADMIN_NAV.map((item) => {
+              const isActive = item.label === active;
+              const available = item.path !== undefined && (!item.id || canAccessPage(item.id));
+              return (
+                <Box component="li" key={item.label} sx={{ display: 'flex' }}>
+                  <Button
+                    fullWidth
+                    size="large"
+                    variant={isActive ? 'contained' : 'text'}
+                    color={isActive ? 'primary' : 'inherit'}
+                    disabled={!available}
+                    {...(available ? { component: RouterLink, to: item.path as string } : {})}
+                    aria-current={isActive ? 'page' : undefined}
                     sx={(t) => ({
-                      display: { xs: 'none', lg: 'block' },
-                      width: t.spacing(0.875),
-                      bgcolor: 'primary.main',
-                      borderRadius: `${t.spacing(0.25)} 0 0 ${t.spacing(0.25)}`,
+                      justifyContent: 'flex-start',
+                      minHeight: t.spacing(7.375),
+                      color: isActive ? undefined : 'text.secondary',
+                      [t.breakpoints.up('lg')]: { minHeight: t.spacing(7.375) },
                     })}
-                  />
-                ) : null}
-              </Box>
-            );
-          })}
-        </Box>
+                  >
+                    {item.label}
+                  </Button>
+                  {isActive ? (
+                    <Box
+                      aria-hidden
+                      sx={(t) => ({
+                        display: { xs: 'none', lg: 'block' },
+                        width: t.spacing(0.875),
+                        bgcolor: 'primary.main',
+                        borderRadius: `${t.spacing(0.25)} 0 0 ${t.spacing(0.25)}`,
+                      })}
+                    />
+                  ) : null}
+                </Box>
+              );
+            })}
+          </Box>
+        )}
       </Box>
       <Box
         component="section"
