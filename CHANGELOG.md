@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.4.0...guestrooms-v1.5.0) (2026-10-21)
+
+
+### Features
+
+* add primary setup system settings ([#128](https://github.com/Excia/Guestrooms-Demo/issues/128)) ([a952ba6](https://github.com/Excia/Guestrooms-Demo/commit/a952ba6da86973e1d49b2c0668d5ad2320e7448a))
+
 ## [1.4.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.3.0...guestrooms-v1.4.0) (2026-10-21)
 
 
