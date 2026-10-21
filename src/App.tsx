@@ -5,6 +5,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import {
   DASHBOARD_PATH,
   NEW_RESERVATION_RESULTS_PATH,
+  BOOKING_RULES_PATH,
   PRIMARY_SETUP_PATH,
   FOLIO_PATH,
   routes,
@@ -15,6 +16,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
+import BookingRules from './pages/BookingRules';
 import SystemSettings from './pages/SystemSettings';
 import NewReservationResults from './pages/NewReservationResults';
 import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
@@ -47,6 +49,7 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [PRIMARY_SETUP_PATH]: <SystemSettings />,
+  [BOOKING_RULES_PATH]: <BookingRules />,
   [FOLIO_PATH]: (
     <Suspense fallback={null}>
       <Folio />

@@ -24,6 +24,8 @@ import type {
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
+  BookingRules,
+  BookingRulesOptions,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
@@ -368,6 +370,30 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     throw invalid(status, 'system settings');
   }
   return body as unknown as SystemSettings;
+}
+
+const isAudience = (v: unknown) => isObject(v) && isObject(v.opens) && isCount(v.holdMinutes);
+
+// Checks the shape the form relies on; the rules themselves are the backend's to enforce.
+function parseBookingRules(body: unknown, status: number): BookingRules {
+  if (
+    !isObject(body) ||
+    !isAudience(body.employee) ||
+    !(body.member === null || isAudience(body.member)) ||
+    !(body.nonMember === null || isAudience(body.nonMember)) ||
+    typeof body.uniqueMemberTypeRules !== 'boolean' ||
+    !Array.isArray(body.memberTypeRules)
+  ) {
+    throw invalid(status, 'booking rules');
+  }
+  return body as unknown as BookingRules;
+}
+
+function parseBookingRulesOptions(body: unknown, status: number): BookingRulesOptions {
+  if (!isObject(body) || !listOf(body.roomTypes, isLookup) || !listOf(body.memberTypes, isLookup)) {
+    throw invalid(status, 'booking rules options');
+  }
+  return body as unknown as BookingRulesOptions;
 }
 
 function parseSystemSettingsOptions(body: unknown, status: number): SystemSettingsOptions {
@@ -822,6 +848,16 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     settings: {
       getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
+    },
+    bookingRules: {
+      get: (o) => request('/settings/booking-rules', {}, o, parseBookingRules),
+      save: (rules, o) =>
+        request('/settings/booking-rules', {}, o, parseBookingRules, {
+          method: 'PUT',
+          body: rules,
+        }),
+      getOptions: (o) =>
+        request('/settings/booking-rules/options', {}, o, parseBookingRulesOptions),
     },
     systemSettings: {
       get: (o) => request('/settings/system', {}, o, parseSystemSettings),

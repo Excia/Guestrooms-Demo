@@ -542,6 +542,87 @@ export interface SystemSettingsApi {
   getOptions(options?: RequestOptions): Promise<SystemSettingsOptions>;
 }
 
+// ---- booking rules (Admin Setup, ticket 7.5) --------------------------------------------------
+
+export type TimeUnit = 'days' | 'weeks' | 'months';
+
+/** A time before check in: "6 months". */
+export interface TimePeriod {
+  amount: number;
+  unit: TimeUnit;
+}
+
+/** Which occupants must be named (never TBD). */
+export type NamedOccupants = 'all' | 'lead' | 'none';
+export type ContactRequirement = 'email' | 'phone' | 'email-and-phone' | 'email-or-phone';
+export type PaymentRequirement = 'on-file' | 'deposit' | 'prepayment';
+export type RoomSelection = 'room-optional' | 'room-only' | 'room-type-only';
+
+/**
+ * One column of the Booking Rules matrix (Employee, Member Online or Non-Member Online). `null`
+ * on a field is the "N/A" cell: the rule does not apply to that audience.
+ */
+export interface AudienceRules {
+  /** Non-member occupants must have a member reserver. Null (N/A) for non-member online booking. */
+  requireMemberReserver: boolean | null;
+  namedOccupants: NamedOccupants;
+  contactInfo: ContactRequirement;
+  /** How long before check in booking opens. */
+  opens: TimePeriod;
+  /** How long before check in booking closes; null is "N/A" (no cut-off). */
+  closes: TimePeriod | null;
+  /** Cancellation window before check in; null is "N/A". Drives the online cancellation window. */
+  cancellation: TimePeriod | null;
+  /** "Reservation Hold": minutes a selected room is held, 1 to 99. Drives the hold timer. */
+  holdMinutes: number;
+  payment: PaymentRequirement;
+  /** Deposit amount; set only while `payment` is `deposit`. */
+  depositCents: Cents | null;
+  roomSelection: RoomSelection;
+  /** Room type ids that cannot be booked. Null (N/A) for employee booking. */
+  excludedRoomTypeIds: string[] | null;
+  maxRoomsPerReservation: number;
+  /** Show the add-on popup after room select. Null (N/A) for employee booking. */
+  addOnPopup: boolean | null;
+}
+
+/** A member type whose online booking differs from the member default. */
+export interface MemberTypeRule {
+  id: string;
+  /** Null while a new row has no member type chosen yet. */
+  memberTypeId: string | null;
+  excludeFromOnlineBooking: boolean;
+  excludedRoomTypeIds: string[];
+  opens: TimePeriod;
+  closes: TimePeriod | null;
+}
+
+/**
+ * System-wide booking rules (Figma Booking Rules 15957:84601). `member` is null while Member
+ * Online Booking is off, `nonMember` while Non-Member Online Booking is off (always when member
+ * online booking is off): a null column is cleared and disabled in the form.
+ */
+export interface BookingRules {
+  employee: AudienceRules;
+  member: AudienceRules | null;
+  nonMember: AudienceRules | null;
+  /** The "Unique Member Type Rules" checkbox; only possible while `member` is set. */
+  uniqueMemberTypeRules: boolean;
+  memberTypeRules: MemberTypeRule[];
+}
+
+export interface BookingRulesOptions {
+  roomTypes: LookupRef[];
+  memberTypes: LookupRef[];
+}
+
+export interface BookingRulesApi {
+  get(options?: RequestOptions): Promise<BookingRules>;
+  /** Replaces the rules; answers with what was stored. The backend re-checks the rules. */
+  save(rules: BookingRules, options?: RequestOptions): Promise<BookingRules>;
+  getOptions(options?: RequestOptions): Promise<BookingRulesOptions>;
+}
+
 // ---- permissions -----------------------------------------------------------------------------
 
 /**
@@ -738,6 +819,7 @@ export interface ApiClient {
   schedule: ScheduleApi;
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
+  bookingRules: BookingRulesApi;
   members: MembersApi;
   folios: FoliosApi;
 }
