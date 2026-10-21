@@ -54,7 +54,11 @@ or `Q-G-1` (global). Decision ids look like `D-023`.
 Every PR that changes behavior, the API, permissions or a decision, or that answers an open
 question, updates the matching file here in the same PR. The mapping is in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#requirements-log); the PR template has a checkbox for it and
-the Manager agent checks it before opening a PR. In short:
+the Manager agent checks it before opening a PR.
+
+**New rows go in your ticket's own file in [entries/](entries/README.md)** (decisions, questions,
+deviations, placeholders, status), with ticket-scoped IDs, so parallel PRs do not conflict. The shared
+tables below keep their existing rows; edit one only to change or answer an existing row. In short:
 
 | Change                                                                      | File to update                                                                                                     |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -69,7 +73,8 @@ the Manager agent checks it before opening a PR. In short:
 | A new domain word                                                           | [glossary.md](glossary.md)                                                                                         |
 | A new accessibility, responsive, performance, security or test rule         | [nonfunctional.md](nonfunctional.md)                                                                               |
 
-When a PR merges, change the ticket's status in the tables below. If the PR template box is
+Ticket PRs do not edit the status tables below (that is the line every PR used to conflict on); they
+set `Status` in their entry. The Manager syncs the tables after merges, in one small PR. If the PR template box is
 ticked "n/a", the PR description must say why.
 
 ## Status summary
