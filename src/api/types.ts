@@ -311,7 +311,16 @@ export interface ReservationsApi {
 // ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----
 
 export type FolioLineType =
-  'room-rate' | 'mpos' | 'manual' | 'add-on' | 'surcharge' | 'service-fee';
+  | 'room-rate'
+  | 'mpos'
+  | 'manual'
+  | 'add-on'
+  | 'surcharge'
+  | 'service-fee'
+  /** The line that was split (status `split`); its description names the item or selection. */
+  | 'split-parent'
+  /** One part of a split (Figma "Split Item Child"). */
+  | 'split-child';
 
 /**
  * `posted`: on the folio and owed; `unposted`: waiting for Night Audit; `settled`: paid, with the

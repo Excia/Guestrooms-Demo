@@ -152,6 +152,40 @@ function buildFolio(state: ScheduleState, reservationId: string): Folio {
     });
   }
 
+  // Every fourth reservation shows a split: the first posted night becomes a parent with two parts.
+  const splitSource =
+    trailingNumber(reservationId) % 4 === 0 &&
+    charges.find((c) => c.type === 'room-rate' && c.status === 'posted');
+  if (splitSource) {
+    const half = Math.floor(splitSource.amountCents / 2);
+    const original = splitSource.description;
+    const at = charges.indexOf(splitSource);
+    charges.splice(
+      at,
+      1,
+      {
+        ...splitSource,
+        type: 'split-parent',
+        status: 'split',
+        description: 'Custom Selection (1)',
+      },
+      {
+        ...splitSource,
+        id: `${splitSource.id}-a`,
+        type: 'split-child',
+        description: `Split of ${original}`,
+        amountCents: half,
+      },
+      {
+        ...splitSource,
+        id: `${splitSource.id}-b`,
+        type: 'split-child',
+        description: `Split of ${original}`,
+        amountCents: splitSource.amountCents - half,
+      },
+    );
+  }
+
   return {
     reservationId,
     confirmationNumber: detail.confirmationNumber,
