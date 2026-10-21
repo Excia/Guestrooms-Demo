@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApi } from '../../api';
 import type { ReservationDetail } from '../../api';
 import { ApiError } from '../../api';
@@ -43,16 +43,21 @@ export function useReservationDetail(
     return () => controller.abort();
   }, [api, id, key]);
 
+  // The token this hook has already acted on: mounting (or a new id) with a raised token does not
+  // refetch a second time, only a later increase does.
+  const handled = useRef(refreshToken);
   useEffect(() => {
-    if (refreshToken === 0) return;
+    if (refreshToken === handled.current) return;
     const controller = new AbortController();
     api.reservations.getDetail(id, { signal: controller.signal }).then(
       (detail) => {
         if (controller.signal.aborted) return;
+        handled.current = refreshToken;
         setResult((r) => (r ? { ...r, state: { status: 'success', detail } } : r));
       },
       (error: unknown) => {
         if (controller.signal.aborted) return;
+        handled.current = refreshToken;
         setResult((r) =>
           r
             ? {

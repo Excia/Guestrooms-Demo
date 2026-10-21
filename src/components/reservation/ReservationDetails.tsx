@@ -15,9 +15,7 @@ import IconButton from '@mui/material/IconButton';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
-import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { ReservationDetail, ReservationRoomDetail } from '../../api';
@@ -68,6 +66,8 @@ export interface ReservationDetailsProps {
   roomChangeBusy?: boolean;
   /** Raised after a room change settles: the detail reloads in place. */
   refreshToken?: number;
+  /** Reopens the Change Room dialog on its first step (the data drifted); a new `nonce` each time. */
+  reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
 }
 
 function Loading() {
@@ -285,6 +285,7 @@ export default function ReservationDetails({
   onChangeRoom,
   roomChangeBusy,
   refreshToken,
+  reopenChange,
 }: ReservationDetailsProps) {
   const state = useReservationDetail(reservationId, refreshToken);
   const closeButton = (
@@ -352,6 +353,7 @@ export default function ReservationDetails({
       today={today}
       onChangeRoom={onChangeRoom}
       roomChangeBusy={roomChangeBusy}
+      reopenChange={reopenChange}
     />
   );
 }
@@ -367,6 +369,7 @@ function Loaded({
   today,
   onChangeRoom,
   roomChangeBusy,
+  reopenChange,
 }: {
   detail: ReservationDetail;
   reservationRoomId?: string;
@@ -378,6 +381,7 @@ function Loaded({
   today?: IsoDate;
   onChangeRoom?: ReservationDetailsProps['onChangeRoom'];
   roomChangeBusy?: boolean;
+  reopenChange?: ReservationDetailsProps['reopenChange'];
 }) {
   const navigate = useNavigate();
   const { can } = useAccess();
@@ -388,15 +392,23 @@ function Loaded({
     onSaved: (values) => onEarlyLateSaved(detail.id, values),
     onReloaded,
   });
-  const [roomIndex, setRoomIndex] = useState(() =>
-    initialRoomIndex(detail.rooms, reservationRoomId),
+  // The room shown is chosen by its reservation-room id, not its position: after a reload (a room
+  // change rebuilds the stay's blocks) the same room stays selected.
+  const [selectedRoomId, setSelectedRoomId] = useState(
+    () => detail.rooms[initialRoomIndex(detail.rooms, reservationRoomId)].id,
+  );
+  const roomIndex = Math.max(
+    0,
+    detail.rooms.findIndex((r) => r.id === selectedRoomId),
   );
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
   const say = (text: string) => setNotice((n) => ({ id: (n?.id ?? 0) + 1, text }));
   const changeRoomId = useId();
-  const [changingRoom, setChangingRoom] = useState(false);
+  // The Change Room dialog: closed (null), or open with the choices to start from.
+  const [changing, setChanging] = useState<{ edits?: Record<string, string> } | null>(null);
+  const [seenReopen, setSeenReopen] = useState(reopenChange?.nonce ?? 0);
   const cta = splitCta(detail);
-  const room = detail.rooms[Math.min(roomIndex, detail.rooms.length - 1)];
+  const room = detail.rooms[roomIndex];
   const todayDate = today ?? todayIso();
   const roomChange = changeRoomAvailability({
     room,
@@ -405,6 +417,17 @@ function Loaded({
     busy: roomChangeBusy,
   });
   const multi = detail.rooms.length > 1;
+  // A change that failed because the data drifted reopens the dialog on step 1 (set state while
+  // rendering, the documented pattern for state derived from a prop).
+  if (
+    reopenChange &&
+    reopenChange.nonce !== seenReopen &&
+    detail.rooms.some((r) => r.id === reopenChange.stayId)
+  ) {
+    setSeenReopen(reopenChange.nonce);
+    setSelectedRoomId(reopenChange.stayId);
+    setChanging({ edits: reopenChange.edits });
+  }
 
   const run = (actionId: CtaActionId) => {
     if (actionId === 'jump-to-folio') {
@@ -474,7 +497,7 @@ function Loaded({
             <RoomSelector
               rooms={detail.rooms}
               index={roomIndex}
-              onIndex={setRoomIndex}
+              onIndex={(i) => setSelectedRoomId(detail.rooms[i].id)}
               onStub={say}
             />
           ) : (
@@ -507,30 +530,29 @@ function Loaded({
         ) : null}
         {onChangeRoom ? (
           <Box sx={{ mt: 1 }}>
-            {roomChange.reason ? (
-              <Box component="span" id={`${changeRoomId}-reason`} sx={visuallyHidden}>
-                {roomChange.reason}
-              </Box>
-            ) : null}
-            <Tooltip
-              title={roomChange.reason ?? ''}
-              describeChild
-              disableHoverListener={roomChange.available}
-              disableFocusListener={roomChange.available}
+            <Button
+              size="small"
+              startIcon={<SwapHoriz />}
+              aria-disabled={!roomChange.available}
+              aria-describedby={roomChange.available ? undefined : `${changeRoomId}-reason`}
+              onClick={() =>
+                roomChange.available ? setChanging({}) : say(roomChange.reason ?? '')
+              }
+              // Unavailable: the text stays readable (secondary, not the 0.38 disabled opacity).
+              sx={roomChange.available ? undefined : { color: 'text.secondary' }}
             >
-              <Button
-                size="small"
-                startIcon={<SwapHoriz />}
-                aria-disabled={!roomChange.available}
-                aria-describedby={roomChange.available ? undefined : `${changeRoomId}-reason`}
-                onClick={() =>
-                  roomChange.available ? setChangingRoom(true) : say(roomChange.reason ?? '')
-                }
-                sx={roomChange.available ? undefined : { color: 'text.disabled' }}
+              Change Room
+            </Button>
+            {roomChange.reason ? (
+              <Typography
+                id={`${changeRoomId}-reason`}
+                variant="caption"
+                component="p"
+                sx={{ color: 'text.secondary', mt: 0.25 }}
               >
-                Change Room
-              </Button>
-            </Tooltip>
+                {roomChange.reason}
+              </Typography>
+            ) : null}
           </Box>
         ) : null}
         {detail.rooms.some((r) => r.roomId === null) ? (
@@ -580,15 +602,16 @@ function Loaded({
         ) : null}
       </Box>
       <DetailsAccordion detail={detail} onStub={say} />
-      {changingRoom && roomChange.effectiveDate && onChangeRoom ? (
+      {changing && roomChange.effectiveDate && onChangeRoom ? (
         <ChangeRoomDialog
           detail={detail}
           room={room}
           effectiveDate={roomChange.effectiveDate}
           today={todayDate}
-          onCancel={() => setChangingRoom(false)}
+          initialEdits={changing.edits}
+          onCancel={() => setChanging(null)}
           onSubmit={(submission) => {
-            setChangingRoom(false);
+            setChanging(null);
             onChangeRoom(submission);
           }}
         />

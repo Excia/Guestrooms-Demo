@@ -27,6 +27,8 @@ export interface ReservationPanelProps {
   onChangeRoom?: (submission: RoomChangeSubmission) => void;
   /** A room change is being saved. */
   roomChangeBusy?: boolean;
+  /** Reopens the Change Room dialog on its first step (the data drifted); `nonce` makes each request new. */
+  reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
   /** Raised after a room change settles: the open details reload in place. */
   detailRefresh?: number;
   /** Called when the panel has finished closing (the page puts focus back on what opened it). */
@@ -56,6 +58,7 @@ export default function ReservationPanel({
   onEarlyLateSaved,
   onChangeRoom,
   roomChangeBusy,
+  reopenChange,
   detailRefresh,
   onExited,
   focusTitleFor,
@@ -108,6 +111,7 @@ export default function ReservationPanel({
             today={today}
             onChangeRoom={onChangeRoom}
             roomChangeBusy={roomChangeBusy}
+            reopenChange={reopenChange}
             refreshToken={detailRefresh}
           />
         ) : shown?.kind === 'new' ? (

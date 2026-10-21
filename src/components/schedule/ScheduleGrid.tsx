@@ -28,6 +28,7 @@ import {
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
 import {
   blockAriaLabel,
+  blockTipText,
   segmentBadge,
   segmentLinks,
   type SegmentLink,
@@ -215,6 +216,11 @@ const ScheduleRow = memo(function ScheduleRow({
             onPointerDown={(e) => onItemPointerDown(e, item)}
             active={activeItem?.id === item.id}
             linkText={link ? segmentBadge(link) : undefined}
+            tip={
+              item.kind === 'reservation'
+                ? blockTipText(item, room, link)
+                : (item as ScheduleClosure).reason
+            }
           />
         );
       })}

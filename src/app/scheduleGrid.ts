@@ -336,6 +336,23 @@ export function segmentBadge(link: SegmentLink): string {
   ].join(' ');
 }
 
+/**
+ * The text of a block's tooltip (shown when the block's own text is cut off): guest, confirmation
+ * number, the place in a stay that changed room, the room and the rooms next to it.
+ */
+export function blockTipText(
+  block: Pick<ScheduleBlock, 'guestName' | 'confirmationNumber'>,
+  room: Pick<ScheduleRoom, 'number'> | undefined,
+  link?: SegmentLink,
+): string {
+  return [
+    block.guestName,
+    block.confirmationNumber,
+    ...(link ? [`part ${link.index} of ${link.count}`] : []),
+    `Room ${room?.number ?? ''}${link?.fromRoomNumber ? ` (from ${link.fromRoomNumber})` : ''}${link?.toRoomNumber ? ` \u2192 ${link.toRoomNumber}` : ''}`.trim(),
+  ].join(', ');
+}
+
 /** Name of a block for assistive technology: guest, confirmation number, status, room, dates. */
 export function blockAriaLabel(
   block: ScheduleBlock,

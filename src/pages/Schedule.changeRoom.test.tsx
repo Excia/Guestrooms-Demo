@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes } from 'react-router';
@@ -121,6 +121,10 @@ describe('the Change Room action', () => {
     const button = within(dialog).getByRole('button', { name: 'Change Room' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveAccessibleDescription('Available once the guest is checked in.');
+    // The reason is always visible under the button (not only in a tooltip or after a click).
+    expect(
+      within(dialog).getByText('Available once the guest is checked in.', { selector: 'p' }),
+    ).toBeVisible();
     await user.click(button);
     expect(
       screen.queryByRole('dialog', { name: 'Change Room During Stay' }),
@@ -302,10 +306,41 @@ describe('the confirmation', () => {
     expect(retain).toBeChecked();
     expect(
       within(group).getByRole('radio', {
-        name: /Update to the new rooms' rates \(\$199\.00 per night, -\$300\.00 for 2 nights\)/,
+        name: /Update to the new room's rate \(\$199\.00 per night, -\$300\.00 for 2 nights\)/,
       }),
     ).not.toBeChecked();
     expect(within(confirm).getByRole('button', { name: 'Update Reservation' })).toHaveFocus();
+  });
+
+  it('uses the singular for one night and one room', async () => {
+    const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }));
+    await pick(user, dlg, 5, '107');
+    const confirm = await toConfirm(user, dlg);
+    expect(within(confirm).getByText(/1 night changes room\./)).toBeInTheDocument();
+    expect(
+      within(confirm).getByText(/The 1 night already stayed keeps its room and price\./),
+    ).toBeInTheDocument();
+    expect(
+      within(confirm).getByRole('radiogroup', { name: 'Rate for the 1 night that changes room' }),
+    ).toBeInTheDocument();
+    expect(
+      within(confirm).getByRole('radio', {
+        name: /Update to the new room's rate \(\$199\.00 per night, -\$150\.00 for 1 night\)/,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('uses the plural for several rooms', async () => {
+    const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }));
+    await pick(user, dlg, 3, '107');
+    await pick(user, dlg, 5, '108');
+    const confirm = await toConfirm(user, dlg);
+    expect(
+      within(confirm).getByRole('radio', { name: /Update to the new rooms' rates/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(confirm).getByRole('radiogroup', { name: 'Rate for the 2 nights that change room' }),
+    ).toBeInTheDocument();
   });
 
   it('does not ask when the changed nights have the same rate (another Suite)', async () => {
@@ -327,7 +362,9 @@ describe('the confirmation', () => {
     const confirm = await toConfirm(user, dlg);
     expect(within(confirm).queryByRole('radiogroup')).not.toBeInTheDocument();
     expect(
-      within(confirm).getByText(/new rooms' rate \(\$199\.00 per night\) applies to the 1 night/),
+      within(confirm).getByText(
+        /new room's rate \(\$199\.00 per night\) applies to the 1 night that changes room\./,
+      ),
     ).toBeInTheDocument();
     await user.click(within(confirm).getByRole('button', { name: 'Update Reservation' }));
     await waitFor(() => expect(calls).toHaveLength(1));
@@ -350,7 +387,7 @@ describe('the confirmation', () => {
 });
 
 describe('applying the plan', () => {
-  it('change only the last night: three parts linked on the grid, panel and toast refreshed', async () => {
+  it('change only the last night: two linked blocks on the grid, panel and toast refreshed', async () => {
     const { client, calls } = spied();
     const { user, dlg, dialog } = await openChangeRoom(client);
     await pick(user, dlg, 5, '107');
@@ -376,22 +413,17 @@ describe('applying the plan', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: /Confirm Room Change/ })).not.toBeInTheDocument(),
     );
-    // Three linked parts, in date order: the stayed night, the rest of the stay, the last night.
-    await waitFor(() => expect(parts().filter((l) => /part \d of 3/.test(l))).toHaveLength(3));
+    // Two linked blocks: the stay up to the last night (the stayed night shares its room), the last night.
+    await waitFor(() => expect(parts().filter((l) => /part \d of 2/.test(l))).toHaveLength(2));
     const labels = parts();
-    expect(labels.find((l) => l.includes('part 1 of 3'))).toContain(
-      'checked out, Room 301, 10/15/2026 to 10/16/2026',
+    expect(labels.find((l) => l.includes('part 1 of 2'))).toContain(
+      'checked in, Room 301, 10/15/2026 to 10/19/2026',
     );
-    // A neighbour in the same room is not mentioned.
-    expect(labels.find((l) => l.includes('part 1 of 3'))).not.toContain('continues in');
-    expect(labels.find((l) => l.includes('part 2 of 3'))).toContain(
-      'checked in, Room 301, 10/16/2026 to 10/19/2026',
-    );
-    expect(labels.find((l) => l.includes('part 2 of 3'))).toContain('continues in Room 107');
-    expect(labels.find((l) => l.includes('part 3 of 3'))).toContain(
+    expect(labels.find((l) => l.includes('part 1 of 2'))).toContain('continues in Room 107');
+    expect(labels.find((l) => l.includes('part 2 of 2'))).toContain(
       'checked in, Room 107, 10/19/2026 to 10/20/2026',
     );
-    expect(labels.find((l) => l.includes('part 3 of 3'))).toContain('moved from Room 301');
+    expect(labels.find((l) => l.includes('part 2 of 2'))).toContain('moved from Room 301');
     // The toast, and the open details show the plan: the current room, the stay's end and the later room.
     expect((await screen.findAllByText('Moved to Room 107')).length).toBeGreaterThan(0);
     expect(
@@ -406,13 +438,13 @@ describe('applying the plan', () => {
     );
   });
 
-  it('change a middle night: four parts', async () => {
+  it('change a middle night: three blocks', async () => {
     const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }));
     await pick(user, dlg, 3, '107');
     await toConfirm(user, dlg);
     await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
-    await waitFor(() => expect(parts().filter((l) => /part \d of 4/.test(l))).toHaveLength(4));
-    expect(parts().find((l) => l.includes('part 3 of 4'))).toContain(
+    await waitFor(() => expect(parts().filter((l) => /part \d of 3/.test(l))).toHaveLength(3));
+    expect(parts().find((l) => l.includes('part 2 of 3'))).toContain(
       'Room 107, 10/17/2026 to 10/18/2026',
     );
   });
@@ -433,7 +465,7 @@ describe('applying the plan', () => {
     await pick(user, dlg, 5, '107');
     await toConfirm(user, dlg);
     await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
-    await waitFor(() => expect(parts().filter((l) => /of 3/.test(l))).toHaveLength(3));
+    await waitFor(() => expect(parts().filter((l) => /of 2/.test(l))).toHaveLength(2));
     await waitFor(() =>
       expect(within(dialog).getByRole('button', { name: 'Change Room' })).not.toHaveAttribute(
         'aria-disabled',
@@ -447,10 +479,10 @@ describe('applying the plan', () => {
     await pick(user, again, 5, '301');
     await toConfirm(user, again);
     await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
-    await waitFor(() => expect(parts().filter((l) => /of 2/.test(l))).toHaveLength(2));
-    expect(parts().find((l) => l.includes('part 2 of 2'))).toContain(
-      'Room 301, 10/16/2026 to 10/20/2026',
-    );
+    // Unsplit again: ONE block, no link, no "part n of m".
+    await waitFor(() => expect(parts().filter((l) => /part \d of/.test(l))).toHaveLength(0));
+    expect(cells('GR-50271')).toHaveLength(1);
+    expect(parts()[0]).toContain('Room 301, 10/15/2026 to 10/20/2026');
   });
 
   it('update: the new rate is sent and applied to the changed night only', async () => {
@@ -459,7 +491,7 @@ describe('applying the plan', () => {
     const { user, dlg } = await openChangeRoom(client);
     await pick(user, dlg, 5, '107');
     await toConfirm(user, dlg);
-    await user.click(await screen.findByRole('radio', { name: /Update to the new rooms' rates/ }));
+    await user.click(await screen.findByRole('radio', { name: /Update to the new room's rate/ }));
     await user.click(screen.getByRole('button', { name: 'Update Reservation' }));
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0].rateChoice).toBe('update');
@@ -494,7 +526,7 @@ describe('applying the plan', () => {
     await pick(user, dlg, 5, '110');
     await toConfirm(user, dlg);
     await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
-    await waitFor(() => expect(parts().filter((l) => /of 3/.test(l))).toHaveLength(3));
+    await waitFor(() => expect(parts().filter((l) => /of 2/.test(l))).toHaveLength(2));
     expect(screen.getByRole('button', { name: 'Change Room' })).toHaveAttribute(
       'aria-disabled',
       'true',
@@ -562,6 +594,8 @@ describe('Cancel leaves everything unchanged', () => {
   });
 });
 
+const REVIEW = 'The schedule changed while you were editing. Review the plan.';
+
 describe('failures', () => {
   async function run(error: ApiError) {
     const base = createMockClient({ today: TODAY });
@@ -587,10 +621,84 @@ describe('failures', () => {
     );
   });
 
-  it('409 stale: refreshes and says it changed', async () => {
+  it('409 stale: reloads, reverts and reopens the dialog on the first step with the choices kept', async () => {
     await run(new ApiError(409, 'x', { code: 'stale' }));
-    expect((await screen.findAllByText(/changed by someone else/)).length).toBeGreaterThan(0);
-    await waitFor(() => expect(cells('GR-50271')).toHaveLength(1));
+    expect((await screen.findAllByText(REVIEW)).length).toBeGreaterThan(0);
+    const again = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    const m5 = await within(again).findByRole('combobox', { name: /Room for night 5/ });
+    expect(m5).toHaveValue('Room 110'); // the user's choice, still valid
+    expect(within(again).getByRole('combobox', { name: /Room for night 4/ })).toHaveValue(
+      'Room 301',
+    );
+    expect(within(again).getByRole('button', { name: 'Continue' })).toBeEnabled();
+    await waitFor(() => expect(cells('GR-50271')).toHaveLength(1)); // the grid was reverted
+  });
+
+  it("a different effective date (the server's today) reopens the dialog from that night", async () => {
+    await run(
+      new ApiError(409, 'x', {
+        code: 'stale',
+        details: { reason: ['effective-date'], today: ['2026-10-17'] },
+      }),
+    );
+    expect((await screen.findAllByText(REVIEW)).length).toBeGreaterThan(0);
+    const again = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    await within(again).findByRole('combobox', { name: /Room for night 5/ });
+    // Night 2 (10/16) is now stayed: it is no longer offered, the later nights are.
+    expect(
+      within(again).queryByRole('combobox', { name: /Room for night 2/ }),
+    ).not.toBeInTheDocument();
+    expect(within(again).getByRole('combobox', { name: /Room for night 3/ })).toBeInTheDocument();
+    expect(within(again).getByRole('combobox', { name: /Room for night 5/ })).toHaveValue(
+      'Room 110',
+    );
+  });
+
+  it('a plan or rate question that no longer fits (400 with details) reopens the same way', async () => {
+    for (const details of [{ rateChoice: ['Required'] }, { nights: ['x'] }]) {
+      await run(new ApiError(400, 'x', { code: 'invalid-query', details }));
+      expect((await screen.findAllByText(REVIEW)).length).toBeGreaterThan(0);
+      expect(
+        await screen.findByRole('dialog', { name: 'Change Room During Stay' }),
+      ).toBeInTheDocument();
+      cleanup();
+    }
+  });
+
+  it('a choice that is no longer valid is dropped when the dialog reopens', async () => {
+    // The room chosen for night 5 is booked by someone else in the meantime.
+    const base = createMockClient({ today: TODAY });
+    const client = withChange(
+      () => Promise.reject(new ApiError(409, 'x', { code: 'stale' })),
+      base,
+    );
+    const { user, dlg } = await openChangeRoom(client);
+    await pick(user, dlg, 5, '110');
+    await toConfirm(user, dlg);
+    const sched = base.schedule.get;
+    client.schedule.get = async (q, o) => {
+      const d = await sched(q, o);
+      return {
+        ...d,
+        blocks: [
+          ...d.blocks,
+          {
+            ...d.blocks[0],
+            id: 'rr-x',
+            reservationId: 'rs-x',
+            roomId: 'rm-110',
+            startDate: '2026-10-18',
+            endDate: '2026-10-21',
+            status: 'confirmed',
+          },
+        ],
+      };
+    };
+    await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
+    const again = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    expect(await within(again).findByRole('combobox', { name: /Room for night 5/ })).toHaveValue(
+      'Room 301',
+    );
   });
 
   it('404: reverts and reloads', async () => {
@@ -616,5 +724,91 @@ describe('failures', () => {
     expect(
       (await screen.findAllByText(/Could not confirm the room change/)).length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('a split stay inside a multi-room reservation', () => {
+  // Robert and Elaine Cho (GR-50290): rm-210 (rr-10) and rm-206 (rr-11), checked in 10/13 to 10/17;
+  // today is 10/16, so night 4 (10/16) is the one remaining night of each room.
+  async function splitRoom210() {
+    const user = userEvent.setup();
+    setup(createMockClient({ today: TODAY }));
+    await screen.findByRole('grid', { name: 'Schedule', hidden: true });
+    const first = cells('GR-50290').find((c) =>
+      c.getAttribute('aria-label')?.includes('Room 210'),
+    )!;
+    await user.click(first);
+    const dialog = await screen.findByRole('dialog', { name: /Reservation #GR-50290/ });
+    await within(dialog).findByRole('button', { name: 'Change Room' });
+    expect(within(dialog).getByRole('button', { name: /^Room 210/ })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Change Room' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    const menu4 = await within(dlg).findByRole('combobox', { name: /Room for night 4/ });
+    await user.click(menu4);
+    await user.click(await screen.findByRole('option', { name: /^Room 204/ }));
+    await user.click(within(dlg).getByRole('button', { name: 'Continue' }));
+    await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
+    return { user, dialog };
+  }
+
+  it('the panel keeps showing the room that was changed after the reload (not the other room)', async () => {
+    const { dialog } = await splitRoom210();
+    await screen.findAllByText('Moved to Room 204');
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: /^Room 204/ })).toBeInTheDocument(),
+    );
+    expect(within(dialog).queryByRole('button', { name: /^Room 206/ })).not.toBeInTheDocument();
+  });
+
+  it('clicking any block of the split stay opens that room, not the first room of the reservation', async () => {
+    const { user, dialog } = await splitRoom210();
+    await screen.findAllByText('Moved to Room 204');
+    const parts210 = () =>
+      cells('GR-50290').filter((c) => /part \d of 2/.test(c.getAttribute('aria-label') ?? ''));
+    await waitFor(() => expect(parts210()).toHaveLength(2));
+    for (const labelPart of ['part 1 of 2', 'part 2 of 2']) {
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(dialog).not.toBeVisible());
+      const cell = parts210().find((c) => c.getAttribute('aria-label')?.includes(labelPart))!;
+      await user.click(cell);
+      const reopened = await screen.findByRole('dialog', { name: /Reservation #GR-50290/ });
+      // The room selector of a multi-room reservation shows the room of the stay that was clicked.
+      expect(
+        await within(reopened).findByRole('button', { name: /^Room 204/ }),
+      ).toBeInTheDocument();
+    }
+  });
+});
+
+describe('long block text', () => {
+  it('shows the full text in a tooltip on hover only when cut off, created lazily, without a second announcement', async () => {
+    const user = userEvent.setup();
+    setup(createMockClient({ today: TODAY }));
+    await screen.findByRole('grid', { name: 'Schedule', hidden: true });
+    const cell = block('Victor Almeida');
+    const label = cell.getAttribute('aria-label');
+    // Nothing is created before the first hover.
+    expect(screen.queryAllByRole('tooltip', { hidden: true })).toHaveLength(0);
+    // Not cut off: no tooltip.
+    await user.hover(cell);
+    expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument();
+    await user.unhover(cell);
+    // Cut off (the ellipsis shows): the tooltip names guest, confirmation number and room.
+    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300);
+    const client = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(40);
+    await user.hover(cell);
+    // The tooltip is hidden from assistive technology: the cell's own name already says it all.
+    const tip = await screen.findByRole('tooltip', { hidden: true });
+    expect(tip).toHaveTextContent('Victor Almeida, GR-50271, Room 301');
+    // The accessible name is unchanged and the cell is not described twice.
+    expect(cell.getAttribute('aria-label')).toBe(label);
+    expect(cell).not.toHaveAttribute('aria-describedby');
+    expect(cell).not.toHaveAttribute('aria-labelledby');
+    await user.unhover(cell);
+    await waitFor(() =>
+      expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument(),
+    );
+    width.mockRestore();
+    client.mockRestore();
   });
 });
