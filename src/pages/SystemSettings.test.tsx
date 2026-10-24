@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
@@ -281,5 +281,48 @@ describe('SystemSettings page', () => {
       policyUrl: 'https://club.example.com/policy',
       showAddOnsPopup: true,
     });
+  });
+
+  it('ties the counter, the error and the switch explanations to their controls', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('tab', { name: 'Online Booking' }));
+    const message = screen.getByRole('textbox', { name: 'Global Booking Message' });
+    expect(message).toHaveAccessibleDescription(/70 \/ 150/);
+    expect(message).toHaveAccessibleDescription(/Message will be displayed/);
+    // maxLength stops typing, so an over-limit value is set the way a script or paste would
+    fireEvent.change(message, { target: { value: 'x'.repeat(151) } });
+    expect(message).toHaveAccessibleDescription(/Use 150 characters or fewer\./);
+    expect(message).toHaveAccessibleDescription(/151 \/ 150/);
+    expect(
+      screen.getByRole('switch', { name: 'Charge a Cancellation Fee' }),
+    ).toHaveAccessibleDescription('Helper text about cancellation fees.');
+    expect(
+      screen.getByRole('switch', { name: 'Display Add-Ons Popup' }),
+    ).toHaveAccessibleDescription(/promote add-on options/);
+  });
+
+  it('puts the validation message in the url description', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('tab', { name: 'Online Booking' }));
+    const url = screen.getByLabelText('URL');
+    await user.clear(url);
+    await user.type(url, 'nope');
+    expect(url).toHaveAccessibleDescription(/Enter a full web address/);
+  });
+
+  it('asks before leaving after an Online Booking edit', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('tab', { name: 'Online Booking' }));
+    await user.click(screen.getByRole('switch', { name: 'Charge a Cancellation Fee' }));
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'System Settings have not been saved.' }),
+    ).toBeInTheDocument();
   });
 });

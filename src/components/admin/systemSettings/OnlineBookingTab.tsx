@@ -45,21 +45,35 @@ export default function OnlineBookingTab({ value, onChange, errors }: OnlineBook
                 {message}
               </Box>
             ) : null}
-            <Box component="span" sx={{ display: 'block', textAlign: 'right' }}>
+            <Box
+              component="span"
+              aria-live={value[key].length >= limit * 0.9 ? 'polite' : undefined}
+              sx={{ display: 'block', textAlign: 'right' }}
+            >
               {`${value[key].length} / ${limit}`}
             </Box>
           </>
         }
         slotProps={{
-          htmlInput: { maxLength: limit, 'aria-label': label, 'aria-describedby': describedBy },
+          htmlInput: {
+            maxLength: limit,
+            'aria-label': label,
+            'aria-describedby': `${fieldId(field)}-helper-text ${describedBy}`,
+          },
         }}
       />
     );
   };
 
-  const group = (title: string, titleId: string, hintId: string, hint: string, body: ReactNode) => (
+  const group = (
+    title: string,
+    titleId: string,
+    hintId: string | null,
+    hint: string | null,
+    body: ReactNode,
+  ) => (
     <Section title={title} titleId={titleId}>
-      <Hint id={hintId}>{hint}</Hint>
+      {hint ? <Hint id={hintId ?? undefined}>{hint}</Hint> : null}
       {body}
     </Section>
   );
@@ -115,10 +129,11 @@ export default function OnlineBookingTab({ value, onChange, errors }: OnlineBook
       {group(
         'Cancellation Fee',
         `${ids.fee}-title`,
-        ids.fee,
-        'Helper text about cancellation fees.',
+        null,
+        null,
         <ToggleRow
           label="Charge a Cancellation Fee"
+          description="Helper text about cancellation fees."
           checked={value.chargeCancellationFee}
           onChange={(checked) => set('chargeCancellationFee', checked)}
         />,
@@ -126,10 +141,11 @@ export default function OnlineBookingTab({ value, onChange, errors }: OnlineBook
       {group(
         'Add-Ons Popup',
         `${ids.addOns}-title`,
-        ids.addOns,
-        'Add-Ons Popup will help to promote add-on options to guests during their booking process. When turned on, this popup will display once a room selection has been made, prior to the details screen.',
+        null,
+        null,
         <ToggleRow
           label="Display Add-Ons Popup"
+          description="Add-Ons Popup will help to promote add-on options to guests during their booking process. When turned on, this popup will display once a room selection has been made, prior to the details screen."
           checked={value.showAddOnsPopup}
           onChange={(checked) => set('showAddOnsPopup', checked)}
         />,

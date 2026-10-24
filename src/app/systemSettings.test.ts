@@ -67,6 +67,15 @@ describe('validateSystemSettings', () => {
     expect(validateSystemSettings(base())).toEqual({});
   });
 
+  it('reports an over-limit Online Booking message through the whole-form check', () => {
+    const settings = base();
+    const errors = validateSystemSettings({
+      ...settings,
+      onlineBooking: { ...settings.onlineBooking, globalMessage: 'a'.repeat(151) },
+    });
+    expect(errors['onlineBooking.globalMessage']).toEqual(['Use 150 characters or fewer.']);
+  });
+
   it('requires Close Settled Folios to be larger than the MPOS visibility after checkout', () => {
     const errors = validateSystemSettings(
       base({ mposVisibleAfter: h(6), closeSettledFolios: h(6), earlyLateEnabled: false }),
