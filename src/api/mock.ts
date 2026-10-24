@@ -408,6 +408,9 @@ export function createMockClient({
         respond(
           () => {
             assertSaveClosureRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change closures', { code: 'forbidden' });
+            }
             return replayable(request, () => createClosure(schedule, request));
           },
           () => {
@@ -420,6 +423,9 @@ export function createMockClient({
         respond(
           () => {
             assertUpdateClosureRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change closures', { code: 'forbidden' });
+            }
             return replayable(request, () => updateClosure(schedule, request));
           },
           () => {
@@ -432,6 +438,9 @@ export function createMockClient({
         respond(
           () => {
             assertDeleteClosureRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change closures', { code: 'forbidden' });
+            }
             return replayable(request, () => deleteClosure(schedule, request));
           },
           () => {

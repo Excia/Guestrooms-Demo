@@ -865,6 +865,8 @@ export function updateClosure(
   assertClosureFree(state, request, closure.id);
   closure.roomId = request.roomId;
   closure.startDate = request.startDate;
+  // The orange "block ends" marker belonged to the old end.
+  if (closure.endDate !== request.endDate) closure.endMarker = false;
   closure.endDate = request.endDate;
   closure.reason = request.description;
   return structuredClone(closure);

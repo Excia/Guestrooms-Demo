@@ -62,6 +62,8 @@ export default function NewClosureTab({
     };
   });
   const [submitted, setSubmitted] = useState(0);
+  // Save pressed without permission: say why, since nothing else happens.
+  const [blocked, setBlocked] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const { run, saving, failure, clearFailure } = useClosureSubmit();
 
@@ -88,7 +90,11 @@ export default function NewClosureTab({
   }, [submitted]);
 
   const submit = () => {
-    if (saving || !canEdit) return;
+    if (saving) return;
+    if (!canEdit) {
+      setBlocked(true);
+      return;
+    }
     setSubmitted((n) => n + 1);
     if (Object.keys(errors).length > 0 || conflict) return;
     const body = {
@@ -112,6 +118,11 @@ export default function NewClosureTab({
 
   const footer = (
     <>
+      {blocked && !canEdit ? (
+        <Alert severity="error" role="alert" sx={{ mb: 1.5 }}>
+          You do not have permission to create closures.
+        </Alert>
+      ) : null}
       {failure && !failure.onRoom ? (
         <Alert severity="error" role="alert" sx={{ mb: 1.5 }}>
           {failure.message}
@@ -161,6 +172,7 @@ export default function NewClosureTab({
         onChange={change}
         today={today}
         errors={shown}
+        disabled={!canEdit}
         roomError={roomError}
         rooms={{ options, loading: !data && !dataFailed, failed: dataFailed, onRetry: onRetryData }}
       />

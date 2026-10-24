@@ -52,6 +52,17 @@ export const closureTitle = (roomNumber: string) => `Room ${roomNumber} Closure`
 export default function ClosureDetails(props: ClosureDetailsProps) {
   const { titleId, closureId, data, dataFailed, onRetryData, onClose } = props;
   const closure = data?.closures.find((c) => c.id === closureId);
+  // The last good copy: while the schedule reloads or fails to reload (after an unknown outcome),
+  // the form stays, with the user's edits.
+  const [last, setLast] = useState<{
+    id: string;
+    closure: ScheduleClosure;
+    data: ScheduleData;
+  } | null>(null);
+  if (data && closure && (last?.closure !== closure || last.data !== data)) {
+    setLast({ id: closureId, closure, data });
+  }
+  const kept = !data && last?.id === closureId ? last : null;
   const header = (title: string) => (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <Typography
@@ -74,7 +85,7 @@ export default function ClosureDetails(props: ClosureDetailsProps) {
       </IconButton>
     </Box>
   );
-  if (!data || !closure) {
+  if (!kept && (!data || !closure)) {
     return (
       <Box sx={{ p: 2.5 }}>
         {header('Closure')}
@@ -102,7 +113,16 @@ export default function ClosureDetails(props: ClosureDetailsProps) {
       </Box>
     );
   }
-  return <Editor {...props} closure={closure} data={data} header={header} />;
+  const shown = kept ?? { closure: closure!, data: data! };
+  return (
+    <Editor
+      {...props}
+      closure={shown.closure}
+      data={shown.data}
+      header={header}
+      stale={kept ? { failed: dataFailed, onRetry: onRetryData } : null}
+    />
+  );
 }
 
 function focusHeading(element: HTMLElement | null) {
@@ -119,9 +139,12 @@ function Editor({
   onUnknownOutcome,
   onDuplicate,
   header,
+  stale,
 }: ClosureDetailsProps & {
   closure: ScheduleClosure;
   data: ScheduleData;
+  /** The schedule behind this copy is reloading or failed to reload. */
+  stale: { failed: boolean; onRetry: () => void } | null;
   header: (title: string) => React.ReactNode;
 }) {
   const api = useApi();
@@ -209,6 +232,19 @@ function Editor({
     >
       <Box sx={{ px: 2.5, pt: 2.5, flex: '1 1 auto', overflow: 'auto', minHeight: 0 }}>
         {header(title)}
+        {stale?.failed ? (
+          <Alert
+            severity="warning"
+            sx={{ mt: 2 }}
+            action={
+              <Button color="inherit" size="small" onClick={stale.onRetry}>
+                Retry
+              </Button>
+            }
+          >
+            The schedule could not be reloaded. Your changes are kept.
+          </Alert>
+        ) : null}
         {!canEdit ? (
           <Alert severity="info" sx={{ mt: 2 }}>
             You do not have permission to change closures.

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import { ApiError } from '../api/types';
@@ -16,19 +16,26 @@ const EMPTY_WEEK = '/schedule?start=2026-12-01';
 
 function Probe() {
   const { pathname, search } = useLocation();
-  return <output data-testid="url">{pathname + search}</output>;
+  const navigate = useNavigate();
+  return (
+    <>
+      <output data-testid="url">{pathname + search}</output>
+      <button onClick={() => void navigate(-1)}>history back</button>
+    </>
+  );
 }
 
 function setup(
   url: string,
   client: ApiClient,
   granted?: Parameters<typeof GrantedAccess>[0]['granted'],
+  before: string[] = [],
 ) {
   return render(
     <ThemeProvider theme={theme}>
       <GrantedAccess granted={granted}>
         <ApiProvider client={client}>
-          <MemoryRouter initialEntries={[url]}>
+          <MemoryRouter initialEntries={[...before, url]} initialIndex={before.length}>
             <Routes>
               <Route path="/schedule" element={<Schedule today={TODAY} />} />
             </Routes>
@@ -51,9 +58,10 @@ async function loaded(
   path: string,
   client = createMockClient({ today: TODAY }),
   granted?: Parameters<typeof setup>[2],
+  before: string[] = [],
 ) {
   const user = userEvent.setup();
-  setup(path, client, granted);
+  setup(path, client, granted, before);
   await screen.findByRole('grid', { name: 'Schedule', hidden: true });
   return { user, client };
 }
@@ -363,5 +371,87 @@ describe('Closure details panel', () => {
       'true',
     );
     expect(within(panel).getByRole('textbox', { name: 'Description' })).toBeDisabled();
+  });
+});
+
+describe('review items', () => {
+  const described = (el: HTMLElement) =>
+    (el.getAttribute('aria-describedby') ?? '')
+      .split(' ')
+      .map((id) => document.getElementById(id)?.textContent ?? '')
+      .join(' ');
+
+  it('the native input of every field is described by its message', async () => {
+    const { user } = await loaded(`${EMPTY_WEEK}&panel=new&tab=closure&arrival=2026-12-02`);
+    const panel = await dialog('New Room Closure');
+    setDate(/Closure End/, '2026-12-01');
+    await user.click(within(panel).getByRole('button', { name: 'Save Closure' }));
+    expect(described(within(panel).getByRole('combobox', { name: /Room/ }))).toMatch(
+      /Choose a room/,
+    );
+    expect(described(within(panel).getByLabelText(/Closure End/))).toMatch(/after the start/);
+    expect(described(within(panel).getByLabelText(/Closure Start/))).toBe('');
+    expect(described(within(panel).getByRole('textbox', { name: 'Description' }))).toBe('0/50');
+    setDate(/Closure Start/, '');
+    await user.click(within(panel).getByRole('button', { name: 'Save Closure' }));
+    expect(described(within(panel).getByLabelText(/Closure Start/))).toMatch(/Enter a start date/);
+  });
+
+  it('without permission the fields are disabled and Save says why', async () => {
+    const { user } = await loaded(
+      `${EMPTY_WEEK}&panel=new&tab=closure&room=rm-203&arrival=2026-12-02`,
+      undefined,
+      [],
+    );
+    const panel = await dialog('New Room Closure');
+    expect(within(panel).getByRole('textbox', { name: 'Description' })).toBeDisabled();
+    expect(within(panel).getByRole('combobox', { name: /Room/ })).toBeDisabled();
+    await user.click(within(panel).getByRole('button', { name: 'Save Closure' }));
+    expect(
+      (await within(panel).findAllByText('You do not have permission to create closures.')).length,
+    ).toBeGreaterThan(1);
+  });
+
+  it('the closure room and day do not leak into the reservation tab', async () => {
+    const { user } = await loaded('/schedule?panel=new&tab=closure&room=rm-203&arrival=2026-10-01');
+    const panel = await dialog('New Room Closure');
+    await user.click(within(panel).getByRole('tab', { name: 'New Reservation' }));
+    expect(within(panel).queryByText(/has passed/)).not.toBeInTheDocument();
+    expect(within(panel).getByRole('combobox', { name: 'Room' })).toHaveValue('');
+  });
+
+  it('Back that drops tab=closure shows the reservation tab again', async () => {
+    const { user } = await loaded(
+      '/schedule?panel=new&tab=closure&room=rm-203&arrival=2026-12-02',
+      undefined,
+      undefined,
+      ['/schedule?panel=new'],
+    );
+    await dialog('New Room Closure');
+    fireEvent.click(screen.getByRole('button', { name: 'history back', hidden: true }));
+    const back = await dialog('New Reservation');
+    expect(within(back).getByRole('tab', { name: 'New Reservation' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  it('keeps the edits when the reload after an unknown outcome fails', async () => {
+    const client = createMockClient({ today: TODAY });
+    vi.spyOn(client.schedule, 'deleteClosure').mockRejectedValue(new ApiError(500, 'boom'));
+    const { user } = await loaded('/schedule?closure=cl-2', client);
+    const panel = await dialog('Room 102 Closure');
+    const description = within(panel).getByRole('textbox', { name: 'Description' });
+    await user.clear(description);
+    await user.type(description, 'My edit');
+    vi.spyOn(client.schedule, 'get').mockRejectedValue(new ApiError(500, 'down'));
+    await user.click(within(panel).getByRole('button', { name: 'Remove closure' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Yes' }),
+    );
+    expect(await within(panel).findByText(/could not be reloaded/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(panel).getByRole('textbox', { name: 'Description' })).toHaveValue('My edit'),
+    );
   });
 });

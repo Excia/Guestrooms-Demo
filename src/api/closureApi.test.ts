@@ -118,6 +118,45 @@ describe('mock closures', () => {
   });
 });
 
+describe('mock closures, review items', () => {
+  it('answers 403 forbidden without reservation.edit', async () => {
+    const api = createMockClient({ today: T, grant: { role: 'Viewer', permissions: [] } });
+    await expect(api.schedule.createClosure(save())).rejects.toMatchObject({
+      status: 403,
+      code: 'forbidden',
+    });
+    await expect(
+      api.schedule.updateClosure({ ...save(), closureId: 'cl-1' }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      api.schedule.deleteClosure({ closureId: 'cl-1', requestId: 'req-forbidden-1' }),
+    ).rejects.toMatchObject({ status: 403 });
+  });
+  it('drops the end marker when the end date changes, keeps it otherwise', async () => {
+    const api = mk();
+    const before = (await api.schedule.get(week)).closures.find((c) => c.id === 'cl-1')!;
+    expect(before.endMarker).toBe(true);
+    const same = await api.schedule.updateClosure({
+      closureId: 'cl-1',
+      roomId: before.roomId,
+      startDate: before.startDate,
+      endDate: before.endDate,
+      description: 'Renamed',
+      requestId: 'req-marker-keep',
+    });
+    expect(same.endMarker).toBe(true);
+    const moved = await api.schedule.updateClosure({
+      closureId: 'cl-1',
+      roomId: before.roomId,
+      startDate: before.startDate,
+      endDate: '2026-10-21',
+      description: 'Renamed',
+      requestId: 'req-marker-drop',
+    });
+    expect(moved.endMarker).toBe(false);
+  });
+});
+
 describe('http closures', () => {
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const make = (fetchMock: typeof fetch) =>

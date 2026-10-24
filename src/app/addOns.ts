@@ -15,7 +15,13 @@ export const NIGHTLY_QTY = { min: 0, initial: 1 } as const;
 export const LINE_QTY = { min: 1, max: 99 } as const;
 
 export type AddOnField =
-  'name' | 'startDate' | 'endDate' | 'sku' | 'nightlyQty' | 'description' | 'photos';
+  | 'name'
+  | 'startDate'
+  | 'endDate'
+  | 'sku'
+  | 'nightlyQty'
+  | 'description'
+  | 'photos';
 
 /** A new add-on: an item, active from today with no end, nothing tracked, no associations. */
 export function blankAddOn(today: string): AddOnInput {

@@ -117,18 +117,29 @@ export default function NewReservationPanel({
   const { can } = useAccess();
   const canCreate = can(RESERVATION_EDIT_PERMISSION);
   const rootRef = useRef<HTMLDivElement>(null);
-  const [initial] = useState(() => prefilledNewReservation(today, addDays(today, 1), prefill));
+  // On the closure tab the room and day describe the closure, not the reservation.
+  const reservationPrefill = prefill?.tab === 'closure' ? undefined : prefill;
+  const [initial] = useState(() =>
+    prefilledNewReservation(today, addDays(today, 1), reservationPrefill),
+  );
   const [form, setForm] = useState<NewReservationForm>(initial.form);
   // Opened from a past day: Check In was set to today, and the panel says so until it is edited.
   const [pastNote, setPastNote] = useState(initial.pastDate);
   const [tab, setTab] = useState(prefill?.tab === 'closure' ? 1 : 0);
+  // The URL is the truth: Back or Forward that adds or drops tab=closure moves the visible tab.
+  const urlTab = prefill?.tab === 'closure' ? 1 : 0;
+  const [seenUrlTab, setSeenUrlTab] = useState(urlTab);
+  if (seenUrlTab !== urlTab) {
+    setSeenUrlTab(urlTab);
+    setTab(urlTab);
+  }
   const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   const [addFor, setAddFor] = useState<'booking' | 'lead' | null>(null);
   // The room of a clicked cell is applied once the rooms have loaded (a reload opens the panel first).
-  const [roomApplied, setRoomApplied] = useState(!prefill?.roomId);
+  const [roomApplied, setRoomApplied] = useState(!reservationPrefill?.roomId);
   if (!roomApplied && data) {
     setRoomApplied(true);
-    const room = data.rooms.find((r) => r.id === prefill?.roomId);
+    const room = data.rooms.find((r) => r.id === reservationPrefill?.roomId);
     if (room) setForm((f) => ({ ...f, ...selectRoom(data.rooms, f, room.id) }));
   }
   const [notes, setNotes] = useState({ publicNotes: '', privateNotes: '' });

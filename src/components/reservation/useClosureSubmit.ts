@@ -29,21 +29,25 @@ export function useClosureSubmit() {
       if (attempt.current?.body !== fingerprint) {
         attempt.current = { id: newRequestId(), body: fingerprint };
       }
+      let result: Awaited<ReturnType<typeof call>>;
       try {
-        const result = await call(attempt.current.id);
-        attempt.current = null;
-        onDone(result);
+        result = await call(attempt.current.id);
       } catch (error) {
         const status = error instanceof ApiError ? error.status : 0;
         const code = error instanceof ApiError ? error.code : undefined;
-        const result = closureFailure(status, code);
-        setFailure(result);
-        if (result.unknown) onUnknown();
-        else attempt.current = null;
-      } finally {
+        const failed = closureFailure(status, code);
+        setFailure(failed);
+        if (failed.unknown) onUnknown();
+        else if (!failed.retryable) attempt.current = null;
         inFlight.current = false;
         setSaving(false);
+        return;
       }
+      attempt.current = null;
+      inFlight.current = false;
+      setSaving(false);
+      // Outside the try: a throw in the caller's handler is not a failed save.
+      onDone(result);
     },
     [],
   );

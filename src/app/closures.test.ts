@@ -138,3 +138,19 @@ describe('closureFailure', () => {
     expect(closureFailure(422)).toMatchObject({ onRoom: false, unknown: false });
   });
 });
+
+describe('closure failures and descriptions, review items', () => {
+  it('maps 403 to a permission message and 429 to a retryable refusal', () => {
+    expect(closureFailure(403, 'forbidden')).toMatchObject({
+      message: expect.stringMatching(/permission/),
+      unknown: false,
+    });
+    expect(closureFailure(429)).toMatchObject({ retryable: true, unknown: false });
+    expect(closureFailure(400).retryable).toBeUndefined();
+  });
+  it('does not end a description on half an emoji', () => {
+    const text = 'x'.repeat(49) + '\u{1F600}';
+    expect(cleanDescription(text)).toBe('x'.repeat(49));
+    expect(cleanDescription('x'.repeat(48) + '\u{1F600}')).toHaveLength(50);
+  });
+});

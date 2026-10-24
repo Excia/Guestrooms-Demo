@@ -42,8 +42,11 @@ export function validateClosure(form: ClosureForm): Partial<Record<ClosureField,
 }
 
 /** The description as it is saved: trimmed and cut to the limit. */
-export const cleanDescription = (text: string): string =>
-  text.trim().slice(0, CLOSURE_DESCRIPTION_MAX);
+export function cleanDescription(text: string): string {
+  const cut = text.trim().slice(0, CLOSURE_DESCRIPTION_MAX);
+  // Never end on half of a surrogate pair (an emoji cut in two).
+  return /[\uD800-\uDBFF]$/.test(cut) ? cut.slice(0, -1) : cut;
+}
 
 /** Start is the clicked day (or today); End is one night later. */
 export function defaultClosureDates(
@@ -121,6 +124,8 @@ export interface ClosureFailure {
   onRoom: boolean;
   /** The answer is unknown (timeout, network, 5xx): reload the schedule to show the truth. */
   unknown: boolean;
+  /** Nothing was applied and trying again can work (rate limit): the idempotency key is kept. */
+  retryable?: boolean;
 }
 
 /** What a failed save or removal says, from the API status and code. */
@@ -130,6 +135,21 @@ export function closureFailure(status: number, code?: string): ClosureFailure {
       message: 'The room has a reservation or a closure on those dates.',
       onRoom: true,
       unknown: false,
+    };
+  }
+  if (status === 403) {
+    return {
+      message: 'You do not have permission to change closures.',
+      onRoom: false,
+      unknown: false,
+    };
+  }
+  if (status === 429) {
+    return {
+      message: 'Too many requests. Wait a moment and try again.',
+      onRoom: false,
+      unknown: false,
+      retryable: true,
     };
   }
   if (status === 404) {
