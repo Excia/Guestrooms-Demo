@@ -52,14 +52,24 @@ export const isCanceled = (row: Pick<ReservationListRow, 'status'>) => row.statu
  * with nothing left to check in; a partially checked-in multi-room one stays selectable. Unassigned
  * rooms and missing payment methods do not matter here: they are reported by the check-in attempt
  * (final intent of Figma P2; ticket 3.2 refines this).
+ *
+ * With `today` (the club's date, ticket 163) only today's arrivals are selectable: a reservation
+ * that arrived on an earlier date is never checked in in bulk (it goes through the past-date prompts
+ * of the reservation panel), and one that arrives later cannot be checked in yet. Without `today`
+ * the date is not considered.
  */
-export function isSelectable(row: Pick<ReservationListRow, 'rooms'>): boolean {
+export function isSelectable(
+  row: Pick<ReservationListRow, 'rooms'> & { arrival?: IsoDate },
+  today?: IsoDate,
+): boolean {
+  if (today !== undefined && row.arrival !== today) return false;
   return row.rooms.some((r) => r.status === 'not-checked-in');
 }
 
-export const selectableRows = <T extends Pick<ReservationListRow, 'rooms'>>(
+export const selectableRows = <T extends Pick<ReservationListRow, 'rooms' | 'arrival'>>(
   rows: readonly T[],
-): T[] => rows.filter(isSelectable);
+  today?: IsoDate,
+): T[] => rows.filter((r) => isSelectable(r, today));
 
 export type HeaderCheckState = 'none' | 'some' | 'all';
 
@@ -67,8 +77,9 @@ export type HeaderCheckState = 'none' | 'some' | 'all';
 export function headerCheckState(
   rows: readonly ReservationListRow[],
   selected: ReadonlySet<string>,
+  today?: IsoDate,
 ): HeaderCheckState {
-  const selectable = selectableRows(rows);
+  const selectable = selectableRows(rows, today);
   const count = selectable.filter((r) => selected.has(r.id)).length;
   return count === 0 ? 'none' : count === selectable.length ? 'all' : 'some';
 }
@@ -83,18 +94,20 @@ export function toggleRow(selected: ReadonlySet<string>, id: string): Set<string
 export function toggleAllRows(
   rows: readonly ReservationListRow[],
   selected: ReadonlySet<string>,
+  today?: IsoDate,
 ): Set<string> {
-  return headerCheckState(rows, selected) === 'all'
+  return headerCheckState(rows, selected, today) === 'all'
     ? new Set()
-    : new Set(selectableRows(rows).map((r) => r.id));
+    : new Set(selectableRows(rows, today).map((r) => r.id));
 }
 
 /** The selected rows, in table order, dropping ids that are gone or no longer selectable. */
 export function selectedRows(
   rows: readonly ReservationListRow[],
   selected: ReadonlySet<string>,
+  today?: IsoDate,
 ): ReservationListRow[] {
-  return rows.filter((r) => selected.has(r.id) && isSelectable(r));
+  return rows.filter((r) => selected.has(r.id) && isSelectable(r, today));
 }
 
 /** "10/16/26", as the Figma rows show dates (MM/DD/YY). */

@@ -1,4 +1,6 @@
 import {
+  CHECK_IN_ANY_TIME_PERMISSION,
+  CHECK_IN_ARRIVAL_DATE_PERMISSION,
   pagePermission,
   RESERVATION_EDIT_PERMISSION,
   type Permission,
@@ -34,6 +36,8 @@ export const MOCK_USERS: readonly MockUser[] = [
       permissions: [
         ...nonAdminPages.map((r) => pagePermission(r.id as PermissionPageId)),
         RESERVATION_EDIT_PERMISSION,
+        // Check in on the arrival date only: a past date needs an override code (ticket 163).
+        CHECK_IN_ARRIVAL_DATE_PERMISSION,
       ] satisfies Permission[],
     },
   },
@@ -47,7 +51,7 @@ export const MOCK_USERS: readonly MockUser[] = [
         ...routes.filter((r) => r.id === 'rooms' || r.id === 'room-types'),
       ]
         .flatMap((r): Permission[] => [pagePermission(r.id as PermissionPageId)])
-        .concat(RESERVATION_EDIT_PERMISSION),
+        .concat(RESERVATION_EDIT_PERMISSION, CHECK_IN_ANY_TIME_PERMISSION),
     },
   },
 ];

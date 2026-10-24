@@ -326,10 +326,34 @@ describe('ReservationList', () => {
       expect(within(await rowFor('GR-50240')).queryByRole('checkbox')).toBeNull();
       expect(within(await rowFor('GR-50188')).queryByRole('checkbox')).toBeNull();
       expect(within(await rowFor('GR-50401')).queryByRole('checkbox')).toBeNull();
-      // Not checked in (unassigned too) and a multi-room one: selectable.
+      // Arriving today, not checked in (unassigned too): selectable.
       expect(within(await rowFor('GR-50310')).getByRole('checkbox')).toBeInTheDocument();
       expect(within(await rowFor('GR-50402')).getByRole('checkbox')).toBeInTheDocument();
-      expect(within(await rowFor('GR-50321')).getByRole('checkbox')).toBeInTheDocument();
+    });
+
+    it('never offers a checkbox on a past or a future arrival (ticket 163)', async () => {
+      setup('/reservations?from=&to=&rows=100');
+      // GR-50395 arrived on 10/12 and never checked in: it goes through the panel's past-date prompts.
+      expect(within(await rowFor('GR-50395')).queryByRole('checkbox')).toBeNull();
+      // GR-50396: one room in house, one still waiting since 10/14.
+      expect(within(await rowFor('GR-50396')).queryByRole('checkbox')).toBeNull();
+      // GR-50321 arrives on 10/18.
+      expect(within(await rowFor('GR-50321')).queryByRole('checkbox')).toBeNull();
+    });
+
+    it('select-all skips past-dated reservations', async () => {
+      const user = userEvent.setup();
+      const onSelectionChange = vi.fn();
+      setup('/reservations?from=&to=&rows=100', undefined, { onSelectionChange });
+      await rowFor('GR-50395');
+      await user.click(
+        screen.getByRole('checkbox', { name: 'Select all selectable reservations' }),
+      );
+      const last = onSelectionChange.mock.calls.at(-1)?.[0] as { confirmationNumber: string }[];
+      expect(last.length).toBeGreaterThan(0);
+      expect(last.every((r) => !['GR-50395', 'GR-50396'].includes(r.confirmationNumber))).toBe(
+        true,
+      );
     });
 
     it('select-all selects only selectable rows and exposes them', async () => {

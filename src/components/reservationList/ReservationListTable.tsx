@@ -19,6 +19,7 @@ import { visuallyHidden } from '@mui/utils';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
 import type { ReservationListRow, ReservationListSort, ReservationListSortField } from '../../api';
+import type { IsoDate } from '../../lib/dates';
 import {
   formatListDate,
   headerCheckState,
@@ -70,6 +71,8 @@ export interface ReservationListTableProps {
   onToggleRow: (id: string) => void;
   onToggleAll: () => void;
   onOpen: (row: ReservationListRow) => void;
+  /** The club's today: only reservations arriving today can be selected for bulk check in (ticket 163). */
+  today?: IsoDate;
   /** The Location column is hidden when the property has only one location (requirements doc 16.10.7). */
   showLocation: boolean;
   /** Replaces the rows (empty or error); the header stays so a filter can be changed or cleared. */
@@ -86,8 +89,8 @@ export default function ReservationListTable(props: ReservationListTableProps) {
   const { rows, loading, refreshing, sort, selected } = props;
   const columns = props.showLocation ? COLUMNS : COLUMNS.filter((c) => c.id !== 'location');
   const columnCount = columns.length + 1; // plus the search column
-  const check = headerCheckState(rows, selected);
-  const selectable = selectableRows(rows).length;
+  const check = headerCheckState(rows, selected, props.today);
+  const selectable = selectableRows(rows, props.today).length;
   return (
     <TableContainer
       sx={(t) => ({
@@ -194,11 +197,12 @@ function ListRow({
   onOpen,
   showLocation,
   failedIds,
+  today,
 }: { row: ReservationListRow } & ReservationListTableProps) {
   const failed = failedIds?.has(row.id) ?? false;
   const canceled = isCanceled(row);
   const room = roomLabel(row);
-  const canSelect = isSelectable(row);
+  const canSelect = isSelectable(row, today);
   const isSelected = selected.has(row.id);
   return (
     <TableRow

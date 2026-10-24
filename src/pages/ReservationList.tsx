@@ -11,6 +11,8 @@ import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
 import type { ReservationListRow } from '../api';
 import { applyPanel } from '../app/panelUrl';
 import { selectedRows, toggleAllRows, toggleRow } from '../app/reservationList';
+import { useSystemSettings } from '../app/useSystemSettings';
+import { clubClock } from '../lib/clubTime';
 import {
   applyReservationListView,
   clearFilters,
@@ -58,6 +60,12 @@ export default function ReservationList({
   failedIds,
 }: ReservationListProps) {
   const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
+  // Bulk check in: "today" is the club's date (its time zone), not the browser's (ticket 163).
+  const { settings: clubSettings } = useSystemSettings();
+  const selectionToday = useMemo(
+    () => todayProp ?? clubClock(clubSettings?.timeZone).date,
+    [todayProp, clubSettings?.timeZone],
+  );
   const [params, setParams] = useSearchParams();
   const view = useMemo(() => parseReservationListView(params, today), [params, today]);
   const navigate = useNavigate();
@@ -95,7 +103,10 @@ export default function ReservationList({
   });
   const rows = useMemo(() => (list.status === 'success' ? list.page.items : []), [list]);
   const selected = selection.key === queryKey ? selection.ids : EMPTY;
-  const chosen = useMemo(() => selectedRows(rows, selected), [rows, selected]);
+  const chosen = useMemo(
+    () => selectedRows(rows, selected, selectionToday),
+    [rows, selected, selectionToday],
+  );
   const notify = useRef(onSelectionChange);
   useEffect(() => {
     notify.current = onSelectionChange;
@@ -222,7 +233,8 @@ export default function ReservationList({
           onSearch={onSearch}
           selected={selected}
           onToggleRow={(id) => setSelected(toggleRow(selected, id))}
-          onToggleAll={() => setSelected(toggleAllRows(rows, selected))}
+          onToggleAll={() => setSelected(toggleAllRows(rows, selected, selectionToday))}
+          today={selectionToday}
           showLocation={optionsState.status !== 'success' || options.locations.length > 1}
           onOpen={(row) => void navigate(reservationHubPath(row.id))}
           message={message}

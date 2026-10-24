@@ -410,4 +410,46 @@ describe('results and failures', () => {
       (await screen.findAllByText(/Key card integration reported an error/)).length,
     ).toBeGreaterThan(0);
   });
+
+  it('retries with the same idempotency key after an unknown outcome', async () => {
+    const base = createMockClient({ today: TODAY });
+    const keys: string[] = [];
+    let first = true;
+    const client = wrap(async (r) => {
+      keys.push(r.requestId);
+      if (first) {
+        first = false;
+        throw new ApiError(500, 'boom');
+      }
+      return base.reservations.checkIn(r);
+    });
+    const { user } = await open('rs-5', { client, room: 'rr-5' });
+    await user.click(await screen.findByRole('button', { name: 'Check In' }));
+    await user.click(await screen.findByRole('button', { name: 'Complete check in' }));
+    expect(
+      (await screen.findAllByText(/Could not confirm whether the check in went through/)).length,
+    ).toBeGreaterThan(0);
+    await user.click(await screen.findByRole('button', { name: 'Complete check in' }));
+    await waitFor(() => expect(keys).toHaveLength(2));
+    expect(keys[1]).toBe(keys[0]);
+  });
+
+  it('sends the override code back to its step when the backend refuses it', async () => {
+    const base = createMockClient({ today: TODAY });
+    const client = wrap(async () => {
+      throw new ApiError(403, 'no', { code: 'override-invalid' });
+    });
+    client.reservations.verifyOverrideCode = base.reservations.verifyOverrideCode;
+    const { user } = await open('rs-31', { client, granted: ARRIVAL_ONLY });
+    await user.click(await screen.findByRole('button', { name: 'Check In' }));
+    await user.click(await screen.findByRole('button', { name: 'Override and check in' }));
+    await user.type(await screen.findByLabelText('Override code'), `${MOCK_OVERRIDE_CODE}{Enter}`);
+    await user.click(await screen.findByRole('button', { name: 'Complete check in' }));
+    expect((await screen.findAllByText(/override code was not accepted/)).length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      await dialog('Enter override code to check in after the check-in date'),
+    ).toBeInTheDocument();
+  });
 });

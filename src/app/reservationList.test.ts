@@ -134,3 +134,39 @@ describe('formatListDate', () => {
     expect(formatListDate('nonsense')).toBe('nonsense');
   });
 });
+
+describe('bulk check in only takes today (ticket 163)', () => {
+  const on = (arrival: string, ...rooms: ListStatus[]) => ({
+    ...row('x', ...rooms),
+    arrival,
+  });
+  it('a reservation that arrived earlier is not selectable, even with rooms left to check in', () => {
+    expect(isSelectable(on('2026-10-15', 'not-checked-in'), '2026-10-16')).toBe(false);
+    expect(isSelectable(on('2026-10-15', 'checked-in', 'not-checked-in'), '2026-10-16')).toBe(
+      false,
+    );
+  });
+  it('a future arrival is not selectable either', () => {
+    expect(isSelectable(on('2026-10-17', 'not-checked-in'), '2026-10-16')).toBe(false);
+  });
+  it("today's arrival with a room left is selectable; with none left it is not", () => {
+    expect(isSelectable(on('2026-10-16', 'not-checked-in'), '2026-10-16')).toBe(true);
+    expect(isSelectable(on('2026-10-16', 'checked-in', 'not-checked-in'), '2026-10-16')).toBe(true);
+    expect(isSelectable(on('2026-10-16', 'checked-in'), '2026-10-16')).toBe(false);
+  });
+  it('without a date the date is not considered', () => {
+    expect(isSelectable(on('2026-10-01', 'not-checked-in'))).toBe(true);
+  });
+  it('select-all, the header state and the chosen rows follow the same rule', () => {
+    const rows = [
+      { ...on('2026-10-15', 'not-checked-in'), id: 'old' },
+      { ...on('2026-10-16', 'not-checked-in'), id: 'today' },
+    ];
+    expect([...toggleAllRows(rows, new Set(), '2026-10-16')]).toEqual(['today']);
+    expect(headerCheckState(rows, new Set(['today']), '2026-10-16')).toBe('all');
+    expect(selectedRows(rows, new Set(['old', 'today']), '2026-10-16').map((r) => r.id)).toEqual([
+      'today',
+    ]);
+    expect(selectableRows(rows, '2026-10-16').map((r) => r.id)).toEqual(['today']);
+  });
+});
