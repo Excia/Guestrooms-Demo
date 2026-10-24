@@ -549,6 +549,10 @@ const isAddOn = (v: unknown) =>
   isString(v.id) &&
   isString(v.name) &&
   isString(v.startDate) &&
+  (v.endDate === null || isString(v.endDate)) &&
+  (v.sku === null || isLookup(v.sku)) &&
+  typeof v.onlineBooking === 'boolean' &&
+  isString(v.description) &&
   (v.kind === 'item' || v.kind === 'combo') &&
   typeof v.trackNightly === 'boolean' &&
   isCount(v.nightlyQty) &&

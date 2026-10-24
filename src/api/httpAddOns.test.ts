@@ -37,4 +37,17 @@ describe('http add-on API', () => {
     const fetchMock = vi.fn().mockResolvedValue(json([{ id: 'x' }]));
     await expect(make(fetchMock).addOns.list()).rejects.toBeInstanceOf(ApiError);
   });
+
+  it('rejects add-ons with a wrong endDate, sku, onlineBooking or description', async () => {
+    const [good] = mockAddOns();
+    for (const bad of [
+      { ...good, endDate: 5 },
+      { ...good, sku: 'crib' },
+      { ...good, onlineBooking: 'yes' },
+      { ...good, description: null },
+    ]) {
+      const fetchMock = vi.fn().mockResolvedValue(json([bad]));
+      await expect(make(fetchMock).addOns.list()).rejects.toBeInstanceOf(ApiError);
+    }
+  });
 });
