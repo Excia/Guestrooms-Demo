@@ -1,4 +1,4 @@
-import { alpha, createTheme } from '@mui/material/styles';
+import { alpha, createTheme, lighten } from '@mui/material/styles';
 import type { CSSProperties } from 'react';
 import { menuFontPx } from './app/layout';
 
@@ -13,6 +13,12 @@ export interface ScheduleColors {
   /** Checked in and leaving today. */
   dueOut: string;
   closure: string;
+  /** Housekeeping chip fills (Figma "Housekeeping Block"). */
+  hkNotCheckedOut: string;
+  hkNeedsCleaning: string;
+  hkCleaned: string;
+  hkReady: string;
+  hkNeedsMaintenance: string;
   /** Guest name colors by guest type. */
   ownerText: string;
   memberText: string;
@@ -21,6 +27,8 @@ export interface ScheduleColors {
   /** Drop indicator while dragging: allowed / not allowed. */
   dropAllowed: string;
   dropRefused: string;
+  /** Unassigned section rows (opaque: the sticky row label sits over scrolling blocks). */
+  unassignedRow: string;
 }
 
 /** Folio screen colors (Figma Balance Summary 16575:25666 and the status chips 12050:11503). */
@@ -133,11 +141,18 @@ const base = createTheme({
       // PLACEHOLDER: Figma shows the due-out block as a light orange; this is the housekeeping orange at 40%.
       dueOut: 'rgba(228, 113, 0, 0.4)',
       closure: 'rgba(189, 189, 189, 0.8)',
+      hkNotCheckedOut: 'rgba(66, 66, 66, 0.3)',
+      hkNeedsCleaning: 'rgba(228, 113, 0, 0.8)',
+      hkCleaned: 'rgba(253, 216, 53, 0.8)',
+      hkReady: 'rgba(56, 142, 60, 0.8)',
+      hkNeedsMaintenance: 'rgba(239, 83, 80, 0.8)',
       ownerText: '#043f7a',
       memberText: '#16491a',
       today: alpha(primaryMain, 0.07),
       dropAllowed: alpha(primaryMain, 0.22),
       dropRefused: alpha(errorMain, 0.2),
+      // PLACEHOLDER: Figma shows a light pink row; this is the error color at 90% lightness.
+      unassignedRow: lighten(errorMain, 0.9),
     },
   },
   shape: { borderRadius: 4 },

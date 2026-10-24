@@ -109,9 +109,25 @@ describe('mock schedule.get', () => {
       });
     }
   });
+  it('windows the seeded unassigned reservations by date', async () => {
+    const c = mk();
+    const first = await c.schedule.get(week);
+    expect(first.unassigned.map((b) => b.id)).toEqual(['rr-u1', 'rr-u2']);
+    expect(first.unassigned.every((b) => b.roomId === '')).toBe(true);
+    const wide = await c.schedule.get({ ...week, days: 14 });
+    expect(wide.unassigned).toHaveLength(3);
+    const later = await c.schedule.get({ ...week, startDate: '2026-12-01' });
+    expect(later.unassigned).toEqual([]);
+  });
   it('honors scenarios and abort', async () => {
     const empty = await mk({ scenario: 'empty' }).schedule.get(week);
-    expect(empty).toMatchObject({ rooms: [], blocks: [], closures: [], locations: [] });
+    expect(empty).toMatchObject({
+      rooms: [],
+      blocks: [],
+      closures: [],
+      unassigned: [],
+      locations: [],
+    });
     await expect(mk({ scenario: 'error' }).schedule.get(week)).rejects.toMatchObject({
       status: 500,
     });
@@ -476,5 +492,88 @@ describe('mock move fidelity', () => {
     await expect(
       dates(c, { reservationRoomId: 'rr-7', toStartDate: '2026-10-15', scope: 'all-rooms' }),
     ).rejects.toMatchObject({ code: 'not-movable' });
+  });
+});
+
+describe('mock schedule.setHousekeeping', () => {
+  const hk = async (c: ApiClient, id: string) => {
+    const g = await guard(c, id);
+    return { reservationRoomId: id, requestId: g.requestId, version: g.version };
+  };
+  const find = async (c: ApiClient, id: string) =>
+    (await c.schedule.get({ startDate: '2026-10-06', days: 30 })).blocks.find((b) => b.id === id)!;
+
+  it('sets the status, keeps the note, and shows on the next get with a new version', async () => {
+    const c = mk();
+    const before = await find(c, 'rr-3');
+    const res = await c.schedule.setHousekeeping({ ...(await hk(c, 'rr-3')), status: 'ready' });
+    expect(res.blocks).toHaveLength(1);
+    expect(res.blocks[0]).toMatchObject({ id: 'rr-3', housekeeping: 'ready' });
+    expect(res.blocks[0].version).not.toBe(before.version);
+    expect(await find(c, 'rr-3')).toMatchObject({ housekeeping: 'ready' });
+  });
+  it('saves a note, and an empty note removes it', async () => {
+    const c = mk();
+    const first = await c.schedule.setHousekeeping({
+      ...(await hk(c, 'rr-3')),
+      status: 'cleaned',
+      notes: 'Mini bar restocked',
+    });
+    expect(first.blocks[0].housekeepingNotes).toBe('Mini bar restocked');
+    const kept = await c.schedule.setHousekeeping({
+      reservationRoomId: 'rr-3',
+      requestId: 'req-keep-note-1',
+      status: 'ready',
+    });
+    expect(kept.blocks[0].housekeepingNotes).toBe('Mini bar restocked');
+    const removed = await c.schedule.setHousekeeping({
+      reservationRoomId: 'rr-3',
+      requestId: 'req-drop-note-1',
+      status: 'ready',
+      notes: '',
+    });
+    expect(removed.blocks[0].housekeepingNotes).toBeUndefined();
+  });
+  it('409 stale for another version, applying nothing', async () => {
+    const c = mk();
+    const before = await find(c, 'rr-3');
+    await expect(
+      c.schedule.setHousekeeping({
+        reservationRoomId: 'rr-3',
+        requestId: 'req-stale-hk-1',
+        version: 'v-old',
+        status: 'ready',
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'stale' });
+    expect((await find(c, 'rr-3')).housekeeping).toBe(before.housekeeping);
+  });
+  it('404 for an unknown reservation room', async () => {
+    await expect(
+      mk().schedule.setHousekeeping({
+        reservationRoomId: 'rr-nope',
+        requestId: 'req-nope-0001',
+        status: 'ready',
+      }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+  it('replays the same request once and rejects the same id with another body', async () => {
+    const c = mk();
+    const req = { ...(await hk(c, 'rr-3')), status: 'cleaned' as const };
+    const one = await c.schedule.setHousekeeping(req);
+    const two = await c.schedule.setHousekeeping(req);
+    expect(two).toEqual(one);
+    await expect(c.schedule.setHousekeeping({ ...req, status: 'ready' })).rejects.toMatchObject({
+      status: 409,
+      code: 'idempotency-conflict',
+    });
+  });
+  it('rejects a status that cannot be set (nyci) with 400', async () => {
+    await expect(
+      mk().schedule.setHousekeeping({
+        reservationRoomId: 'rr-3',
+        requestId: 'req-nyci-0001',
+        status: 'nyci' as never,
+      }),
+    ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
   });
 });

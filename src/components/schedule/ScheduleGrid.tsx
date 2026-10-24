@@ -42,13 +42,17 @@ import {
   itemAtColumn,
   moveCursor,
   refusalMessage,
-  rowIndexAt,
+  roomRowAt,
+  roomRowScrollTop,
   shiftFromDistance,
   yearLabel,
   type CursorKey,
   type GridCursor,
 } from '../../app/scheduleGrid';
+import type { SetHousekeeping } from './HousekeepingChip';
+import { unassignedSection } from '../../app/unassignedRows';
 import ScheduleItemView from './ScheduleItemView';
+import UnassignedSection from './UnassignedSection';
 import {
   BLOCK_HEIGHT,
   BLOCK_TOP,
@@ -83,6 +87,8 @@ export interface ScheduleGridProps {
   onOpen: (block: ScheduleBlock) => void;
   /** A free night in a room row was clicked (or Enter was pressed on it): start a reservation there. */
   onOpenCell: (room: ScheduleRoom, date: IsoDate) => void;
+  /** Saves a change made in the housekeeping chip's pop-up; absent when the user may not change housekeeping. */
+  onSetHousekeeping?: SetHousekeeping;
 }
 
 interface DragState {
@@ -119,6 +125,8 @@ const HELP =
 interface RowProps {
   room: ScheduleRoom;
   index: number;
+  /** Rows above the first room row besides the date header (the Unassigned section). */
+  rowOffset: number;
   label: RoomRowLabel;
   blocks: ScheduleBlock[] | undefined;
   closures: ScheduleClosure[] | undefined;
@@ -134,6 +142,7 @@ interface RowProps {
   /** The grid has keyboard focus: the block under the cursor then shows its tooltip. */
   focused: boolean;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
+  onSetHousekeeping?: SetHousekeeping;
 }
 
 const itemId = (prefix: string, item: ScheduleItem) => `${prefix}-item-${item.id}`;
@@ -142,6 +151,7 @@ const itemId = (prefix: string, item: ScheduleItem) => `${prefix}-item-${item.id
 const ScheduleRow = memo(function ScheduleRow({
   room,
   index,
+  rowOffset,
   label,
   blocks,
   closures,
@@ -154,6 +164,7 @@ const ScheduleRow = memo(function ScheduleRow({
   links,
   focused,
   onItemPointerDown,
+  onSetHousekeeping,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
     () => [...(blocks ?? []), ...(closures ?? [])],
@@ -164,7 +175,7 @@ const ScheduleRow = memo(function ScheduleRow({
   return (
     <Box
       role="row"
-      aria-rowindex={index + 2}
+      aria-rowindex={index + 2 + rowOffset}
       style={{ top: rowTop(index) }}
       sx={(t) => ({
         position: 'absolute',
@@ -229,6 +240,7 @@ const ScheduleRow = memo(function ScheduleRow({
                 : closureAriaLabel(item, room)
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
+            onSetHousekeeping={onSetHousekeeping}
             active={activeItem?.id === item.id}
             tipFocused={focused && activeItem?.id === item.id}
             linkText={link ? segmentBadge(link) : undefined}
@@ -271,6 +283,7 @@ export default function ScheduleGrid({
   onRefuse,
   onOpen,
   onOpenCell,
+  onSetHousekeeping,
 }: ScheduleGridProps) {
   const theme = useTheme();
   const idPrefix = useId().replace(/:/g, '');
@@ -298,15 +311,25 @@ export default function ScheduleGrid({
   const [cursor, setCursor] = useState<GridCursor>({ row: 0, col: 0 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  // Collapse state of the Unassigned section is local UI state: not in the URL, not saved.
+  const [unassignedCollapsed, setUnassignedCollapsed] = useState(false);
+  const section = useMemo(
+    () => unassignedSection(data.unassigned, startDate, days, unassignedCollapsed),
+    [data.unassigned, startDate, days, unassignedCollapsed],
+  );
+  const unassignedRows = section.rows.length;
+  const unassignedPx = unassignedRows * rowPx;
   const [gridFocused, setGridFocused] = useState(false);
+  // Focus is on a tab stop inside the grid (an Unassigned block), not on the grid element itself.
+  const [innerFocus, setInnerFocus] = useState(false);
   // The block under the cursor shows its tooltip only while the cursor is driven by the keyboard:
   // set by a navigation key or by keyboard (focus-visible) focus, cleared by any pointer press.
   const [keyboardCursor, setKeyboardCursor] = useState(false);
 
   // Virtualization window. The scroll handler only stores the row range when it changes.
   const range = useMemo(
-    () => visibleRowRange(scrollTop, viewportHeight, rowPx, rooms.length),
-    [scrollTop, viewportHeight, rowPx, rooms.length],
+    () => visibleRowRange(scrollTop - unassignedPx, viewportHeight, rowPx, rooms.length),
+    [scrollTop, unassignedPx, viewportHeight, rowPx, rooms.length],
   );
   const cursorRow = Math.min(cursor.row, Math.max(rooms.length - 1, 0));
   const rowIndexes = useMemo(() => {
@@ -344,6 +367,7 @@ export default function ScheduleGrid({
     onOpen,
     onOpenCell,
     locked,
+    unassignedRows,
   });
   useLayoutEffect(() => {
     latest.current = {
@@ -357,6 +381,7 @@ export default function ScheduleGrid({
       onOpen,
       onOpenCell,
       locked,
+      unassignedRows,
     };
   });
 
@@ -399,7 +424,12 @@ export default function ScheduleGrid({
       const inside =
         x >= rect.left + labelPx && x <= rect.right && y >= rect.top && y <= rect.bottom;
       const row = inside
-        ? rowIndexAt(y - rect.top + scroller.scrollTop - rowPx, rowPx, latest.current.rooms.length)
+        ? roomRowAt(
+            y - rect.top + scroller.scrollTop,
+            rowPx,
+            latest.current.unassignedRows,
+            latest.current.rooms.length,
+          )
         : null;
       return { row, shift };
     },
@@ -579,9 +609,16 @@ export default function ScheduleGrid({
     const press = pressRef.current;
     pressRef.current = null;
     const element = event.target as HTMLElement;
+    // The Unassigned section: a block opens its details; nothing else there reacts to a click.
+    if (element.closest('[data-unassigned-section]')) {
+      const id = element.closest<HTMLElement>('[data-item-id]')?.dataset.itemId;
+      const unassigned = data.unassigned.find((b) => b.id === id);
+      if (unassigned) latest.current.onOpen(unassigned);
+      return;
+    }
     const rowEl = element.closest<HTMLElement>('[role="row"]');
     if (!rowEl) return;
-    const index = Number(rowEl.getAttribute('aria-rowindex')) - 2;
+    const index = Number(rowEl.getAttribute('aria-rowindex')) - 2 - latest.current.unassignedRows;
     if (index < 0) return;
     const target = element.closest<HTMLElement>('[data-item-id]');
     if (!target) {
@@ -620,7 +657,7 @@ export default function ScheduleGrid({
     (row: number, col: number) => {
       const el = scrollRef.current;
       if (!el) return;
-      const top = row * rowPx;
+      const top = roomRowScrollTop(row, rowPx, unassignedRows);
       const viewport = el.clientHeight - rowPx; // the sticky header covers the top 60px
       if (top < el.scrollTop) el.scrollTop = top;
       else if (viewport > 0 && top + rowPx > el.scrollTop + viewport)
@@ -635,7 +672,7 @@ export default function ScheduleGrid({
           el.scrollLeft = left + dayWidth - visible;
       }
     },
-    [rowPx, labelPx, days],
+    [rowPx, labelPx, days, unassignedRows],
   );
 
   // Keyboard move: once the block has changed room or date, the cursor follows it.
@@ -813,14 +850,22 @@ export default function ScheduleGrid({
         ref={scrollRef}
         role="grid"
         aria-label="Schedule"
-        aria-rowcount={rooms.length + 1}
+        aria-rowcount={rooms.length + 1 + unassignedRows}
         aria-colcount={days + 1}
         aria-busy={busy || undefined}
-        aria-activedescendant={activeId}
+        aria-activedescendant={innerFocus ? undefined : activeId}
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
         onFocus={(e) => {
+          // Focus on a tab stop inside the grid (an Unassigned block) is not the grid's cursor: put the
+          // cursor's tooltip and aria-activedescendant away. Focus back on the grid restores them.
+          setInnerFocus(e.target !== e.currentTarget);
+          if (e.target !== e.currentTarget) {
+            setGridFocused(false);
+            setKeyboardCursor(false);
+            return;
+          }
           setGridFocused(true);
           // Keyboard focus (Tab, or focus handed back by a closing panel) is :focus-visible; a mouse
           // press that focuses the grid is not.
@@ -836,9 +881,13 @@ export default function ScheduleGrid({
           if (!e.currentTarget.contains(e.relatedTarget)) {
             setGridFocused(false);
             setKeyboardCursor(false);
+            setInnerFocus(false);
           }
-          // Leaving the grid abandons a keyboard pick-up.
-          if (drag?.mode === 'keyboard' && !e.currentTarget.contains(e.relatedTarget)) {
+          // Leaving the grid abandons a keyboard pick-up, also into the Unassigned section's tab stops.
+          if (
+            drag?.mode === 'keyboard' &&
+            (e.target === e.currentTarget || !e.currentTarget.contains(e.relatedTarget))
+          ) {
             setDrag(null);
             setAnnouncement('Move cancelled.');
           }
@@ -962,6 +1011,15 @@ export default function ScheduleGrid({
               </Box>
             ))}
           </Box>
+          <UnassignedSection
+            section={section}
+            startDate={startDate}
+            days={days}
+            today={today}
+            idPrefix={idPrefix}
+            onToggle={() => setUnassignedCollapsed((c) => !c)}
+            onOpen={(block) => latest.current.onOpen(block)}
+          />
           <Box role="rowgroup" sx={{ position: 'relative', height: rowsHeight }}>
             {todayIndex >= 0 && todayIndex < days ? (
               <Box
@@ -982,6 +1040,7 @@ export default function ScheduleGrid({
                 key={rooms[i].id}
                 room={rooms[i]}
                 index={i}
+                rowOffset={unassignedRows}
                 label={labels[i]}
                 blocks={blocksByRoom.get(rooms[i].id)}
                 closures={closuresByRoom.get(rooms[i].id)}
@@ -994,6 +1053,7 @@ export default function ScheduleGrid({
                 links={links}
                 focused={gridFocused && keyboardCursor}
                 onItemPointerDown={onItemPointerDown}
+                onSetHousekeeping={onSetHousekeeping}
               />
             ))}
             {band ? (
