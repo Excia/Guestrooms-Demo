@@ -277,6 +277,11 @@ export interface ReservationDetail {
    * only exist before it (Undo Check In).
    */
   lastAuditedDate?: IsoDate | null;
+  /**
+   * The folio's lines, only their type and status (the legacy rule for "the night audit has run"
+   * reads them). Absent when the backend does not say: Add Another Room then stays offered.
+   */
+  folioCharges?: Pick<FolioCharge, 'type' | 'status'>[];
 }
 
 /**
@@ -996,12 +1001,18 @@ export type ScheduleGuestType = 'guest' | 'member' | 'owner' | 'none';
 
 /**
  * The room a linked-room block points at (ticket 2.4): its number and its reserver's name, shown in
- * the tooltip. A linked block draws no early check in / late check out indicators.
+ * the tooltip and the block text. A linked block draws no early check in / late check out
+ * indicators and cannot be opened or moved (legacy behavior).
  */
 export interface LinkedRoom {
   roomNumber: string;
   /** "First Last" of the reservation holder of the linked room. */
   reserverName: string;
+  /**
+   * Set when several rooms are linked: the number shown after the room name as " +N" (legacy
+   * `multilinkageCount`). Absent, 0 or 1 for a single linked room: nothing is added.
+   */
+  multilinkageCount?: number;
 }
 
 /**
@@ -1036,7 +1047,7 @@ export interface ScheduleBlock {
   /** Early Check In / Late Check Out were requested: the orange edge markers (Figma). */
   earlyCheckIn?: boolean;
   lateCheckOut?: boolean;
-  /** Present when this is a linked-room block (link icon and tooltip; no early/late indicators). */
+  /** Present when this is a linked-room block (link icon, grey, not clickable or draggable). */
   linkedTo?: LinkedRoom;
   /** Housekeeping chip drawn after the departure edge ("H"); absent when none is shown. */
   housekeeping?: HousekeepingStatus;

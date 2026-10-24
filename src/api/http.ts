@@ -682,7 +682,10 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     (v.linkedTo === undefined ||
       (isObject(v.linkedTo) &&
         isString(v.linkedTo.roomNumber) &&
-        isString(v.linkedTo.reserverName))) &&
+        isString(v.linkedTo.reserverName) &&
+        (v.linkedTo.multilinkageCount === undefined ||
+          (Number.isInteger(v.linkedTo.multilinkageCount) &&
+            (v.linkedTo.multilinkageCount as number) >= 0)))) &&
     (v.roomChange === undefined ||
       (isObject(v.roomChange) &&
         (v.roomChange.part === 'previous' ||

@@ -96,9 +96,12 @@ const refuse = (
   splitMoves: ScheduleMove[] | null = null,
 ): DropResult => ({ ok: false, reason, conflictRoomIds, splitMoves });
 
-/** Whether a drag may start: reservations that are not checked out. */
+/** Whether a drag may start: reservations that are not checked out and not linked-room blocks. */
 export const isDraggable = (item: ScheduleItem): boolean =>
-  item.kind === 'reservation' && item.status !== 'checked-out' && !item.roomChange;
+  item.kind === 'reservation' &&
+  item.status !== 'checked-out' &&
+  !item.roomChange &&
+  !item.linkedTo;
 
 interface Conflicts {
   reservations: string[];

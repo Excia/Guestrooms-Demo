@@ -110,6 +110,25 @@ describe('opening the details panel', () => {
     expect(url()).toContain('res=rs-5');
   });
 
+  it('a linked-room block opens nothing and cannot be picked up (click, Enter, Space)', async () => {
+    const user = await loaded();
+    const linked = block('Marcus Feldman');
+    expect(linked).toHaveAttribute('aria-disabled', 'true');
+    await user.click(linked);
+    expect(url()).toBe('/schedule');
+    grid().focus();
+    await user.keyboard('{Enter}'); // the cursor starts on room 101, where the linked block is
+    await user.keyboard(' ');
+    expect(url()).toBe('/schedule');
+    expect(screen.queryByRole('dialog', { name: /Reservation/ })).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('status', { hidden: true })
+        .map((s) => s.textContent)
+        .join(' '),
+    ).not.toMatch(/Picked up/);
+  });
+
   it('Enter on an empty cell or a closure does nothing', async () => {
     const user = await loaded();
     grid().focus();

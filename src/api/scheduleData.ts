@@ -313,6 +313,7 @@ const BLOCK_SEEDS: BlockSeed[] = [
     linked: {
       roomNumber: '102',
       reserverName: 'Beatrice Quinn',
+      multilinkageCount: 2,
     },
   },
   {
