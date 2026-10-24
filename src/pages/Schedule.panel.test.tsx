@@ -321,7 +321,9 @@ describe('split CTA', () => {
   it("stub actions say what is missing; Jump to Folio goes to the reservation's folio", async () => {
     const user = await loaded('/schedule?res=rs-5&rr=rr-5');
     const dialog = await panel(/Reservation #GR-50310/);
-    await user.click(await within(dialog).findByRole('button', { name: 'Check In' }));
+    await within(dialog).findByRole('button', { name: 'Check In' });
+    await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Add Another Room' }));
     expect(await within(dialog).findByText(/Reservation Hub \(ticket 3\.12\)/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Jump to Folio' }));
@@ -905,7 +907,9 @@ describe('small review items', () => {
   it('a stub notice is announced once: one live region, and the alert inside has no live role', async () => {
     const user = await loaded('/schedule?res=rs-5&rr=rr-5');
     const dialog = await panel(/Reservation #GR-50310/);
-    await user.click(await within(dialog).findByRole('button', { name: 'Check In' }));
+    await within(dialog).findByRole('button', { name: 'Check In' });
+    await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Add Another Room' }));
     const text = await within(dialog).findByText(/Reservation Hub \(ticket 3\.12\)/);
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
     expect(text.closest('[role=status]')).not.toBeNull();

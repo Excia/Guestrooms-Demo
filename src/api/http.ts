@@ -1,4 +1,9 @@
 import type {
+  AddPaymentMethodRequest,
+  CheckInReservationRequest,
+  CheckInReservationResult,
+  SplitRoomRequest,
+  VerifyOverrideCodeRequest,
   ApiClient,
   BookingHold,
   CancelReservationRequest,
@@ -53,6 +58,12 @@ import { assertChangeLogQuery } from './changeLogValidation';
 import { changeLogParams, parseChangeEventTypes, parseChangeLogPage } from './httpChangeLog';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
+import {
+  assertAddPaymentMethodRequest,
+  assertCheckInReservationRequest,
+  assertSplitRoomRequest,
+  assertVerifyOverrideCodeRequest,
+} from './checkInApi';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
   assertChangeRoomRequest,
@@ -371,6 +382,68 @@ const parseCancelled =
     }
     return withKnownAudit(body);
   };
+
+const CHECK_IN_FAILURES: readonly string[] = [
+  'unassigned',
+  'room-not-ready',
+  'occupied',
+  'no-payment-method',
+  'not-checkable',
+];
+
+// The answer must have one outcome for each room asked for, and the reservation they belong to.
+const parseCheckInReservation =
+  (request: CheckInReservationRequest) =>
+  (body: unknown, status: number): CheckInReservationResult => {
+    if (
+      !isObject(body) ||
+      !isReservationDetail(body.reservation) ||
+      body.reservation.id !== request.reservationId ||
+      !isFlag(body.autoCheckedOut) ||
+      !isCount(body.nightsPosted) ||
+      !listOf(
+        body.rooms,
+        (r) =>
+          isObject(r) &&
+          isString(r.reservationRoomId) &&
+          request.reservationRoomIds.includes(r.reservationRoomId) &&
+          isFlag(r.checkedIn) &&
+          (r.checkedIn
+            ? r.failure === undefined
+            : isString(r.failure) && CHECK_IN_FAILURES.includes(r.failure)) &&
+          (r.checkedInAt === undefined || isString(r.checkedInAt)) &&
+          (r.checkedOutAt === undefined || isString(r.checkedOutAt)),
+      ) ||
+      (body.rooms as unknown[]).length !== request.reservationRoomIds.length ||
+      new Set((body.rooms as { reservationRoomId: string }[]).map((r) => r.reservationRoomId))
+        .size !== request.reservationRoomIds.length ||
+      !listOf(
+        body.integrationErrors,
+        (e) => isObject(e) && (e.kind === 'key-card' || e.kind === 'tms') && isString(e.message),
+      )
+    ) {
+      throw invalid(status, 'check in');
+    }
+    return {
+      ...(body as unknown as CheckInReservationResult),
+      reservation: withKnownAudit(body.reservation),
+    };
+  };
+
+// A split answers the new reservation, never the one it left.
+const parseSplit =
+  (request: SplitRoomRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (!isReservationDetail(body) || body.id === request.reservationId) {
+      throw invalid(status, 'split reservation');
+    }
+    return withKnownAudit(body);
+  };
+
+const parseOverrideCheck = (body: unknown, status: number): { valid: boolean } => {
+  if (!isObject(body) || !isFlag(body.valid)) throw invalid(status, 'override code check');
+  return { valid: body.valid };
+};
 
 const parseCreated =
   (request: CreateReservationRequest) =>
@@ -1161,6 +1234,47 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             o,
             parseDetail(r.reservationId),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      checkIn: (r: CheckInReservationRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCheckInReservationRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/check-in`,
+            {},
+            o,
+            parseCheckInReservation(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      verifyOverrideCode: (r: VerifyOverrideCodeRequest, o) =>
+        Promise.resolve().then(() => {
+          assertVerifyOverrideCodeRequest(r);
+          return request('/override-codes/verify', {}, o, parseOverrideCheck, {
+            method: 'POST',
+            body: r,
+          });
+        }),
+      splitRoom: (r: SplitRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertSplitRoomRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/split`,
+            {},
+            o,
+            parseSplit(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      addPaymentMethod: (r: AddPaymentMethodRequest, o) =>
+        Promise.resolve().then(() => {
+          assertAddPaymentMethodRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/payment-methods`,
+            {},
+            o,
+            parseDetail(r.reservationId),
+            { method: 'POST', body: {}, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
     },

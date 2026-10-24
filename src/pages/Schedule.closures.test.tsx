@@ -421,7 +421,7 @@ describe('review items', () => {
   });
 
   it('Back that drops tab=closure shows the reservation tab again', async () => {
-    const { user } = await loaded(
+    await loaded(
       '/schedule?panel=new&tab=closure&room=rm-203&arrival=2026-12-02',
       undefined,
       undefined,

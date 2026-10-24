@@ -714,6 +714,7 @@ export default function Schedule({
         onClosureRemoved={onClosureRemoved}
         onDuplicateClosure={duplicateClosure}
         onNewTabChange={changeNewTab}
+        onOpenReservation={(reservationId) => openPanel({ kind: 'details', reservationId })}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}

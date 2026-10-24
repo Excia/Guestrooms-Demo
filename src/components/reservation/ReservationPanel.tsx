@@ -41,6 +41,8 @@ export interface ReservationPanelProps {
   onDuplicateClosure?: (closure: ScheduleClosure) => void;
   /** The New Reservation / New Room Closure tab changed; the URL follows. */
   onNewTabChange?: (tab: 'reservation' | 'closure') => void;
+  /** Opens another reservation (a room was split into it); the page puts it in the URL. */
+  onOpenReservation?: (reservationId: string) => void;
   /** Called when the panel has finished closing (the page puts focus back on what opened it). */
   onExited?: () => void;
   /** The reservation just created: its heading takes focus once loaded (the form that had it is gone). */
@@ -75,6 +77,7 @@ export default function ReservationPanel({
   onClosureRemoved,
   onDuplicateClosure,
   onNewTabChange,
+  onOpenReservation,
   onExited,
   focusTitleFor,
   side = RESERVATION_PANEL_SIDE,
@@ -129,6 +132,8 @@ export default function ReservationPanel({
             reopenChange={reopenChange}
             refreshToken={detailRefresh}
             onReservationChanged={onReservationChanged}
+            onOpenReservation={onOpenReservation}
+            now={now}
           />
         ) : shown?.kind === 'closure' ? (
           <ClosureDetails
