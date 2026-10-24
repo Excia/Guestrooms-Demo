@@ -1,6 +1,6 @@
 # 7.10 Change Log overlay (admin pages)
 
-Ticket Excia/Guestrooms-Demo#97; PR not opened yet. Figma: Change Log 16718:6217 (header row 16734:6811). The Event Types
+Ticket Excia/Guestrooms-Demo#97; PR #158. Figma: Change Log 16718:6217 (header row 16734:6811). The Event Types
 reference table next to it in the System Settings section was not read (an image of a spreadsheet).
 **Status:** in review (branch `feat/97-change-log-overlay`), 2026-10-24.
 
@@ -25,12 +25,13 @@ reference table next to it in the System Settings section was not read (an image
 
 ## Decisions
 
-| ID     | Date       | Decision                                                                                                                                                                              | Why                                    | Source      | Status      |
-| ------ | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ----------- | ----------- |
-| D-97-1 | 2026-10-24 | One year of retention is the backend's rule: `GET /change-log` never returns an entry older than one year before today. The mock enforces it (`retentionCutoff`, `isWithinRetention`) | Ticket: "enforced by the API contract" | ticket 7.10 | provisional |
-| D-97-2 | 2026-10-24 | Entries carry the club's local `date` and `time` (`HH:mm`); the UI only formats them, so no time zone maths happens in the browser                                                    | The backend knows the club's zone      | agent       | provisional |
-| D-97-3 | 2026-10-24 | Default order is newest first (date, then time, descending). Sorting by time compares the time of day and then the date                                                               | Ticket                                 | ticket 7.10 | provisional |
-| D-97-4 | 2026-10-24 | The overlay is a full-screen MUI Dialog (focus trap, Escape, focus returns to the Change Log button); the X is a labelled button                                                      | Accessible by default                  | agent       | provisional |
+| ID     | Date       | Decision                                                                                                                                                                                                                      | Why                                     | Source      | Status      |
+| ------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ----------- | ----------- |
+| D-97-1 | 2026-10-24 | One year of retention is the backend's rule: `GET /change-log` never returns an entry older than one year before today. The mock enforces it (`retentionCutoff`, `isWithinRetention`)                                         | Ticket: "enforced by the API contract"  | ticket 7.10 | provisional |
+| D-97-2 | 2026-10-24 | Entries carry the club's local `date` and `time` (`HH:mm`); the UI only formats them, so no time zone maths happens in the browser                                                                                            | The backend knows the club's zone       | agent       | provisional |
+| D-97-3 | 2026-10-24 | Default order is newest first (date, then time, descending). Sorting by time compares the time of day and then the date                                                                                                       | Ticket                                  | ticket 7.10 | provisional |
+| D-97-4 | 2026-10-24 | The overlay is a full-screen MUI Dialog (focus trap, Escape, focus returns to the Change Log button); the X is a labelled button                                                                                              | Accessible by default                   | agent       | provisional |
+| D-97-5 | 2026-10-24 | The overlay starts fresh on every opening (sort, filters, search, page and rows reset); the button remounts it with a new key. Search applies after a 300 ms pause or on Done; a failed request shows no rows under the error | Stale rows or filters on reopen mislead | agent       | provisional |
 
 ## Placeholders and invented values
 
