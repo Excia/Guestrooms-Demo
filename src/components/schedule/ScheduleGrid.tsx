@@ -1,3 +1,5 @@
+import BlockIcon from '@mui/icons-material/Block';
+import CheckIcon from '@mui/icons-material/Check';
 import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
@@ -32,6 +34,12 @@ import {
   type RoomRowLabel,
 } from '../../app/schedule';
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
+import {
+  dropColumns,
+  isActiveEvent,
+  pastColumnCount,
+  type ActiveEvent,
+} from '../../app/scheduleBlockState';
 import {
   blockAriaLabel,
   turnoverGap,
@@ -87,6 +95,11 @@ export interface ScheduleGridProps {
   /** The rows to show (filters applied), in display order. */
   rooms: readonly ScheduleRoom[];
   today: IsoDate;
+  /**
+   * The event whose panel is open (or that "see on schedule" points at): its blocks are
+   * highlighted. Keep the object stable between renders.
+   */
+  activeEvent?: ActiveEvent | null;
   /** A new range is loading: the grid stays, dimmed. */
   busy?: boolean;
   /** No new moves while the grid is refreshing or a move is in flight: its answer could overwrite them. */
@@ -162,6 +175,7 @@ interface RowProps {
   /** Keyboard cursor column when this is the active row, else null. */
   activeCol: number | null;
   draggingId: string | null;
+  activeEvent?: ActiveEvent | null;
   idPrefix: string;
   /** Place of each part of a stay that changed room: "part 2 of 3" and the rooms next to it. */
   links: ReadonlyMap<string, SegmentLink>;
@@ -189,6 +203,7 @@ const ScheduleRow = memo(function ScheduleRow({
   today,
   activeCol,
   draggingId,
+  activeEvent,
   idPrefix,
   links,
   focused,
@@ -290,6 +305,7 @@ const ScheduleRow = memo(function ScheduleRow({
             days={days}
             today={today}
             dragging={draggingId === item.id}
+            highlighted={isActiveEvent(item, activeEvent)}
             label={
               item.kind === 'reservation'
                 ? blockAriaLabel(item, room, link, days)
@@ -352,6 +368,7 @@ export default function ScheduleGrid({
   data,
   rooms,
   today,
+  activeEvent,
   busy,
   locked,
   onDrop,
@@ -928,6 +945,14 @@ export default function ScheduleGrid({
     return { span: blockSpan(layout, days), row: drag.row, allowed: drag.result?.ok === true };
   }, [drag, startDate, days]);
 
+  // The columns the dragged stay would cover: its length never changes, only where it starts.
+  const dropCols = useMemo(
+    () => (drag && drag.row !== null ? dropColumns(drag.item, drag.shift, startDate, days) : null),
+    [drag, startDate, days],
+  );
+  const pastCols = pastColumnCount(startDate, days, today);
+  const inDropColumns = (i: number) =>
+    dropCols !== null && i >= dropCols.first && i < dropCols.first + dropCols.count;
   const ghostLayout = drag?.mode === 'pointer' ? blockLayout(drag.item, startDate, days) : null;
   const ghostRow = drag ? rooms.findIndex((r) => r.id === drag.item.roomId) : -1;
   const dragging = drag?.mode === 'pointer';
@@ -1094,12 +1119,23 @@ export default function ScheduleGrid({
                   textAlign: 'center',
                   borderRight: `1px solid ${t.palette.divider}`,
                   bgcolor: i === todayIndex ? t.palette.schedule.today : undefined,
+                  // A past date reads lighter; the day a dragged stay would start on and the ones it
+                  // covers get a thick underline (not color alone).
+                  color: i < pastCols ? t.palette.text.secondary : undefined,
+                  boxShadow: inDropColumns(i)
+                    ? `inset 0 -3px 0 ${t.palette.primary.main}`
+                    : undefined,
                 })}
               >
                 <Typography
                   variant="subtitle2"
                   component="span"
-                  sx={{ fontWeight: i === todayIndex ? 700 : 500, textAlign: 'center' }}
+                  data-drop-column={inDropColumns(i) || undefined}
+                  sx={{
+                    fontWeight: i === todayIndex || inDropColumns(i) ? 700 : 500,
+                    textAlign: 'center',
+                    color: 'inherit',
+                  }}
                 >
                   {days === 7 ? (
                     dayHeader(date)
@@ -1124,6 +1160,7 @@ export default function ScheduleGrid({
             days={days}
             today={today}
             idPrefix={idPrefix}
+            activeEvent={activeEvent}
             onToggle={() => setUnassignedCollapsed((c) => !c)}
             onOpen={(block) => latest.current.onOpen(block)}
             onLinked={() => setAnnouncement(LINKED_ANNOUNCEMENT)}
@@ -1143,6 +1180,44 @@ export default function ScheduleGrid({
                 })}
               />
             ) : null}
+            {pastCols > 0 ? (
+              <Box
+                aria-hidden
+                data-testid="past-dates"
+                style={{ left: dateAreaX(0), width: dateAreaWidth(pastCols / days) }}
+                sx={(t) => ({
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  bgcolor: t.palette.schedule.pastDate,
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                })}
+              />
+            ) : null}
+            {dropCols ? (
+              <Box
+                aria-hidden
+                data-testid="drop-columns"
+                data-count={dropCols.count}
+                style={{
+                  left: dateAreaX(dropCols.first / days),
+                  width: dateAreaWidth(dropCols.count / days),
+                }}
+                sx={(t) => ({
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  boxSizing: 'border-box',
+                  bgcolor: t.palette.schedule.dropColumn,
+                  // Solid edges mark the column range whatever its color.
+                  borderLeft: `2px solid ${t.palette.primary.main}`,
+                  borderRight: `2px solid ${t.palette.primary.main}`,
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                })}
+              />
+            ) : null}
             {rowIndexes.map((i) => (
               <ScheduleRow
                 key={rooms[i].id}
@@ -1157,6 +1232,7 @@ export default function ScheduleGrid({
                 today={today}
                 activeCol={i === cursorRow ? cursor.col : null}
                 draggingId={drag?.item.id ?? null}
+                activeEvent={activeEvent}
                 idPrefix={idPrefix}
                 links={links}
                 focused={gridFocused && keyboardCursor}
@@ -1183,13 +1259,25 @@ export default function ScheduleGrid({
                   bgcolor: band.allowed
                     ? t.palette.schedule.dropAllowed
                     : t.palette.schedule.dropRefused,
-                  outline: `2px dashed ${band.allowed ? t.palette.primary.main : t.palette.error.main}`,
+                  // Allowed: solid outline and a check; refused: dashed outline and a "no entry"
+                  // icon. The shape tells them apart, not only the color.
+                  outline: `2px ${band.allowed ? 'solid' : 'dashed'} ${band.allowed ? t.palette.primary.main : t.palette.error.main}`,
                   outlineOffset: -2,
                   borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  px: 0.5,
+                  color: band.allowed ? t.palette.primary.main : t.palette.error.main,
                   pointerEvents: 'none',
                   zIndex: 8,
                 })}
-              />
+              >
+                {band.allowed ? (
+                  <CheckIcon fontSize="small" data-testid="drop-allowed-icon" />
+                ) : (
+                  <BlockIcon fontSize="small" data-testid="drop-refused-icon" />
+                )}
+              </Box>
             ) : null}
             {drag && ghostLayout && ghostRow >= 0 ? (
               <Box

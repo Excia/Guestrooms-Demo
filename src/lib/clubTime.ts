@@ -24,13 +24,23 @@ export function clubClock(timeZone: string | undefined, now: Date = new Date()):
     const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
     // Some engines print midnight as "24".
     const hour = get('hour') === '24' ? '00' : get('hour');
-    return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${hour}:${get('minute')}` };
+    return {
+      date: `${get('year')}-${get('month')}-${get('day')}`,
+      time: `${hour}:${get('minute')}`,
+    };
   } catch {
     return {
       date: `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
       time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
     };
   }
+}
+
+/**
+ * The club's calendar date for `now`. An unknown or empty zone falls back to the browser's date.
+ */
+export function clubTodayIso(timeZone: string | null | undefined, now: Date = new Date()): IsoDate {
+  return clubClock(timeZone || undefined, now).date;
 }
 
 /**

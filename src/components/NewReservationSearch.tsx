@@ -7,7 +7,8 @@ import { visuallyHidden } from '@mui/utils';
 import { useEffect, useId, useReducer, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { stayLimits } from '../app/dateRange';
-import { addDays, todayIso } from '../app/dateSelection';
+import { addDays } from '../app/dateSelection';
+import { useClubToday } from '../app/useClubToday';
 import type { WeekStartDay } from '../lib/calendar';
 import { PLACEHOLDER_LOCATIONS, type SearchLocation } from '../app/placeholderLocations';
 import {
@@ -58,7 +59,7 @@ export default function NewReservationSearch({
   weekStartsOn,
 }: NewReservationSearchProps) {
   const navigate = useNavigate();
-  const today = todayProp ?? todayIso();
+  const today = useClubToday(todayProp);
   const [checkIn, setCheckIn] = useState('');
   const [checkOut, setCheckOut] = useState('');
   const [touched, setTouched] = useState({ checkIn: false, checkOut: false });

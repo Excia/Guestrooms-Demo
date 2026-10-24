@@ -26,6 +26,8 @@ interface Settled {
 export function useSchedule(
   startDate: IsoDate,
   days: ScheduleDays,
+  /** False holds the fetch (the skeleton shows) until the range is known. */
+  enabled = true,
 ): ScheduleState & {
   retry: () => void;
   /**
@@ -44,6 +46,7 @@ export function useSchedule(
   const key = `${startDate}|${days}|${attempt}`;
 
   useEffect(() => {
+    if (!enabled) return;
     const controller = new AbortController();
     api.schedule.get({ startDate, days }, { signal: controller.signal }).then(
       (answer) => {
@@ -57,7 +60,7 @@ export function useSchedule(
       },
     );
     return () => controller.abort();
-  }, [api, startDate, days, key]);
+  }, [api, startDate, days, key, enabled]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   // The range of the data on screen, readable from event handlers that outlive a render.

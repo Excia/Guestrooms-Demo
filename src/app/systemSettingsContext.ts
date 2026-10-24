@@ -4,6 +4,8 @@ import type { SystemSettings } from '../api/types';
 export type SystemSettingsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface SystemSettingsState {
+  /** False without a provider: nothing will ever load, so no one should wait for the settings. */
+  provided: boolean;
   status: SystemSettingsStatus;
   /** Null until loaded. Consumers fall back to their defaults meanwhile (switches read as off). */
   settings: SystemSettings | null;
@@ -17,6 +19,7 @@ export interface SystemSettingsState {
 
 // Without a provider nothing is loaded and every flag reads as its default.
 export const SystemSettingsContext = createContext<SystemSettingsState>({
+  provided: false,
   status: 'idle',
   settings: null,
   load: () => {},

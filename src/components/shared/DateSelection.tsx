@@ -14,7 +14,6 @@ import {
   rangePresets,
   setCompare,
   setRangePreset,
-  todayIso,
   updateComparison,
   updatePeriod,
   validateValue,
@@ -27,6 +26,7 @@ import {
   type RangePreset,
   type WeekStart,
 } from '../../app/dateSelection';
+import { useClubToday } from '../../app/useClubToday';
 import DateField from './DateField';
 import Select from './Select';
 
@@ -132,7 +132,7 @@ export default function DateSelection({
   showErrors = true,
 }: DateSelectionProps) {
   const id = useId();
-  const today = todayProp ?? todayIso();
+  const today = useClubToday(todayProp);
   const { period, comparison } = value;
   const errors = showErrors ? validateValue(value) : {};
   const periodErrorId = `${id}-period-error`;
