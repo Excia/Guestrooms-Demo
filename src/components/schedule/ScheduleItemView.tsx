@@ -6,7 +6,7 @@ import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { memo, useEffect, useRef, useState, type PointerEventHandler } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type PointerEventHandler } from 'react';
 import type { HousekeepingStatus, LinkedRoom, ScheduleBlock, ScheduleClosure } from '../../api';
 import type { IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
@@ -189,7 +189,8 @@ export default memo(function ScheduleItemView({
   const bodyRef = useRef<HTMLDivElement>(null);
   const linked = item.kind === 'reservation' ? item.linkedTo : undefined;
   // A linked block's content follows its drawn width (three tiers); measured, since the width is CSS.
-  useEffect(() => {
+  // useLayoutEffect so the first paint already uses the right tier (no icon-only flash).
+  useLayoutEffect(() => {
     const el = bodyRef.current;
     if (!linked || !el) return;
     const measure = () => setWidth(el.getBoundingClientRect().width);
