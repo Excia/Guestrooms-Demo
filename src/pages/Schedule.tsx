@@ -563,6 +563,7 @@ export default function Schedule({
         reopenChange={reopen}
         roomChangeBusy={roomChanging}
         detailRefresh={detailRefresh}
+        onReservationChanged={retry}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}

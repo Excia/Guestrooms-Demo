@@ -37,15 +37,24 @@ import {
 } from '../../app/reservationPanel';
 import { formatPanelDate } from '../../app/newReservation';
 import { folioPath } from '../../app/routes';
+import {
+  cancelConfirmation,
+  canUndoCheckIn,
+  registrationCardUrl,
+  reservationMenu,
+  type MenuActionId,
+} from '../../app/reservationMenu';
 import { splitCta, STUB_TICKETS, type CtaActionId } from '../../app/splitCta';
 import { useAccess } from '../../app/useAccess';
 import { todayIso, type IsoDate } from '../../lib/dates';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import { focusOnMount } from '../shared/focusOnMount';
 import SplitButton from '../shared/SplitButton';
 import ChangeRoomDialog, { type RoomChangeSubmission } from './ChangeRoomDialog';
 import DetailsAccordion from './DetailsAccordion';
 import EarlyLateToggles from './EarlyLateToggles';
 import { useEarlyLate } from './useEarlyLate';
+import { useReservationMenuActions } from './useReservationMenuActions';
 import { useReservationDetail } from './useReservationDetail';
 
 export interface ReservationDetailsProps {
@@ -68,6 +77,8 @@ export interface ReservationDetailsProps {
   refreshToken?: number;
   /** Reopens the Change Room dialog on its first step (the data drifted); a new `nonce` each time. */
   reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
+  /** The reservation was cancelled or a check in undone: the schedule behind the panel reloads. */
+  onReservationChanged?: () => void;
 }
 
 function Loading() {
@@ -144,11 +155,20 @@ function RoomSelector({
   index,
   onIndex,
   onStub,
+  lastAuditedDate,
+  canEdit,
+  busy,
+  onUndo,
 }: {
   rooms: ReservationRoomDetail[];
   index: number;
   onIndex: (i: number) => void;
   onStub: (m: string) => void;
+  lastAuditedDate: ReservationDetail['lastAuditedDate'];
+  canEdit: boolean;
+  busy: boolean;
+  /** Undo the check in of this reservation room. */
+  onUndo: (reservationRoomId: string) => void;
 }) {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -157,6 +177,10 @@ function RoomSelector({
   const next = rooms[stepRoomIndex(index, 1, rooms.length)];
   const solid = room.status === 'checked-in';
   const out = room.status === 'checked-out';
+  const unassigned = room.roomNumber === null && room.status === 'nyci';
+  // "Remove after NA run": once the night audit has run for the check-in date, Undo Check In gives
+  // way to Check Out Room (Figma "CheckedIn-NArun").
+  const undoable = canUndoCheckIn(room, lastAuditedDate);
   return (
     <Box sx={{ bgcolor: 'background.default', px: 2.5, py: 1.5, mx: -2.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -180,7 +204,7 @@ function RoomSelector({
             justifyContent: 'space-between',
             textAlign: 'left',
             textTransform: 'none',
-            borderColor: 'primary.main',
+            borderColor: unassigned ? 'error.main' : 'primary.main',
             ...(out && { bgcolor: 'grey.300', color: 'text.primary', borderColor: 'grey.300' }),
             ...(!solid && !out && { bgcolor: 'background.paper' }),
           }}
@@ -189,7 +213,12 @@ function RoomSelector({
             <Typography
               variant="subtitle1"
               component="div"
-              sx={{ fontWeight: 700, color: 'inherit', lineHeight: 1.3 }}
+              sx={{
+                fontWeight: 700,
+                color: unassigned ? 'error.main' : 'inherit',
+                textTransform: unassigned ? 'uppercase' : undefined,
+                lineHeight: 1.3,
+              }}
             >
               {roomNumberText(room)}
             </Typography>
@@ -230,17 +259,27 @@ function RoomSelector({
         >
           Edit Room
         </Button>
-        {room.status === 'checked-out' ? null : (
+        {room.status === 'checked-out' ? null : undoable ? (
+          canEdit ? (
+            <Button
+              size="small"
+              startIcon={<Undo />}
+              disabled={busy}
+              onClick={() => onUndo(room.id)}
+            >
+              Undo Check In
+            </Button>
+          ) : null
+        ) : (
           <Button
             size="small"
-            startIcon={room.status === 'checked-in' ? <Undo /> : undefined}
             onClick={() =>
               onStub(
                 'Checking a single room in or out arrives with the Reservation Hub (ticket 3.12).',
               )
             }
           >
-            {room.status === 'checked-in' ? 'Undo Check In' : 'Check In Room'}
+            {room.status === 'checked-in' ? 'Check Out Room' : 'Check In Room'}
           </Button>
         )}
       </Box>
@@ -286,6 +325,7 @@ export default function ReservationDetails({
   roomChangeBusy,
   refreshToken,
   reopenChange,
+  onReservationChanged,
 }: ReservationDetailsProps) {
   const state = useReservationDetail(reservationId, refreshToken);
   const closeButton = (
@@ -354,6 +394,7 @@ export default function ReservationDetails({
       onChangeRoom={onChangeRoom}
       roomChangeBusy={roomChangeBusy}
       reopenChange={reopenChange}
+      onReservationChanged={onReservationChanged}
     />
   );
 }
@@ -370,6 +411,7 @@ function Loaded({
   onChangeRoom,
   roomChangeBusy,
   reopenChange,
+  onReservationChanged,
 }: {
   detail: ReservationDetail;
   reservationRoomId?: string;
@@ -382,6 +424,7 @@ function Loaded({
   onChangeRoom?: ReservationDetailsProps['onChangeRoom'];
   roomChangeBusy?: boolean;
   reopenChange?: ReservationDetailsProps['reopenChange'];
+  onReservationChanged?: () => void;
 }) {
   const navigate = useNavigate();
   const { can } = useAccess();
@@ -408,6 +451,14 @@ function Loaded({
   const [changing, setChanging] = useState<{ edits?: Record<string, string> } | null>(null);
   const [seenReopen, setSeenReopen] = useState(reopenChange?.nonce ?? 0);
   const cta = splitCta(detail);
+  const menu = reservationMenu({ ...detail, canEdit });
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const actions = useReservationMenuActions({
+    detail,
+    onReloaded,
+    onChanged: onReservationChanged,
+    say,
+  });
   const room = detail.rooms[roomIndex];
   const todayDate = today ?? todayIso();
   const roomChange = changeRoomAvailability({
@@ -433,12 +484,39 @@ function Loaded({
   }
 
   const run = (actionId: CtaActionId) => {
-    if (actionId === 'jump-to-folio') {
-      void navigate(folioPath(detail.id));
-      return;
-    }
     say(STUB_TICKETS[actionId] ?? 'This action arrives in a later ticket.');
   };
+  const runMenu = (id: MenuActionId) => {
+    switch (id) {
+      case 'jump-to-folio':
+        void navigate(folioPath(detail.id));
+        return;
+      case 'print-registration-card':
+        // The backend generates the PDF; the UI opens it in a new tab (D-003; stub URL for now).
+        window.open(registrationCardUrl(detail.id), '_blank', 'noopener');
+        return;
+      case 'cancel-reservation':
+        setCancelOpen(true);
+        return;
+      case 'undo-check-in':
+        actions.undoCheckIn();
+        return;
+      case 'add-room':
+        say('Adding another room arrives with the Reservation Hub (ticket 3.12).');
+        return;
+      case 'edit-reservation':
+      case 'assign-room':
+        say(
+          id === 'assign-room'
+            ? 'Assigning a room arrives with the Reservation Hub (ticket 3.12).'
+            : 'Editing a reservation arrives with the Reservation Hub (ticket 3.12).',
+        );
+    }
+  };
+  const confirmation = cancelConfirmation({
+    confirmationNumber: detail.confirmationNumber,
+    rooms: detail.rooms.length,
+  });
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -486,12 +564,12 @@ function Loaded({
               variant: cta.primary.variant,
               blocked: cta.primary.blockedReason ?? undefined,
             }}
-            items={cta.menu}
+            items={menu}
             onPrimary={() => {
               if (cta.primary.blockedReason) say(cta.primary.blockedReason);
               else run(cta.primary.id);
             }}
-            onItem={(id) => run(id as CtaActionId)}
+            onItem={(id) => runMenu(id as MenuActionId)}
             menuLabel="More reservation actions"
           />
         </Box>
@@ -502,6 +580,10 @@ function Loaded({
               index={roomIndex}
               onIndex={(i) => setSelectedRoomId(detail.rooms[i].id)}
               onStub={say}
+              lastAuditedDate={detail.lastAuditedDate}
+              canEdit={canEdit}
+              busy={actions.busy}
+              onUndo={actions.undoCheckIn}
             />
           ) : (
             <RoomCard
@@ -605,6 +687,20 @@ function Loaded({
         ) : null}
       </Box>
       <DetailsAccordion detail={detail} onStub={say} />
+      <ConfirmDialog
+        open={cancelOpen}
+        title={confirmation.title}
+        message={confirmation.message}
+        // The safe choice is the focused primary action; cancelling is the explicit secondary one.
+        confirmLabel={confirmation.keepLabel}
+        discardLabel={confirmation.confirmLabel}
+        onClose={() => setCancelOpen(false)}
+        onConfirm={() => setCancelOpen(false)}
+        onDiscard={() => {
+          setCancelOpen(false);
+          actions.cancel();
+        }}
+      />
       {changing && roomChange.effectiveDate && onChangeRoom ? (
         <ChangeRoomDialog
           detail={detail}

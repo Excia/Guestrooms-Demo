@@ -144,11 +144,11 @@ describe('print and cancel copy', () => {
   it('names one reservation or all rooms', () => {
     expect(cancelConfirmation({ confirmationNumber: 'GR-1', rooms: 1 })).toMatchObject({
       title: 'Cancel this reservation?',
-      confirmLabel: 'Cancel Reservation',
+      confirmLabel: 'Yes, Cancel Reservation',
+      keepLabel: 'No, Keep Reservation',
     });
     expect(cancelConfirmation({ confirmationNumber: 'GR-1', rooms: 3 })).toMatchObject({
       title: 'Cancel all rooms?',
-      confirmLabel: 'Cancel All Rooms',
     });
   });
 });

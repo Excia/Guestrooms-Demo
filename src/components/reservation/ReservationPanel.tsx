@@ -31,6 +31,8 @@ export interface ReservationPanelProps {
   reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
   /** Raised after a room change settles: the open details reload in place. */
   detailRefresh?: number;
+  /** The reservation was cancelled or a check in undone (ticket 2.5): the page reloads the schedule. */
+  onReservationChanged?: () => void;
   /** Called when the panel has finished closing (the page puts focus back on what opened it). */
   onExited?: () => void;
   /** The reservation just created: its heading takes focus once loaded (the form that had it is gone). */
@@ -60,6 +62,7 @@ export default function ReservationPanel({
   roomChangeBusy,
   reopenChange,
   detailRefresh,
+  onReservationChanged,
   onExited,
   focusTitleFor,
   side = RESERVATION_PANEL_SIDE,
@@ -113,6 +116,7 @@ export default function ReservationPanel({
             roomChangeBusy={roomChangeBusy}
             reopenChange={reopenChange}
             refreshToken={detailRefresh}
+            onReservationChanged={onReservationChanged}
           />
         ) : shown?.kind === 'new' ? (
           <NewReservationPanel

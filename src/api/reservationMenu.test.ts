@@ -166,24 +166,24 @@ describe('http reservations cancel and undo', () => {
   });
 
   it('posts with the idempotency key and checks the answer', async () => {
-    const fetchMock = vi.fn((..._args: unknown[]) =>
+    const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(JSON.stringify(body('cancelled')), { status: 200 })),
     );
-    const client = createHttpClient('https://api.test', { fetch: fetchMock as typeof fetch });
+    const client = createHttpClient('https://api.test', { fetch: fetchMock });
     const request = { requestId: rid(), reservationId: 'rs-3', version: 'r1' };
     const detail = await client.reservations.cancelReservation(request);
     expect(detail.status).toBe('cancelled');
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init = {}] = fetchMock.mock.calls[0];
     expect(String(url)).toBe('https://api.test/reservations/rs-3/cancel');
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>)['Idempotency-Key']).toBe(request.requestId);
   });
 
   it('rejects a cancel answer that is not cancelled', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(JSON.stringify(body('confirmed')), { status: 200 })),
     );
-    const client = createHttpClient('https://api.test', { fetch: fetchMock as typeof fetch });
+    const client = createHttpClient('https://api.test', { fetch: fetchMock });
     await expect(
       client.reservations.cancelReservation({
         requestId: rid(),
@@ -194,17 +194,17 @@ describe('http reservations cancel and undo', () => {
   });
 
   it('undo check in posts to its path', async () => {
-    const fetchMock = vi.fn((..._args: unknown[]) =>
+    const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(JSON.stringify(body('confirmed')), { status: 200 })),
     );
-    const client = createHttpClient('https://api.test', { fetch: fetchMock as typeof fetch });
+    const client = createHttpClient('https://api.test', { fetch: fetchMock });
     await client.reservations.undoCheckIn({
       requestId: rid(),
       reservationId: 'rs-3',
       version: 'r1',
       reservationRoomId: 'rr-3',
     });
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init = {}] = fetchMock.mock.calls[0];
     expect(String(url)).toBe('https://api.test/reservations/rs-3/undo-check-in');
     expect(JSON.parse(String(init.body))).toMatchObject({ reservationRoomId: 'rr-3' });
   });

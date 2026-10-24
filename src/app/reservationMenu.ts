@@ -125,7 +125,7 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
 export const registrationCardUrl = (reservationId: string) =>
   `/files/registration-cards/${encodeURIComponent(reservationId)}.pdf`;
 
-/** Copy of the Cancel Reservation confirmation (not in Figma: Q-22-1). */
+/** Copy of the Cancel Reservation confirmation (not in Figma; the button labels come from the requirements doc 20.3.4, Q-22-1). */
 export function cancelConfirmation(input: { confirmationNumber: string; rooms: number }) {
   const all = input.rooms > 1;
   return {
@@ -133,7 +133,7 @@ export function cancelConfirmation(input: { confirmationNumber: string; rooms: n
     message:
       `Reservation #${input.confirmationNumber}${all ? ` (${input.rooms} rooms)` : ''} will be cancelled and removed from the schedule. ` +
       'This cannot be undone.',
-    confirmLabel: all ? 'Cancel All Rooms' : 'Cancel Reservation',
-    keepLabel: 'Keep Reservation',
+    confirmLabel: 'Yes, Cancel Reservation',
+    keepLabel: 'No, Keep Reservation',
   };
 }
