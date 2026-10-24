@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
-import type { ScheduleBlock } from '../../api';
+import type { ScheduleBlock, ScheduleClosure } from '../../api';
 import { theme } from '../../theme';
 import ScheduleItemView from './ScheduleItemView';
 
@@ -28,7 +28,10 @@ const block: ScheduleBlock = {
 };
 const layout = { column: 0, span: 1, continuesBefore: false, continuesAfter: false };
 
-function view(item: ScheduleBlock, extra: Partial<Parameters<typeof ScheduleItemView>[0]> = {}) {
+function view(
+  item: ScheduleBlock | ScheduleClosure,
+  extra: Partial<Parameters<typeof ScheduleItemView>[0]> = {},
+) {
   return render(
     <ThemeProvider theme={theme}>
       <ScheduleItemView
@@ -114,5 +117,111 @@ describe('ScheduleItemView linked block', () => {
   it('a stay of 3 nights shows the room name in bold in the 30 day view', () => {
     view({ ...block, endDate: '2026-10-13' }, { days: 30 });
     expect(screen.getByText('202')).toHaveStyle({ fontWeight: '700' });
+  });
+});
+
+describe('ScheduleItemView block content', () => {
+  const plain: ScheduleBlock = {
+    ...block,
+    linkedTo: undefined,
+    guestType: 'owner',
+    guestName: 'Ada Lovelace',
+    occupantCount: 3,
+    occupants: ['Ada Lovelace', 'Bill Lovelace'],
+    reserverName: 'Thomas Okafor',
+    endDate: '2026-10-11',
+  };
+
+  it('writes the lead occupant with +N and the reserver as the detail', () => {
+    view(plain, { days: 14 });
+    expect(screen.getByText('Ada Lovelace +2')).toBeInTheDocument();
+    expect(screen.getByText('Thomas Okafor')).toBeInTheDocument();
+    expect(screen.queryByText('C-1')).not.toBeInTheDocument();
+  });
+
+  it('keeps the confirmation number when there is no detail', () => {
+    view({ ...plain, reserverName: undefined, occupantCount: undefined }, { days: 14 });
+    expect(screen.getByText('C-1')).toBeInTheDocument();
+  });
+
+  it('shows the room type of an unassigned reservation', () => {
+    view({ ...plain, roomId: '', roomTypeName: 'Suite' }, { days: 14 });
+    expect(screen.getByText('Suite')).toBeInTheDocument();
+  });
+
+  it('month view, one night: initials and no guest-type icon', () => {
+    const { container } = view(plain, { days: 30 });
+    expect(screen.getByText('A.L. +2')).toBeInTheDocument();
+    expect(container.querySelector('svg[data-testid="HistoryEduIcon"]')).toBeNull();
+  });
+
+  it('month view, two nights: full name and the icon', () => {
+    const { container } = view({ ...plain, endDate: '2026-10-12' }, { days: 30 });
+    expect(screen.getByText('Ada Lovelace +2')).toBeInTheDocument();
+    expect(container.querySelector('svg[data-testid="HistoryEduIcon"]')).not.toBeNull();
+  });
+
+  it('truncates the text with an ellipsis (noWrap) and keeps the full text in the tooltip', async () => {
+    view(plain, {
+      days: 30,
+      tip: 'Ada Lovelace, C-1, Room 1',
+    });
+    expect(screen.getByText('A.L. +2')).toHaveStyle({ textOverflow: 'ellipsis' });
+    await userEvent.hover(screen.getByRole('gridcell'));
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent(
+      'Occupants: Ada Lovelace, Bill Lovelace, TBD',
+    );
+  });
+
+  it('opens the tooltip on hover even when the text is not cut off, and on keyboard focus', async () => {
+    const { unmount } = view(plain, { days: 14, tip: 'Ada Lovelace, C-1, Room 1' });
+    await userEvent.hover(screen.getByRole('gridcell'));
+    const tip = await screen.findByRole('tooltip', { hidden: true });
+    expect(tip).toHaveTextContent('Ada Lovelace, C-1, Room 1');
+    expect(tip).toHaveTextContent('Room owner');
+    unmount();
+    view(plain, { days: 14, tip: 'Ada Lovelace, C-1, Room 1', onActivate: () => {} });
+    await userEvent.tab();
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent('Room owner');
+  });
+});
+
+describe('ScheduleItemView closure tooltip', () => {
+  const closure: ScheduleClosure = {
+    kind: 'closure',
+    id: 'cl-1',
+    roomId: 'rm-1',
+    startDate: '2026-10-10',
+    endDate: '2026-10-12',
+    reason: 'Reserved: Fixed Loss',
+    endMarker: false,
+  };
+
+  it('has no tooltip on hover while its text fits', async () => {
+    view(closure, { tip: closure.reason });
+    await userEvent.hover(screen.getByRole('gridcell'));
+    expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument();
+  });
+
+  it('shows the full reason on hover when the text is cut off', async () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300);
+    const client = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(40);
+    try {
+      view(closure, { tip: closure.reason });
+      await userEvent.hover(screen.getByRole('gridcell'));
+      expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent(
+        'Reserved: Fixed Loss',
+      );
+    } finally {
+      width.mockRestore();
+      client.mockRestore();
+    }
+  });
+
+  it('a linked block builds no occupant lines', async () => {
+    view(block, { tip: 'ignored', tipFocused: true });
+    const tip = await screen.findByRole('tooltip', { hidden: true });
+    expect(tip).toHaveTextContent('Linked to 202');
+    expect(tip).not.toHaveTextContent('ignored');
   });
 });

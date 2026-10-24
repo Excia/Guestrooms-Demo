@@ -42,7 +42,7 @@ export const HOUSEKEEPING_OPTIONS: readonly { value: SettableHousekeepingStatus;
  * unassigned reservation (no room yet) and a linked-room block (a shadow of another room's stay,
  * no event of its own in the legacy system) have none.
  */
-export function needsHousekeepingBlock(block: ScheduleBlock): boolean {
+export function needsHousekeepingBlock(block: Pick<ScheduleBlock, 'roomId' | 'linkedTo'>): boolean {
   return block.roomId !== '' && block.linkedTo === undefined;
 }
 
@@ -51,7 +51,9 @@ export function needsHousekeepingBlock(block: ScheduleBlock): boolean {
  * default of a stay whose room has not been checked out ("Not Checked Out"). `nyci` is stored only
  * when the backend says so; it is drawn invisible (Figma).
  */
-export function housekeepingStatusOf(block: ScheduleBlock): HousekeepingStatus | undefined {
+export function housekeepingStatusOf(
+  block: Pick<ScheduleBlock, 'roomId' | 'linkedTo' | 'housekeeping'>,
+): HousekeepingStatus | undefined {
   if (!needsHousekeepingBlock(block)) return undefined;
   return block.housekeeping ?? 'not-checked-out';
 }

@@ -1216,6 +1216,22 @@ export interface ScheduleBlock {
   lateCheckOut?: boolean;
   /** Present when this is a linked-room block (link icon, grey, not clickable or draggable). */
   linkedTo?: LinkedRoom;
+  /**
+   * Block content (ticket LP-S.1). `guestName` is the lead occupant. Everything below is optional;
+   * an absent field simply drops its line (see `src/app/scheduleBlockContent.ts`).
+   * Guests in this room, named or not; "+N" on the block is this minus one.
+   */
+  occupantCount?: number;
+  /** Names of the named occupants, lead first. Fewer names than `occupantCount`: the rest are TBD. */
+  occupants?: string[];
+  /** Who made the reservation. */
+  reserverName?: string;
+  /** Group or event block name. */
+  blockName?: string;
+  /** Requested room type name; shown when the reservation has no room yet. */
+  roomTypeName?: string;
+  /** Open folio balance (what the guest still owes); shown when above zero. */
+  balanceCents?: Cents;
   /** Housekeeping chip drawn after the departure edge ("H"); absent when none is shown. */
   housekeeping?: HousekeepingStatus;
   /** Free-text housekeeping note (functional doc 15.13.3 / 15.13.4); absent when there is none. */

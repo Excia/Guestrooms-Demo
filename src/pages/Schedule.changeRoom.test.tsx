@@ -967,7 +967,7 @@ describe('long block text', () => {
     await waitFor(() => expect(screen.queryAllByRole('tooltip', { hidden: true })).toHaveLength(0));
   });
 
-  it('shows the full text in a tooltip on hover only when cut off, created lazily, without a second announcement', async () => {
+  it('shows the tooltip on hover, created lazily, without a second announcement or a native title', async () => {
     const user = userEvent.setup();
     setup(createMockClient({ today: TODAY }));
     await screen.findByRole('grid', { name: 'Schedule', hidden: true });
@@ -975,14 +975,6 @@ describe('long block text', () => {
     const label = cell.getAttribute('aria-label');
     // Nothing is created before the first hover.
     expect(screen.queryAllByRole('tooltip', { hidden: true })).toHaveLength(0);
-    // Not cut off: no tooltip, and no native title either (the browser would show its own).
-    await user.hover(cell);
-    expect(cell.querySelectorAll('[title]')).toHaveLength(0);
-    expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument();
-    await user.unhover(cell);
-    // Cut off (the ellipsis shows): the tooltip names guest, confirmation number and room.
-    const width = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(300);
-    const client = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(40);
     await user.hover(cell);
     // The tooltip is hidden from assistive technology: the cell's own name already says it all.
     const tip = await screen.findByRole('tooltip', { hidden: true });
@@ -998,7 +990,5 @@ describe('long block text', () => {
     await waitFor(() =>
       expect(screen.queryByRole('tooltip', { hidden: true })).not.toBeInTheDocument(),
     );
-    width.mockRestore();
-    client.mockRestore();
   });
 });

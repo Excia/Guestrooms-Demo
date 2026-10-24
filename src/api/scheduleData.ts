@@ -612,6 +612,33 @@ function seedExtras(): Record<string, ReservationExtras> {
   };
 }
 
+/**
+ * PLACEHOLDER (P-147-1): sample block content (occupants, reserver, block name, room type, open
+ * balance) for a few seeded blocks, so the content rules show on the grid. The backend sends the
+ * real values.
+ */
+const BLOCK_CONTENT_SEEDS: Record<string, Partial<ScheduleBlock>> = {
+  'rr-2': {
+    occupantCount: 4,
+    occupants: ['Daniel Whitfield', 'Priscilla Whitfield'],
+    reserverName: 'Daniel Whitfield',
+    balanceCents: 18250,
+  },
+  'rr-3': { occupantCount: 2, occupants: ['Margaret Ellison', 'Paul Ellison'] },
+  'rr-4': { reserverName: 'Meera Raman', balanceCents: 0 },
+  'rr-5': { reserverName: 'Club Events Office', blockName: 'Spring Retreat' },
+  'rr-6': { housekeeping: 'needs-maintenance' },
+  'rr-10': {
+    occupantCount: 2,
+    occupants: ['Robert Cho', 'Elaine Cho'],
+    reserverName: 'Robert Cho',
+  },
+  'rr-14': { occupantCount: 3, occupants: ['Victor Almeida'], balanceCents: 4200 },
+  'rr-u1': { roomTypeName: 'King Deluxe', occupantCount: 2, occupants: ['Harriet Lowell'] },
+  'rr-u2': { roomTypeName: 'Suite' },
+  'rr-u3': { roomTypeName: 'Queen Standard' },
+};
+
 function defaultState(today: IsoDate): ScheduleState {
   const at = (n: number) => addDays(today, n);
   return {
@@ -635,6 +662,7 @@ function defaultState(today: IsoDate): ScheduleState {
       roomTypeLocked: s.locked ?? false,
       version: 'v1',
       ...(s.linked ? { linkedTo: s.linked } : {}),
+      ...BLOCK_CONTENT_SEEDS[s.id],
     })),
     closures: CLOSURE_SEEDS.map((c) => ({
       kind: 'closure',
@@ -663,6 +691,7 @@ function defaultState(today: IsoDate): ScheduleState {
       roomCount: 1,
       roomTypeLocked: false,
       version: 'v1',
+      ...BLOCK_CONTENT_SEEDS[u.id],
     })),
     rateOverrides: {},
     segmentSeq: 0,

@@ -212,7 +212,7 @@ describe('copy', () => {
   });
   it('names a block with guest, confirmation, status, room and dates', () => {
     expect(blockAriaLabel(block({ status: 'nyci' }), { number: '202' })).toBe(
-      'Ada Lovelace, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026, housekeeping not checked out',
+      'Ada Lovelace, Non-member guest, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026, housekeeping not checked out',
     );
     expect(blockAriaLabel(block({ status: 'checked-in' }), { number: '1' })).toContain(
       'checked in',
@@ -220,8 +220,40 @@ describe('copy', () => {
   });
   it('names an unassigned block by the missing room', () => {
     expect(blockAriaLabel(block({ roomId: '' }), undefined)).toBe(
-      'Ada Lovelace, GR-1, confirmed, Unassigned room, 10/20/2026 to 10/22/2026',
+      'Ada Lovelace, Non-member guest, GR-1, confirmed, Unassigned room, 10/20/2026 to 10/22/2026',
     );
+  });
+  it('carries the visible text, the guest type and every fact in the name', () => {
+    const b = block({
+      status: 'checked-in',
+      guestType: 'owner',
+      occupantCount: 3,
+      occupants: ['Ada Lovelace', 'Bill Lovelace'],
+      reserverName: 'Ann Lee',
+      balanceCents: 18250,
+      blockName: 'Spring Retreat',
+    });
+    const label = blockAriaLabel(b, { number: '202' }, undefined, 14);
+    // Label in Name: the visible first line and detail line are in the name.
+    expect(label.startsWith('Ada Lovelace +2, Room owner, GR-1')).toBe(true);
+    expect(label).toContain('Balance due: $182.50');
+    expect(label).toContain('Reserver: Ann Lee');
+    expect(label).toContain('Occupants: Ada Lovelace, Bill Lovelace, TBD');
+    expect(label).toContain('Block: Spring Retreat');
+  });
+  it('names the initials of a compact month block and the full name too', () => {
+    const b = block({ guestType: 'member', occupantCount: 3, endDate: '2026-10-21' });
+    const label = blockAriaLabel(b, { number: '202' }, undefined, 30);
+    expect(label.startsWith('A.L. +2, Ada Lovelace, Club member, GR-1')).toBe(true);
+    // The same block in the 14 day view shows the full name.
+    expect(
+      blockAriaLabel(b, { number: '202' }, undefined, 14).startsWith('Ada Lovelace +2, Club'),
+    ).toBe(true);
+  });
+  it('names the room type of an unassigned reservation', () => {
+    expect(
+      blockAriaLabel(block({ roomId: '', roomTypeName: 'Suite' }), undefined, undefined, 14),
+    ).toContain('Room type: Suite');
   });
   it('labels the corner with the year or both years', () => {
     expect(yearLabel(['2026-10-20', '2026-10-21'])).toBe('2026');
