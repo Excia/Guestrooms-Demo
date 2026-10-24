@@ -240,4 +240,17 @@ describe('SystemSettings page', () => {
     await user.click(screen.getByRole('combobox', { name: 'Close Settled Folios unit' }));
     expect(screen.getByRole('option', { name: 'Days' })).toBeInTheDocument();
   });
+  it('opens the Change Log overlay for this page and returns focus when it closes', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    const open = screen.getByRole('button', { name: 'Change Log' });
+    await user.click(open);
+    expect(
+      await screen.findByRole('dialog', { name: 'System Settings Change Log' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close Change Log' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(open).toHaveFocus();
+  });
 });

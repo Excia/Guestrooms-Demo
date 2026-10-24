@@ -145,7 +145,12 @@ export default function BookingRules() {
   }
 
   return (
-    <AdminShell active="Booking Rules" title="Booking Rules" actions={saveButton}>
+    <AdminShell
+      active="Booking Rules"
+      title="Booking Rules"
+      actions={saveButton}
+      changeLog="booking-rules"
+    >
       {body}
       <ConfirmDialog
         open={guard.pending}

@@ -1,3 +1,4 @@
+import type { ChangeLogApi } from './changeLogTypes';
 import type { ReservationListApi } from './reservationListTypes';
 
 /** ISO calendar date, `YYYY-MM-DD`. */
@@ -1103,6 +1104,7 @@ export interface ApiClient {
   members: MembersApi;
   folios: FoliosApi;
   reports: ReportsApi;
+  changeLog: ChangeLogApi;
 }
 
 export interface ApiErrorInit {

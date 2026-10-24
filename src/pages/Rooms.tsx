@@ -158,6 +158,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
     <AdminShell
       active="Room Options"
       title={title}
+      changeLog="rooms"
       sidebarLabel="Rooms"
       sidebar={
         <SetupList

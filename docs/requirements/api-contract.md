@@ -379,3 +379,13 @@ carry the `ReservationDetail.version` the user saw.
   Check In when a checked-in room's check-in business date (arrival, Q-22-5) is on or before it, and when the field is absent.
 - Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
 - New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).
+
+## Change Log (ticket 7.10, branch `feat/97-change-log-overlay`)
+
+| #   | Method and path                | Request (query parameters)                                                                                                                                                                                  | Response                                                                                                       | Errors            |
+| --- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------- |
+| 1   | `GET /change-log`              | `page` (an admin page id, required), `sort` (`date`, `time`, `changeType` or `actionBy`, then `:asc` or `:desc`; default `date:desc`), `dateFrom`, `dateTo` (`YYYY-MM-DD`), `timeFrom`, `timeTo` (`HH:mm`, time of day), `changeTypes` (comma-separated event type ids), `actionBy`, `search` (parts of a name or description), `pageNumber` (1-based), `limit` (1 to 200) | `Page<ChangeLogEntry>`: `{items: [{id, date, time, changeType, description, actionBy}], total}`; date and time are the club's local time | 400 `invalid-query`, 5xx |
+| 2   | `GET /change-log/event-types`  | none                                                                                                                                                                                                        | `[{id, label}]`; the Change Type filter offers exactly these                                                    | 5xx               |
+
+- Retention: one year. The backend never returns an entry older than one year before today (the mock does the same).
+- The backend writes the entries when an admin page saves or deletes something (Q-97-3 in `entries/97-change-log.md`).
