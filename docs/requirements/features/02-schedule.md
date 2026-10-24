@@ -50,7 +50,7 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
 - **Unassigned section (owner, 2026-10-21; D-21-1):** reservation rooms booked without a room sit at the top
   of the grid, above the room rows, on a light red tinted row (`palette.schedule.unassignedRow`). Counts
   and rows follow the visible date range; the room filters (location, room type, availability) do not
-  apply to them. Four states: (1) none in the range: no row; (2) exactly one: a single row, no
+  apply to them. Four states: (1) none in the range (owner, 2026-10-24, D-UZ-1): one collapsed row "Unassigned" with "(0)" on a second line and a red "+" circle button that is `aria-disabled` (still focusable, described by "There are no unassigned reservations in this date range."), no blocks; (2) exactly one: a single row, no
   expand/collapse control; (3) two or more: expanded by default, one row per reservation room (not
   packed), each with its block across its dates, "Unassigned" on the first row only, and a red "-" circle
   button (`aria-expanded="true"`, name "Collapse N unassigned reservations"); (4) two or more, collapsed:

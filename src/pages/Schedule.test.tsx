@@ -128,7 +128,8 @@ describe('Schedule grid', () => {
     try {
       await loaded('/schedule?view=30', createMockClient({ today: TODAY, scheduleSize: 'large' }));
       const rows = within(grid()).getAllByRole('row');
-      expect(grid()).toHaveAttribute('aria-rowcount', '201');
+      // header + the "Unassigned (0)" row + 200 rooms
+      expect(grid()).toHaveAttribute('aria-rowcount', '202');
       expect(rows.length).toBeLessThan(25);
       expect(rows.length).toBeGreaterThan(5);
       // scrolling renders the rows that come into view

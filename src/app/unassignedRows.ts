@@ -1,13 +1,14 @@
-// The grid's Unassigned section (owner, 2026-10-21): reservation rooms booked without a room,
+// The grid's Unassigned section (owner, 2026-10-21; zero row 2026-10-24): reservation rooms booked without a room,
 // shown above the room rows. Pure, so the four states are unit tested apart from the component.
 import { nightsOverlap, addDays, type IsoDate } from '../lib/dates';
 import type { ScheduleBlock } from '../api/types';
 
 /**
- * none: nothing in the range, no row. single: one reservation, one row, no toggle. expanded: two
- * or more, one row each. collapsed: two or more, folded to one label row with the count.
+ * empty: nothing in the range, one collapsed label row "Unassigned (0)" (owner, 2026-10-24). single:
+ * one reservation, one row, no toggle. expanded: two or more, one row each. collapsed: two or more,
+ * folded to one label row with the count.
  */
-export type UnassignedState = 'none' | 'single' | 'expanded' | 'collapsed';
+export type UnassignedState = 'empty' | 'single' | 'expanded' | 'collapsed';
 
 export interface UnassignedSection {
   state: UnassignedState;
@@ -15,8 +16,10 @@ export interface UnassignedSection {
   count: number;
   /** One entry per grid row, each holding that row's block; the collapsed row holds none. */
   rows: ScheduleBlock[][];
-  /** The expand/collapse control shows (two or more). */
+  /** The expand/collapse control shows (none or two or more). */
   toggleable: boolean;
+  /** The control shows but cannot act: there is nothing to expand (zero). */
+  toggleDisabled: boolean;
 }
 
 /**
@@ -35,15 +38,33 @@ export function unassignedSection(
     .filter((b) => nightsOverlap(b.startDate, b.endDate, startDate, end))
     .sort((a, b) => a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id));
   const count = visible.length;
-  if (count === 0) return { state: 'none', count, rows: [], toggleable: false };
-  if (count === 1) return { state: 'single', count, rows: [[visible[0]]], toggleable: false };
-  if (collapsed) return { state: 'collapsed', count, rows: [[]], toggleable: true };
-  return { state: 'expanded', count, rows: visible.map((b) => [b]), toggleable: true };
+  if (count === 0) {
+    return { state: 'empty', count, rows: [[]], toggleable: true, toggleDisabled: true };
+  }
+  if (count === 1) {
+    return {
+      state: 'single',
+      count,
+      rows: [[visible[0]]],
+      toggleable: false,
+      toggleDisabled: false,
+    };
+  }
+  if (collapsed) {
+    return { state: 'collapsed', count, rows: [[]], toggleable: true, toggleDisabled: false };
+  }
+  return {
+    state: 'expanded',
+    count,
+    rows: visible.map((b) => [b]),
+    toggleable: true,
+    toggleDisabled: false,
+  };
 }
 
-/** The label cell's text: "Unassigned", with "(N)" on a second line only while collapsed. */
+/** The label cell's text: "Unassigned", with "(N)" on a second line while collapsed or empty. */
 export function unassignedLabel(section: UnassignedSection): { title: string; count?: string } {
-  return section.state === 'collapsed'
+  return section.state === 'collapsed' || section.state === 'empty'
     ? { title: 'Unassigned', count: `(${section.count})` }
     : { title: 'Unassigned' };
 }
@@ -52,3 +73,6 @@ export function unassignedLabel(section: UnassignedSection): { title: string; co
 export function unassignedToggleName(): string {
   return 'Unassigned reservations';
 }
+
+/** Read out with the disabled toggle at zero, where there is nothing to expand. */
+export const UNASSIGNED_EMPTY_HINT = 'There are no unassigned reservations in this date range.';
