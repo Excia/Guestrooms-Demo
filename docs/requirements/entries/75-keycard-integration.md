@@ -1,6 +1,6 @@
 # 7.6 Keycard Integration settings
 
-Ticket Excia/Guestrooms-Demo#75; PR Excia/Guestrooms-Demo#TBD. Figma: Keycard Integration 2829:6860 (frames 2784:24240 open field, 2784:53677 populated, dialog 2784:53648, toast 2784:53940).
+Ticket Excia/Guestrooms-Demo#75; PR Excia/Guestrooms-Demo#161. Figma: Keycard Integration 2829:6860 (frames 2784:24240 open field, 2784:53677 populated, dialog 2784:53648, toast 2784:53940).
 **Status:** in review (branch `feat/75-keycard-integration`), 2026-10-24.
 
 ## Figma deviations
