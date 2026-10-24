@@ -682,6 +682,24 @@ export interface SystemSettings {
   guestRoomsArea: LookupRef | null;
   guestMember: LookupRef | null;
   folio: FolioDetails;
+  /** The Online Booking tab (ticket 7.9); read by the online booking flow (Epic 5). */
+  onlineBooking: OnlineBookingSettings;
+}
+
+/** Online Booking tab of System Settings (Figma 15957:84617). */
+export interface OnlineBookingSettings {
+  /** Shown with the search fields; at most 150 characters. Empty means none. */
+  globalMessage: string;
+  /** Short policy beside the agreement checkbox; at most 300 characters. */
+  cancellationAgreement: string;
+  /** "Include Link to Full Policy". */
+  includePolicyLink: boolean;
+  /** Absolute http(s) address; only used while `includePolicyLink` is on. */
+  policyUrl: string;
+  /** "Charge a Cancellation Fee". The amount and rules are out of scope (D-007, Q-96-2). */
+  chargeCancellationFee: boolean;
+  /** "Display Add-Ons Popup" after room selection (Q-96-1). */
+  showAddOnsPopup: boolean;
 }
 
 /** Choices for the System Settings selects and lookups. */

@@ -40,6 +40,7 @@ import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
+import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
 import {
   effectiveDetails,
@@ -494,7 +495,10 @@ export function createMockClient({
             if (Object.keys(errors).length > 0) {
               throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
             }
-            systemSettings = structuredClone(settings);
+            systemSettings = structuredClone({
+              ...settings,
+              onlineBooking: normalizeOnlineBooking(settings.onlineBooking),
+            });
             return structuredClone(systemSettings);
           },
           () => structuredClone(settings),

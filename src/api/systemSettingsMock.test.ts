@@ -33,6 +33,25 @@ describe('mock system settings', () => {
     expect((await client.systemSettings.get()).closeSettledFolios.amount).toBe(8);
   });
 
+  it('refuses an Online Booking policy link that is not a web address', async () => {
+    const client = createMockClient();
+    const base = mockSystemSettings();
+    const bad = { ...base, onlineBooking: { ...base.onlineBooking, policyUrl: 'nope' } };
+    await expect(client.systemSettings.save(bad)).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('stores the policy link without surrounding spaces', async () => {
+    const client = createMockClient();
+    const base = mockSystemSettings();
+    const next = {
+      ...base,
+      onlineBooking: { ...base.onlineBooking, policyUrl: ' https://a.com/p ' },
+    };
+    expect((await client.systemSettings.save(next)).onlineBooking.policyUrl).toBe(
+      'https://a.com/p',
+    );
+  });
+
   it('fails in the error scenario', async () => {
     const client = createMockClient({ scenario: 'error' });
     await expect(client.systemSettings.get()).rejects.toMatchObject({ status: 500 });
