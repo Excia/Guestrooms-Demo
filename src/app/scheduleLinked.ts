@@ -53,8 +53,8 @@ export function indicatorsForStatus(
 }
 
 /**
- * The indicators a block draws. A linked block takes the flags of the room it is linked to, not its
- * own; the status rule then applies to the block's own status.
+ * The indicators a block draws. A linked-room block draws none (the legacy system draws none either,
+ * owner decision 2026-10-24); any other block follows the status rule on its own flags.
  */
 export function blockIndicators(block: {
   status?: ScheduleBlockStatus;
@@ -62,5 +62,6 @@ export function blockIndicators(block: {
   lateCheckOut?: boolean;
   linkedTo?: LinkedRoom;
 }): { early: boolean; late: boolean } {
-  return indicatorsForStatus(block.status, block.linkedTo ?? block);
+  if (block.linkedTo) return { early: false, late: false };
+  return indicatorsForStatus(block.status, block);
 }

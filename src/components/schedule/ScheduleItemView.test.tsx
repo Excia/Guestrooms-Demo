@@ -22,9 +22,9 @@ const block: ScheduleBlock = {
   linkedTo: {
     roomNumber: '202',
     reserverName: 'Thomas Okafor',
-    earlyCheckIn: true,
-    lateCheckOut: true,
   },
+  earlyCheckIn: true,
+  lateCheckOut: true,
 };
 const layout = { column: 0, span: 1, continuesBefore: false, continuesAfter: false };
 
@@ -44,18 +44,18 @@ function view(item: ScheduleBlock, extra: Partial<Parameters<typeof ScheduleItem
 }
 
 describe('ScheduleItemView linked block', () => {
-  it('draws the link icon and takes early/late from the linked room (not yet checked in: early only)', () => {
+  it('draws the link icon and no early/late markers, whatever the flags', () => {
     const { container } = view(block);
     expect(screen.getByTestId('linked-icon')).toBeInTheDocument();
     expect(screen.queryByText('Ada Lovelace')).not.toBeInTheDocument();
-    expect(container.querySelector('[data-marker="left"]')).not.toBeNull();
+    expect(container.querySelector('[data-marker="left"]')).toBeNull();
     expect(container.querySelector('[data-marker="right"]')).toBeNull();
   });
 
-  it('shows late only once checked in, even when both are set', () => {
+  it('draws no markers once checked in either', () => {
     const { container } = view({ ...block, status: 'checked-in' });
     expect(container.querySelector('[data-marker="left"]')).toBeNull();
-    expect(container.querySelector('[data-marker="right"]')).not.toBeNull();
+    expect(container.querySelector('[data-marker="right"]')).toBeNull();
   });
 
   it('shows the exact two-line tooltip on hover', async () => {

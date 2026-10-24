@@ -63,22 +63,13 @@ describe('indicatorsForStatus', () => {
 });
 
 describe('blockIndicators', () => {
-  it('a linked block inherits the flags of the linked room, not its own', () => {
-    expect(
-      blockIndicators({
-        status: 'nyci',
-        earlyCheckIn: false,
-        lateCheckOut: true,
-        linkedTo: { roomNumber: '1', reserverName: 'A B', earlyCheckIn: true },
-      }),
-    ).toEqual({ early: true, late: false });
-    expect(
-      blockIndicators({
-        status: 'checked-in',
-        earlyCheckIn: true,
-        linkedTo: { roomNumber: '1', reserverName: 'A B', earlyCheckIn: true, lateCheckOut: true },
-      }),
-    ).toEqual({ early: false, late: true });
+  it('a linked block draws no indicators, whatever its flags and status', () => {
+    const linkedTo = { roomNumber: '1', reserverName: 'A B' };
+    for (const status of ['nyci', 'checked-in', 'checked-out'] as const) {
+      expect(blockIndicators({ status, earlyCheckIn: true, lateCheckOut: true, linkedTo })).toEqual(
+        { early: false, late: false },
+      );
+    }
   });
   it('an unlinked block uses its own flags', () => {
     expect(blockIndicators({ status: 'checked-out', lateCheckOut: true })).toEqual({
@@ -104,6 +95,18 @@ describe('blockMarkers with a status', () => {
   });
 });
 
+describe('blockMarkers for a linked block', () => {
+  it('draws no marker on either edge', () => {
+    const linkedTo = { roomNumber: '1', reserverName: 'A B' };
+    expect(
+      blockMarkers(
+        { status: 'nyci', earlyCheckIn: true, lateCheckOut: true, linkedTo },
+        { continuesBefore: false, continuesAfter: false },
+      ),
+    ).toEqual({ left: false, right: false });
+  });
+});
+
 describe('blockAriaLabel for linked blocks', () => {
   const base = {
     guestName: 'Henry Lowell',
@@ -115,9 +118,10 @@ describe('blockAriaLabel for linked blocks', () => {
     lateCheckOut: true,
     linkedTo: { roomNumber: '202', reserverName: 'Thomas Okafor' },
   } as unknown as ScheduleBlock;
-  it('says what the block is linked to and only the indicator that shows', () => {
+  it('says what the block is linked to and names no early/late indicator', () => {
     const label = blockAriaLabel(base, { number: '203' });
     expect(label).toContain('Linked to 202, Thomas Okafor');
     expect(label).not.toContain('early check in');
+    expect(label).not.toContain('late check out');
   });
 });

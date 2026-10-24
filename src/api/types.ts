@@ -953,15 +953,13 @@ export const SETTABLE_HOUSEKEEPING_STATUSES: readonly SettableHousekeepingStatus
 export type ScheduleGuestType = 'guest' | 'member' | 'owner' | 'none';
 
 /**
- * The room a linked-room block points at (ticket 2.4). The block takes that room's Early Check In /
- * Late Check Out flags, so the backend sends them here.
+ * The room a linked-room block points at (ticket 2.4): its number and its reserver's name, shown in
+ * the tooltip. A linked block draws no early check in / late check out indicators.
  */
 export interface LinkedRoom {
   roomNumber: string;
   /** "First Last" of the reservation holder of the linked room. */
   reserverName: string;
-  earlyCheckIn?: boolean;
-  lateCheckOut?: boolean;
 }
 
 /**
@@ -996,9 +994,8 @@ export interface ScheduleBlock {
   /** Early Check In / Late Check Out were requested: the orange edge markers (Figma). */
   earlyCheckIn?: boolean;
   lateCheckOut?: boolean;
-  /** Present when this is a linked-room block (link icon, tooltip, flags of the linked room). */
+  /** Present when this is a linked-room block (link icon and tooltip; no early/late indicators). */
   linkedTo?: LinkedRoom;
-  // Canceled blocks (docs gap item 18, Q-21-3) are undecided: no `canceled` status exists yet.
   /** Housekeeping chip drawn after the departure edge ("H"); absent when none is shown. */
   housekeeping?: HousekeepingStatus;
   /** Free-text housekeeping note (functional doc 15.13.3 / 15.13.4); absent when there is none. */
