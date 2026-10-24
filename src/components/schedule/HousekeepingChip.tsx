@@ -114,7 +114,7 @@ export default function HousekeepingChip({ block, chip, fill, onSave }: Housekee
     }
   };
   const pick = (value: SettableHousekeepingStatus) => {
-    if (value !== status) void run({ status: value });
+    if (!saving && value !== status) void run({ status: value });
   };
   const trimmed = draft.trim();
   const dirty = trimmed !== saved;
@@ -179,7 +179,8 @@ export default function HousekeepingChip({ block, chip, fill, onSave }: Housekee
           size="small"
           label="Status"
           value={status ?? ''}
-          disabled={saving}
+          // Not disabled while saving: that would drop focus from the select. Busy, and picks are ignored.
+          slotProps={{ select: { SelectDisplayProps: { 'aria-busy': saving || undefined } } }}
           onChange={(e) => pick(e.target.value as SettableHousekeepingStatus)}
           sx={{ mt: 1.5 }}
         >

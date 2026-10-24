@@ -162,6 +162,16 @@ describe('HousekeepingChip', () => {
     );
   });
 
+  it('keeps focus on the status select after a pick', async () => {
+    const user = userEvent.setup();
+    render(<Harness seen={seenNone()} onSave={vi.fn().mockResolvedValue(true)} />);
+    await user.click(chipButton());
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
+    await user.click(screen.getByRole('option', { name: 'Ready' }));
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Status' })).toHaveFocus());
+    expect(screen.getByRole('combobox', { name: 'Status' })).not.toHaveAttribute('aria-disabled');
+  });
+
   it('keeps the old status shown when the save fails', async () => {
     const user = userEvent.setup();
     render(<Harness seen={seenNone()} onSave={vi.fn().mockResolvedValue(false)} />);
