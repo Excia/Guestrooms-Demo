@@ -30,6 +30,8 @@ import type {
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
+  AddOnOptions,
+  AddOnSetup,
   RoomSetup,
   RoomSetupOptions,
   RoomTypeSetup,
@@ -551,6 +553,39 @@ const parseRoomList = (body: unknown, status: number): RoomSetup[] => {
   return body as RoomSetup[];
 };
 const parseNothing = () => undefined;
+
+const isAddOn = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.startDate) &&
+  (v.endDate === null || isString(v.endDate)) &&
+  (v.sku === null || isLookup(v.sku)) &&
+  typeof v.onlineBooking === 'boolean' &&
+  isString(v.description) &&
+  (v.kind === 'item' || v.kind === 'combo') &&
+  typeof v.trackNightly === 'boolean' &&
+  isCount(v.nightlyQty) &&
+  Array.isArray(v.photos) &&
+  Array.isArray(v.locationIds) &&
+  Array.isArray(v.roomTypeIds);
+const parseAddOn = (body: unknown, status: number): AddOnSetup => {
+  if (!isAddOn(body)) throw invalid(status, 'add-on');
+  return body as unknown as AddOnSetup;
+};
+const parseAddOnList = (body: unknown, status: number): AddOnSetup[] => {
+  if (!Array.isArray(body) || !body.every(isAddOn)) throw invalid(status, 'add-ons');
+  return body as unknown as AddOnSetup[];
+};
+const parseAddOnOptions = (body: unknown, status: number): AddOnOptions => {
+  if (
+    !isObject(body) ||
+    !(['skus', 'locations', 'roomTypes'] as const).every((k) => listOf(body[k], isLookup))
+  ) {
+    throw invalid(status, 'add-on options');
+  }
+  return body as unknown as AddOnOptions;
+};
 
 const STAT_COUNTS = [
   'arrivalsToday',
@@ -1180,6 +1215,19 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           : request('/rooms', {}, o, parseRoomSetup, { method: 'POST', body: input }),
       deleteRoom: (id, o) =>
         request(`/rooms/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
+    addOns: {
+      getOptions: (o) => request('/add-ons/options', {}, o, parseAddOnOptions),
+      list: (o) => request('/add-ons', {}, o, parseAddOnList),
+      save: (input, o) =>
+        input.id
+          ? request(`/add-ons/${encodeURIComponent(input.id)}`, {}, o, parseAddOn, {
+              method: 'PUT',
+              body: input,
+            })
+          : request('/add-ons', {}, o, parseAddOn, { method: 'POST', body: input }),
+      delete: (id, o) =>
+        request(`/add-ons/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
