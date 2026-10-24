@@ -1,6 +1,6 @@
 # LP-S.6 Hold shading on the grid
 
-Ticket Excia/Guestrooms-Demo#152 (epic #146); PR Excia/Guestrooms-Demo#<pr>. Figma: no frame (the ticket is marked `needs-design`); the look is a placeholder.
+Ticket Excia/Guestrooms-Demo#152 (epic #146); PR Excia/Guestrooms-Demo#171. Figma: no frame (the ticket is marked `needs-design`); the look is a placeholder.
 **Status:** in review (built on a mock hold; needs a backend hold and a designer), 2026-10-24.
 
 Legacy: searched `ReservationsScheduleView` (the room row, reservation, closure, linked-room, unassigned and housekeeping boxes and the view itself) for hold, in-progress, timer, countdown and expiry handling and found none. The legacy schedule draws no shading for a booking in progress; the doc requirement 15.10 / 15.10.1 (gap C7, item 19) is the only source.
