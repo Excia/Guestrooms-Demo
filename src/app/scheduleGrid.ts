@@ -4,13 +4,16 @@
 import { addDays, daysBetween, nightsOverlap, type IsoDate } from '../lib/dates';
 import type {
   HousekeepingStatus,
+  LinkedRoom,
   ScheduleBlock,
+  ScheduleBlockStatus,
   ScheduleClosure,
   ScheduleData,
   ScheduleRoom,
   SettableHousekeepingStatus,
 } from '../api/types';
 import { SETTABLE_HOUSEKEEPING_STATUSES } from '../api/types';
+import { blockIndicators, linkedTooltipLines } from './scheduleLinked';
 import { blockLayout, dayHeader, type BlockLayout } from './schedule';
 import type { DropRefusal, DropResult, ScheduleMove } from './scheduleDrag';
 
@@ -153,13 +156,16 @@ export function columnAtX(
  * Only the drawn edge is decided here; which nights the block occupies never changes.
  */
 export function blockMarkers(
-  block: { earlyCheckIn?: boolean; lateCheckOut?: boolean },
+  block: {
+    status?: ScheduleBlockStatus;
+    earlyCheckIn?: boolean;
+    lateCheckOut?: boolean;
+    linkedTo?: LinkedRoom;
+  },
   layout: Pick<BlockLayout, 'continuesAfter'> & Partial<Pick<BlockLayout, 'continuesBefore'>>,
 ): { left: boolean; right: boolean } {
-  return {
-    left: Boolean(block.earlyCheckIn),
-    right: Boolean(block.lateCheckOut) && !layout.continuesAfter,
-  };
+  const { early, late } = blockIndicators(block);
+  return { left: early, right: late && !layout.continuesAfter };
 }
 
 export type EmptyCellAction =
@@ -506,14 +512,16 @@ export function blockAriaLabel(
   link?: SegmentLink,
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
+  const { early, late } = blockIndicators(block);
   return [
     block.guestName,
     block.confirmationNumber,
     status,
     room ? `Room ${room.number}` : 'Unassigned room',
     `${formatDialogDate(block.startDate)} to ${formatDialogDate(block.endDate)}`,
-    ...(block.earlyCheckIn ? ['early check in'] : []),
-    ...(block.lateCheckOut ? ['late check out'] : []),
+    ...(block.linkedTo ? [linkedTooltipLines(block.linkedTo).join(', ')] : []),
+    ...(early ? ['early check in'] : []),
+    ...(late ? ['late check out'] : []),
     ...(block.housekeeping && block.housekeeping !== 'nyci'
       ? [`housekeeping ${HOUSEKEEPING_LABELS[block.housekeeping]}`]
       : []),
