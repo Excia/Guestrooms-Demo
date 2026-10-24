@@ -15,7 +15,8 @@ import {
   type RangeLimits,
   type RangeValue,
 } from '../../app/dateRange';
-import { isValidIsoDate, todayIso, type IsoDate } from '../../app/dateSelection';
+import { isValidIsoDate, type IsoDate } from '../../app/dateSelection';
+import { useClubToday } from '../../app/useClubToday';
 import { clampDate, type WeekStartDay } from '../../lib/calendar';
 import Calendar, { type CalendarHandle } from './Calendar';
 
@@ -88,7 +89,7 @@ export default function DateField({
   onBlur,
   sx,
 }: DateFieldProps) {
-  const today = todayProp ?? todayIso();
+  const today = useClubToday(todayProp);
   const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<RangeValue>({ from: '', to: '' });

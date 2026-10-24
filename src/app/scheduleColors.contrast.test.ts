@@ -70,3 +70,20 @@ describe('text contrast on a faded past block', () => {
     expect(c.opacity.past).toBeGreaterThanOrEqual(0.5);
   });
 });
+
+describe('past-date header text', () => {
+  it('has AA contrast on the header and on the past-dates wash over the grid', () => {
+    const over = (bg: string) => {
+      const [r, g, b] = bg.match(/[\d.]+/g)!.map(Number);
+      const a = 0.6; // theme.palette.text.secondary: black at 60%
+      const m = (v: number) => Math.round(v * (1 - a));
+      return `rgb(${m(r)}, ${m(g)}, ${m(b)})`;
+    };
+    const paper = 'rgb(255, 255, 255)';
+    const wash = overWhite(c.pastDate);
+    const todayBg = overWhite(c.today);
+    for (const bg of [paper, wash, todayBg]) {
+      expect(getContrastRatio(over(bg), bg), bg).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

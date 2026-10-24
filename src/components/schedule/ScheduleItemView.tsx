@@ -265,10 +265,11 @@ export default memo(function ScheduleItemView({
               ? 'none'
               : `0.5px solid ${t.palette.schedule.nyciBorder}`,
           borderRadius: `${cl} ${cr} ${cr} ${cl}`,
-          boxShadow: highlighted ? t.shadows[6] : t.shadows[1],
-          // The active event: a solid outline in the primary color on top of the raised shadow.
-          outline: highlighted ? `2px solid ${t.palette.primary.main}` : undefined,
-          outlineOffset: highlighted ? 1 : undefined,
+          // The active event: a raised shadow and a thick bar on the left edge. Not a ring, so it
+          // cannot be mistaken for the keyboard focus ring or the grid cursor (2px outlines).
+          boxShadow: highlighted
+            ? `${t.shadows[6]}, inset ${t.spacing(0.5)} 0 0 ${t.palette.primary.main}`
+            : t.shadows[1],
         };
       }}
     >

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clubTodayIso } from './dates';
+import { clubTodayIso } from './clubTime';
 
 // 2026-10-25 03:30 UTC: still the 24th in New York and Los Angeles, already the 25th in Berlin and Tokyo.
 const instant = new Date('2026-10-25T03:30:00Z');
