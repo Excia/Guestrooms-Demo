@@ -6,7 +6,7 @@ import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { memo, useEffect, useLayoutEffect, useRef, useState, type PointerEventHandler } from 'react';
+import { memo, useLayoutEffect, useRef, useState, type PointerEventHandler } from 'react';
 import type { HousekeepingStatus, LinkedRoom, ScheduleBlock, ScheduleClosure } from '../../api';
 import type { IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';

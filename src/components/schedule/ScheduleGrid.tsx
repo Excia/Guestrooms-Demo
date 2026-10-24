@@ -320,6 +320,8 @@ export default function ScheduleGrid({
   const unassignedRows = section.rows.length;
   const unassignedPx = unassignedRows * rowPx;
   const [gridFocused, setGridFocused] = useState(false);
+  // Focus is on a tab stop inside the grid (an Unassigned block), not on the grid element itself.
+  const [innerFocus, setInnerFocus] = useState(false);
   // The block under the cursor shows its tooltip only while the cursor is driven by the keyboard:
   // set by a navigation key or by keyboard (focus-visible) focus, cleared by any pointer press.
   const [keyboardCursor, setKeyboardCursor] = useState(false);
@@ -851,13 +853,14 @@ export default function ScheduleGrid({
         aria-rowcount={rooms.length + 1 + unassignedRows}
         aria-colcount={days + 1}
         aria-busy={busy || undefined}
-        aria-activedescendant={gridFocused ? activeId : undefined}
+        aria-activedescendant={innerFocus ? undefined : activeId}
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
         onFocus={(e) => {
           // Focus on a tab stop inside the grid (an Unassigned block) is not the grid's cursor: put the
           // cursor's tooltip and aria-activedescendant away. Focus back on the grid restores them.
+          setInnerFocus(e.target !== e.currentTarget);
           if (e.target !== e.currentTarget) {
             setGridFocused(false);
             setKeyboardCursor(false);
@@ -878,6 +881,7 @@ export default function ScheduleGrid({
           if (!e.currentTarget.contains(e.relatedTarget)) {
             setGridFocused(false);
             setKeyboardCursor(false);
+            setInnerFocus(false);
           }
           // Leaving the grid abandons a keyboard pick-up, also into the Unassigned section's tab stops.
           if (
