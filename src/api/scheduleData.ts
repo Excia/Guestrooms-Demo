@@ -707,14 +707,13 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
     'needs-maintenance',
   ];
   let n = 0;
+  let hasNotes = state.blocks.some((b) => b.housekeepingNotes);
   for (const block of state.blocks) {
     if (block.status === 'checked-in') block.housekeeping = 'not-checked-out';
     else if (block.status === 'checked-out') block.housekeeping = departed[n++ % departed.length];
-    if (
-      block.housekeeping === 'not-checked-out' &&
-      !state.blocks.some((b) => b.housekeepingNotes)
-    ) {
+    if (block.housekeeping === 'not-checked-out' && !hasNotes) {
       block.housekeepingNotes = 'Guest asked for extra towels.';
+      hasNotes = true;
     }
   }
   return state;
