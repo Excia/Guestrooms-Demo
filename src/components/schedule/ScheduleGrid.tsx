@@ -28,6 +28,10 @@ import {
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
 import {
   blockAriaLabel,
+  blockTipText,
+  segmentBadge,
+  segmentLinks,
+  type SegmentLink,
   blockSpan,
   columnAtX,
   emptyCellAction,
@@ -101,6 +105,18 @@ interface DragState {
 
 const DRAG_THRESHOLD_PX = 4;
 
+/** Keys that move the grid's cursor. */
+const NAVIGATION_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+]);
+
 const HELP =
   'Use the arrow keys to move between rooms and dates. Press Enter on a reservation to open its details, or on an empty date to start a new reservation there. ' +
   'Press Space or M to pick it up, the arrow keys to choose a new room or date, Enter or Space to drop it ' +
@@ -121,6 +137,10 @@ interface RowProps {
   activeCol: number | null;
   draggingId: string | null;
   idPrefix: string;
+  /** Place of each part of a stay that changed room: "part 2 of 3" and the rooms next to it. */
+  links: ReadonlyMap<string, SegmentLink>;
+  /** The grid has keyboard focus: the block under the cursor then shows its tooltip. */
+  focused: boolean;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
   onSetHousekeeping?: SetHousekeeping;
 }
@@ -141,6 +161,8 @@ const ScheduleRow = memo(function ScheduleRow({
   activeCol,
   draggingId,
   idPrefix,
+  links,
+  focused,
   onItemPointerDown,
   onSetHousekeeping,
 }: RowProps) {
@@ -202,6 +224,7 @@ const ScheduleRow = memo(function ScheduleRow({
       {items.map((item) => {
         const layout = blockLayout(item, startDate, days);
         if (!layout) return null;
+        const link = item.kind === 'reservation' ? links.get(item.id) : undefined;
         return (
           <ScheduleItemView
             key={item.id}
@@ -213,12 +236,19 @@ const ScheduleRow = memo(function ScheduleRow({
             dragging={draggingId === item.id}
             label={
               item.kind === 'reservation'
-                ? blockAriaLabel(item, room)
+                ? blockAriaLabel(item, room, link)
                 : closureAriaLabel(item, room)
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
             onSetHousekeeping={onSetHousekeeping}
             active={activeItem?.id === item.id}
+            tipFocused={focused && activeItem?.id === item.id}
+            linkText={link ? segmentBadge(link) : undefined}
+            tip={
+              item.kind === 'reservation'
+                ? blockTipText(item, room, link)
+                : (item as ScheduleClosure).reason
+            }
           />
         );
       })}
@@ -264,6 +294,7 @@ export default function ScheduleGrid({
   const todayIndex = daysBetween(startDate, today);
   const blocksByRoom = useMemo(() => groupByRoom(data.blocks), [data.blocks]);
   const closuresByRoom = useMemo(() => groupByRoom(data.closures), [data.closures]);
+  const links = useMemo(() => segmentLinks(data.blocks, data.rooms), [data.blocks, data.rooms]);
   const labels = useMemo(
     () => rooms.map((r) => roomRowLabel(r, data.locations, data.roomTypes)),
     [rooms, data.locations, data.roomTypes],
@@ -288,6 +319,10 @@ export default function ScheduleGrid({
   );
   const unassignedRows = section.rows.length;
   const unassignedPx = unassignedRows * rowPx;
+  const [gridFocused, setGridFocused] = useState(false);
+  // The block under the cursor shows its tooltip only while the cursor is driven by the keyboard:
+  // set by a navigation key or by keyboard (focus-visible) focus, cleared by any pointer press.
+  const [keyboardCursor, setKeyboardCursor] = useState(false);
 
   // Virtualization window. The scroll handler only stores the row range when it changes.
   const range = useMemo(
@@ -662,7 +697,7 @@ export default function ScheduleGrid({
       return;
     }
     if (!isDraggable(item)) {
-      setAnnouncement(refusalMessage('checked-out'));
+      setAnnouncement(refusalMessage(item.roomChange ? 'room-changed-stay' : 'checked-out'));
       return;
     }
     const result = evaluate(item, row, 0);
@@ -676,6 +711,7 @@ export default function ScheduleGrid({
     if (event.target !== event.currentTarget || event.altKey || event.ctrlKey || event.metaKey)
       return;
     const key = event.key;
+    if (NAVIGATION_KEYS.has(key)) setKeyboardCursor(true);
     if (drag?.mode === 'keyboard') {
       const arrows: Record<string, [number, number]> = {
         ArrowUp: [-1, 0],
@@ -819,7 +855,23 @@ export default function ScheduleGrid({
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
+        onFocus={(e) => {
+          setGridFocused(true);
+          // Keyboard focus (Tab, or focus handed back by a closing panel) is :focus-visible; a mouse
+          // press that focuses the grid is not.
+          let visible = false;
+          try {
+            visible = e.currentTarget.matches(':focus-visible');
+          } catch {
+            // old engines: treat as a pointer focus
+          }
+          if (visible) setKeyboardCursor(true);
+        }}
         onBlur={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget)) {
+            setGridFocused(false);
+            setKeyboardCursor(false);
+          }
           // Leaving the grid abandons a keyboard pick-up, also into the Unassigned section's tab stops.
           if (
             drag?.mode === 'keyboard' &&
@@ -834,6 +886,8 @@ export default function ScheduleGrid({
         onClick={selectItemFromEvent}
         onPointerDown={(e) => {
           pressRef.current = { x: e.clientX, y: e.clientY };
+          // Any pointer use (a click, a drag, a refused drag) ends the keyboard cursor's tooltip.
+          setKeyboardCursor(false);
         }}
         onPointerCancel={() => {
           pressRef.current = 'cancelled';
@@ -985,6 +1039,8 @@ export default function ScheduleGrid({
                 activeCol={i === cursorRow ? cursor.col : null}
                 draggingId={drag?.item.id ?? null}
                 idPrefix={idPrefix}
+                links={links}
+                focused={gridFocused && keyboardCursor}
                 onItemPointerDown={onItemPointerDown}
                 onSetHousekeeping={onSetHousekeeping}
               />

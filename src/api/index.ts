@@ -9,6 +9,7 @@ import type { ApiClient } from './types';
 import { ApiError } from './types';
 
 export * from './types';
+export * from './reservationListTypes';
 export { ApiProvider, useApi } from './ApiProvider';
 export { permissionsFromGrant } from './grant';
 

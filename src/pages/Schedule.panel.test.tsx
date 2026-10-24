@@ -240,9 +240,10 @@ describe('accordion', () => {
     expect(within(dialog).getByText('Guest is celebrating a birthday!')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Rates & Payment' }));
     expect(within(dialog).getByText('Folio Total')).toBeInTheDocument();
+    // The folio view of this reservation (not the Open Folios list).
     expect(within(dialog).getByRole('link', { name: 'Folio' })).toHaveAttribute(
       'href',
-      '/open-folios',
+      '/reservations/rs-2/folio',
     );
   });
 });
@@ -261,14 +262,20 @@ describe('split CTA', () => {
       within(menu)
         .getAllByRole('menuitem')
         .map((m) => m.textContent),
-    ).toEqual(['Print Registration Card', 'Jump to Folio']);
+    ).toEqual([
+      'Edit Reservation',
+      'Cancel Reservation',
+      'Add Another Room',
+      'Print Registration Card(s)',
+      'Jump to Folio',
+    ]);
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     expect(arrow).toHaveFocus();
     expect(url()).toContain('res=rs-5'); // Escape closed only the menu
   });
 
-  it('stub actions say what is missing; Jump to Folio goes to the folios page', async () => {
+  it("stub actions say what is missing; Jump to Folio goes to the reservation's folio", async () => {
     const user = await loaded('/schedule?res=rs-5&rr=rr-5');
     const dialog = await panel(/Reservation #GR-50310/);
     await user.click(await within(dialog).findByRole('button', { name: 'Check In' }));
@@ -276,7 +283,7 @@ describe('split CTA', () => {
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Jump to Folio' }));
     expect(await screen.findByText('Elsewhere')).toBeInTheDocument();
-    expect(url()).toBe('/open-folios');
+    expect(url()).toBe('/reservations/rs-5/folio');
   });
 
   it('multi-room: Check In All Rooms, a room selector and the room count in the title', async () => {
@@ -291,7 +298,7 @@ describe('split CTA', () => {
     expect(within(dialog).getByRole('button', { name: /Room 205/ })).toBeInTheDocument();
   });
 
-  it('checked out: Manage Reservation with only Jump to Folio in its menu', async () => {
+  it('checked out: Manage Reservation with Print Registration Card(s) and Jump to Folio in its menu', async () => {
     const user = await loaded('/schedule?res=rs-1');
     const dialog = await panel(/Reservation #GR-50188/);
     expect(
@@ -299,7 +306,7 @@ describe('split CTA', () => {
     ).toBeInTheDocument();
     expect(within(dialog).getByText('Checked Out')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
-    expect(within(await screen.findByRole('menu')).getAllByRole('menuitem')).toHaveLength(1);
+    expect(within(await screen.findByRole('menu')).getAllByRole('menuitem')).toHaveLength(2);
   });
 });
 
@@ -553,7 +560,10 @@ describe('hold timer', () => {
     const base = createMockClient({ today: TODAY });
     return {
       ...base,
-      settings: { getBookingHold: async () => ({ employee: minutes, member: 99, nonMember: 98 }) },
+      settings: {
+        ...base.settings,
+        getBookingHold: async () => ({ employee: minutes, member: 99, nonMember: 98 }),
+      },
     };
   }
   beforeEach(() => {
@@ -625,7 +635,7 @@ describe('hold timer', () => {
     const base = createMockClient({ today: TODAY });
     setup('/schedule?panel=new', {
       ...base,
-      settings: { getBookingHold: () => Promise.reject(new ApiError(500, 'x')) },
+      settings: { ...base.settings, getBookingHold: () => Promise.reject(new ApiError(500, 'x')) },
     });
     expect(await screen.findByText(/time limit could not be loaded/)).toBeInTheDocument();
     expect(screen.queryByRole('timer')).not.toBeInTheDocument();
@@ -913,7 +923,10 @@ describe('the time limit stops with the panel', () => {
     const base = createMockClient({ today: TODAY });
     setup('/schedule?panel=new', {
       ...base,
-      settings: { getBookingHold: async () => ({ employee: 1, member: 1, nonMember: 1 }) },
+      settings: {
+        ...base.settings,
+        getBookingHold: async () => ({ employee: 1, member: 1, nonMember: 1 }),
+      },
     });
     await screen.findByRole('timer');
     fireEvent.click(await screen.findByRole('button', { name: 'Back to schedule' }));

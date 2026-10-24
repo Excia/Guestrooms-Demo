@@ -1,5 +1,9 @@
 # Ticket entry template
 
+> New rows for decisions, questions, Figma deviations, placeholders and status go in your own file
+> `entries/<ticket>-<short-name>.md` (copy [entries/_TEMPLATE.md](entries/_TEMPLATE.md); rules in
+> [entries/README.md](entries/README.md)). The epic-file block below is for the narrative only.
+
 Copy the block below into the matching epic file under [features/](features/) when a ticket starts or
 changes, fill every line (write "none" or "Unknown" rather than leaving a line out), and update the status
 tables in [README.md](README.md). Keep wording faithful to the ticket body; do not invent requirements.
@@ -24,12 +28,13 @@ names and node ids, or "no frame">.
 ## Checklist when you touch a ticket
 
 1. Entry above written or updated in the epic file.
-2. Status tables in the README updated (status, PR link).
-3. New or changed decision added to [decisions.md](decisions.md) (id, date, why, source, status).
+2. `Status` set in your entry file (do not edit the README status tables; the Manager syncs them).
+3. New decision added to your entry with a `D-<ticket>-<n>` ID (decisions.md only for changing an existing row).
 4. New or changed endpoint, error or backend rule in [api-contract.md](api-contract.md).
 5. New permission in [permissions.md](permissions.md).
-6. Questions added or answered (status, date, answer) in [open-questions.md](open-questions.md).
-7. Invented values added or replaced in [placeholders.md](placeholders.md).
-8. Differences from Figma or missing frames in [figma-deviations.md](figma-deviations.md).
+6. Questions in your entry (`Q-<ticket>-<n>`); answer an existing one by editing only its row in [open-questions.md](open-questions.md).
+7. Invented values in your entry (`P-<ticket>-<n>`); replace an old one by editing only its line in [placeholders.md](placeholders.md).
+8. Differences from Figma or missing frames in your entry (`F-<ticket>-<n>`).
 9. New domain term in [glossary.md](glossary.md); new rule in [nonfunctional.md](nonfunctional.md); new
    build switch or architecture change in [overview.md](overview.md).
+10. `git fetch origin && git merge origin/main` immediately before opening the PR (and again before asking for merge); resolve conflicts yourself.

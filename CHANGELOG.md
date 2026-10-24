@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.7.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.6.0...guestrooms-v1.7.0) (2026-10-21)
+
+
+### Features
+
+* add booking rules ([#137](https://github.com/Excia/Guestrooms-Demo/issues/137)) ([ed2d7e2](https://github.com/Excia/Guestrooms-Demo/commit/ed2d7e2b8c5848627e4b74c8cb4c77513d43a6e9))
+* add bulk check-in with result dialogs ([#139](https://github.com/Excia/Guestrooms-Demo/issues/139)) ([d4053b2](https://github.com/Excia/Guestrooms-Demo/commit/d4053b2a9eb37273e13b7de4a1a1aeeb3cb171ac))
+* add online booking reservation widget and adjust search ([#136](https://github.com/Excia/Guestrooms-Demo/issues/136)) ([eae0918](https://github.com/Excia/Guestrooms-Demo/commit/eae09188bc4ff14a102f9e98cb47bcdb04880e44))
+* add reservation list with filters, sorting and selection ([#138](https://github.com/Excia/Guestrooms-Demo/issues/138)) ([c9106e5](https://github.com/Excia/Guestrooms-Demo/commit/c9106e59c4c9c836c1ce96c876442b7e82f614f0))
+* add room types and rooms setup ([#140](https://github.com/Excia/Guestrooms-Demo/issues/140)) ([b695a75](https://github.com/Excia/Guestrooms-Demo/commit/b695a75ff19360b260c1a7ca9ba09e6faf270b05))
+
+## [1.6.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.5.0...guestrooms-v1.6.0) (2026-10-21)
+
+
+### Features
+
+* add folio line type variations ([#135](https://github.com/Excia/Guestrooms-Demo/issues/135)) ([6467b24](https://github.com/Excia/Guestrooms-Demo/commit/6467b2402f1f7950ec672aa6a3571cccdf6ff941))
+* add online booking header, account menu and return to site tooltip ([#130](https://github.com/Excia/Guestrooms-Demo/issues/130)) ([1519370](https://github.com/Excia/Guestrooms-Demo/commit/1519370d22cc4903bc4315c060fdbfea24e5de1b))
+* add reporting landing page ([#134](https://github.com/Excia/Guestrooms-Demo/issues/134)) ([14060f6](https://github.com/Excia/Guestrooms-Demo/commit/14060f691e69c0a771ff8259404b96a0703c6d6b))
+
 ## [1.5.0](https://github.com/Excia/Guestrooms-Demo/compare/guestrooms-v1.4.0...guestrooms-v1.5.0) (2026-10-21)
 
 

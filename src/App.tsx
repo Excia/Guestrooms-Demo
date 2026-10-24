@@ -5,18 +5,29 @@ import { Navigate, Route, Routes, useLocation } from 'react-router';
 import {
   DASHBOARD_PATH,
   NEW_RESERVATION_RESULTS_PATH,
+  BOOKING_RULES_PATH,
+  RESERVATION_HUB_PATH,
+  RESERVATIONS_PATH,
   PRIMARY_SETUP_PATH,
+  ROOM_TYPES_PATH,
+  ROOMS_PATH,
   FOLIO_PATH,
   routes,
   SCHEDULE_PATH,
 } from './app/routes';
+import { REPORTING_PATH } from './app/reports';
 import AppShell from './AppShell';
 import ErrorBoundary from './components/ErrorBoundary';
 import AccessDeniedNotice from './components/AccessDeniedNotice';
 import RequireAccess from './components/RequireAccess';
 import Dashboard from './pages/Dashboard';
+import RoomTypes from './pages/RoomTypes';
+import Rooms from './pages/Rooms';
+import BookingRules from './pages/BookingRules';
 import SystemSettings from './pages/SystemSettings';
+import Reporting from './pages/Reporting';
 import NewReservationResults from './pages/NewReservationResults';
+import ReservationList from './pages/ReservationList';
 import ScheduleSkeleton from './components/schedule/ScheduleSkeleton';
 
 // Dev-only gallery of the shared components (0.9). Behind import.meta.env.DEV and lazy-loaded, so
@@ -26,6 +37,11 @@ export const COMPONENTS_DEMO_PATH = '/dev/components';
 const Schedule = lazy(() => import('./pages/Schedule'));
 const Folio = lazy(() => import('./pages/Folio'));
 const ComponentsDemo = import.meta.env.DEV ? lazy(() => import('./pages/ComponentsDemo')) : null;
+// Dev-only mock of the embedded widget and the online booking pages (ticket 5.2).
+export const ONLINE_BOOKING_DEMO_PATH = '/dev/online-booking';
+const OnlineBookingDemo = import.meta.env.DEV
+  ? lazy(() => import('./pages/OnlineBookingDemo'))
+  : null;
 
 function PagePlaceholder({ title }: { title: string }) {
   return (
@@ -47,12 +63,17 @@ function RedirectToSchedule() {
 const pages: Partial<Record<string, ReactElement>> = {
   [DASHBOARD_PATH]: <Dashboard />,
   [PRIMARY_SETUP_PATH]: <SystemSettings />,
+  [BOOKING_RULES_PATH]: <BookingRules />,
+  [REPORTING_PATH]: <Reporting />,
+  [ROOM_TYPES_PATH]: <RoomTypes />,
+  [ROOMS_PATH]: <Rooms />,
   [FOLIO_PATH]: (
     <Suspense fallback={null}>
       <Folio />
     </Suspense>
   ),
   [NEW_RESERVATION_RESULTS_PATH]: <NewReservationResults />,
+  [RESERVATIONS_PATH]: <ReservationList />,
   [SCHEDULE_PATH]: (
     <Suspense fallback={<ScheduleSkeleton />}>
       <Schedule />
@@ -84,6 +105,17 @@ export default function App() {
             />
           );
         })}
+        {/* The Reservation Hub (ticket 3.3) is not a menu link; until it exists the row click lands on a placeholder. */}
+        <Route
+          path={RESERVATION_HUB_PATH}
+          element={
+            <RequireAccess pageId="reservations">
+              <ErrorBoundary>
+                <PagePlaceholder title="Reservation Hub" />
+              </ErrorBoundary>
+            </RequireAccess>
+          }
+        />
         {/* Deliberately not in the route table or the menu. */}
         {ComponentsDemo ? (
           <Route
@@ -92,6 +124,18 @@ export default function App() {
               <ErrorBoundary>
                 <Suspense fallback={null}>
                   <ComponentsDemo />
+                </Suspense>
+              </ErrorBoundary>
+            }
+          />
+        ) : null}
+        {OnlineBookingDemo ? (
+          <Route
+            path={ONLINE_BOOKING_DEMO_PATH}
+            element={
+              <ErrorBoundary>
+                <Suspense fallback={null}>
+                  <OnlineBookingDemo />
                 </Suspense>
               </ErrorBoundary>
             }

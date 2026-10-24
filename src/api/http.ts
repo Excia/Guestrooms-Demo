@@ -1,7 +1,12 @@
 import type {
   ApiClient,
   BookingHold,
+  CancelReservationRequest,
+  UndoCheckInRequest,
+  ChangeRoomRequest,
+  ChangeRoomResult,
   CreateMemberRequest,
+  CustomReportSummary,
   Member,
   MemberQuery,
   CreateReservationRequest,
@@ -18,6 +23,7 @@ import type {
   Reservation,
   ReservationQuery,
   RequestOptions,
+  RoomChangeRule,
   MoveDatesRequest,
   MoveRoomRequest,
   ScheduleBlock,
@@ -25,12 +31,22 @@ import type {
   ScheduleMoveResult,
   ScheduleQuery,
   SetHousekeepingRequest,
+  RoomSetup,
+  RoomSetupOptions,
+  RoomTypeSetup,
+  BookingRules,
+  BookingRulesOptions,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
+import { normalizeRuns } from '../lib/stayPlan';
 import { expectedLeadOccupantName } from './createRules';
+import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
+import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
+  assertChangeRoomRequest,
+  assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
   assertMemberQuery,
@@ -39,10 +55,13 @@ import {
   assertMoveRoomRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
+  assertReservationListQuery,
   assertResourceId,
   assertScheduleQuery,
   assertSetHousekeepingRequest,
 } from './validation';
+import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
+import { parseIsoDate } from '../lib/dates';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -126,6 +145,18 @@ function parseReservation(body: unknown, status: number): Reservation {
 const isFlag = (v: unknown): v is boolean => typeof v === 'boolean';
 const ROOM_STATUSES: readonly string[] = ['nyci', 'checked-in', 'checked-out'];
 
+const isPartialStays = (v: unknown) =>
+  v === undefined ||
+  listOf(
+    v,
+    (p) =>
+      isObject(p) &&
+      isString(p.roomId) &&
+      (p.roomNumber === null || isString(p.roomNumber)) &&
+      isString(p.arrival) &&
+      isString(p.departure),
+  );
+
 // Light shape guard on what the details panel reads. A mismatch is an invalid-response error.
 function isReservationDetail(v: unknown): v is ReservationDetail {
   return (
@@ -156,7 +187,9 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(r.arrival) &&
         isString(r.departure) &&
         isString(r.status) &&
-        ROOM_STATUSES.includes(r.status),
+        ROOM_STATUSES.includes(r.status) &&
+        isPartialStays(r.previousStays) &&
+        isPartialStays(r.upcomingStays),
     ) &&
     (v.rooms as unknown[]).length >= 1 &&
     isFlag(v.earlyCheckIn) &&
@@ -176,10 +209,17 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     isCount(v.stay.folioTotalCents) &&
     listOf(
       v.stay.lines,
-      (l) => isObject(l) && isString(l.roomType) && isString(l.date) && isCount(l.amountCents),
+      (l) =>
+        isObject(l) &&
+        isString(l.roomType) &&
+        isString(l.date) &&
+        isCount(l.amountCents) &&
+        isString(l.reservationRoomId) &&
+        l.reservationRoomId !== '',
     ) &&
     isString(v.version) &&
-    v.version !== ''
+    v.version !== '' &&
+    (v.lastAuditedDate === undefined || v.lastAuditedDate === null || isString(v.lastAuditedDate))
   );
 }
 
@@ -191,6 +231,8 @@ const CHARGE_TYPES: readonly string[] = [
   'add-on',
   'surcharge',
   'service-fee',
+  'split-parent',
+  'split-child',
 ];
 const CHARGE_STATUSES: readonly string[] = ['posted', 'unposted', 'settled', 'split'];
 const isNullableString = (v: unknown) => v === null || isString(v);
@@ -253,12 +295,23 @@ const parseFolio =
     return body;
   };
 
+// A malformed `lastAuditedDate` is treated as unknown (absent): Undo Check In stays hidden.
+function withKnownAudit(detail: ReservationDetail): ReservationDetail {
+  const date = detail.lastAuditedDate;
+  if (typeof date === 'string' && parseIsoDate(date) === null) {
+    const rest = { ...detail };
+    delete rest.lastAuditedDate;
+    return rest;
+  }
+  return detail;
+}
+
 // The answer must be for the reservation that was asked for.
 const parseDetail =
   (id: string) =>
   (body: unknown, status: number): ReservationDetail => {
     if (!isReservationDetail(body) || body.id !== id) throw invalid(status, 'reservation detail');
-    return body;
+    return withKnownAudit(body);
   };
 
 // The answer must carry the flags the request asked for (a changed flag that did not stick is a
@@ -278,6 +331,20 @@ const parseEarlyLate =
       throw invalid(status, 'early/late');
     }
     return body as unknown as EarlyLateResult;
+  };
+
+// The cancel answer is the reservation, and it must say it is cancelled.
+const parseCancelled =
+  (request: CancelReservationRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (
+      !isReservationDetail(body) ||
+      body.id !== request.reservationId ||
+      body.status !== 'cancelled'
+    ) {
+      throw invalid(status, 'cancelled reservation');
+    }
+    return withKnownAudit(body);
   };
 
 const parseCreated =
@@ -343,6 +410,26 @@ function parseBookingHold(body: unknown, status: number): BookingHold {
   return body as unknown as BookingHold;
 }
 
+function parseRoomChangeRule(body: unknown, status: number): RoomChangeRule {
+  if (!isObject(body) || !isFlag(body.askRateOnRoomChange)) {
+    throw invalid(status, 'room change rule');
+  }
+  return { askRateOnRoomChange: body.askRateOnRoomChange };
+}
+
+const isCustomReport = (v: unknown): v is CustomReportSummary =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.creatorName) &&
+  isString(v.updatedAt) &&
+  !Number.isNaN(Date.parse(v.updatedAt));
+
+function parseCustomReports(body: unknown, status: number): CustomReportSummary[] {
+  if (!Array.isArray(body) || !body.every(isCustomReport)) throw invalid(status, 'custom reports');
+  return body;
+}
+
 const isLookup = (v: unknown) => isObject(v) && isString(v.id) && isString(v.label);
 
 // Checks the shape the form relies on; the rules themselves are the backend's to enforce.
@@ -372,6 +459,30 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
   return body as unknown as SystemSettings;
 }
 
+const isAudience = (v: unknown) => isObject(v) && isObject(v.opens) && isCount(v.holdMinutes);
+
+// Checks the shape the form relies on; the rules themselves are the backend's to enforce.
+function parseBookingRules(body: unknown, status: number): BookingRules {
+  if (
+    !isObject(body) ||
+    !isAudience(body.employee) ||
+    !(body.member === null || isAudience(body.member)) ||
+    !(body.nonMember === null || isAudience(body.nonMember)) ||
+    typeof body.uniqueMemberTypeRules !== 'boolean' ||
+    !Array.isArray(body.memberTypeRules)
+  ) {
+    throw invalid(status, 'booking rules');
+  }
+  return body as unknown as BookingRules;
+}
+
+function parseBookingRulesOptions(body: unknown, status: number): BookingRulesOptions {
+  if (!isObject(body) || !listOf(body.roomTypes, isLookup) || !listOf(body.memberTypes, isLookup)) {
+    throw invalid(status, 'booking rules options');
+  }
+  return body as unknown as BookingRulesOptions;
+}
+
 function parseSystemSettingsOptions(body: unknown, status: number): SystemSettingsOptions {
   if (
     !isObject(body) ||
@@ -383,6 +494,55 @@ function parseSystemSettingsOptions(body: unknown, status: number): SystemSettin
   }
   return body as unknown as SystemSettingsOptions;
 }
+
+const isRoomDetails = (v: unknown) =>
+  isObject(v) &&
+  isCount(v.maxOccupancy) &&
+  isObject(v.bedTypes) &&
+  isString(v.description) &&
+  Array.isArray(v.photos) &&
+  Array.isArray(v.featureIds) &&
+  Array.isArray(v.addOnIds);
+
+const parseRoomSetupOptions = (body: unknown, status: number): RoomSetupOptions => {
+  if (
+    !isObject(body) ||
+    !(['skus', 'features', 'addOns', 'bedSizes', 'members'] as const).every((k) =>
+      listOf(body[k], isLookup),
+    )
+  ) {
+    throw invalid(status, 'room setup options');
+  }
+  return body as unknown as RoomSetupOptions;
+};
+
+const isSetupItem = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.startDate) &&
+  isRoomDetails(v.details);
+
+const parseRoomTypeSetup = (body: unknown, status: number): RoomTypeSetup => {
+  if (!isSetupItem(body)) throw invalid(status, 'room type');
+  return body as unknown as RoomTypeSetup;
+};
+const parseRoomTypeList = (body: unknown, status: number): RoomTypeSetup[] => {
+  if (!Array.isArray(body) || !body.every(isSetupItem)) throw invalid(status, 'room types');
+  return body as unknown as RoomTypeSetup[];
+};
+const parseRoomSetup = (body: unknown, status: number): RoomSetup => {
+  if (!isSetupItem(body) || !Array.isArray((body as { linkedRoomIds?: unknown }).linkedRoomIds)) {
+    throw invalid(status, 'room');
+  }
+  return body as unknown as RoomSetup;
+};
+const parseRoomList = (body: unknown, status: number): RoomSetup[] => {
+  if (!Array.isArray(body)) throw invalid(status, 'rooms');
+  body.forEach((room) => parseRoomSetup(room, status));
+  return body as RoomSetup[];
+};
+const parseNothing = () => undefined;
 
 const STAT_COUNTS = [
   'arrivalsToday',
@@ -455,6 +615,7 @@ const parseQuickStats =
     return body as unknown as QuickStats;
   };
 
+const HOUSEKEEPING: readonly string[] = ['clean', 'dirty'];
 const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
 const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
 const HOUSEKEEPING_STATUSES: readonly string[] = [...SETTABLE_HOUSEKEEPING_STATUSES, 'nyci'];
@@ -482,7 +643,18 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     v.version !== '' &&
     (v.housekeeping === undefined ||
       (isString(v.housekeeping) && HOUSEKEEPING_STATUSES.includes(v.housekeeping))) &&
-    (v.housekeepingNotes === undefined || isString(v.housekeepingNotes))
+    (v.housekeepingNotes === undefined || isString(v.housekeepingNotes)) &&
+    (v.roomChange === undefined ||
+      (isObject(v.roomChange) &&
+        (v.roomChange.part === 'previous' ||
+          v.roomChange.part === 'current' ||
+          v.roomChange.part === 'next') &&
+        Number.isInteger(v.roomChange.index) &&
+        Number.isInteger(v.roomChange.count) &&
+        (v.roomChange.index as number) >= 1 &&
+        (v.roomChange.index as number) <= (v.roomChange.count as number) &&
+        isString(v.roomChange.stayId) &&
+        v.roomChange.stayId !== ''))
   );
 }
 
@@ -505,7 +677,8 @@ const parseSchedule =
           isString(r.id) &&
           isString(r.number) &&
           isString(r.locationId) &&
-          isString(r.roomTypeId),
+          isString(r.roomTypeId) &&
+          (r.housekeeping === undefined || HOUSEKEEPING.includes(r.housekeeping as string)),
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
       listOf(body.unassigned, isScheduleBlock) &&
@@ -572,6 +745,87 @@ const parseMove =
     return result;
   };
 
+// The answer must describe the change that was asked for: the blocks of the stay are exactly the
+// segments of the normalized plan. From the first remaining night on there is one block per run of
+// the plan (the first, which keeps the request's id, may also hold earlier nights spent in the same
+// room); stayed nights in another room are checked-out `previous` blocks that end where it begins
+// and never share its room (runs in one room are merged). Several blocks are numbered 1..count and
+// linked by `stayId`; a single block carries no `roomChange`. The vacated room (if any) is the room
+// of the first night.
+const parseChangeRoom =
+  (request: ChangeRoomRequest) =>
+  (body: unknown, status: number): ChangeRoomResult => {
+    const bad = () => invalid(status, 'room change');
+    if (
+      !isObject(body) ||
+      !listOf(body.blocks, isScheduleBlock) ||
+      !listOf(body.removedBlockIds, isString) ||
+      !isObject(body.folio) ||
+      !Number.isInteger(body.folio.deltaCents) ||
+      !Number.isInteger(body.folio.repricedNights) ||
+      (body.folio.repricedNights as number) < 0 ||
+      !Number.isInteger(body.folio.roomChargesCents) ||
+      !(body.vacatedRoom === null || isObject(body.vacatedRoom))
+    ) {
+      throw bad();
+    }
+    const result = body as unknown as ChangeRoomResult;
+    const first = request.nights[0];
+    const vacated = result.vacatedRoom;
+    if (
+      vacated &&
+      (vacated.roomId !== request.fromRoomId ||
+        vacated.roomId === first.roomId ||
+        !HOUSEKEEPING.includes(vacated.housekeeping) ||
+        vacated.since !== first.date)
+    ) {
+      throw bad();
+    }
+    const ids = result.blocks.map((b) => b.id);
+    const moved = result.blocks.find((b) => b.id === request.reservationRoomId);
+    const sorted = [...result.blocks].sort((a, b) => a.startDate.localeCompare(b.startDate));
+    const before = sorted.filter((b) => b.roomChange?.part === 'previous');
+    const after = sorted.filter((b) => b.roomChange?.part !== 'previous');
+    const plan = normalizeRuns(request.nights);
+    const single = sorted.length === 1;
+    if (
+      !moved ||
+      new Set(ids).size !== ids.length ||
+      result.removedBlockIds.some((id) => ids.includes(id)) ||
+      sorted.some((b) => b.reservationId !== moved.reservationId) ||
+      // one block has no link; several are numbered 1..count in date order and share the stay id
+      (single
+        ? moved.roomChange !== undefined
+        : !sorted.every(
+            (b, i) =>
+              b.roomChange?.stayId === moved.id &&
+              b.roomChange.index === i + 1 &&
+              b.roomChange.count === sorted.length,
+          )) ||
+      // the stayed part comes first and ends where the rest begins, in another room
+      sorted.slice(0, before.length).some((b) => b.roomChange?.part !== 'previous') ||
+      before.some((b) => b.status !== 'checked-out') ||
+      after.length === 0 ||
+      (before.length > 0 &&
+        (before[before.length - 1].endDate !== after[0].startDate ||
+          before[before.length - 1].roomId === after[0].roomId)) ||
+      // the rest equals the plan: the first run may start earlier (earlier nights in the same room)
+      after.length !== plan.length ||
+      !after.every(
+        (b, i) =>
+          b.roomId === plan[i].roomId &&
+          b.endDate === plan[i].endDate &&
+          (i === 0 ? b.startDate <= plan[0].startDate : b.startDate === plan[i].startDate) &&
+          b.status === 'checked-in' &&
+          (single || b.roomChange?.part === (i === 0 ? 'current' : 'next')),
+      ) ||
+      after[0].id !== request.reservationRoomId
+    ) {
+      throw bad();
+    }
+    return result;
+  };
+
 function errorFromBody(status: number, statusText: string, text: string): ApiError {
   let message = statusText || 'Request failed';
   let code: string | undefined;
@@ -603,7 +857,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     params: Record<string, string | undefined>,
     requestOptions: RequestOptions | undefined,
     parse: (body: unknown, status: number) => T,
-    send?: { method: 'POST' | 'PUT'; body: unknown; headers?: Record<string, string> },
+    send?: { method: 'POST' | 'PUT' | 'DELETE'; body?: unknown; headers?: Record<string, string> },
   ): Promise<T> {
     const url = new URL(baseUrl + path, globalThis.location?.origin);
     for (const [key, value] of Object.entries(params)) {
@@ -637,10 +891,10 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         throw new DOMException('The operation was aborted.', 'AbortError');
       response = await (options.fetch ?? fetch)(url, {
         method: send?.method,
-        body: send ? JSON.stringify(send.body) : undefined,
+        body: send?.body !== undefined ? JSON.stringify(send.body) : undefined,
         headers: {
           Accept: 'application/json',
-          ...(send ? { 'Content-Type': 'application/json' } : {}),
+          ...(send?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
           ...send?.headers,
           ...extra,
         },
@@ -753,6 +1007,58 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             headers: { 'Idempotency-Key': r.requestId },
           });
         }),
+      changeRoomDuringStay: (r: ChangeRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertChangeRoomRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/change-room`,
+            {},
+            o,
+            parseChangeRoom(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      cancelReservation: (r: CancelReservationRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCancelReservationRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/cancel`,
+            {},
+            o,
+            parseCancelled(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      undoCheckIn: (r: UndoCheckInRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUndoCheckInRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/undo-check-in`,
+            {},
+            o,
+            parseDetail(r.reservationId),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+    },
+    reservationList: {
+      list: (q = {}, o) =>
+        Promise.resolve().then(() => {
+          assertReservationListQuery(q);
+          return request('/reservation-list', listParams(q), o, parseListPage);
+        }),
+      getOptions: (o) => request('/reservation-list/options', {}, o, parseListOptions),
+      checkInRoom: (r: CheckInRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCheckInRoomRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/check-in`,
+            {},
+            o,
+            parseCheckIn(r.reservationRoomId),
+            { method: 'POST', body: {}, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
     },
     schedule: {
       get: (q, o) =>
@@ -849,6 +1155,17 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     settings: {
       getBookingHold: (o) => request('/settings/booking-hold', {}, o, parseBookingHold),
+      getRoomChangeRule: (o) => request('/settings/room-change-rule', {}, o, parseRoomChangeRule),
+    },
+    bookingRules: {
+      get: (o) => request('/settings/booking-rules', {}, o, parseBookingRules),
+      save: (rules, o) =>
+        request('/settings/booking-rules', {}, o, parseBookingRules, {
+          method: 'PUT',
+          body: rules,
+        }),
+      getOptions: (o) =>
+        request('/settings/booking-rules/options', {}, o, parseBookingRulesOptions),
     },
     systemSettings: {
       get: (o) => request('/settings/system', {}, o, parseSystemSettings),
@@ -856,6 +1173,32 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         request('/settings/system', {}, o, parseSystemSettings, { method: 'PUT', body: settings }),
       getOptions: (o) => request('/settings/system/options', {}, o, parseSystemSettingsOptions),
     },
+    roomSetup: {
+      getOptions: (o) => request('/room-setup/options', {}, o, parseRoomSetupOptions),
+      listRoomTypes: (o) => request('/room-types', {}, o, parseRoomTypeList),
+      saveRoomType: (input, o) =>
+        input.id
+          ? request(`/room-types/${encodeURIComponent(input.id)}`, {}, o, parseRoomTypeSetup, {
+              method: 'PUT',
+              body: input,
+            })
+          : request('/room-types', {}, o, parseRoomTypeSetup, { method: 'POST', body: input }),
+      deleteRoomType: (id, o) =>
+        request(`/room-types/${encodeURIComponent(id)}`, {}, o, parseNothing, {
+          method: 'DELETE',
+        }),
+      listRooms: (o) => request('/rooms', {}, o, parseRoomList),
+      saveRoom: (input, o) =>
+        input.id
+          ? request(`/rooms/${encodeURIComponent(input.id)}`, {}, o, parseRoomSetup, {
+              method: 'PUT',
+              body: input,
+            })
+          : request('/rooms', {}, o, parseRoomSetup, { method: 'POST', body: input }),
+      deleteRoom: (id, o) =>
+        request(`/rooms/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
+    reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
   };
 }

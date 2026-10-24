@@ -74,7 +74,10 @@ totalNights, averageRate}`; rows are one per rate category in the data (not a fi
   `endDate` (exclusive), `status` (`confirmed`, `nyci` = Not Yet Checked In with arrival reached,
   `checked-in`, `checked-out`; a "due out" block is a checked-in one ending today), `roomCount`
   (rooms on the reservation; blocks with the same `reservationId` move together), `roomTypeLocked`,
-  `version` (opaque, never parsed or compared by the client).
+  `version` (opaque, never parsed or compared by the client), optional `earlyCheckIn` / `lateCheckOut`, and
+  optional `roomChange {part: 'previous'|'current'|'next', index, count, stayId}` when the stay changed room
+  during the stay (ticket 2.3);
+  `ScheduleRoom.housekeeping` (`clean|dirty`) is optional and a placeholder.
 - `ScheduleClosure`: `kind: 'closure'`, `id`, `roomId`, `startDate`, `endDate`, `reason`, `endMarker`.
 - Every block and closure must sit in a listed room; **ids must be unique across blocks and closures**
   (the grid looks items up by id); rooms unique. "Empty" means no rooms.
@@ -115,6 +118,9 @@ ones in `createHttpClient` (`src/api/http.ts`).
 | 13  | `GET /members`                       | `q` (matches name, member number or email, case-insensitive; at most 200 characters), `limit`                                                                                                                                                                                                                      | `Page<Member>` (`Member {id, memberNumber, name, email, phone}`); the mock answers 8 by default, at most 50                                                                                                                                                                                                                                                                                                                                                                                                                           | 400 `invalid-query`, 5xx                                                                                                                     |
 | 14  | `POST /members`                      | `CreateMemberRequest {requestId, name, email?, phone?}`; `Idempotency-Key`                                                                                                                                                                                                                                         | the new `Member` (idempotent on `requestId`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 400 `invalid-query`, 409 `idempotency-conflict`                                                                                              |
 | 15  | `GET /settings/system`, `PUT /settings/system`, `GET /settings/system/options` | `PUT`: the whole `SystemSettings` object (times as 24-hour `HH:mm` on a 5-minute step, MPOS and close settled values as `{amount 0-31, unit hours                                      | days}`, `nightAuditRunTime`, folio details with `logo` as a data URL or null)                                                                                                                                                                                                                                                                                                                                                                                                                                                         | `SystemSettings`; options `{timeZones, cardReaders, items, areas, members}` each a list of `{id, label}`  | 422 `validation` when a rule fails (the UI checks the same rules, `src/app/systemSettings.ts`); 5xx |
+| 16  | `GET /reports/custom` | none | `CustomReportSummary[] { id, name, creatorName, updatedAt }` (`updatedAt` an ISO 8601 instant). Unsorted: the UI sorts newest first and filters client-side (Reporting landing, Excia/Guestrooms-Demo#57; Q-58-1 covers the large-list question) | 5xx |
+| 17  | `GET /settings/booking-rules`, `PUT /settings/booking-rules`, `GET /settings/booking-rules/options` | `PUT`: the whole `BookingRules` (`employee`, `member` or null, `nonMember` or null, `uniqueMemberTypeRules`, `memberTypeRules[]`; periods as `{amount, unit days\|weeks\|months}`, money in cents)                                                                                                                 | `BookingRules`; options `{roomTypes, memberTypes}` as `{id, label}` lists                                                                                                                                                                                                                                                                                                                                                                                                                                                             | 422 `validation` when a rule fails (same rules as `src/app/bookingRules.ts`); 5xx                                                            |
+| 18  | `GET /room-setup/options`; `GET/POST /room-types`, `PUT/DELETE /room-types/{id}`; `GET/POST /rooms`, `PUT/DELETE /rooms/{id}` (ticket 7.3) | `RoomTypeInput` / `RoomInput` (see `src/api/types.ts`; `id` absent on create) | `RoomSetupOptions {skus, features, addOns, bedSizes, members}`, `RoomTypeSetup`, `RoomSetup`. Errors: 422 `validation` (rules in `src/app/roomSetup.ts`: name 1 to 50, start before end, description 750, a room type needs a photo, a room needs a room type), 404 `not-found`, 409 `in-use` (deleting a room type that rooms use). Backend rules: a room that inherits details stores its room type's (and follows later edits); `linkedRoomIds` is two-way and deleting a room unlinks it; add-on associations on a room type or room must show on the add-on (7.4). |
 
 - `ReservationDetail.version` is separate from schedule block versions. Early/late check order: validate,
   404, 409 `stale`, then 409 `not-editable`.
@@ -152,6 +158,103 @@ Added by the Folio view (Excia/Guestrooms-Demo#38). Both are in `createHttpClien
   the settle reference; `references` holds every payment reference of a split settlement.
 - Posting is idempotent by `requestId`. Print and Email are not endpoints yet (D-003, Q-38-2).
 
+## Reservation List endpoints (ticket 3.1, built on the mock)
+
+Separate from `GET /reservations` so the details panel and dashboard shapes stay as they are. Client:
+`api.reservationList.list(query)` and `getOptions()`; shapes in `src/api/reservationListTypes.ts`. The path is
+the client's choice (Q-G-3).
+
+| #   | Endpoint                        | Request                                                                                                                                                                                                                                                            | Answer                                                                                                                                                                                                                                                                                                      | Errors                   |
+| --- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 12  | `GET /reservation-list`         | `checkInFrom`, `checkInTo` (inclusive, on arrival), `unassignedOnly=true`, `locationIds`, `roomTypeIds`, `statuses` (comma lists), text filters `guest`, `reserver`, `resNumber`, `block`, `room`, `search`, `sort=<field>:<asc\|desc>`, `page` (1-based), `limit` | `Page<ReservationListRow>`: `items`, `total` of all matches (`nextCursor` unused). Row: id, confirmationNumber, arrival, departure (exclusive), guestName (lead occupant), reserverName, blockName, locationId/Name and roomTypeId/Name of the first room, rooms[] {id, roomNumber or null, status}, status | 400 `invalid-query`, 5xx |
+| 13  | `GET /reservation-list/options` | none                                                                                                                                                                                                                                                               | `{ locations[], roomTypes[] }` (id, name), never narrowed by a query                                                                                                                                                                                                                                        | 5xx                      |
+| 14  | `POST /reservation-rooms/{id}/check-in` | none (idempotency key header) | `{ reservationRoomId, status: "checked-in" }` | 404, 409 `unassigned`, 409 `no-payment-method`, 409 `not-checkable` |
+
+Rules the backend must apply: sort fields `arrival` (default, ascending), `departure`, `confirmationNumber`,
+`guestName`, `reserverName`, `blockName`, `locationName`, `roomTypeName`, `roomNumber`, `status`; ties broken by
+id so paging is stable; text filters are case-insensitive substrings; `search` matches guest, reserver, Res #
+or block; `unassignedOnly` keeps reservations with at least one room without a number. Row `status` is one of
+`not-checked-in`, `checked-in`, `checked-out`, `canceled`, the lowest common denominator of its rooms (see
+3.1 in [features/03-reservations.md](features/03-reservations.md)).
+
+## Change room during stay (ticket 2.3, branch `feat/20-change-room-during-stay`)
+
+Per-night model (D-087 to D-096); see also [02-schedule.md](features/02-schedule.md#23-change-room-during-stay-menu-and-dialog).
+
+| #   | Method and path                            | Request                                                                                                                                                 | Response                                                                                                                                                  | Errors                                                                                                                                                                                                                                          |
+| --- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 18  | `POST /reservation-rooms/{id}/change-room` | `ChangeRoomRequest {requestId, reservationRoomId, fromRoomId, version, nights: [{date, roomId}], rateChoice `retain\|update\|null`}`; `Idempotency-Key` | `{ blocks[], removedBlockIds[], folio {deltaCents, repricedNights, roomChargesCents}, vacatedRoom {roomId, housekeeping `clean\|dirty`, since} or null }` | 400 `invalid-id`/`invalid-query` (`details.nights`, `details.rateChoice`), 403, 404, 409 `stale` (also `details.reason` `effective-date` and `details.today`), 409 `not-movable`, 409 `conflict` (`details.roomId`), 409 `idempotency-conflict` |
+| 19  | `GET /settings/room-change-rule`           | none                                                                                                                                                    | `RoomChangeRule { askRateOnRoomChange: boolean }` (PLACEHOLDER: name, default true and home are undecided, Q-20-2)                                        | 5xx                                                                                                                                                                                                                                             |
+
+- **The plan:** `nights` is the **whole remaining stay**: one entry per night from the first night not yet
+  stayed to the night before the departure, in date order, each with the room it should be spent in
+  (unchanged nights repeat their current room). **The server owns the effective date** (the first night not
+  yet stayed is the club's today, from the club's time zone, which comes from system settings; Q-G-5, Q-20-14);
+  the client's first night is advisory. A plan whose first night differs from the server's is **409 `stale`
+  with `details.reason` `["effective-date"]` and `details.today`** (the client reloads its dialog data, adopts
+  that date and reopens on step 1). A plan that lists a night twice, misses a night or changes no night is 400
+  `invalid-query` (`details.nights`). Nights before the effective date are stayed and cannot change. The
+  reservation room is the one holding the first remaining night (the block whose id is the stay id; the
+  server checks `fromRoomId` and `version` against that block, i.e. against the room of the first remaining
+  night); the id of a `previous` or `next` part is 404.
+- **Permission:** 403 (`forbidden`) without `reservation.edit`; nothing is applied. The mock enforces it from
+  the grant it was created with.
+- **Rooms per night (requirements 27.9.1.2.2):** a night may use any room that is free **that night**
+  (half-open nights: a stay that ends on the night, or starts the day after, does not block). A changed night
+  in a room booked or closed that night is 409 `conflict` (`details.roomId` lists the rooms); unchanged nights
+  are not rechecked; the stay's own parts never block. Only a **checked-in** reservation room can change (409
+  `not-movable` otherwise, and also for a locked room type with a night in another type). Check order: 404,
+  409 `stale` (version or room), 409 `not-movable`, 409 `stale` (effective date), 400 nights, 409 `conflict`,
+  400 missing rate choice.
+- **Answer = the whole stay after the change:** `blocks` has one block per run of consecutive nights in one
+  room, oldest first, with the stay's `reservationId` and confirmation number. **Consecutive runs in the same
+  room are always one block, whatever their status:** a stayed night in the same room as the first remaining
+  night belongs to the block that holds it (status `checked-in`), so `previous` blocks exist only where the
+  room really differs. When the result is **one block, it carries no `roomChange`** (the stay is "unsplit"
+  again, also after reverting every night to its room) and can be dragged like any stay. With several
+  blocks each has `roomChange {part, index, count, stayId}` (`previous`: stayed nights in another room,
+  `checked-out`, never movable; `current`: the block with the request's `reservationRoomId`, which may also
+  hold earlier nights in its room; `next`: later runs, `checked-in`). `roomCount` counts rooms, not segments.
+  `removedBlockIds` are blocks of the stay that no longer exist. Early Check In stays on the first block and
+  Late Check Out on the last. **Ids of new blocks are opaque** (the mock's `<id>~n` carries no meaning; the
+  client never parses ids, it links blocks by `stayId`). The client rejects (`invalid-response`) an answer whose
+  blocks are not exactly the normalized plan (the first block may start earlier), whose numbering, stay link
+  or part order is inconsistent, with a link on a single block, a stayed part in the room of the current one,
+  a block of another reservation or duplicate ids, a vacated room or date that differs, or non-integer money.
+- **Rates (D-015, D-090):** money is integer cents excluding taxes and service charges (Q-20-6). Nights before
+  the effective date are never repriced; a night that keeps its room keeps its price; a changed night is
+  repriced per its new room: `retain` keeps its current price, `update` or `null` uses its new room's rate.
+  When the setting asks (`askRateOnRoomChange`) and a changed night's rate differs, `null` is refused (400,
+  `details.rateChoice`); a setting or rate that changed between the dialog opening and the request is handled
+  the same way (the client reopens on step 1). `folio.deltaCents` is the change of this reservation room's
+  room charges (negative: cheaper); the weighted average rate is untouched.
+- **Housekeeping (D-091):** when the room the guest sleeps in tonight changes, it becomes `dirty` from that
+  night (`vacatedRoom`, `ScheduleRoom.housekeeping`; PLACEHOLDER until ticket 6.4); otherwise `vacatedRoom` is
+  null (rooms of later nights were never occupied).
+- **Concurrency and idempotency:** exactly like the schedule moves: `version` and `fromRoomId` guard against a
+  stale view (409 `stale`, nothing applied; the mock bumps the version of every block it rewrites),
+  `requestId` is also the `Idempotency-Key`; the same id with the same body **replays the original answer,
+  including the original versions and `removedBlockIds`**; another body is 409 `idempotency-conflict`. The
+  client treats status 0, 408, 5xx and an unusable 2xx as an unknown outcome (reload, neutral message, no
+  revert).
+- **Moves of a stay with several parts (D-093):** `POST /schedule/move-room` and `/move-dates` answer 409
+  `not-movable` for any block of such a stay; the client refuses the drop first.
+- **Reporting rule:** the blocks of one stay share the reservation id and confirmation number. Nights and
+  revenue are summed **per night**, never per block, and the segments of a stay are **not** extra
+  reservations, arrivals or departures in the dashboard, Quick Stats, the reservation list or reports (a stay
+  that changed room is still one reservation with one arrival and one departure); the average rate stays
+  weighted (revenue / nights).
+- **Related fields:** `ReservationDetail.rooms[]` lists the current room only: `roomId` is the room of the
+  first night not yet stayed, `arrival` where its block starts, `departure` the departure of the **whole**
+  stay, with optional `previousStays[]` and `upcomingStays[] {roomId, roomNumber, arrival, departure}` (absent
+  whenever the stay is a single block); the order of `rooms[]` does not change when a room is split.
+  `stay.lines[]` has one line per night over all blocks with a **required** `reservationRoomId` (the stay id).
+  The reservation `version` is **not** changed by a room change (the mock's choice; the client reloads the
+  detail afterwards either way).
+- The client loads the inventory for the remaining nights with `schedule.get`: only the remaining nights, in
+  windows of at most 30 days, **13 windows at most** (a stay has at most 365 nights); the version that guards
+  the request is the one from the window that starts at the effective date.
+
 ## Error codes
 
 | Status | Code                   | Meaning                                                                                                                                                       | Client behavior                                                       |
@@ -164,6 +267,7 @@ Added by the Folio view (Excia/Guestrooms-Demo#38). Both are in `createHttpClien
 | 400    | `invalid-id`           | empty id, `.` or `..` (also raised client-side)                                                                                                               |                                                                       |
 | 400    | `invalid-query`        | malformed query or body (date, month, view, `days` not 7/14/30, request id not 8 to 128 URL-safe characters, version empty or over 128 characters, bad scope) |                                                                       |
 | 401    | (any)                  | not signed in                                                                                                                                                 | `onUnauthorized` hook, then error                                     |
+| 403    | `forbidden`            | (ticket 2.3) no `reservation.edit` for a room change                                                                                                          | revert; "You do not have permission to change this reservation."      |
 | 404    | (none)                 | unknown reservation, reservation room or room                                                                                                                 | Schedule: revert and refetch                                          |
 | 408    | (none)                 | request timeout                                                                                                                                               | unknown outcome                                                       |
 | 409    | `conflict`             | target room booked or closed on those nights; `details.roomId` lists rooms                                                                                    | revert and refetch                                                    |
@@ -260,3 +364,18 @@ list records only what each ticket needs. Mutations should follow the concurrenc
 | Notifications (8.x)             | CRUD for triggered and scheduled notifications (unique names), recipients, attachments upload, content/snippets, a trigger engine and scheduler, a prompt-before-sending signal at trigger time                                                                                                                                                                                                                                                                |
 | Members / locations / SKUs      | Lookups for members (`GET /members` and `POST /members` exist as placeholders from PR 119), locations (replaces the placeholder list), SKUs, employees by role                                                                                                                                                                                                                                                                                                 |
 | Generic                         | `GET /locations` (the mock has no locations endpoint; the dashboard uses placeholders)                                                                                                                                                                                                                                                                                                                                                                         |
+
+## Reservation menus (ticket 2.5, branch `feat/22-reservation-menus`)
+
+Built on the mock behind `ReservationsApi`; both calls are idempotent on `requestId` (body and `Idempotency-Key` header) and
+carry the `ReservationDetail.version` the user saw.
+
+| #   | Method and path                                | Request                                                                                       | Response                                                                       | Errors                                                                                                                          |
+| --- | ---------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `POST /reservations/{id}/cancel`               | `CancelReservationRequest {requestId, reservationId, version}`                                | `ReservationDetail` with `status` `cancelled` and a new `version`              | 400 `invalid-id`/`invalid-query`, 403 `forbidden`, 404, 409 `stale`, 409 `not-cancellable`, 409 `idempotency-conflict`         |
+| 2   | `POST /reservations/{id}/undo-check-in`        | `UndoCheckInRequest {requestId, reservationId, version, reservationRoomId?}` (no room: all)   | `ReservationDetail` as it is now                                               | 400, 403 `forbidden`, 404, 409 `stale`, 409 `not-checked-in`, 409 `audit-closed`, 409 `idempotency-conflict`                     |
+
+- `ReservationDetail.lastAuditedDate?: IsoDate | null` is the latest business date a night audit has run for. The UI hides Undo
+  Check In when a checked-in room's check-in business date (arrival, Q-22-5) is on or before it, and when the field is absent.
+- Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
+- New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).

@@ -54,7 +54,11 @@ or `Q-G-1` (global). Decision ids look like `D-023`.
 Every PR that changes behavior, the API, permissions or a decision, or that answers an open
 question, updates the matching file here in the same PR. The mapping is in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#requirements-log); the PR template has a checkbox for it and
-the Manager agent checks it before opening a PR. In short:
+the Manager agent checks it before opening a PR.
+
+**New rows go in your ticket's own file in [entries/](entries/README.md)** (decisions, questions,
+deviations, placeholders, status), with ticket-scoped IDs, so parallel PRs do not conflict. The shared
+tables below keep their existing rows; edit one only to change or answer an existing row. In short:
 
 | Change                                                                      | File to update                                                                                                     |
 | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -69,7 +73,8 @@ the Manager agent checks it before opening a PR. In short:
 | A new domain word                                                           | [glossary.md](glossary.md)                                                                                         |
 | A new accessibility, responsive, performance, security or test rule         | [nonfunctional.md](nonfunctional.md)                                                                               |
 
-When a PR merges, change the ticket's status in the tables below. If the PR template box is
+Ticket PRs do not edit the status tables below (that is the line every PR used to conflict on); they
+set `Status` in their entry. The Manager syncs the tables after merges, in one small PR. If the PR template box is
 ticked "n/a", the PR description must say why.
 
 ## Status summary
@@ -114,33 +119,33 @@ Issue Excia/Guestrooms-Demo#12. Epic status: **done**. Details: [features/01-das
 
 Issue Excia/Guestrooms-Demo#17. Epic status: **in progress**. Details: [features/02-schedule.md](features/02-schedule.md).
 
-| Ticket                   | Title                                           | Status      | PR                                                  |
-| ------------------------ | ----------------------------------------------- | ----------- | --------------------------------------------------- |
-| Excia/Guestrooms-Demo#18 | [2.1] Schedule grid (rooms by dates)            | done        | Excia/Guestrooms-Demo#118 (merged 2026-10-20)       |
-| Excia/Guestrooms-Demo#19 | [2.2] Reservation details panel with split CTA  | done        | Excia/Guestrooms-Demo#119 (merged 2026-10-21)       |
-| Excia/Guestrooms-Demo#20 | [2.3] Change room during stay (menu and dialog) | in progress | none yet (branch `feat/20-change-room-during-stay`) |
-| Excia/Guestrooms-Demo#21 | [2.4] Schedule blocks and linked room blocks    | not started |                                                     |
-| Excia/Guestrooms-Demo#22 | [2.5] Reservation menus and multi-room selector | not started |                                                     |
+| Ticket                   | Title                                           | Status      | PR                                                                             |
+| ------------------------ | ----------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
+| Excia/Guestrooms-Demo#18 | [2.1] Schedule grid (rooms by dates)            | done        | Excia/Guestrooms-Demo#118 (merged 2026-10-20)                                  |
+| Excia/Guestrooms-Demo#19 | [2.2] Reservation details panel with split CTA  | done        | Excia/Guestrooms-Demo#119 (merged 2026-10-21)                                  |
+| Excia/Guestrooms-Demo#20 | [2.3] Change room during stay (menu and dialog) | in progress | none yet (branch `feat/20-change-room-during-stay`, complete; PR to be opened) |
+| Excia/Guestrooms-Demo#21 | [2.4] Schedule blocks and linked room blocks    | not started |                                                                                |
+| Excia/Guestrooms-Demo#22 | [2.5] Reservation menus and multi-room selector | not started |                                                                                |
 
 ### Epic Reservations
 
 Issue Excia/Guestrooms-Demo#23. Epic status: **not started**. Details: [features/03-reservations.md](features/03-reservations.md).
 
-| Ticket                   | Title                                                                                           | Status      | PR  |
-| ------------------------ | ----------------------------------------------------------------------------------------------- | ----------- | --- |
-| Excia/Guestrooms-Demo#24 | [3.1] Reservation List with bulk actions                                                        | not started |     |
-| Excia/Guestrooms-Demo#25 | [3.2] Bulk check-in: success dialog and mixed-result dialog                                     | not started |     |
-| Excia/Guestrooms-Demo#26 | [3.3] Reservation Hub layout (left column, guest column, notes column, header, CTAs)            | not started |     |
-| Excia/Guestrooms-Demo#27 | [3.4] Hub states: single room and multi room                                                    | not started |     |
-| Excia/Guestrooms-Demo#28 | [3.5] Check in, including check in after date and failure dialogs                               | not started |     |
-| Excia/Guestrooms-Demo#29 | [3.6] Keycards: encode, in progress, done, error/timeout, manage (0, 1, 3 active)               | not started |     |
-| Excia/Guestrooms-Demo#30 | [3.7] Update contact info dialog and guest edit state                                           | not started |     |
-| Excia/Guestrooms-Demo#31 | [3.8] Adjust rate dialog (hub only)                                                             | not started |     |
-| Excia/Guestrooms-Demo#32 | [3.9] Payment methods dialog, including penny auth processing and declined                      | not started |     |
-| Excia/Guestrooms-Demo#33 | [3.10] Add-on items on reservation                                                              | not started |     |
-| Excia/Guestrooms-Demo#34 | [3.11] Owner / Member / Guest treatment (system setting, room setup, reservation treatments)    | not started |     |
-| Excia/Guestrooms-Demo#35 | [3.12] Early check-in and late check-out (system setting, states and variations, details panel) | not started |     |
-| Excia/Guestrooms-Demo#36 | [3.13] Manual send (email to guest) and "no mail" state                                         | not started |     |
+| Ticket                   | Title                                                                                           | Status                                                  | PR  |
+| ------------------------ | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- | --- |
+| Excia/Guestrooms-Demo#24 | [3.1] Reservation List with bulk actions                                                        | built on branch `feat/24-reservation-list` (PR pending) |     |
+| Excia/Guestrooms-Demo#25 | [3.2] Bulk check-in: success dialog and mixed-result dialog                                     | built on branch `feat/25-bulk-checkin` (PR pending)     |     |
+| Excia/Guestrooms-Demo#26 | [3.3] Reservation Hub layout (left column, guest column, notes column, header, CTAs)            | not started                                             |     |
+| Excia/Guestrooms-Demo#27 | [3.4] Hub states: single room and multi room                                                    | not started                                             |     |
+| Excia/Guestrooms-Demo#28 | [3.5] Check in, including check in after date and failure dialogs                               | not started                                             |     |
+| Excia/Guestrooms-Demo#29 | [3.6] Keycards: encode, in progress, done, error/timeout, manage (0, 1, 3 active)               | not started                                             |     |
+| Excia/Guestrooms-Demo#30 | [3.7] Update contact info dialog and guest edit state                                           | not started                                             |     |
+| Excia/Guestrooms-Demo#31 | [3.8] Adjust rate dialog (hub only)                                                             | not started                                             |     |
+| Excia/Guestrooms-Demo#32 | [3.9] Payment methods dialog, including penny auth processing and declined                      | not started                                             |     |
+| Excia/Guestrooms-Demo#33 | [3.10] Add-on items on reservation                                                              | not started                                             |     |
+| Excia/Guestrooms-Demo#34 | [3.11] Owner / Member / Guest treatment (system setting, room setup, reservation treatments)    | not started                                             |     |
+| Excia/Guestrooms-Demo#35 | [3.12] Early check-in and late check-out (system setting, states and variations, details panel) | not started                                             |     |
+| Excia/Guestrooms-Demo#36 | [3.13] Manual send (email to guest) and "no mail" state                                         | not started                                             |     |
 
 ### Epic Folios and Night Audit
 
@@ -149,7 +154,7 @@ Issue Excia/Guestrooms-Demo#37. Epic status: **not started**. Details: [features
 | Ticket                   | Title                                                                 | Status                     | PR  |
 | ------------------------ | --------------------------------------------------------------------- | -------------------------- | --- |
 | Excia/Guestrooms-Demo#38 | [4.1] Folio view: charges, payments, balance summary, occupant filter | in review                  |     |
-| Excia/Guestrooms-Demo#39 | [4.2] Folio line type variations                                      | not started                |     |
+| Excia/Guestrooms-Demo#39 | [4.2] Folio line type variations                                      | in review                  |     |
 | Excia/Guestrooms-Demo#40 | [4.3] Open Folios list                                                | not started (needs design) |     |
 | Excia/Guestrooms-Demo#41 | [4.4] Unassigned Charges list                                         | not started                |     |
 | Excia/Guestrooms-Demo#42 | [4.5] Item transfer dialog                                            | not started                |     |
@@ -169,7 +174,7 @@ Issue Excia/Guestrooms-Demo#47. Epic status: **not started**. Details: [features
 | Ticket                   | Title                                                                              | Status      | PR  |
 | ------------------------ | ---------------------------------------------------------------------------------- | ----------- | --- |
 | Excia/Guestrooms-Demo#48 | [5.1] Online booking header, account menu, return to site tooltip                  | in review   |     |
-| Excia/Guestrooms-Demo#49 | [5.2] Reservation widget and adjust search                                         | not started |     |
+| Excia/Guestrooms-Demo#49 | [5.2] Reservation widget and adjust search                                         | in review   |     |
 | Excia/Guestrooms-Demo#50 | [5.3] Results cards: member vs non-member, single vs multi room, room vs room type | not started |     |
 | Excia/Guestrooms-Demo#51 | [5.4] Guest selection, name guests, secondary occupant                             | not started |     |
 | Excia/Guestrooms-Demo#52 | [5.5] Stay summary, fee line items, review details                                 | not started |     |
@@ -185,7 +190,7 @@ Issue Excia/Guestrooms-Demo#56. Epic status: **not started**. Details: [features
 
 | Ticket                   | Title                                                                                              | Status      | PR  |
 | ------------------------ | -------------------------------------------------------------------------------------------------- | ----------- | --- |
-| Excia/Guestrooms-Demo#57 | [6.1] Reporting landing page                                                                       | not started |     |
+| Excia/Guestrooms-Demo#57 | [6.1] Reporting landing page                                                                       | in review   |     |
 | Excia/Guestrooms-Demo#58 | [6.2] Standard report shell: filters, column filter, group-by, view and export options, pagination | not started |     |
 | Excia/Guestrooms-Demo#59 | [6.3] Custom report builder: column list, group-by list, save split menu, save toast               | not started |     |
 | Excia/Guestrooms-Demo#60 | [6.4] Report: Housekeeping (types and statuses logic from the Figma note)                          | not started |     |
@@ -206,7 +211,7 @@ Issue Excia/Guestrooms-Demo#69. Epic status: **not started**. Details: [features
 | ------------------------ | ----------------------------------------------------------------------------- | -------------------------- | --- |
 | Excia/Guestrooms-Demo#70 | [7.1] Primary Setup / System Settings                                         | not started                |     |
 | Excia/Guestrooms-Demo#71 | [7.2] Rate Categories                                                         | not started (needs design) |     |
-| Excia/Guestrooms-Demo#72 | [7.3] Room Types and Rooms (associations, quantity picker, image placeholder) | not started                |     |
+| Excia/Guestrooms-Demo#72 | [7.3] Room Types and Rooms (associations, quantity picker, image placeholder) | in review                |     |
 | Excia/Guestrooms-Demo#73 | [7.4] Add-On Items                                                            | not started                |     |
 | Excia/Guestrooms-Demo#74 | [7.5] Booking Rules                                                           | not started                |     |
 | Excia/Guestrooms-Demo#75 | [7.6] Keycard Integration settings                                            | not started                |     |

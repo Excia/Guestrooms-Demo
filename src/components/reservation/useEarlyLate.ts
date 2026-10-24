@@ -14,7 +14,7 @@ import { newRequestId } from '../../lib/requestId';
 export interface UseEarlyLateOptions {
   detail: ReservationDetail;
   /** A save was confirmed: mirror it elsewhere (the schedule's edge markers). */
-  onSaved: (values: EarlyLateValues) => void;
+  onSaved: (values: EarlyLateValues, version?: string) => void;
   /** The reservation was reloaded after a failed save (it changed, or the outcome was unknown). */
   onReloaded: (detail: ReservationDetail) => void;
 }
@@ -61,7 +61,7 @@ export function useEarlyLate({ detail, onSaved, onReloaded }: UseEarlyLateOption
           inflight.current = false;
           const values = { earlyCheckIn: result.earlyCheckIn, lateCheckOut: result.lateCheckOut };
           dispatch({ type: 'saved', values });
-          callbacks.current.onSaved(values);
+          callbacks.current.onSaved(values, result.version);
         },
         (error: unknown) => {
           const failure = earlyLateFailure(error);

@@ -21,12 +21,21 @@ export const DASHBOARD_PATH = '/dashboard';
 export const ROOM_BLOCKS_PATH = '/room-blocks';
 /** Reservation List (ticket 3.1): the list side of the schedule's list/calendar toggle. */
 export const RESERVATIONS_PATH = '/reservations';
+/** Reservation Hub (ticket 3.3): one reservation. A placeholder page until that ticket lands. */
+export const RESERVATION_HUB_PATH = '/reservations/:id';
+export const reservationHubPath = (id: string) => `/reservations/${encodeURIComponent(id)}`;
 /** Night Audit History; the schedule's Night Audit button opens it until the run screen exists. */
 export const NIGHT_AUDIT_HISTORY_PATH = '/night-audit-history';
 /** Open Folios (stub): where "Jump to Folio" and the panel's Folio button go until the folio screens exist. */
 export const OPEN_FOLIOS_PATH = '/open-folios';
 /** Primary Setup / System Settings (ticket 7.1). */
 export const PRIMARY_SETUP_PATH = '/admin/primary-setup';
+/** Room Types and Rooms (ticket 7.3). */
+export const ROOM_TYPES_PATH = '/admin/room-types';
+export const ROOMS_PATH = '/admin/rooms';
+
+/** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
+export const BOOKING_RULES_PATH = '/admin/booking-rules';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -87,13 +96,20 @@ export const routes = [
   { id: 'admin', path: '/admin', title: 'Admin Setup' },
   { id: 'primary-setup', path: PRIMARY_SETUP_PATH, title: 'Primary Setup', section: 'admin' },
   {
+    id: 'booking-rules',
+    path: BOOKING_RULES_PATH,
+    title: 'Booking Rules',
+    section: 'admin',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
+  },
+  {
     id: 'rate-categories',
     path: '/admin/rate-categories',
     title: 'Rate Categories',
     section: 'admin',
   },
-  { id: 'room-types', path: '/admin/room-types', title: 'Room Types', section: 'admin' },
-  { id: 'rooms', path: '/admin/rooms', title: 'Rooms', section: 'admin' },
+  { id: 'room-types', path: ROOM_TYPES_PATH, title: 'Room Types', section: 'admin' },
+  { id: 'rooms', path: ROOMS_PATH, title: 'Rooms', section: 'admin' },
   { id: 'add-on-items', path: '/admin/add-on-items', title: 'Add-On Items', section: 'admin' },
   {
     id: 'notifications',

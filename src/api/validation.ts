@@ -1,5 +1,6 @@
-import { isValidMonth, parseIsoDate } from '../lib/dates';
+import { daysBetween, isValidMonth, parseIsoDate } from '../lib/dates';
 import type {
+  ChangeRoomRequest,
   CreateMemberRequest,
   CreateReservationRequest,
   EarlyLateRequest,
@@ -11,6 +12,8 @@ import type {
   ScheduleQuery,
   SetHousekeepingRequest,
 } from './types';
+import type { CheckInRoomRequest, ReservationListQuery } from './reservationListTypes';
+import { LIST_STATUSES } from './reservationListTypes';
 import { SCHEDULE_DAYS, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import { ApiError } from './types';
 
@@ -46,7 +49,7 @@ export function assertScheduleQuery(query: ScheduleQuery): void {
 /** Idempotency keys: 8 to 128 URL-safe characters (a UUID fits). */
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,128}$/;
 
-function assertRequestId(requestId: unknown): void {
+export function assertRequestId(requestId: unknown): void {
   if (typeof requestId !== 'string' || !REQUEST_ID.test(requestId)) {
     throw invalidQuery('request id');
   }
@@ -68,6 +71,11 @@ export function assertMoveRoomRequest(request: MoveRoomRequest): void {
   assertMoveGuard(request);
   assertResourceId(request.reservationRoomId, 'reservation room');
   assertResourceId(request.toRoomId, 'room');
+}
+
+export function assertCheckInRoomRequest(request: CheckInRoomRequest): void {
+  assertRequestId(request.requestId);
+  assertResourceId(request.reservationRoomId, 'reservation room');
 }
 
 export function assertMoveDatesRequest(request: MoveDatesRequest): void {
@@ -97,6 +105,37 @@ export function assertSetHousekeepingRequest(request: SetHousekeepingRequest): v
   ) {
     throw invalidQuery('housekeeping request');
   }
+}
+
+/** A stay has at most this many nights in a plan (the New Reservation limit is 365). */
+export const MAX_PLAN_NIGHTS = 400;
+
+export function assertChangeRoomRequest(request: ChangeRoomRequest): void {
+  assertMoveGuard(request);
+  assertResourceId(request.reservationRoomId, 'reservation room');
+  if (
+    !Array.isArray(request.nights) ||
+    request.nights.length === 0 ||
+    request.nights.length > MAX_PLAN_NIGHTS ||
+    (request.rateChoice !== null &&
+      request.rateChoice !== 'retain' &&
+      request.rateChoice !== 'update')
+  ) {
+    throw invalidQuery('room change request');
+  }
+  request.nights.forEach((night, i) => {
+    if (typeof night !== 'object' || night === null || typeof night.date !== 'string') {
+      throw invalidQuery('room change request');
+    }
+    assertResourceId(night.roomId, 'room');
+    // One night per day, in date order: a plan names every remaining night exactly once.
+    if (
+      parseIsoDate(night.date) === null ||
+      (i > 0 && daysBetween(request.nights[i - 1].date, night.date) !== 1)
+    ) {
+      throw invalidQuery('room change request');
+    }
+  });
 }
 
 export function assertEarlyLateRequest(request: EarlyLateRequest): void {
@@ -184,6 +223,52 @@ export function assertMemberQuery(query: { q?: string; limit?: number }): void {
       (!Number.isInteger(query.limit) || query.limit < 1 || query.limit > 50))
   ) {
     throw invalidQuery('member query');
+  }
+}
+
+const LIST_SORT_FIELDS = [
+  'arrival',
+  'departure',
+  'confirmationNumber',
+  'guestName',
+  'reserverName',
+  'blockName',
+  'locationName',
+  'roomTypeName',
+  'roomNumber',
+  'status',
+];
+export const MAX_LIST_FILTER_LENGTH = 200;
+
+/** The Reservation List query reaches the mock and the URL of the real API: reject anything malformed. */
+export function assertReservationListQuery(query: ReservationListQuery): void {
+  const date = (v: unknown) =>
+    v === undefined || (typeof v === 'string' && parseIsoDate(v) !== null);
+  const text = (v: unknown) =>
+    v === undefined || (typeof v === 'string' && v.length <= MAX_LIST_FILTER_LENGTH);
+  const ids = (v: unknown) =>
+    v === undefined || (Array.isArray(v) && v.length <= 100 && v.every(shortId));
+  if (
+    !date(query.checkInFrom) ||
+    !date(query.checkInTo) ||
+    (query.unassignedOnly !== undefined && typeof query.unassignedOnly !== 'boolean') ||
+    !ids(query.locationIds) ||
+    !ids(query.roomTypeIds) ||
+    (query.statuses !== undefined &&
+      !(Array.isArray(query.statuses) && query.statuses.every((s) => LIST_STATUSES.includes(s)))) ||
+    !text(query.guest) ||
+    !text(query.reserver) ||
+    !text(query.resNumber) ||
+    !text(query.block) ||
+    !text(query.room) ||
+    !text(query.search) ||
+    (query.sort !== undefined &&
+      (!LIST_SORT_FIELDS.includes(query.sort.field) ||
+        (query.sort.direction !== 'asc' && query.sort.direction !== 'desc'))) ||
+    (query.page !== undefined && (!Number.isInteger(query.page) || query.page < 1)) ||
+    (query.limit !== undefined && (!Number.isInteger(query.limit) || query.limit < 1))
+  ) {
+    throw invalidQuery('reservation list query');
   }
 }
 

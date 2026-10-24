@@ -1,3 +1,5 @@
+import type { ReservationListApi } from './reservationListTypes';
+
 /** ISO calendar date, `YYYY-MM-DD`. */
 export type IsoDate = string;
 /** Money is always integer cents; the backend owns currency formatting rules. */
@@ -201,6 +203,24 @@ export interface ReservationRoomDetail {
   arrival: IsoDate;
   /** Departure, exclusive. */
   departure: IsoDate;
+  /**
+   * When the stay has several parts (ticket 2.3) `roomId` / `roomNumber` are the room of the first
+   * night not yet stayed, `arrival` is where that run of nights starts and `departure` is the
+   * departure of the whole stay (also when later nights are in other rooms). The two lists below are
+   * absent whenever the stay is a single block.
+   */
+  previousStays?: ReservationPartialStay[];
+  /** Rooms of the nights after the current run, oldest first (planned room changes). */
+  upcomingStays?: ReservationPartialStay[];
+}
+
+/** A run of consecutive nights in one room: [arrival, departure). */
+export interface ReservationPartialStay {
+  roomId: string;
+  roomNumber: string | null;
+  arrival: IsoDate;
+  /** Departure from that room, exclusive. */
+  departure: IsoDate;
 }
 
 export interface ReservationAddOn {
@@ -214,7 +234,14 @@ export interface ReservationAddOn {
 export interface ReservationStayLine {
   roomType: string;
   date: IsoDate;
+  /** Per night, excluding taxes and service charges. */
   amountCents: Cents;
+  /**
+   * The reservation room (the id of its `current` schedule block, the "stay id") the night belongs
+   * to, so a multi-room reservation's lines can be told apart: the change-room dialog prices the
+   * remaining nights of one room. Required; the backend sums nights and revenue per night, not per block.
+   */
+  reservationRoomId: string;
 }
 
 /**
@@ -244,6 +271,12 @@ export interface ReservationDetail {
   /** Excludes taxes and service charges. */
   stay: { lines: ReservationStayLine[]; folioTotalCents: Cents };
   version: string;
+  /**
+   * The latest business date a night audit has run for (ticket 2.5); null when none has. Absent
+   * when the backend does not say: the UI then treats the audit as unknown and hides actions that
+   * only exist before it (Undo Check In).
+   */
+  lastAuditedDate?: IsoDate | null;
 }
 
 /**
@@ -298,6 +331,100 @@ export interface CreateReservationRequest {
   privateNotes?: string;
 }
 
+/** Which rate a room change keeps for the nights whose room changed (ticket 2.3, decision D-015). */
+export type RateChoice = 'retain' | 'update';
+
+/** One night of a stay and the room it is spent in. */
+export interface NightRoom {
+  /** The night's date (the stay occupies [arrival, departure)). */
+  date: IsoDate;
+  roomId: string;
+}
+
+/**
+ * Change the rooms of a checked-in reservation room for the rest of its stay, night by night (ticket
+ * 2.3; Figma 1326:19431, requirements 27.9.1.2). `nights` is the **whole remaining stay**: one entry
+ * per night from the first night not yet stayed (today, or the arrival if later) to the night before
+ * the departure, in date order, each with the room it should be spent in (unchanged nights repeat
+ * their current room). Nights before that are stayed and cannot be changed. The backend merges
+ * consecutive nights in one room into segments.
+ * - `requestId`: idempotency key (body and `Idempotency-Key` header), as for the schedule moves.
+ * - `reservationRoomId`, `fromRoomId`, `version`: the schedule block as the user saw it (the room of
+ *   the first remaining night); 409 `stale` when its room or version has changed since.
+ * - `rateChoice`: 'retain' keeps the current nightly price of the nights whose room changed, 'update'
+ *   uses their new rooms' rates, `null` means the question was not asked (the "ask" setting is off, or
+ *   the rates do not differ): the new rates apply. When the setting is on and the rates differ, the
+ *   backend answers 400 `invalid-query` (details.rateChoice) for `null`.
+ */
+export interface ChangeRoomRequest {
+  requestId: string;
+  reservationRoomId: string;
+  fromRoomId: string;
+  nights: NightRoom[];
+  rateChoice: RateChoice | null;
+  version: string;
+}
+
+/**
+ * Housekeeping state of a room. PLACEHOLDER until the Housekeeping report (ticket 6.4) defines the
+ * real types and statuses (the requirements call the state after a checkout "Needs Cleaning").
+ * Named RoomHousekeepingStatus: the block-level `HousekeepingStatus` of the schedule's "H" chip
+ * (ticket 2.4) uses the shorter name.
+ */
+export type RoomHousekeepingStatus = 'clean' | 'dirty';
+
+/**
+ * What the change did. `blocks` is the whole stay of that reservation room after the change: one
+ * block per run of consecutive nights in one room, oldest first (see `ScheduleBlock.roomChange`);
+ * the block with the request's `reservationRoomId` is the run holding the first remaining night.
+ * `removedBlockIds` are blocks of the stay that no longer exist (merged or replaced). `folio`
+ * summarizes the room charges (integer cents, excluding taxes and service charges): `deltaCents` is
+ * the change of this reservation room's total, `repricedNights` how many nights got another price.
+ * `vacatedRoom` is the room the guest sleeps in tonight when it changed (dirty from that night), else
+ * null. When every night ends up in one room the answer is a single block without `roomChange`.
+ * Errors: 400 `invalid-id` / `invalid-query` (`details.nights`, `details.rateChoice`); 403 (no
+ * `reservation.edit`); 404; 409 `stale` (the block's version or room changed, or the effective date
+ * differs: `details.reason` ['effective-date'] and `details.today`, the club's today, which the
+ * server owns); 409 `not-movable` (not checked in, locked room type); 409 `conflict` (a room is
+ * booked or closed on a night it was given, `details.roomId`); 409 `idempotency-conflict`. Nothing
+ * is applied on an error. A replay of the same request returns the original answer (versions and
+ * `removedBlockIds` included).
+ */
+export interface ChangeRoomResult {
+  blocks: ScheduleBlock[];
+  removedBlockIds: string[];
+  folio: { deltaCents: Cents; repricedNights: number; roomChargesCents: Cents };
+  vacatedRoom: { roomId: string; housekeeping: RoomHousekeepingStatus; since: IsoDate } | null;
+}
+
+/**
+ * Cancel a whole reservation (ticket 2.5). `requestId` is the idempotency key (body and
+ * `Idempotency-Key` header); `version` is the `ReservationDetail.version` the user saw. Fees are
+ * out of scope. Answers the reservation as it is now (status 'cancelled', new `version`). Errors:
+ * 400 `invalid-id` / `invalid-query`; 403 `forbidden` (no `reservation.edit`); 404; 409 `stale`;
+ * 409 `not-cancellable` (a room is checked in or out, or it is already cancelled); 409
+ * `idempotency-conflict`.
+ */
+export interface CancelReservationRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+}
+
+/**
+ * Undo a check in (ticket 2.5): one reservation room (`reservationRoomId`) or, when absent, every
+ * room that is checked in. Answers the reservation as it is now. Errors: 400; 403 `forbidden`; 404;
+ * 409 `stale`; 409 `not-checked-in` (nothing to undo, or a room was already checked out); 409
+ * `audit-closed` (the night audit has run for the check-in business date); 409
+ * `idempotency-conflict`.
+ */
+export interface UndoCheckInRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+  reservationRoomId?: string;
+}
+
 export interface ReservationsApi {
   list(query?: ReservationQuery, options?: RequestOptions): Promise<Page<Reservation>>;
   /** Rejects with an ApiError of status 404 when the id is unknown. */
@@ -306,12 +433,33 @@ export interface ReservationsApi {
   getDetail(id: string, options?: RequestOptions): Promise<ReservationDetail>;
   setEarlyLate(request: EarlyLateRequest, options?: RequestOptions): Promise<EarlyLateResult>;
   create(request: CreateReservationRequest, options?: RequestOptions): Promise<ReservationDetail>;
+  /** Change room during the stay (ticket 2.3). Idempotent on `requestId`. */
+  changeRoomDuringStay(
+    request: ChangeRoomRequest,
+    options?: RequestOptions,
+  ): Promise<ChangeRoomResult>;
+  /** Cancel the reservation (ticket 2.5). Idempotent on `requestId`. */
+  cancelReservation(
+    request: CancelReservationRequest,
+    options?: RequestOptions,
+  ): Promise<ReservationDetail>;
+  /** Undo a check in (ticket 2.5). Idempotent on `requestId`. */
+  undoCheckIn(request: UndoCheckInRequest, options?: RequestOptions): Promise<ReservationDetail>;
 }
 
 // ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----
 
 export type FolioLineType =
-  'room-rate' | 'mpos' | 'manual' | 'add-on' | 'surcharge' | 'service-fee';
+  | 'room-rate'
+  | 'mpos'
+  | 'manual'
+  | 'add-on'
+  | 'surcharge'
+  | 'service-fee'
+  /** The line that was split (status `split`); its description names the item or selection. */
+  | 'split-parent'
+  /** One part of a split (Figma "Split Item Child"). */
+  | 'split-child';
 
 /**
  * `posted`: on the folio and owed; `unposted`: waiting for Night Audit; `settled`: paid, with the
@@ -443,8 +591,18 @@ export interface BookingHold {
   nonMember: number;
 }
 
+/**
+ * Whether a room change during a stay asks "retain the current rate or update to the new room's
+ * rate" (decision D-015, ticket 2.3). PLACEHOLDER: name, default (true) and home (probably System
+ * Settings, ticket 7.1) are not decided; read-only here.
+ */
+export interface RoomChangeRule {
+  askRateOnRoomChange: boolean;
+}
+
 export interface SettingsApi {
   getBookingHold(options?: RequestOptions): Promise<BookingHold>;
+  getRoomChangeRule(options?: RequestOptions): Promise<RoomChangeRule>;
 }
 
 // ---- system settings (Primary Setup, ticket 7.1) ---------------------------------------------
@@ -542,6 +700,170 @@ export interface SystemSettingsApi {
   getOptions(options?: RequestOptions): Promise<SystemSettingsOptions>;
 }
 
+// ---- room setup (Admin Setup: Room Types and Rooms, ticket 7.3) --------------------------------
+
+/** A photo of a room type or room. `url` is a placeholder until the storage service is chosen (Q-72-1). */
+export interface RoomPhoto {
+  id: string;
+  name: string;
+  url: string;
+}
+
+/** The details a room can inherit from its room type. */
+export interface RoomDetails {
+  maxOccupancy: number;
+  bedrooms: number;
+  fullBaths: number;
+  halfBaths: number;
+  /** Quantity per bed size id (bed sizes come from Room Options). */
+  bedTypes: Record<string, number>;
+  description: string;
+  photos: RoomPhoto[];
+  featureIds: string[];
+  addOnIds: string[];
+}
+
+export interface RoomTypeSetup {
+  id: string;
+  name: string;
+  /** yyyy-mm-dd. */
+  startDate: string;
+  /** null: no end date configured. */
+  endDate: string | null;
+  sku: LookupRef | null;
+  onlineBooking: boolean;
+  details: RoomDetails;
+}
+
+export interface RoomSetup {
+  id: string;
+  name: string;
+  /** Only used while the Owner system setting is on; never inherited from the room type. */
+  owner: LookupRef | null;
+  startDate: string;
+  endDate: string | null;
+  roomTypeId: string;
+  inheritDetails: boolean;
+  inheritRates: boolean;
+  onlineBooking: boolean;
+  /** Replaced by the room type's details by the backend while `inheritDetails` is on. */
+  details: RoomDetails;
+  /** Two-way: the backend keeps the other side in step. */
+  linkedRoomIds: string[];
+  /** Read only; a room with upcoming reservations is deleted only after a warning. */
+  upcomingReservations: number;
+}
+
+/** A form's value: `id` is missing until the first save. */
+export type RoomTypeInput = Omit<RoomTypeSetup, 'id'> & { id?: string };
+export type RoomInput = Omit<RoomSetup, 'id' | 'upcomingReservations'> & {
+  id?: string;
+  upcomingReservations?: number;
+};
+
+export interface RoomSetupOptions {
+  skus: LookupRef[];
+  features: LookupRef[];
+  addOns: LookupRef[];
+  bedSizes: LookupRef[];
+  members: LookupRef[];
+}
+
+/**
+ * Errors: 422 `validation` (the rules in `src/app/roomSetup.ts`), 404 `not-found`, 409 `in-use`
+ * (deleting a room type that rooms still use).
+ */
+export interface RoomSetupApi {
+  getOptions(options?: RequestOptions): Promise<RoomSetupOptions>;
+  listRoomTypes(options?: RequestOptions): Promise<RoomTypeSetup[]>;
+  saveRoomType(input: RoomTypeInput, options?: RequestOptions): Promise<RoomTypeSetup>;
+  deleteRoomType(id: string, options?: RequestOptions): Promise<void>;
+  listRooms(options?: RequestOptions): Promise<RoomSetup[]>;
+  saveRoom(input: RoomInput, options?: RequestOptions): Promise<RoomSetup>;
+  deleteRoom(id: string, options?: RequestOptions): Promise<void>;
+}
+
+// ---- booking rules (Admin Setup, ticket 7.5) --------------------------------------------------
+
+export type TimeUnit = 'days' | 'weeks' | 'months';
+
+/** A time before check in: "6 months". */
+export interface TimePeriod {
+  amount: number;
+  unit: TimeUnit;
+}
+
+/** Which occupants must be named (never TBD). */
+export type NamedOccupants = 'all' | 'lead' | 'none';
+export type ContactRequirement = 'email' | 'phone' | 'email-and-phone' | 'email-or-phone';
+export type PaymentRequirement = 'on-file' | 'deposit' | 'prepayment';
+export type RoomSelection = 'room-optional' | 'room-only' | 'room-type-only';
+
+/**
+ * One column of the Booking Rules matrix (Employee, Member Online or Non-Member Online). `null`
+ * on a field is the "N/A" cell: the rule does not apply to that audience.
+ */
+export interface AudienceRules {
+  /** Non-member occupants must have a member reserver. Null (N/A) for non-member online booking. */
+  requireMemberReserver: boolean | null;
+  namedOccupants: NamedOccupants;
+  contactInfo: ContactRequirement;
+  /** How long before check in booking opens. */
+  opens: TimePeriod;
+  /** How long before check in booking closes; null is "N/A" (no cut-off). */
+  closes: TimePeriod | null;
+  /** Cancellation window before check in; null is "N/A". Drives the online cancellation window. */
+  cancellation: TimePeriod | null;
+  /** "Reservation Hold": minutes a selected room is held, 1 to 99. Drives the hold timer. */
+  holdMinutes: number;
+  payment: PaymentRequirement;
+  /** Deposit amount; set only while `payment` is `deposit`. */
+  depositCents: Cents | null;
+  roomSelection: RoomSelection;
+  /** Room type ids that cannot be booked. Null (N/A) for employee booking. */
+  excludedRoomTypeIds: string[] | null;
+  maxRoomsPerReservation: number;
+  /** Show the add-on popup after room select. Null (N/A) for employee booking. */
+  addOnPopup: boolean | null;
+}
+
+/** A member type whose online booking differs from the member default. */
+export interface MemberTypeRule {
+  id: string;
+  /** Null while a new row has no member type chosen yet. */
+  memberTypeId: string | null;
+  excludeFromOnlineBooking: boolean;
+  excludedRoomTypeIds: string[];
+  opens: TimePeriod;
+  closes: TimePeriod | null;
+}
+
+/**
+ * System-wide booking rules (Figma Booking Rules 15957:84601). `member` is null while Member
+ * Online Booking is off, `nonMember` while Non-Member Online Booking is off (always when member
+ * online booking is off): a null column is cleared and disabled in the form.
+ */
+export interface BookingRules {
+  employee: AudienceRules;
+  member: AudienceRules | null;
+  nonMember: AudienceRules | null;
+  /** The "Unique Member Type Rules" checkbox; only possible while `member` is set. */
+  uniqueMemberTypeRules: boolean;
+  memberTypeRules: MemberTypeRule[];
+}
+
+export interface BookingRulesOptions {
+  roomTypes: LookupRef[];
+  memberTypes: LookupRef[];
+}
+
+export interface BookingRulesApi {
+  get(options?: RequestOptions): Promise<BookingRules>;
+  /** Replaces the rules; answers with what was stored. The backend re-checks the rules. */
+  save(rules: BookingRules, options?: RequestOptions): Promise<BookingRules>;
+  getOptions(options?: RequestOptions): Promise<BookingRulesOptions>;
+}
+
 // ---- permissions -----------------------------------------------------------------------------
 
 /**
@@ -596,6 +918,11 @@ export interface ScheduleRoom {
   number: string;
   locationId: string;
   roomTypeId: string;
+  /**
+   * PLACEHOLDER until the Housekeeping report (ticket 6.4): absent means not tracked. A room
+   * vacated by a room change during a stay becomes `dirty`.
+   */
+  housekeeping?: RoomHousekeepingStatus;
 }
 
 /**
@@ -661,6 +988,24 @@ export interface ScheduleBlock {
   housekeeping?: HousekeepingStatus;
   /** Free-text housekeeping note (functional doc 15.13.3 / 15.13.4); absent when there is none. */
   housekeepingNotes?: string;
+  /**
+   * Set only while the stay has SEVERAL blocks (ticket 2.3); absent whenever the stay is a single
+   * block, also after a change that put every night back in one room. The blocks share the
+   * `reservationId` and confirmation number, one per run of consecutive nights in one room (runs in
+   * the same room are always merged, whatever their status), linked by `stayId` (the id of the
+   * `current` block, which keeps the reservation-room id). `previous` blocks hold nights already
+   * stayed in ANOTHER room (they are `checked-out`, never movable), `current` is the run holding the
+   * first night not yet stayed (it also holds earlier nights spent in the same room; `checked-in`) and
+   * `next` the later runs (planned rooms; `checked-in` like the stay). `index` (1-based) and `count`
+   * give "part 2 of 3". `roomCount` still counts rooms of the reservation, not segments. Segment ids
+   * on the wire are opaque. A stay with several blocks cannot be dragged.
+   */
+  roomChange?: {
+    part: 'previous' | 'current' | 'next';
+    index: number;
+    count: number;
+    stayId: string;
+  };
 }
 
 /** A gray closure block (e.g. "Reserved: Fixed Loss"). Same half-open dates as `ScheduleBlock`. */
@@ -776,17 +1121,37 @@ export interface ScheduleApi {
   moveDates(request: MoveDatesRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
 }
 
+// ---- reports ---------------------------------------------------------------------------------
+
+/** A saved custom report as the Reporting landing list shows it (ticket 6.1). */
+export interface CustomReportSummary {
+  id: string;
+  name: string;
+  creatorName: string;
+  /** ISO 8601 instant with offset or "Z"; the list shows it in the viewer's local time. */
+  updatedAt: string;
+}
+
+export interface ReportsApi {
+  /** All saved custom reports, in no guaranteed order (the UI sorts by `updatedAt`, newest first). */
+  listCustom(options?: RequestOptions): Promise<CustomReportSummary[]>;
+}
+
 // ---- client ----------------------------------------------------------------------------------
 
 export interface ApiClient {
   dashboard: DashboardApi;
   reservations: ReservationsApi;
+  reservationList: ReservationListApi;
   permissions: PermissionsApi;
   schedule: ScheduleApi;
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
+  roomSetup: RoomSetupApi;
+  bookingRules: BookingRulesApi;
   members: MembersApi;
   folios: FoliosApi;
+  reports: ReportsApi;
 }
 
 export interface ApiErrorInit {

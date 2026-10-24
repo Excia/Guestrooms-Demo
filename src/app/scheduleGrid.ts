@@ -235,6 +235,8 @@ export function formatDialogDate(iso: IsoDate): string {
 
 const REFUSALS: Record<DropRefusal, string> = {
   closure: 'Closures cannot be moved.',
+  'room-changed-stay':
+    'This stay has several rooms. Use Change Room During Stay in its details to change them.',
   'checked-out': 'Checked-out rooms cannot be moved.',
   past: 'A reservation cannot be moved to a date in the past.',
   'room-type-locked': 'This reservation is locked to its room type.',
@@ -264,15 +266,33 @@ export interface MoveDialogCopy {
 /** Title, text and primary button of the confirm dialog for an accepted drop (Figma 2623:*). */
 export function moveDialogCopy(
   result: Accepted,
-  block: Pick<ScheduleBlock, 'confirmationNumber'>,
+  block: Pick<ScheduleBlock, 'confirmationNumber' | 'status' | 'startDate'>,
   toRoomNumber: string,
+  /** The schedule's today: a checked-in stay that began earlier has nights already stayed. */
+  today?: IsoDate,
 ): MoveDialogCopy {
   const move = result.moves[0];
   const dates = `${formatDialogDate(move.toStart)} to ${formatDialogDate(move.toEnd)}`;
   if (result.dialog === 'room-change') {
+    // Dragging a checked-in stay moves all of it (D-050, Q-20-5): say so, including the nights that
+    // were already stayed, and point to the way of changing only the nights still to come.
+    const stayed =
+      block.status === 'checked-in' && today !== undefined
+        ? Math.max(
+            0,
+            Math.min(
+              daysBetween(block.startDate, today),
+              daysBetween(move.fromStart, move.fromEnd),
+            ),
+          )
+        : 0;
+    const body =
+      stayed > 0
+        ? `Please confirm moving the whole stay to Room ${toRoomNumber} for dates ${dates}. This includes the ${stayed === 1 ? '1 night' : `${stayed} nights`} already stayed. To change only the nights not yet stayed, use Change Room During Stay in the reservation details.`
+        : `Please confirm moving this room to Room ${toRoomNumber} for dates ${dates}.`;
     return {
       title: `Reservation ${block.confirmationNumber} Room Change`,
-      body: `Please confirm moving this room to Room ${toRoomNumber} for dates ${dates}.`,
+      body,
       confirmLabel: 'Move to New Room',
     };
   }
@@ -398,10 +418,92 @@ export function housekeepingFailure(error: unknown): HousekeepingFailure {
   };
 }
 
+/** Where a part of a stay that changed room sits in its chain, for the label and the grid text. */
+export interface SegmentLink {
+  index: number;
+  count: number;
+  /** Room number of the part before this one, if loaded. */
+  fromRoomNumber?: string;
+  /** Room number of the part after this one, if loaded. */
+  toRoomNumber?: string;
+}
+
+/**
+ * Links the parts of every stay that changed room during the stay: each part knows its place
+ * ("part 2 of 3") and the rooms of its neighbours, found by `stayId` among the loaded blocks.
+ */
+export function segmentLinks(
+  blocks: readonly ScheduleBlock[],
+  rooms: readonly Pick<ScheduleRoom, 'id' | 'number'>[],
+): Map<string, SegmentLink> {
+  const number = new Map(rooms.map((r) => [r.id, r.number]));
+  const byStay = new Map<string, ScheduleBlock[]>();
+  for (const b of blocks) {
+    if (!b.roomChange) continue;
+    const list = byStay.get(b.roomChange.stayId) ?? [];
+    list.push(b);
+    byStay.set(b.roomChange.stayId, list);
+  }
+  const links = new Map<string, SegmentLink>();
+  for (const parts of byStay.values()) {
+    for (const b of parts) {
+      const { index, count } = b.roomChange!;
+      const before = parts.find((p) => p.roomChange!.index === index - 1);
+      const after = parts.find((p) => p.roomChange!.index === index + 1);
+      links.set(b.id, {
+        index,
+        count,
+        // A neighbour in the same room is not a room change: nothing to point at.
+        fromRoomNumber:
+          before && before.roomId !== b.roomId ? number.get(before.roomId) : undefined,
+        toRoomNumber: after && after.roomId !== b.roomId ? number.get(after.roomId) : undefined,
+      });
+    }
+  }
+  return links;
+}
+
+/** "part 2 of 3, moved from Room 201, continues in Room 207". */
+export function segmentText(link: SegmentLink): string {
+  return [
+    `part ${link.index} of ${link.count}`,
+    ...(link.fromRoomNumber ? [`moved from Room ${link.fromRoomNumber}`] : []),
+    ...(link.toRoomNumber ? [`continues in Room ${link.toRoomNumber}`] : []),
+  ].join(', ');
+}
+
+/** The short text on the block: "2/3 ← 201 → 207". */
+export function segmentBadge(link: SegmentLink): string {
+  return [
+    `${link.index}/${link.count}`,
+    ...(link.fromRoomNumber ? [`← ${link.fromRoomNumber}`] : []),
+    ...(link.toRoomNumber ? [`→ ${link.toRoomNumber}`] : []),
+  ].join(' ');
+}
+
+/**
+ * The text of a block's tooltip (shown when the block's own text is cut off): guest, confirmation
+ * number, the place in a stay that changed room, the room and the rooms next to it.
+ */
+export function blockTipText(
+  block: Pick<ScheduleBlock, 'guestName' | 'confirmationNumber'>,
+  room: Pick<ScheduleRoom, 'number'> | undefined,
+  link?: SegmentLink,
+): string {
+  return [
+    block.guestName,
+    block.confirmationNumber,
+    ...(link ? [`part ${link.index} of ${link.count}`] : []),
+    `Room ${room?.number ?? ''}${link?.fromRoomNumber ? ` (from ${link.fromRoomNumber})` : ''}${link?.toRoomNumber ? ` \u2192 ${link.toRoomNumber}` : ''}`.trim(),
+  ].join(', ');
+}
+
 /** Name of a block for assistive technology: guest, confirmation number, status, room, dates. */
 export function blockAriaLabel(
   block: ScheduleBlock,
   room: Pick<ScheduleRoom, 'number'> | undefined,
+  /** The place of this part in a stay that changed room (ticket 2.3). */
+  link?: SegmentLink,
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
   return [
@@ -415,6 +517,7 @@ export function blockAriaLabel(
     ...(block.housekeeping && block.housekeeping !== 'nyci'
       ? [`housekeeping ${HOUSEKEEPING_LABELS[block.housekeeping]}`]
       : []),
+    ...(link ? [segmentText(link)] : []),
   ].join(', ');
 }
 

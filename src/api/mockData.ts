@@ -161,3 +161,9 @@ export const noGrant: PermissionGrant = { role: 'No access', permissions: [] };
  * (the setting accepts 1 to 99).
  */
 export const MOCK_BOOKING_HOLD = { employee: 15, member: 10, nonMember: 10 } as const;
+
+/**
+ * PLACEHOLDER until System Settings (ticket 7.1) defines it: when on, a room change during a stay
+ * asks whether to retain the current rate or update to the new room's rate (D-015).
+ */
+export const MOCK_ROOM_CHANGE_RULE = { askRateOnRoomChange: true } as const;

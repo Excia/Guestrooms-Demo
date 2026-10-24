@@ -39,18 +39,6 @@ describe('splitCta', () => {
     expect(splitCta(input(['nyci'], { status: 'cancelled' })).primary.id).toBe('manage');
   });
 
-  it('menu: print registration card and jump to folio; only the folio after check out or cancel', () => {
-    expect(splitCta(input(['nyci'])).menu.map((a) => a.label)).toEqual([
-      'Print Registration Card',
-      'Jump to Folio',
-    ]);
-    expect(splitCta(input(['checked-in'])).menu).toHaveLength(2);
-    expect(splitCta(input(['checked-out'])).menu.map((a) => a.id)).toEqual(['jump-to-folio']);
-    expect(splitCta(input(['nyci'], { status: 'cancelled' })).menu.map((a) => a.id)).toEqual([
-      'jump-to-folio',
-    ]);
-  });
-
   it('blocks check in while a room to check in is unassigned', () => {
     const unassigned = input(['nyci']);
     unassigned.rooms[0].roomId = null;

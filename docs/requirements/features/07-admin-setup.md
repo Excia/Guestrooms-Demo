@@ -102,6 +102,31 @@ Picker 11964:13394, Image Placeholder 11964:13054, Section Header 11895:18681.
   validation; a reusable Quantity Picker (min 0); photo upload with preview, remove and a max count;
   deleting a room or type in use blocked or warned.
 - **Open questions:** Q-72-1 to Q-72-3. The Quantity Picker divider decision is D-029.
+- **Implemented (Excia/Guestrooms-Demo#72, in review):** `src/pages/RoomTypes.tsx` at `/admin/room-types` and
+  `src/pages/Rooms.tsx` at `/admin/rooms`, both inside the Admin Setup shell (`AdminShell` gained an optional
+  `sidebar` for the item list, D-088). Left list (`SetupList`) with NEW ROOM TYPE / NEW ROOM, the selected item
+  filled, inactive items last with "(Inactive)" (PDF 9.4.2.4); a new item shows the default title and a Cancel
+  button; duplicate makes a new unsaved item named "Copy of ..."; delete asks Delete or Cancel (D-087). Form
+  parts: Active Start/End Date with "Configure active end date?" (end must be after start), SKU lookup, switches,
+  the shared `QuantityPicker` (`src/components/shared`, min 0 by default; occupancy 1 to 99, bedrooms 0 to 10,
+  full bath 1 to 99, half bath and bed types 0 to 99), description with a counter (750), photos (ADD PHOTOS,
+  remove, 50 max, at least one for a room type; D-089), Associations tabs with Select All / Select None and a
+  count in each tab label. Rooms: Room Owner (only while the System Settings owner switch is on, always enabled,
+  not inherited), Room Type lookup (changing it re-reads inherited details), Inherit Details (disables and fills
+  occupancy, beds, description, photos, features, add-ons), Inherit Rates (the rates table waits for 7.2), Display
+  in Online Booking, Linked Rooms tab (two-way, D-090). Saving a room type updates rooms that inherit from it (in
+  the mock). Unsaved changes ask before picking another item, creating one or following a link
+  (`useSetupEditor`, `useLeaveGuard`). Pure rules and tests: `src/app/roomSetup.ts`. API: `roomSetup` (see
+  [api-contract.md](../api-contract.md)). `LookupField` (7.1) now keeps the input slots MUI wires up (it had
+  dropped the input ref and its combobox role).
+- **From the functional requirements PDF (sections 9 and 10; Figma wins on layout and labels):** name 50
+  characters, description 750, photos 50 with one required, defaults 2 / 0 / 1 / 0 and bed types 0, active dates,
+  inactive items to the bottom, linked rooms two-way, inherit rules 10.4.3 to 10.4.7.
+- **Not built:** rates tables (7.2), room order editing, photo reorder and per-photo description, location
+  association (Figma shows only "SKU", see [figma-deviations.md](../figma-deviations.md)), deactivation checks,
+  visibility of the online booking toggles by Booking Rules (7.5), the schedule hiding inactive types and showing
+  linked rooms as unavailable (ticket 1.x reads its own data today).
+- **Status:** in review, 2026-10-21.
 
 ## 7.4 Add-On Items
 
@@ -141,6 +166,29 @@ Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.
   Epic 5 and the admin New Reservation search.
 - **Existing groundwork:** `GET /settings/booking-hold` and `BookingHold { employee, member, nonMember }`
   (1 to 99 minutes) on `main` (PR Excia/Guestrooms-Demo#119); the New Reservation panel uses the employee value (placeholder 15 minutes).
+- **Implemented (Excia/Guestrooms-Demo#74, in review):** `src/pages/BookingRules.tsx` at `/admin/booking-rules`
+  (route `booking-rules`, an Admin Setup page that is not in the menu; the Admin Setup navigation links to it) in
+  the Admin Setup shell. `src/components/admin/bookingRules/`: `RulesMatrix` (a real table; the rows are data in
+  `ROWS`, so a rule is added in one place), `MemberTypeRulesTable`, `PeriodField`, `CellSelect`,
+  `RoomTypesField`. Pure rules in `src/app/bookingRules.ts`: `toggleColumn` (member online off clears both
+  online columns and the member type rules; non-member off clears its column; non-member online cannot be on
+  while member online is off), `validateBookingRules`, `effectiveRules` (what Epic 5 and the admin New
+  Reservation search call: the member type rule overrides the member default, an excluded member type or a
+  switched-off column means no online booking) and `holdFromRules`. A cleared column is `null` in the data. An
+  N/A cell is a gray cell (employee excluded room types and add-on popup; the non-member member reserver).
+  Validation: booking opens earlier than it closes (compared in days, a month counts 30), hold 1 to 99, deposit
+  amount required for Deposit, rooms per reservation 1 to 99, a member type chosen once per row. One Save
+  button, enabled while dirty; Confirm Leaving; a refused save focuses the first invalid cell.
+  The mock's `GET /settings/booking-hold` now reads the Reservation Hold row.
+  - **Built defaults:** time units are days, weeks and months, amounts 1 to 99 (Q-74-1); Employee Booking has no
+    Excluded Room Types (N/A, as drawn; Q-74-2); the "Maximum reservations / time" hint Figma shows under Room
+    Selection looks pasted from another row and is not shown; the member-type label is a link to its table and
+    the checkbox beside it toggles the rows; switching a column back on gives it default values.
+  - **Not built:** consumers (Epic 5 online booking, the cancellation window, the New Reservation search) still use
+    their own placeholders; they should call `effectiveRules`. Fee amounts for cancellation are out of scope
+    (decision D-007).
+  - **Backend:** `GET` and `PUT /settings/booking-rules`, `GET /settings/booking-rules/options` (see
+    [api-contract.md](../api-contract.md)).
 - **Open questions:** Q-74-1, Q-74-2.
 
 ## 7.6 Keycard Integration settings
