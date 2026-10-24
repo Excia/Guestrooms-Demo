@@ -170,6 +170,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
     <AdminShell
       active="Room Options"
       title={title}
+      changeLog="add-on-items"
       sidebarLabel="Add-Ons"
       sidebar={
         <SetupList

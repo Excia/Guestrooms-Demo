@@ -12,10 +12,13 @@ import {
 import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
 import { permissionsFromGrant } from './grant';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
+import { assertChangeLogQuery } from './changeLogValidation';
+import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
+import { MOCK_RETRIEVED_ENCODERS, mockEncoderKeys } from './keycardData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
@@ -39,6 +42,7 @@ import {
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
+import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
@@ -118,7 +122,9 @@ export function createMockClient({
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
   let addOns = mockAddOns();
+  let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
+  const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
   const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
@@ -531,6 +537,23 @@ export function createMockClient({
           o,
         ),
     },
+    changeLog: {
+      list: (query, o) =>
+        respond(
+          () => {
+            assertChangeLogQuery(query);
+            return queryChangeLog(changeLog[query.page], query, today);
+          },
+          () => ({ items: [], total: 0 }),
+          o,
+        ),
+      listEventTypes: (o) =>
+        respond(
+          () => structuredClone([...MOCK_EVENT_TYPES]),
+          () => structuredClone([...MOCK_EVENT_TYPES]),
+          o,
+        ),
+    },
     roomSetup: {
       getOptions: (o) =>
         respond(
@@ -680,6 +703,33 @@ export function createMockClient({
             addOns = addOns.filter((a) => a.id !== id);
           },
           () => undefined,
+          o,
+        ),
+    },
+    keycards: {
+      listEncoders: (o) =>
+        respond(
+          () => [...encoderKeys],
+          () => [],
+          o,
+        ),
+      saveEncoders: (keys, o) =>
+        respond(
+          () => {
+            if (!validateEncoderKeys(keys)) {
+              throw new ApiError(422, 'Encoder keys are not valid', { code: 'validation' });
+            }
+            encoderKeys = [...keys];
+            return [...encoderKeys];
+          },
+          () => [...keys],
+          o,
+        ),
+      // The Visionline connection does not exist yet (Q-75-3): a fixed success response.
+      retrieveEncoders: (o) =>
+        respond(
+          () => [...MOCK_RETRIEVED_ENCODERS],
+          () => [],
           o,
         ),
     },

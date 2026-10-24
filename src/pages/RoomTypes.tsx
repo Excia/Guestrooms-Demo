@@ -145,6 +145,7 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
     <AdminShell
       active="Room Options"
       title={title}
+      changeLog="room-types"
       sidebarLabel="Room Types"
       sidebar={
         <SetupList

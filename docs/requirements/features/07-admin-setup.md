@@ -215,6 +215,18 @@ Excia/Guestrooms-Demo#75. Figma: Keycard Integration 2829:6860.
   encoders retrieved. Try doing something to troubleshoot and try again." (Cancel / Try Again); success
   toast "1 Encoder Successfully Retrieved". Retrieve goes through an integration interface with a mock;
   input validation (format and length, no duplicates); saved encoders feed the keycard flows (3.6).
+- **Implemented (Excia/Guestrooms-Demo#75, in review):** `src/pages/KeycardIntegration.tsx` at
+  `/admin/keycard-integration` inside the Admin Setup shell (navigation item enabled; not a menu link). Encoder Key
+  rows with a delete icon, **Retrieve Encoder**, **Add Encoder**, **Remove All** (confirmation dialog), **Save Changes**,
+  the retrieve error dialog (Cancel / Try Again) and the success toast, Confirm Leaving on unsaved edits. Pure rules in
+  `src/app/keycards.ts` (key format and length, duplicates, blank rows dropped on save, merge of retrieved keys),
+  unit-tested. API `keycards` (`listEncoders`, `saveEncoders`, `retrieveEncoders`) on the typed client with a mock whose
+  Visionline retrieve always succeeds with one key; see [api-contract.md](../api-contract.md). The saved list is read
+  with `api.keycards.listEncoders()`; ticket 3.6 uses it.
+  - **Built defaults (open questions):** a key is 14 digits, hyphens and spaces ignored (Q-75-1); the error dialog
+    keeps the Figma placeholder sentence (Q-75-2); no Visionline connection or authentication (Q-75-3).
+  - **Not built:** a real Visionline connection, the keycard flows that consume the list (3.6).
+  - **Status:** in review, 2026-10-24.
 - **Open questions:** Q-75-1 to Q-75-3.
 
 ## 7.7 Migration Tool
@@ -280,4 +292,9 @@ table sits next to it).
   Description, Action By; newest first; sort and filter by date, time, change type and action by;
   pagination; the X closes; **retention one year** on admin setup screens (enforced by the API contract);
   the event types table drives the Change Type filter.
-- **Open questions:** Q-97-1, Q-97-2.
+- **Implemented (Excia/Guestrooms-Demo#97, in review):** `src/components/admin/changeLog/` (`ChangeLogOverlay`,
+  `ColumnFilter`, `ChangeLogButton`, `useChangeLog`); `AdminShell` takes `changeLog="<page>"` and shows the button
+  (System Settings, Booking Rules, Room Types, Rooms, Add-On Items wired). Pure rules in `src/app/changeLog.ts` (formats,
+  retention, sort toggling, filters); typed API `changeLog` (`src/api/changeLogTypes.ts`) with a mock that filters,
+  sorts, pages and drops entries older than a year. Details in [entries/97-change-log.md](entries/97-change-log.md).
+- **Open questions:** Q-97-1, Q-97-2, Q-97-3.

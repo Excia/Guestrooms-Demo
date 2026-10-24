@@ -1,3 +1,4 @@
+import type { ChangeLogApi } from './changeLogTypes';
 import type { ReservationListApi } from './reservationListTypes';
 
 /** ISO calendar date, `YYYY-MM-DD`. */
@@ -848,6 +849,22 @@ export interface AddOnApi {
   delete(id: string, options?: RequestOptions): Promise<void>;
 }
 
+// ---- keycard integration (Admin Setup, ticket 7.6) --------------------------------------------
+
+/**
+ * Encoder Keys identify the keycard encoders of the club (Visionline). Keys are digits without
+ * separators (`src/app/keycards.ts`). The keycard flows (ticket 3.6) read the saved list.
+ * Errors: 422 `validation` on save (a key that is not 14 plain digits, or a duplicate); 5xx on retrieve.
+ */
+export interface KeycardApi {
+  /** The saved Encoder Keys, in list order. */
+  listEncoders(options?: RequestOptions): Promise<string[]>;
+  /** Replaces the saved list; returns what was stored. */
+  saveEncoders(keys: string[], options?: RequestOptions): Promise<string[]>;
+  /** Asks Visionline for its encoders. Resolves with an empty list when it knows none. Does not save. */
+  retrieveEncoders(options?: RequestOptions): Promise<string[]>;
+}
+
 // ---- booking rules (Admin Setup, ticket 7.5) --------------------------------------------------
 
 export type TimeUnit = 'days' | 'weeks' | 'months';
@@ -1232,10 +1249,12 @@ export interface ApiClient {
   systemSettings: SystemSettingsApi;
   roomSetup: RoomSetupApi;
   addOns: AddOnApi;
+  keycards: KeycardApi;
   bookingRules: BookingRulesApi;
   members: MembersApi;
   folios: FoliosApi;
   reports: ReportsApi;
+  changeLog: ChangeLogApi;
 }
 
 export interface ApiErrorInit {
