@@ -49,7 +49,7 @@ describe('Add-On Items page', () => {
     expect(screen.getByRole('radio', { name: 'Item' })).not.toBeChecked();
   });
 
-  it('enables the nightly quantity stepper only while tracking, within 1 and 99', async () => {
+  it('enables the nightly quantity stepper only while tracking, from 0 with no maximum', async () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
@@ -62,6 +62,10 @@ describe('Add-On Items page', () => {
     await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
     await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
     expect(stepper).toHaveTextContent('1');
+    await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
+    expect(stepper).toHaveTextContent('0');
+    await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
+    expect(stepper).toHaveTextContent('0');
     await user.click(screen.getByRole('switch', { name: 'Track Nightly Countdown' }));
     expect(screen.getByRole('button', { name: 'Increase Nightly Qty.' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Decrease Nightly Qty.' })).toBeDisabled();

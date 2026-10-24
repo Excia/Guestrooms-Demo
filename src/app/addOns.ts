@@ -3,7 +3,6 @@
 import type { AddOnInput, AddOnOptions, AddOnSetup } from '../api/types';
 import { isValidIsoDate } from './dateSelection';
 import {
-  clampCount,
   isActiveOn,
   MAX_PHOTOS,
   NAME_MAX,
@@ -13,8 +12,11 @@ import {
 
 export { NAME_MAX, MAX_PHOTOS };
 export const ADD_ON_DESCRIPTION_MAX = 400;
-/** Nightly Qty stepper range (ticket 7.4). The maximum is provisional (Q-73-2). */
-export const NIGHTLY_QTY = { min: 1, max: 99 } as const;
+/**
+ * Nightly Qty: a whole number of 0 or more, no maximum (matches the legacy system; Q-73-2).
+ * A new add-on starts at `initial`.
+ */
+export const NIGHTLY_QTY = { min: 0, initial: 1 } as const;
 /** Quantity of one add-on on one reservation line. Not used on this page; ticket 3.10 reads it. */
 export const LINE_QTY = { min: 1, max: 99 } as const;
 
@@ -37,7 +39,7 @@ export function blankAddOn(today: string): AddOnInput {
     sku: null,
     onlineBooking: false,
     trackNightly: false,
-    nightlyQty: NIGHTLY_QTY.min,
+    nightlyQty: NIGHTLY_QTY.initial,
     description: '',
     photos: [],
     locationIds: [],
@@ -46,7 +48,7 @@ export function blankAddOn(today: string): AddOnInput {
 }
 
 export const clampNightlyQty = (value: number) =>
-  clampCount(value, NIGHTLY_QTY.min, NIGHTLY_QTY.max);
+  Number.isFinite(value) ? Math.max(NIGHTLY_QTY.min, Math.round(value)) : NIGHTLY_QTY.min;
 
 export function validateAddOn(input: AddOnInput): SetupErrors<AddOnField> {
   const errors: SetupErrors<AddOnField> = {};
@@ -67,13 +69,9 @@ export function validateAddOn(input: AddOnInput): SetupErrors<AddOnField> {
 
   if (
     input.trackNightly &&
-    !(
-      Number.isInteger(input.nightlyQty) &&
-      input.nightlyQty >= NIGHTLY_QTY.min &&
-      input.nightlyQty <= NIGHTLY_QTY.max
-    )
+    !(Number.isInteger(input.nightlyQty) && input.nightlyQty >= NIGHTLY_QTY.min)
   ) {
-    errors.nightlyQty = `Nightly quantity must be ${NIGHTLY_QTY.min} to ${NIGHTLY_QTY.max}.`;
+    errors.nightlyQty = 'Nightly quantity must be a whole number, 0 or more.';
   }
 
   if (input.description.length > ADD_ON_DESCRIPTION_MAX) {
@@ -91,7 +89,7 @@ export function normalizeAddOn(input: AddOnInput): AddOnInput {
   return {
     ...input,
     name: input.name.trim(),
-    nightlyQty: input.trackNightly ? input.nightlyQty : NIGHTLY_QTY.min,
+    nightlyQty: input.trackNightly ? input.nightlyQty : NIGHTLY_QTY.initial,
     locationIds: [...new Set(input.locationIds)],
     roomTypeIds: [...new Set(input.roomTypeIds)],
   };
