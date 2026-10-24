@@ -262,7 +262,13 @@ describe('split CTA', () => {
       within(menu)
         .getAllByRole('menuitem')
         .map((m) => m.textContent),
-    ).toEqual(['Print Registration Card', 'Jump to Folio']);
+    ).toEqual([
+      'Edit Reservation',
+      'Cancel Reservation',
+      'Add Another Room',
+      'Print Registration Card(s)',
+      'Jump to Folio',
+    ]);
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     expect(arrow).toHaveFocus();
@@ -292,7 +298,7 @@ describe('split CTA', () => {
     expect(within(dialog).getByRole('button', { name: /Room 205/ })).toBeInTheDocument();
   });
 
-  it('checked out: Manage Reservation with only Jump to Folio in its menu', async () => {
+  it('checked out: Manage Reservation with Print Registration Card(s) and Jump to Folio in its menu', async () => {
     const user = await loaded('/schedule?res=rs-1');
     const dialog = await panel(/Reservation #GR-50188/);
     expect(
@@ -300,7 +306,7 @@ describe('split CTA', () => {
     ).toBeInTheDocument();
     expect(within(dialog).getByText('Checked Out')).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
-    expect(within(await screen.findByRole('menu')).getAllByRole('menuitem')).toHaveLength(1);
+    expect(within(await screen.findByRole('menu')).getAllByRole('menuitem')).toHaveLength(2);
   });
 });
 

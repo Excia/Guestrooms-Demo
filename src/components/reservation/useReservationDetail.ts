@@ -20,6 +20,8 @@ export function useReservationDetail(
   retry: () => void;
   /** Replace the loaded detail (after a reload that an early/late failure triggered). */
   replace: (detail: ReservationDetail) => void;
+  /** Merge saved fields (an Early/Late save and its new version) into the loaded detail. */
+  patch: (changes: Partial<ReservationDetail>) => void;
 } {
   const api = useApi();
   const [attempt, setAttempt] = useState(0);
@@ -80,6 +82,15 @@ export function useReservationDetail(
       setResult((r) => (r ? { ...r, state: { status: 'success', detail } } : r)),
     [],
   );
+  const patch = useCallback(
+    (changes: Partial<ReservationDetail>) =>
+      setResult((r) =>
+        r?.state.status === 'success'
+          ? { ...r, state: { status: 'success', detail: { ...r.state.detail, ...changes } } }
+          : r,
+      ),
+    [],
+  );
   const state: DetailState = result?.key === key ? result.state : { status: 'loading' };
-  return { ...state, retry, replace };
+  return { ...state, retry, replace, patch };
 }

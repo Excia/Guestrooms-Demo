@@ -271,6 +271,12 @@ export interface ReservationDetail {
   /** Excludes taxes and service charges. */
   stay: { lines: ReservationStayLine[]; folioTotalCents: Cents };
   version: string;
+  /**
+   * The latest business date a night audit has run for (ticket 2.5); null when none has. Absent
+   * when the backend does not say: the UI then treats the audit as unknown and hides actions that
+   * only exist before it (Undo Check In).
+   */
+  lastAuditedDate?: IsoDate | null;
 }
 
 /**
@@ -389,6 +395,34 @@ export interface ChangeRoomResult {
   vacatedRoom: { roomId: string; housekeeping: HousekeepingStatus; since: IsoDate } | null;
 }
 
+/**
+ * Cancel a whole reservation (ticket 2.5). `requestId` is the idempotency key (body and
+ * `Idempotency-Key` header); `version` is the `ReservationDetail.version` the user saw. Fees are
+ * out of scope. Answers the reservation as it is now (status 'cancelled', new `version`). Errors:
+ * 400 `invalid-id` / `invalid-query`; 403 `forbidden` (no `reservation.edit`); 404; 409 `stale`;
+ * 409 `not-cancellable` (a room is checked in or out, or it is already cancelled); 409
+ * `idempotency-conflict`.
+ */
+export interface CancelReservationRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+}
+
+/**
+ * Undo a check in (ticket 2.5): one reservation room (`reservationRoomId`) or, when absent, every
+ * room that is checked in. Answers the reservation as it is now. Errors: 400; 403 `forbidden`; 404;
+ * 409 `stale`; 409 `not-checked-in` (nothing to undo, or a room was already checked out); 409
+ * `audit-closed` (the night audit has run for the check-in business date); 409
+ * `idempotency-conflict`.
+ */
+export interface UndoCheckInRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+  reservationRoomId?: string;
+}
+
 export interface ReservationsApi {
   list(query?: ReservationQuery, options?: RequestOptions): Promise<Page<Reservation>>;
   /** Rejects with an ApiError of status 404 when the id is unknown. */
@@ -402,6 +436,13 @@ export interface ReservationsApi {
     request: ChangeRoomRequest,
     options?: RequestOptions,
   ): Promise<ChangeRoomResult>;
+  /** Cancel the reservation (ticket 2.5). Idempotent on `requestId`. */
+  cancelReservation(
+    request: CancelReservationRequest,
+    options?: RequestOptions,
+  ): Promise<ReservationDetail>;
+  /** Undo a check in (ticket 2.5). Idempotent on `requestId`. */
+  undoCheckIn(request: UndoCheckInRequest, options?: RequestOptions): Promise<ReservationDetail>;
 }
 
 // ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----

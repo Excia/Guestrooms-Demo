@@ -1,6 +1,8 @@
 import type {
   ApiClient,
   BookingHold,
+  CancelReservationRequest,
+  UndoCheckInRequest,
   ChangeRoomRequest,
   ChangeRoomResult,
   CreateMemberRequest,
@@ -56,6 +58,8 @@ import {
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
+import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
+import { parseIsoDate } from '../lib/dates';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -212,7 +216,8 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         l.reservationRoomId !== '',
     ) &&
     isString(v.version) &&
-    v.version !== ''
+    v.version !== '' &&
+    (v.lastAuditedDate === undefined || v.lastAuditedDate === null || isString(v.lastAuditedDate))
   );
 }
 
@@ -288,12 +293,23 @@ const parseFolio =
     return body;
   };
 
+// A malformed `lastAuditedDate` is treated as unknown (absent): Undo Check In stays hidden.
+function withKnownAudit(detail: ReservationDetail): ReservationDetail {
+  const date = detail.lastAuditedDate;
+  if (typeof date === 'string' && parseIsoDate(date) === null) {
+    const rest = { ...detail };
+    delete rest.lastAuditedDate;
+    return rest;
+  }
+  return detail;
+}
+
 // The answer must be for the reservation that was asked for.
 const parseDetail =
   (id: string) =>
   (body: unknown, status: number): ReservationDetail => {
     if (!isReservationDetail(body) || body.id !== id) throw invalid(status, 'reservation detail');
-    return body;
+    return withKnownAudit(body);
   };
 
 // The answer must carry the flags the request asked for (a changed flag that did not stick is a
@@ -313,6 +329,20 @@ const parseEarlyLate =
       throw invalid(status, 'early/late');
     }
     return body as unknown as EarlyLateResult;
+  };
+
+// The cancel answer is the reservation, and it must say it is cancelled.
+const parseCancelled =
+  (request: CancelReservationRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (
+      !isReservationDetail(body) ||
+      body.id !== request.reservationId ||
+      body.status !== 'cancelled'
+    ) {
+      throw invalid(status, 'cancelled reservation');
+    }
+    return withKnownAudit(body);
   };
 
 const parseCreated =
@@ -974,6 +1004,28 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             {},
             o,
             parseChangeRoom(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      cancelReservation: (r: CancelReservationRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCancelReservationRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/cancel`,
+            {},
+            o,
+            parseCancelled(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      undoCheckIn: (r: UndoCheckInRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUndoCheckInRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/undo-check-in`,
+            {},
+            o,
+            parseDetail(r.reservationId),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),

@@ -18,6 +18,12 @@ import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupDa
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
+import {
+  cancelReservation,
+  mockLastAuditedDate,
+  undoCheckIn,
+  type CancelledStore,
+} from './reservationMenuData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
@@ -51,6 +57,7 @@ import {
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
+import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
 
 export interface MockOptions {
   scenario?: MockScenario;
@@ -66,6 +73,8 @@ export interface MockOptions {
   scheduleSize?: ScheduleSize;
   /** The room-change rate setting (ticket 2.3); defaults to asking (PLACEHOLDER until ticket 7.1). */
   roomChangeRule?: RoomChangeRule;
+  /** The latest business date a night audit has run for (ticket 2.5); defaults to the day before `today`. */
+  lastAuditedDate?: IsoDate;
 }
 
 export const MOCK_PAGE_SIZE = 4;
@@ -87,17 +96,20 @@ export function createMockClient({
   today = MOCK_TODAY,
   scheduleSize = 'default',
   roomChangeRule = MOCK_ROOM_CHANGE_RULE,
+  lastAuditedDate = mockLastAuditedDate(today),
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
   const members = seedMembers();
   const listCheckedIn = new Set<string>();
+  const cancelledReservations: CancelledStore = new Map();
   let systemSettings = mockSystemSettings();
   let roomTypes = mockRoomTypes();
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
   let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
+  const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {
@@ -188,7 +200,9 @@ export function createMockClient({
         respond(
           () => {
             assertResourceId(id, 'reservation');
-            return buildDetail(schedule, id);
+            const cancelled = cancelledReservations.get(id);
+            if (cancelled) return structuredClone(cancelled);
+            return { ...buildDetail(schedule, id), lastAuditedDate };
           },
           () => {
             throw notFound();
@@ -235,6 +249,38 @@ export function createMockClient({
           () => {
             assertChangeRoomRequest(request);
             throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
+      cancelReservation: (request, o) =>
+        respond(
+          () => {
+            assertCancelReservationRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () =>
+              cancelReservation(schedule, cancelledReservations, request, lastAuditedDate),
+            );
+          },
+          () => {
+            assertCancelReservationRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      undoCheckIn: (request, o) =>
+        respond(
+          () => {
+            assertUndoCheckInRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () => undoCheckIn(schedule, request, lastAuditedDate));
+          },
+          () => {
+            assertUndoCheckInRequest(request);
+            throw notFound();
           },
           o,
         ),

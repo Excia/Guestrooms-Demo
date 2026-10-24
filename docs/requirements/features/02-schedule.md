@@ -326,7 +326,11 @@ Ticket Excia/Guestrooms-Demo#22. Figma: Reservation Menus 17239:17738; Hub-Multi
   the top of the hub listing all rooms with status; the selected room is visually distinct. Cancel
   Reservation asks for confirmation. Online cancellation window uses the "Cancellation Period" rule;
   fee amounts out of scope (D-007).
-- **Implemented:** nothing for the menus (PR #119 added `splitCta()` for the details panel's
-  primary/secondary actions only, with stubs).
-- **Open questions:** Q-22-1, Q-22-2.
-- **Status:** not started.
+- **Implemented:** the split CTA menu is driven by `reservationMenu()` (`src/app/reservationMenu.ts`) per
+  state; Cancel Reservation (confirmation dialog, `cancelReservation`), Undo Check In (menu and per room in
+  the selector, hidden after the night audit via `ReservationDetail.lastAuditedDate`, and for a reservation with a
+  checked-out room; Add Another Room stays after the audit, Q-22-3), Print Registration
+  Card(s) (stub PDF URL in a new tab). Edit Reservation, Assign Room and Add Another Room are notices until
+  the hub (3.12). Details in `entries/22-reservation-menus.md`.
+- **Open questions:** Q-22-1, Q-22-2, Q-22-3 to Q-22-6 (entry).
+- **Status:** in review (branch `feat/22-reservation-menus`).
