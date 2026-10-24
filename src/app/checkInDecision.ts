@@ -6,6 +6,7 @@
 // the last night audit are not used.
 import { daysBetween, type IsoDate } from '../lib/dates';
 import { departurePassed, type ClubClock } from '../lib/clubTime';
+import type { ReservationDetail } from '../api/types';
 import type { CheckInLevel } from './permissions';
 
 export type CheckInRoomStatus = 'nyci' | 'checked-in' | 'checked-out';
@@ -39,10 +40,7 @@ export interface CheckInInput {
 }
 
 export type CheckInDisabledReason =
-  | 'no-permission'
-  | 'future-arrival'
-  | 'room-not-ready'
-  | 'nothing-to-check-in';
+  'no-permission' | 'future-arrival' | 'room-not-ready' | 'nothing-to-check-in';
 
 /** Fields every non-disabled answer carries. */
 export interface CheckInPlan {
@@ -96,7 +94,10 @@ const disabled = (reason: CheckInDisabledReason): CheckInDecision => ({
 function stayOf(rooms: readonly CheckInRoomFacts[]): { arrival: IsoDate; departure: IsoDate } {
   return {
     arrival: rooms.reduce((min, r) => (r.arrival < min ? r.arrival : min), rooms[0].arrival),
-    departure: rooms.reduce((max, r) => (r.departure > max ? r.departure : max), rooms[0].departure),
+    departure: rooms.reduce(
+      (max, r) => (r.departure > max ? r.departure : max),
+      rooms[0].departure,
+    ),
   };
 }
 
@@ -133,9 +134,15 @@ export function decideCheckIn(input: CheckInInput): CheckInDecision {
   };
   if (stay.arrival < clock.date) {
     const split = rooms.some(
-      (r) => !input.targetIds.includes(r.id) && (r.status === 'checked-in' || r.status === 'checked-out'),
+      (r) =>
+        !input.targetIds.includes(r.id) &&
+        (r.status === 'checked-in' || r.status === 'checked-out'),
     );
-    return { kind: level === 'any-time' ? 'needsPastDateConfirmation' : 'needsOverride', split, ...plan };
+    return {
+      kind: level === 'any-time' ? 'needsPastDateConfirmation' : 'needsOverride',
+      split,
+      ...plan,
+    };
   }
   return { kind: plan.thenCheckOut ? 'checkInThenOut' : 'allowed', ...plan };
 }
@@ -168,12 +175,20 @@ export const CHECK_OUT_AFTER_NOTICE =
   'The departure date has passed. After check in the reservation is checked out automatically.';
 
 /** The number of nights charged to the folio by a past check in: the nights before today. */
-export function nightsBeforeToday(
-  arrival: IsoDate,
-  departure: IsoDate,
-  today: IsoDate,
-): number {
+export function nightsBeforeToday(arrival: IsoDate, departure: IsoDate, today: IsoDate): number {
   const end = departure < today ? departure : today;
   if (end <= arrival) return 0;
   return daysBetween(arrival, end);
+}
+
+/** The rule's view of a reservation's rooms. A room whose housekeeping is not reported counts as ready. */
+export function roomFactsOf(detail: Pick<ReservationDetail, 'rooms'>): CheckInRoomFacts[] {
+  return detail.rooms.map((r) => ({
+    id: r.id,
+    status: r.status,
+    assigned: r.roomId !== null,
+    dirty: r.housekeeping === 'dirty',
+    arrival: r.arrival,
+    departure: r.departure,
+  }));
 }

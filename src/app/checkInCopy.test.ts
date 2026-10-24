@@ -1,6 +1,8 @@
+import { ApiError } from '../api/types';
 import { decideCheckIn } from './checkInDecision';
 import {
   checkInFailureText,
+  checkInRequestFailure,
   checkInSuccessMessage,
   formatPromptDate,
   integrationErrorMessage,
@@ -11,9 +13,25 @@ import {
 const plan = (split: boolean) => {
   const d = decideCheckIn({
     rooms: [
-      { id: 'a', status: 'nyci', assigned: true, dirty: false, arrival: '2026-10-20', departure: '2026-10-27' },
+      {
+        id: 'a',
+        status: 'nyci',
+        assigned: true,
+        dirty: false,
+        arrival: '2026-10-20',
+        departure: '2026-10-27',
+      },
       ...(split
-        ? [{ id: 'b', status: 'checked-in' as const, assigned: true, dirty: false, arrival: '2026-10-20', departure: '2026-10-27' }]
+        ? [
+            {
+              id: 'b',
+              status: 'checked-in' as const,
+              assigned: true,
+              dirty: false,
+              arrival: '2026-10-20',
+              departure: '2026-10-27',
+            },
+          ]
         : []),
     ],
     targetIds: ['a'],
@@ -57,7 +75,9 @@ describe('pastDatePrompt', () => {
       firstLabel: 'Split this room from the reservation',
     });
     expect(p.message).toMatch(/already checked in or out/);
-    expect(pastDatePrompt(plan(true), 'arrival-date-only').message).toMatch(/Split this room.*override code/);
+    expect(pastDatePrompt(plan(true), 'arrival-date-only').message).toMatch(
+      /Split this room.*override code/,
+    );
   });
 });
 
@@ -79,20 +99,40 @@ describe('splitConfirmation', () => {
 describe('checkInSuccessMessage', () => {
   it('names the room of a one-room reservation', () => {
     expect(
-      checkInSuccessMessage({ reservationRooms: 1, alreadyCheckedIn: 0, checkedIn: 1, roomNumbers: ['203'] }),
+      checkInSuccessMessage({
+        reservationRooms: 1,
+        alreadyCheckedIn: 0,
+        checkedIn: 1,
+        roomNumbers: ['203'],
+      }),
     ).toBe('You have successfully checked in Room 203.');
   });
   it('says "all rooms" when the rest of the reservation is in', () => {
     expect(
-      checkInSuccessMessage({ reservationRooms: 3, alreadyCheckedIn: 1, checkedIn: 2, roomNumbers: [] }),
+      checkInSuccessMessage({
+        reservationRooms: 3,
+        alreadyCheckedIn: 1,
+        checkedIn: 2,
+        roomNumbers: [],
+      }),
     ).toBe('You have successfully checked in all rooms.');
   });
   it('counts rooms otherwise', () => {
     expect(
-      checkInSuccessMessage({ reservationRooms: 3, alreadyCheckedIn: 0, checkedIn: 1, roomNumbers: [] }),
+      checkInSuccessMessage({
+        reservationRooms: 3,
+        alreadyCheckedIn: 0,
+        checkedIn: 1,
+        roomNumbers: [],
+      }),
     ).toBe('You have successfully checked in 1 room.');
     expect(
-      checkInSuccessMessage({ reservationRooms: 4, alreadyCheckedIn: 0, checkedIn: 2, roomNumbers: [] }),
+      checkInSuccessMessage({
+        reservationRooms: 4,
+        alreadyCheckedIn: 0,
+        checkedIn: 2,
+        roomNumbers: [],
+      }),
     ).toBe('You have successfully checked in 2 rooms.');
   });
 });
@@ -112,9 +152,42 @@ describe('failure and integration text', () => {
         { kind: 'key-card', message: 'y' },
         { kind: 'tms', message: 'z' },
       ]),
-    ).toBe('Checked in, but the Key card and TMS integration reported an error. Verify the integration status.');
+    ).toBe(
+      'Checked in, but the Key card and TMS integration reported an error. Verify the integration status.',
+    );
   });
   it('formats the prompt date', () => {
     expect(formatPromptDate('2026-10-20')).toBe('10/20/2026');
+  });
+});
+
+describe('checkInRequestFailure', () => {
+  const err = (status: number, code?: string) =>
+    new ApiError(status, 'x', code ? { code } : undefined);
+  it('sends a wrong or missing override code back to the code step', () => {
+    for (const code of ['override-required', 'override-invalid']) {
+      expect(checkInRequestFailure(err(403, code))).toMatchObject({
+        askOverrideAgain: true,
+        refetch: false,
+      });
+    }
+  });
+  it('explains a refusal, a stale reservation and a date problem', () => {
+    expect(checkInRequestFailure(err(403, 'forbidden')).message).toMatch(/may not check in/);
+    expect(checkInRequestFailure(err(409, 'stale'))).toMatchObject({ refetch: true });
+    expect(checkInRequestFailure(err(409, 'future-arrival')).message).toMatch(/arrival date/);
+    expect(checkInRequestFailure(err(409, 'past-date-unconfirmed')).refetch).toBe(false);
+  });
+  it('treats no answer, 408 and 5xx as an unknown outcome and a definite 4xx as a plain failure', () => {
+    expect(checkInRequestFailure(new Error('network'))).toMatchObject({
+      outcomeUnknown: true,
+      refetch: true,
+    });
+    expect(checkInRequestFailure(err(408))).toMatchObject({ outcomeUnknown: true });
+    expect(checkInRequestFailure(err(500))).toMatchObject({ outcomeUnknown: true });
+    expect(checkInRequestFailure(err(400, 'invalid-query'))).toEqual({
+      message: 'Could not check in. Try again.',
+      refetch: false,
+    });
   });
 });

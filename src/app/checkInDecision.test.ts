@@ -2,6 +2,7 @@ import {
   checkInCtaLabel,
   decideCheckIn,
   nightsBeforeToday,
+  roomFactsOf,
   needsPastDatePrompt,
   type CheckInInput,
   type CheckInRoomFacts,
@@ -40,9 +41,7 @@ describe('decideCheckIn', () => {
   it('asks for a payment method when none is on file, past date or not', () => {
     expect(decideCheckIn(input({ paymentOnFile: false }))).toMatchObject({ paymentRequired: true });
     expect(
-      decideCheckIn(
-        input({ paymentOnFile: false, rooms: [room({ arrival: '2026-10-20' })] }),
-      ),
+      decideCheckIn(input({ paymentOnFile: false, rooms: [room({ arrival: '2026-10-20' })] })),
     ).toMatchObject({ kind: 'needsPastDateConfirmation', paymentRequired: true });
   });
 
@@ -117,11 +116,15 @@ describe('decideCheckIn', () => {
 
     it('on the departure day only a time after check-out time counts', () => {
       const rooms = [room({ arrival: '2026-10-24', departure: '2026-10-24' })];
-      expect(decideCheckIn(input({ rooms, clock: { date: '2026-10-24', time: '11:00' } }))).toMatchObject({
+      expect(
+        decideCheckIn(input({ rooms, clock: { date: '2026-10-24', time: '11:00' } })),
+      ).toMatchObject({
         kind: 'allowed',
         thenCheckOut: false,
       });
-      expect(decideCheckIn(input({ rooms, clock: { date: '2026-10-24', time: '12:30' } }))).toMatchObject({
+      expect(
+        decideCheckIn(input({ rooms, clock: { date: '2026-10-24', time: '12:30' } })),
+      ).toMatchObject({
         kind: 'checkInThenOut',
         thenCheckOut: true,
       });
@@ -176,12 +179,15 @@ describe('decideCheckIn', () => {
       room({ id: 'a', arrival: '2026-10-20' }),
       room({ id: 'b', arrival: '2026-10-20', status: otherStatus }),
     ];
-    it.each(['checked-in', 'checked-out'] as const)('offers a split when another room is %s', (s) => {
-      expect(decideCheckIn(input({ rooms: rooms(s), targetIds: ['a'] }))).toMatchObject({
-        kind: 'needsPastDateConfirmation',
-        split: true,
-      });
-    });
+    it.each(['checked-in', 'checked-out'] as const)(
+      'offers a split when another room is %s',
+      (s) => {
+        expect(decideCheckIn(input({ rooms: rooms(s), targetIds: ['a'] }))).toMatchObject({
+          kind: 'needsPastDateConfirmation',
+          split: true,
+        });
+      },
+    );
     it('offers adjusting the dates when no other room has started', () => {
       expect(decideCheckIn(input({ rooms: rooms('nyci'), targetIds: ['a'] }))).toMatchObject({
         split: false,
@@ -201,7 +207,9 @@ describe('needsPastDatePrompt', () => {
   it('is true for the two past-date answers only', () => {
     const past = { rooms: [room({ arrival: '2026-10-20' })] };
     expect(needsPastDatePrompt(decideCheckIn(input(past)))).toBe(true);
-    expect(needsPastDatePrompt(decideCheckIn(input({ ...past, level: 'arrival-date-only' })))).toBe(true);
+    expect(needsPastDatePrompt(decideCheckIn(input({ ...past, level: 'arrival-date-only' })))).toBe(
+      true,
+    );
     expect(needsPastDatePrompt(decideCheckIn(input()))).toBe(false);
     expect(needsPastDatePrompt(decideCheckIn(input({ level: 'never' })))).toBe(false);
   });
@@ -227,5 +235,30 @@ describe('nightsBeforeToday', () => {
   });
   it('is zero on the arrival day', () => {
     expect(nightsBeforeToday('2026-10-24', '2026-10-27', '2026-10-24')).toBe(0);
+  });
+});
+
+describe('roomFactsOf', () => {
+  it('reads assignment and housekeeping from the detail; unreported housekeeping is ready', () => {
+    const base = {
+      status: 'nyci' as const,
+      locationName: null,
+      roomTypeName: null,
+      arrival: 'a',
+      departure: 'b',
+    };
+    expect(
+      roomFactsOf({
+        rooms: [
+          { ...base, id: '1', roomId: 'rm-1', roomNumber: '1', housekeeping: 'dirty' },
+          { ...base, id: '2', roomId: null, roomNumber: null },
+          { ...base, id: '3', roomId: 'rm-3', roomNumber: '3' },
+        ],
+      }).map((f) => [f.id, f.assigned, f.dirty]),
+    ).toEqual([
+      ['1', true, true],
+      ['2', false, false],
+      ['3', true, false],
+    ]);
   });
 });

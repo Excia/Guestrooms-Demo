@@ -16,12 +16,14 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useApi, type ReservationDetail, type ReservationRoomDetail } from '../../api';
 import { changeRoomAvailability } from '../../app/changeRoom';
 import { type EarlyLateValues } from '../../app/earlyLate';
-import { RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
+import { checkInLevel, RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
+import { RESERVATION_PANEL_SIDE, toastSideFor } from '../../app/layout';
+import { splitConfirmation } from '../../app/checkInCopy';
 import {
   checkInText,
   checkOutText,
@@ -38,7 +40,7 @@ import {
 import { formatPanelDate } from '../../app/newReservation';
 import { openCardErrorMessage, openCardInNewTab } from '../../app/openCardPreview';
 import { registrationCardReservation } from '../../app/registrationCard';
-import { folioPath } from '../../app/routes';
+import { folioPath, NIGHT_AUDIT_HISTORY_PATH } from '../../app/routes';
 import {
   cancelConfirmation,
   canUndoRoomCheckIn,
@@ -48,11 +50,18 @@ import {
 import { splitCta, STUB_TICKETS, type CtaActionId } from '../../app/splitCta';
 import { useAccess } from '../../app/useAccess';
 import { useSystemSettings } from '../../app/useSystemSettings';
+import { clubClock } from '../../lib/clubTime';
 import { todayIso, type IsoDate } from '../../lib/dates';
+import CheckInResultDialog from '../reservationList/CheckInResultDialog';
 import ConfirmDialog from '../shared/ConfirmDialog';
+import SaveToast from '../shared/SaveToast';
 import { focusOnMount } from '../shared/focusOnMount';
 import SplitButton from '../shared/SplitButton';
 import ChangeRoomDialog, { type RoomChangeSubmission } from './ChangeRoomDialog';
+import CheckInPanel from './CheckInPanel';
+import { AutoCheckOutDialog, OverrideCodeDialog, PastDateCheckInDialog } from './CheckInDialogs';
+import PaymentMethodsDialog from './PaymentMethodsDialog';
+import { useCheckInFlow } from './useCheckInFlow';
 import DetailsAccordion from './DetailsAccordion';
 import EarlyLateToggles from './EarlyLateToggles';
 import { useEarlyLate } from './useEarlyLate';
@@ -81,6 +90,10 @@ export interface ReservationDetailsProps {
   reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
   /** The reservation was cancelled or a check in undone: the schedule behind the panel reloads. */
   onReservationChanged?: () => void;
+  /** Opens another reservation in the panel (the one a room was split into). */
+  onOpenReservation?: (reservationId: string) => void;
+  /** The current instant, for the club clock's time of day (check-out time rule). Injectable for tests. */
+  now?: () => number;
 }
 
 function Loading() {
@@ -161,6 +174,7 @@ function RoomSelector({
   canEdit,
   busy,
   onUndo,
+  onCheckIn,
 }: {
   rooms: ReservationRoomDetail[];
   index: number;
@@ -171,6 +185,8 @@ function RoomSelector({
   busy: boolean;
   /** Undo the check in of this reservation room. */
   onUndo: (reservationRoomId: string) => void;
+  /** Check in this one room (ticket 163). */
+  onCheckIn: (reservationRoomId: string) => void;
 }) {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
@@ -276,9 +292,11 @@ function RoomSelector({
           <Button
             size="small"
             onClick={() =>
-              onStub(
-                'Checking a single room in or out arrives with the Reservation Hub (ticket 3.12).',
-              )
+              room.status === 'checked-in'
+                ? onStub(
+                    'Checking a single room out arrives with the Reservation Hub (ticket 3.12).',
+                  )
+                : onCheckIn(room.id)
             }
           >
             {room.status === 'checked-in' ? 'Check Out Room' : 'Check In Room'}
@@ -328,6 +346,8 @@ export default function ReservationDetails({
   refreshToken,
   reopenChange,
   onReservationChanged,
+  onOpenReservation,
+  now,
 }: ReservationDetailsProps) {
   const state = useReservationDetail(reservationId, refreshToken);
   const closeButton = (
@@ -398,6 +418,8 @@ export default function ReservationDetails({
       roomChangeBusy={roomChangeBusy}
       reopenChange={reopenChange}
       onReservationChanged={onReservationChanged}
+      onOpenReservation={onOpenReservation}
+      now={now}
     />
   );
 }
@@ -416,6 +438,8 @@ function Loaded({
   roomChangeBusy,
   reopenChange,
   onReservationChanged,
+  onOpenReservation,
+  now,
 }: {
   detail: ReservationDetail;
   reservationRoomId?: string;
@@ -431,6 +455,8 @@ function Loaded({
   roomChangeBusy?: boolean;
   reopenChange?: ReservationDetailsProps['reopenChange'];
   onReservationChanged?: () => void;
+  onOpenReservation?: (reservationId: string) => void;
+  now?: () => number;
 }) {
   const navigate = useNavigate();
   const { can } = useAccess();
@@ -484,6 +510,67 @@ function Loaded({
     busy: roomChangeBusy,
   });
   const multi = detail.rooms.length > 1;
+
+  // ---- check in (ticket 163) ----
+  const level = checkInLevel(can);
+  const clock = {
+    ...clubClock(systemSettings?.timeZone, now ? new Date(now()) : undefined),
+    date: todayDate,
+  };
+  const titleRef = useRef<HTMLElement | null>(null);
+  // Focus goes back to the reservation heading whenever the check in panel or a dialog it opened is gone.
+  const [refocus, setRefocus] = useState(0);
+  const flow = useCheckInFlow({
+    detail,
+    level,
+    clock,
+    checkOutTime: systemSettings?.checkOutTime ?? '12:00',
+    onReloaded,
+    onChanged: onReservationChanged,
+    onEdit: (kind) => runMenu(kind),
+    onOpenReservation,
+  });
+  const stepName = flow.step?.name ?? null;
+  const showsPanel = stepName === 'panel';
+  const wasPanel = useRef(false);
+  const hadFinalDialog = useRef(false);
+  useEffect(() => {
+    // The panel closed without a dialog (Back, or a toast follows), or the result / automatic
+    // check-out / split dialog was dismissed: back to the heading. A prompt that is cancelled needs nothing:
+    // MUI hands focus back to the button that opened it.
+    const final = stepName === 'result' || stepName === 'auto-checkout' || stepName === 'split';
+    const panelClosed = wasPanel.current && !showsPanel && stepName === null;
+    if (panelClosed || (hadFinalDialog.current && stepName === null)) setRefocus((n) => n + 1);
+    wasPanel.current = showsPanel;
+    hadFinalDialog.current = final;
+  }, [stepName, showsPanel]);
+  useEffect(() => {
+    if (refocus > 0) titleRef.current?.focus();
+  }, [refocus]);
+  const waitingIds = detail.rooms.filter((r) => r.status === 'nyci').map((r) => r.id);
+  const startCheckIn = (ids: string[]) => {
+    const decision = flow.start(ids);
+    if (decision.kind === 'disabled') say(decision.message);
+  };
+  const isCheckInCta =
+    cta.primary.id === 'check-in' ||
+    cta.primary.id === 'check-in-all' ||
+    cta.primary.id === 'check-in-remaining';
+  const checkInDecision = isCheckInCta ? flow.decide(waitingIds) : null;
+  const primaryBlocked =
+    checkInDecision?.kind === 'disabled'
+      ? checkInDecision.message
+      : isCheckInCta
+        ? undefined
+        : (cta.primary.blockedReason ?? undefined);
+  const splitInfo = flow.step?.name === 'split' ? confirmSplit(flow.step.roomId) : null;
+  function confirmSplit(roomId: string) {
+    return splitConfirmation({
+      roomNumber: detail.rooms.find((r) => r.id === roomId)?.roomNumber ?? null,
+      confirmationNumber: detail.confirmationNumber,
+    });
+  }
+
   // The dialog cannot render (the date or the action is gone after a reload): forget that it was
   // asked for, so it cannot pop open later.
   if (changing && (!roomChange.effectiveDate || !onChangeRoom)) setChanging(null);
@@ -500,6 +587,7 @@ function Loaded({
   }
 
   const run = (actionId: CtaActionId) => {
+    if (isCheckInCta) return startCheckIn(waitingIds);
     say(STUB_TICKETS[actionId] ?? 'This action arrives in a later ticket.');
   };
   const printRegistrationCard = async () => {
@@ -548,6 +636,94 @@ function Loaded({
     rooms: detail.rooms.length,
   });
 
+  const step = flow.step;
+  const dialogs = (
+    <>
+      {step?.name === 'past-date' ? (
+        <PastDateCheckInDialog
+          open
+          plan={step.decision}
+          level={level}
+          onFirst={flow.chooseFirst}
+          onContinue={flow.chooseContinue}
+          onClose={flow.close}
+        />
+      ) : null}
+      {step?.name === 'override' ? (
+        <OverrideCodeDialog
+          open
+          error={flow.codeError}
+          busy={flow.busy}
+          onSubmit={(code) => void flow.submitOverride(code)}
+          onCancel={flow.cancelOverride}
+        />
+      ) : null}
+      {step?.name === 'split' && splitInfo ? (
+        <ConfirmDialog
+          open
+          title={splitInfo.title}
+          message={splitInfo.message}
+          // The safe choice is the focused primary action; splitting is the explicit secondary one.
+          confirmLabel={splitInfo.keepLabel}
+          discardLabel={splitInfo.confirmLabel}
+          onClose={flow.close}
+          onConfirm={flow.close}
+          onDiscard={() => void flow.splitRoom()}
+        />
+      ) : null}
+      <PaymentMethodsDialog
+        open={flow.payment !== null}
+        busy={flow.busy}
+        error={flow.payment?.error ?? false}
+        onAdd={() => void flow.addPaymentMethod()}
+        onClose={flow.cancelPayment}
+      />
+      {step?.name === 'result' ? (
+        <CheckInResultDialog open results={step.results} onClose={flow.dismissResult} />
+      ) : null}
+      {step?.name === 'auto-checkout' ? (
+        <AutoCheckOutDialog
+          open
+          departure={step.departure}
+          onRunNightAudit={() => {
+            flow.dismissAutoCheckOut();
+            void navigate(NIGHT_AUDIT_HISTORY_PATH);
+          }}
+          onClose={flow.dismissAutoCheckOut}
+        />
+      ) : null}
+      <SaveToast
+        open={flow.toastOpen}
+        onClose={flow.closeToast}
+        message={flow.toast?.message ?? ''}
+        saveId={flow.toast?.id}
+        severity={flow.toast?.severity}
+        side={toastSideFor(RESERVATION_PANEL_SIDE)}
+      />
+    </>
+  );
+  if (step?.name === 'panel') {
+    return (
+      <>
+        <CheckInPanel
+          titleId={titleId}
+          detail={detail}
+          plan={step.decision}
+          priorDate={step.confirmed}
+          timeZone={systemSettings?.timeZone}
+          busy={flow.busy}
+          onBack={flow.close}
+          onSubmit={flow.submit}
+          onAssign={() => {
+            flow.close();
+            runMenu('assign-room');
+          }}
+        />
+        {dialogs}
+      </>
+    );
+  }
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <Box sx={{ px: 2.5, pt: 2.5, flex: '1 1 auto', overflow: 'auto', minHeight: 0 }}>
@@ -556,7 +732,10 @@ function Loaded({
             <StatusHeader detail={detail} />
             <Typography
               id={titleId}
-              ref={focusTitle ? focusOnMount : undefined}
+              ref={(element: HTMLElement | null) => {
+                titleRef.current = element;
+                if (focusTitle) focusOnMount(element);
+              }}
               tabIndex={-1}
               variant="subtitle2"
               component="h2"
@@ -592,11 +771,11 @@ function Loaded({
               id: cta.primary.id,
               label: cta.primary.label,
               variant: cta.primary.variant,
-              blocked: cta.primary.blockedReason ?? undefined,
+              blocked: primaryBlocked,
             }}
             items={menu}
             onPrimary={() => {
-              if (cta.primary.blockedReason) say(cta.primary.blockedReason);
+              if (primaryBlocked) say(primaryBlocked);
               else run(cta.primary.id);
             }}
             onItem={(id) => runMenu(id as MenuActionId)}
@@ -614,6 +793,7 @@ function Loaded({
               canEdit={canEdit}
               busy={actions.busy}
               onUndo={actions.undoCheckIn}
+              onCheckIn={(id) => startCheckIn([id])}
             />
           ) : (
             <RoomCard
@@ -717,6 +897,7 @@ function Loaded({
         ) : null}
       </Box>
       <DetailsAccordion detail={detail} onStub={say} />
+      {dialogs}
       <ConfirmDialog
         open={cancelOpen}
         title={confirmation.title}

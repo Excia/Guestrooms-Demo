@@ -2,6 +2,7 @@
 // wording is tested apart from the components.
 import type { CheckInPastDatePlan } from './checkInDecision';
 import type { CheckInLevel } from './permissions';
+import { ApiError } from '../api/types';
 import type { CheckInFailureCode, CheckInReservationResult } from '../api/types';
 
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
@@ -49,12 +50,17 @@ export function pastDatePrompt(plan: CheckInPastDatePlan, level: CheckInLevel): 
 export const OVERRIDE_TITLE = 'Enter override code to check in after the check-in date';
 
 /** What the user sees when "split this room" asks for confirmation. */
-export function splitConfirmation(input: { roomNumber: string | null; confirmationNumber: string }) {
+export function splitConfirmation(input: {
+  roomNumber: string | null;
+  confirmationNumber: string;
+}) {
   const room = input.roomNumber ? `Room ${input.roomNumber}` : 'the unassigned room';
   return {
     title: 'Split room from reservation?',
     message: `Are you sure you want to split ${room} from reservation #${input.confirmationNumber}? It becomes a reservation of its own.`,
-    confirmLabel: input.roomNumber ? `Yes, split Room ${input.roomNumber}` : 'Yes, split the unassigned room',
+    confirmLabel: input.roomNumber
+      ? `Yes, split Room ${input.roomNumber}`
+      : 'Yes, split the unassigned room',
     keepLabel: 'No, keep rooms together',
   };
 }
@@ -100,7 +106,9 @@ export function checkInSuccessMessage(input: {
 export const INTEGRATION_LABELS = { 'key-card': 'Key card', tms: 'TMS' } as const;
 
 /** One line when the check in worked but an integration (key card, TMS) reported an error. */
-export function integrationErrorMessage(errors: CheckInReservationResult['integrationErrors']): string {
+export function integrationErrorMessage(
+  errors: CheckInReservationResult['integrationErrors'],
+): string {
   const names = [...new Set(errors.map((e) => INTEGRATION_LABELS[e.kind]))];
   return `Checked in, but the ${names.join(' and ')} integration reported an error. Verify the integration status.`;
 }
@@ -110,3 +118,47 @@ export function autoCheckOutMessage(departure: string): string {
 }
 
 export const AUTO_CHECK_OUT_TITLE = 'The check-out date has passed';
+
+export interface CheckInRequestFailure {
+  message: string;
+  /** The reservation may have changed (or the outcome is unknown): load it again. */
+  refetch: boolean;
+  /** Go back to the override code step. */
+  askOverrideAgain?: boolean;
+  /** The request may have been applied (no answer, 408, 5xx): a retry reuses its idempotency key. */
+  outcomeUnknown?: boolean;
+}
+
+/** What the user is told when the whole check in request fails (a room that fails is a normal answer). */
+export function checkInRequestFailure(error: unknown): CheckInRequestFailure {
+  const status = error instanceof ApiError ? error.status : 0;
+  const code = error instanceof ApiError ? error.code : undefined;
+  if (code === 'override-required' || code === 'override-invalid') {
+    return {
+      message: 'The override code was not accepted. Enter it again to check in.',
+      refetch: false,
+      askOverrideAgain: true,
+    };
+  }
+  if (status === 403) return { message: 'You may not check in this reservation.', refetch: false };
+  if (code === 'stale') {
+    return {
+      message: 'This reservation changed elsewhere. It was reloaded; check in again.',
+      refetch: true,
+    };
+  }
+  if (code === 'future-arrival') {
+    return { message: 'Check in is only allowed on the arrival date.', refetch: true };
+  }
+  if (code === 'past-date-unconfirmed') {
+    return { message: 'Confirm that you want to check in for a prior date.', refetch: false };
+  }
+  if (status >= 400 && status < 500 && status !== 408) {
+    return { message: 'Could not check in. Try again.', refetch: false };
+  }
+  return {
+    message: 'Could not confirm whether the check in went through. The reservation was reloaded.',
+    refetch: true,
+    outcomeUnknown: true,
+  };
+}
