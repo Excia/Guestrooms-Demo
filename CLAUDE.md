@@ -24,8 +24,12 @@ All four checks must pass before a PR (CI runs the same).
 4. **Requirements log.** A PR that changes behavior, the API, permissions or a decision, or answers an
    open question, updates the matching file in `docs/requirements/` in the same PR (see CONTRIBUTING.md).
    The Manager checks this before opening the PR.
-5. **A human merges.** Agents never merge PRs, never push to `main`, never change repo,
-   branch-protection or Actions settings, and never edit the Figma file.
+5. **Who merges.** Only the CEO session (the owner's main orchestrating session) merges PRs, and
+   only into `Excia/Guestrooms-Demo`, after CI is green and QA and review have passed. Workers and
+   managers (every agent in `.claude/agents`) never merge. Nobody pushes to `main` directly, changes
+   repo, branch-protection or Actions settings, or edits the Figma file. Nothing is ever pushed to a
+   Clubessential repository. The owner is the human gate: each finished area ends with a
+   `human-gate` ticket the owner tests before the area counts as accepted.
 6. If a ticket needs an answer that is not in its body (an open question that blocks the
    work, a missing design), stop and mark it blocked rather than guessing:
    `python3 scripts/board.py block <n> "<what is needed>"`.
