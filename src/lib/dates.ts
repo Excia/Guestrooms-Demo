@@ -23,6 +23,29 @@ export function todayIso(now: Date = new Date()): IsoDate {
   return `${pad(now.getFullYear(), 4)}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/**
+ * The calendar date of `now` in the club's time zone (an IANA id such as "America/New_York"), not
+ * the browser's. An unknown or empty zone falls back to the browser's local date.
+ */
+export function clubTodayIso(timeZone: string | null | undefined, now: Date = new Date()): IsoDate {
+  if (!timeZone) return todayIso(now);
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value;
+    const year = get('year');
+    const month = get('month');
+    const day = get('day');
+    return year && month && day ? `${year.padStart(4, '0')}-${month}-${day}` : todayIso(now);
+  } catch {
+    return todayIso(now);
+  }
+}
+
 export function isValidIsoDate(value: string): boolean {
   return parseIsoDate(value) !== null;
 }

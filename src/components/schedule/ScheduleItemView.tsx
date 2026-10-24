@@ -13,6 +13,7 @@ import { anyTruncated } from '../../app/overflow';
 import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
 import { blockFillToken, housekeepingFillToken } from '../../app/scheduleColors';
 import { blockContent } from '../../app/scheduleBlockContent';
+import { blockOpacityToken } from '../../app/scheduleBlockState';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
 import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
@@ -25,9 +26,6 @@ import {
   dateAreaWidth,
   dateAreaX,
 } from './scheduleLayout';
-
-/** Linked-room blocks are drawn dimmed (legacy: 75%). */
-const LINKED_OPACITY = 0.75;
 
 export interface ScheduleItemViewProps {
   item: ScheduleItem;
@@ -43,6 +41,11 @@ export interface ScheduleItemViewProps {
   dragging?: boolean;
   /** The keyboard cursor is on this block. */
   active?: boolean;
+  /**
+   * This block belongs to the event whose panel is open (or shown through "see on schedule"): drawn
+   * at full strength with an outline and a raised shadow, not by color alone.
+   */
+  highlighted?: boolean;
   /** Room change during the stay: "2/3 ← 201 → 207" next to the confirmation number (and the tooltip). */
   linkText?: string;
   /**
@@ -143,6 +146,7 @@ export default memo(function ScheduleItemView({
   ghost = false,
   dragging = false,
   active,
+  highlighted = false,
   linkText,
   tip,
   tipFocused,
@@ -251,7 +255,10 @@ export default memo(function ScheduleItemView({
               ? 'none'
               : `0.5px solid ${t.palette.schedule.nyciBorder}`,
           borderRadius: `${cl} ${cr} ${cr} ${cl}`,
-          boxShadow: t.shadows[1],
+          boxShadow: highlighted ? t.shadows[6] : t.shadows[1],
+          // The active event: a solid outline in the primary color on top of the raised shadow.
+          outline: highlighted ? `2px solid ${t.palette.primary.main}` : undefined,
+          outlineOffset: highlighted ? 1 : undefined,
         };
       }}
     >
@@ -308,6 +315,8 @@ export default memo(function ScheduleItemView({
       data-item-id={item.id}
       data-kind={item.kind}
       data-active={active || undefined}
+      data-highlighted={highlighted || undefined}
+      aria-current={highlighted && !ghost ? true : undefined}
       aria-disabled={linked ? true : undefined}
       data-linked={linked ? 'true' : undefined}
       data-unassigned={onActivate ? 'true' : undefined}
@@ -358,7 +367,10 @@ export default memo(function ScheduleItemView({
         boxSizing: 'border-box',
         cursor: linked ? 'not-allowed' : ghost ? 'grabbing' : onActivate ? 'pointer' : 'grab',
         touchAction: 'auto',
-        opacity: dragging ? 0.4 : ghost ? 0.9 : linked ? LINKED_OPACITY : 1,
+        opacity:
+          t.palette.schedule.opacity[
+            blockOpacityToken(item, { active: highlighted, dragging, ghost })
+          ],
         zIndex: ghost ? 20 : 2,
         pointerEvents: ghost ? 'none' : 'auto',
         '&:hover > [data-body]': ghost ? {} : { filter: 'brightness(0.97)' },

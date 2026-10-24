@@ -42,7 +42,9 @@ import {
   parseScheduleView,
   type ScheduleViewState,
 } from '../app/scheduleUrl';
-import { todayIso, type IsoDate } from '../lib/dates';
+import { clubTodayIso, type IsoDate } from '../lib/dates';
+import { useSystemSettings } from '../app/useSystemSettings';
+import type { ActiveEvent } from '../app/scheduleBlockState';
 import { newRequestId } from '../lib/requestId';
 import type { RoomChangeSubmission } from '../components/reservation/ChangeRoomDialog';
 import ReservationPanel from '../components/reservation/ReservationPanel';
@@ -86,7 +88,10 @@ export default function Schedule({
   panelSide = RESERVATION_PANEL_SIDE,
 }: ScheduleProps) {
   const api = useApi();
-  const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
+  // "Today" is the club's date (its System Settings time zone), not the browser's; the browser's
+  // date serves until the settings have loaded.
+  const clubTimeZone = useSystemSettings().settings?.timeZone;
+  const today = useMemo(() => todayProp ?? clubTodayIso(clubTimeZone), [todayProp, clubTimeZone]);
   const [params, setParams] = useSearchParams();
   const view = useMemo(() => parseScheduleView(params), [params]);
   const start = view.start ?? today;
@@ -95,6 +100,19 @@ export default function Schedule({
   const navigate = useNavigate();
   const location = useLocation();
   const panel = useMemo(() => parsePanel(params), [params]);
+  // The event whose panel is open: its blocks are highlighted on the grid.
+  const panelReservationId = panel?.kind === 'details' ? panel.reservationId : undefined;
+  const panelRoomId = panel?.kind === 'details' ? panel.reservationRoomId : undefined;
+  const activeEvent = useMemo<ActiveEvent | null>(
+    () =>
+      panelReservationId
+        ? {
+            reservationId: panelReservationId,
+            ...(panelRoomId ? { reservationRoomId: panelRoomId } : {}),
+          }
+        : null,
+    [panelReservationId, panelRoomId],
+  );
   const locationState = useRef<unknown>(location.state);
   useEffect(() => {
     locationState.current = location.state;
@@ -506,6 +524,7 @@ export default function Schedule({
         }
         rooms={rooms}
         today={today}
+        activeEvent={activeEvent}
         busy={schedule.refreshing}
         locked={schedule.refreshing || moving}
         onDrop={(block, result) => {
