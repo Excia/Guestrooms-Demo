@@ -197,6 +197,29 @@ describe('Cancel Reservation', () => {
     expect(await menuItems(user, dialog)).toEqual(['Jump to Folio']);
   });
 
+  it('removes the reservation from the schedule grid once cancelled', async () => {
+    const { user, dialog } = await open(
+      '/schedule?res=rs-5&rr=rr-5',
+      before(),
+      /Reservation #GR-50310/,
+    );
+    const onGrid = () =>
+      screen
+        .queryAllByRole('gridcell', { hidden: true })
+        .filter((c) => c.getAttribute('aria-label')?.includes('GR-50310'));
+    await waitFor(() => expect(onGrid().length).toBeGreaterThan(0));
+    await menuItems(user, dialog);
+    await user.click(screen.getByRole('menuitem', { name: 'Cancel Reservation' }));
+    await user.click(
+      within(await screen.findByRole('dialog', { name: 'Cancel this reservation?' })).getByRole(
+        'button',
+        { name: 'Yes, Cancel Reservation' },
+      ),
+    );
+    expect(await within(dialog).findByText('Canceled')).toBeInTheDocument();
+    await waitFor(() => expect(onGrid()).toHaveLength(0));
+  });
+
   it('a multi-room reservation is cancelled as all rooms', async () => {
     const { user, dialog } = await open(
       '/schedule?res=rs-7&rr=rr-8',

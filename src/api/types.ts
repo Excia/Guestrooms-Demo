@@ -368,8 +368,10 @@ export interface ChangeRoomRequest {
 /**
  * Housekeeping state of a room. PLACEHOLDER until the Housekeeping report (ticket 6.4) defines the
  * real types and statuses (the requirements call the state after a checkout "Needs Cleaning").
+ * Named RoomHousekeepingStatus: the block-level `HousekeepingStatus` of the schedule's "H" chip
+ * (ticket 2.4) uses the shorter name.
  */
-export type HousekeepingStatus = 'clean' | 'dirty';
+export type RoomHousekeepingStatus = 'clean' | 'dirty';
 
 /**
  * What the change did. `blocks` is the whole stay of that reservation room after the change: one
@@ -392,7 +394,7 @@ export interface ChangeRoomResult {
   blocks: ScheduleBlock[];
   removedBlockIds: string[];
   folio: { deltaCents: Cents; repricedNights: number; roomChargesCents: Cents };
-  vacatedRoom: { roomId: string; housekeeping: HousekeepingStatus; since: IsoDate } | null;
+  vacatedRoom: { roomId: string; housekeeping: RoomHousekeepingStatus; since: IsoDate } | null;
 }
 
 /**
@@ -980,7 +982,7 @@ export interface ScheduleRoom {
    * PLACEHOLDER until the Housekeeping report (ticket 6.4): absent means not tracked. A room
    * vacated by a room change during a stay becomes `dirty`.
    */
-  housekeeping?: HousekeepingStatus;
+  housekeeping?: RoomHousekeepingStatus;
 }
 
 /**
@@ -989,8 +991,36 @@ export interface ScheduleRoom {
  */
 export type ScheduleBlockStatus = 'confirmed' | 'nyci' | 'checked-in' | 'checked-out';
 
+/**
+ * Housekeeping status of the room at the departure that ends a block (Figma "Housekeeping Block").
+ * `nyci` is drawn invisible: the next guest has not arrived yet.
+ */
+export type HousekeepingStatus =
+  'not-checked-out' | 'needs-cleaning' | 'cleaned' | 'ready' | 'needs-maintenance' | 'nyci';
+
+/** The statuses staff can set from the schedule's "H" chip (`nyci` is derived, never set). */
+export type SettableHousekeepingStatus = Exclude<HousekeepingStatus, 'nyci'>;
+
+export const SETTABLE_HOUSEKEEPING_STATUSES: readonly SettableHousekeepingStatus[] = [
+  'not-checked-out',
+  'needs-cleaning',
+  'cleaned',
+  'ready',
+  'needs-maintenance',
+];
+
 /** Figma "Type" variant of a block: guest, member, owner or none. */
 export type ScheduleGuestType = 'guest' | 'member' | 'owner' | 'none';
+
+/**
+ * The room a linked-room block points at (ticket 2.4): its number and its reserver's name, shown in
+ * the tooltip. A linked block draws no early check in / late check out indicators.
+ */
+export interface LinkedRoom {
+  roomNumber: string;
+  /** "First Last" of the reservation holder of the linked room. */
+  reserverName: string;
+}
 
 /**
  * One room of a reservation on the grid. A stay occupies the nights [startDate, endDate): `endDate`
@@ -1024,6 +1054,12 @@ export interface ScheduleBlock {
   /** Early Check In / Late Check Out were requested: the orange edge markers (Figma). */
   earlyCheckIn?: boolean;
   lateCheckOut?: boolean;
+  /** Present when this is a linked-room block (link icon and tooltip; no early/late indicators). */
+  linkedTo?: LinkedRoom;
+  /** Housekeeping chip drawn after the departure edge ("H"); absent when none is shown. */
+  housekeeping?: HousekeepingStatus;
+  /** Free-text housekeeping note (functional doc 15.13.3 / 15.13.4); absent when there is none. */
+  housekeepingNotes?: string;
   /**
    * Set only while the stay has SEVERAL blocks (ticket 2.3); absent whenever the stay is a single
    * block, also after a change that put every night back in one room. The blocks share the
@@ -1073,6 +1109,11 @@ export interface ScheduleData {
   rooms: ScheduleRoom[];
   blocks: ScheduleBlock[];
   closures: ScheduleClosure[];
+  /**
+   * Reservation rooms created without a room, overlapping the same window. Their `roomId` is ""
+   * (no listed room); a room is assigned in the reservation panel. They ignore the room filters.
+   */
+  unassigned: ScheduleBlock[];
 }
 
 /**
@@ -1126,8 +1167,28 @@ export interface ScheduleMoveResult {
   blocks: ScheduleBlock[];
 }
 
+/**
+ * Set the housekeeping status of the room at a block's departure, and optionally its note (functional
+ * doc 15.13.4). `notes` omitted leaves the note as it is; an empty string removes it. `version`, when
+ * sent, is the `ScheduleBlock.version` the user saw: another version answers 409 `stale` and applies
+ * nothing. Answers with the changed block (new version). `requestId` is the idempotency key (body and
+ * `Idempotency-Key` header), as for moves. Errors: 400 `invalid-id` / `invalid-query`; 404 (unknown
+ * reservation room); 409 `stale`; 409 `idempotency-conflict`.
+ */
+export interface SetHousekeepingRequest {
+  reservationRoomId: string;
+  status: SettableHousekeepingStatus;
+  notes?: string;
+  requestId: string;
+  version?: string;
+}
+
 export interface ScheduleApi {
   get(query: ScheduleQuery, options?: RequestOptions): Promise<ScheduleData>;
+  setHousekeeping(
+    request: SetHousekeepingRequest,
+    options?: RequestOptions,
+  ): Promise<ScheduleMoveResult>;
   moveRoom(request: MoveRoomRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
   moveDates(request: MoveDatesRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
 }

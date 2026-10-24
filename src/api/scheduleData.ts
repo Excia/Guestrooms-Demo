@@ -7,10 +7,13 @@ import type {
   ChangeRoomRequest,
   ChangeRoomResult,
   IsoDate,
+  HousekeepingStatus,
+  LinkedRoom,
   MoveDatesRequest,
   MoveRoomRequest,
   RoomChangeRule,
   ScheduleBlock,
+  SetHousekeepingRequest,
   ScheduleBlockStatus,
   ScheduleClosure,
   ScheduleGuestType,
@@ -119,6 +122,8 @@ interface BlockSeed {
   status: ScheduleBlockStatus;
   rooms?: number;
   locked?: boolean;
+  /** PLACEHOLDER (P-21-3): makes the block a linked-room block. */
+  linked?: LinkedRoom;
 }
 
 // Day offsets are relative to `today`. Covers every status, same-day turnovers (rm-201, rm-105), a
@@ -305,6 +310,10 @@ const BLOCK_SEEDS: BlockSeed[] = [
     from: 0,
     to: 2,
     status: 'nyci',
+    linked: {
+      roomNumber: '102',
+      reserverName: 'Beatrice Quinn',
+    },
   },
   {
     id: 'rr-17',
@@ -452,6 +461,55 @@ const CLOSURE_SEEDS: ClosureSeed[] = [
   { id: 'cl-4', room: 'rm-302', from: 5, to: 9, reason: 'Member event hold', marker: false },
 ];
 
+// Reservations booked without a room (shown in the grid's Unassigned section). Day offsets are
+// relative to `today`; spread out so a narrower date range shows one, two or three.
+const UNASSIGNED_SEEDS: {
+  id: string;
+  res: string;
+  conf: string;
+  guest: string;
+  type: ScheduleGuestType;
+  from: number;
+  to: number;
+}[] = [
+  {
+    id: 'rr-u1',
+    res: 'rs-u1',
+    conf: 'GR-50411',
+    guest: 'Harriet Lowell',
+    type: 'member',
+    from: 1,
+    to: 4,
+  },
+  {
+    id: 'rr-u2',
+    res: 'rs-u2',
+    conf: 'GR-50412',
+    guest: 'Devon Achterberg',
+    type: 'guest',
+    from: 3,
+    to: 6,
+  },
+  {
+    id: 'rr-u3',
+    res: 'rs-u3',
+    conf: 'GR-50413',
+    guest: 'Priya Natarajan',
+    type: 'member',
+    from: 9,
+    to: 12,
+  },
+];
+
+/**
+ * PLACEHOLDER: the seeded unassigned reservations exist for the grid only. The Reservation List
+ * mock keeps its own list-only unassigned reservations (`EXTRA_SEEDS`, GR-50402 and GR-50403) and
+ * does not list these, so its first page keeps the rows its tests expect. Ones created through
+ * the API are listed like any reservation.
+ */
+export const isSeededUnassigned = (blockId: string): boolean =>
+  UNASSIGNED_SEEDS.some((u) => u.id === blockId);
+
 function seedExtras(): Record<string, ReservationExtras> {
   const base = { adults: 2, children: 0, earlyCheckIn: false, lateCheckOut: false, version: 'r1' };
   return {
@@ -496,6 +554,7 @@ function defaultState(today: IsoDate): ScheduleState {
       roomCount: s.rooms ?? 1,
       roomTypeLocked: s.locked ?? false,
       version: 'v1',
+      ...(s.linked ? { linkedTo: s.linked } : {}),
     })),
     closures: CLOSURE_SEEDS.map((c) => ({
       kind: 'closure',
@@ -509,7 +568,21 @@ function defaultState(today: IsoDate): ScheduleState {
     versionSeq: 1,
     extras: seedExtras(),
     createdSeq: 0,
-    unassigned: [],
+    unassigned: UNASSIGNED_SEEDS.map((u) => ({
+      kind: 'reservation',
+      id: u.id,
+      reservationId: u.res,
+      confirmationNumber: u.conf,
+      guestName: u.guest,
+      guestType: u.type,
+      roomId: '',
+      startDate: at(u.from),
+      endDate: at(u.to),
+      status: 'confirmed',
+      roomCount: 1,
+      roomTypeLocked: false,
+      version: 'v1',
+    })),
     rateOverrides: {},
     segmentSeq: 0,
   };
@@ -622,6 +695,24 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
     const extras = state.extras[block.reservationId];
     if (extras?.earlyCheckIn) block.earlyCheckIn = true;
     if (extras?.lateCheckOut) block.lateCheckOut = true;
+  }
+  // Demo housekeeping states until the backend supplies them: in-house rooms are not checked out,
+  // departed rooms cycle through the cleaning states.
+  const departed: HousekeepingStatus[] = [
+    'needs-cleaning',
+    'cleaned',
+    'ready',
+    'needs-maintenance',
+  ];
+  let n = 0;
+  let hasNotes = state.blocks.some((b) => b.housekeepingNotes);
+  for (const block of state.blocks) {
+    if (block.status === 'checked-in') block.housekeeping = 'not-checked-out';
+    else if (block.status === 'checked-out') block.housekeeping = departed[n++ % departed.length];
+    if (block.housekeeping === 'not-checked-out' && !hasNotes) {
+      block.housekeepingNotes = 'Guest asked for extra towels.';
+      hasNotes = true;
+    }
   }
   return state;
 }
@@ -750,6 +841,25 @@ export function moveRoom(state: ScheduleState, request: MoveRoomRequest): Schedu
   assertCurrent(block, request);
   assertNotSplit(block);
   return relocate(state, block, request.toRoomId);
+}
+
+/**
+ * Sets the housekeeping status (and the note when `notes` is sent; empty removes it) of a block.
+ * `version`, when given, must be the current one. Returns the changed block (copy).
+ */
+export function setHousekeeping(
+  state: ScheduleState,
+  request: SetHousekeepingRequest,
+): ScheduleBlock[] {
+  const block = findBlock(state, request.reservationRoomId);
+  if (request.version !== undefined && block.version !== request.version) throw stale();
+  block.housekeeping = request.status;
+  if (request.notes !== undefined) {
+    if (request.notes === '') delete block.housekeepingNotes;
+    else block.housekeepingNotes = request.notes;
+  }
+  bump(state, block);
+  return [structuredClone(block)];
 }
 
 export function moveDates(state: ScheduleState, request: MoveDatesRequest): ScheduleBlock[] {

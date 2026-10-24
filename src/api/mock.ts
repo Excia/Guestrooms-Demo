@@ -29,7 +29,13 @@ import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
-import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from './scheduleData';
+import {
+  changeRoomDuringStay,
+  createScheduleState,
+  moveDates,
+  moveRoom,
+  setHousekeeping,
+} from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
@@ -54,6 +60,7 @@ import {
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
+  assertSetHousekeepingRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
   assertReservationListQuery,
@@ -367,6 +374,7 @@ export function createMockClient({
               rooms: [],
               blocks: [],
               closures: [],
+              unassigned: [],
             };
           },
           o,
@@ -379,6 +387,18 @@ export function createMockClient({
           },
           () => {
             assertMoveRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
+      setHousekeeping: (request, o) =>
+        respond(
+          () => {
+            assertSetHousekeepingRequest(request);
+            return { blocks: replayable(request, () => setHousekeeping(schedule, request)) };
+          },
+          () => {
+            assertSetHousekeepingRequest(request);
             throw new ApiError(404, 'Reservation room not found');
           },
           o,

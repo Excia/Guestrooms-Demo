@@ -43,6 +43,12 @@ describe('createLazyClient', () => {
       requestId: 'req-lazy-0002',
     });
     expect(dates.blocks[0].startDate).toBe('2026-10-30');
+    const hk = await client.schedule.setHousekeeping({
+      reservationRoomId: 'rr-3',
+      status: 'cleaned',
+      requestId: 'req-lazy-0003',
+    });
+    expect(hk.blocks[0].housekeeping).toBe('cleaned');
   });
   it('surfaces a load failure as a rejection', async () => {
     const client = createLazyClient(() => Promise.reject(new Error('chunk failed')));
