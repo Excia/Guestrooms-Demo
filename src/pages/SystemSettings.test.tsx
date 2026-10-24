@@ -284,6 +284,25 @@ describe('SystemSettings page', () => {
       expect(phone).toBeEnabled();
     });
 
+    it('explains why a dependent box is disabled', async () => {
+      const user = await openTab();
+      const phone = screen.getByRole('checkbox', { name: 'Reserver Phone Number (if unique)' });
+      expect(phone).toHaveAccessibleDescription('Check Reserver Name (if unique) to use this.');
+      await user.click(screen.getByRole('checkbox', { name: 'Reserver Name (if unique)' }));
+      expect(phone).not.toHaveAccessibleDescription();
+    });
+
+    it('a flag needs its date: unchecking the date clears and disables the flag', async () => {
+      const user = await openTab();
+      const flag = screen.getByRole('checkbox', { name: 'Early Check In Flag' });
+      await user.click(flag);
+      expect(flag).toBeChecked();
+      await user.click(screen.getByRole('checkbox', { name: 'Check In Date' }));
+      expect(flag).toBeDisabled();
+      expect(flag).not.toBeChecked();
+      expect(flag).toHaveAccessibleDescription('Check Check In Date to use this.');
+    });
+
     it('unchecking Lead Occupant Name disables and clears its phone and address', async () => {
       const user = await openTab();
       await user.click(screen.getByRole('checkbox', { name: 'Lead Occupant Phone Number' }));
@@ -305,13 +324,15 @@ describe('SystemSettings page', () => {
 
     it('counts the custom text up to 500 and hides the box while Custom Text is unchecked', async () => {
       const user = await openTab();
-      const text = screen.getByRole('textbox', { name: 'Custom Text' });
+      const text = screen.getByRole('textbox', { name: 'Custom Text content' });
       expect(text).toHaveAttribute('maxlength', '500');
       await user.clear(text);
       await user.type(text, 'Hello');
       expect(screen.getByText('5 / 500')).toBeInTheDocument();
       await user.click(screen.getByRole('checkbox', { name: 'Custom Text' }));
-      expect(screen.queryByRole('textbox', { name: 'Custom Text' })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('textbox', { name: 'Custom Text content' }),
+      ).not.toBeInTheDocument();
     });
 
     it('saves the card with the rest of System Settings', async () => {
@@ -338,6 +359,38 @@ describe('SystemSettings page', () => {
       expect(open).toHaveBeenCalledWith('', '_blank');
       expect(request.mock.calls[0][0].settings.items.roomType).toBe(true);
       expect(request.mock.calls[0][0].folio.city).toBe('Cincinnati');
+      open.mockRestore();
+    });
+
+    it('keeps focus on Generate Preview while generating and announces it', async () => {
+      const client = createMockClient();
+      let finish: (v: { url: string }) => void = () => {};
+      const request = vi
+        .spyOn(client.registrationCard, 'requestPreview')
+        .mockReturnValue(new Promise((resolve) => (finish = resolve)));
+      const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
+      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      const user = await openTab(client);
+      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      const busy = screen.getByRole('button', { name: 'Generating…' });
+      expect(busy).toHaveFocus();
+      expect(busy).toHaveAttribute('aria-disabled', 'true');
+      expect(screen.getByText('Generating preview')).toBeInTheDocument();
+      await user.click(busy);
+      expect(request).toHaveBeenCalledTimes(1);
+      finish({ url: 'blob:preview' });
+      expect(await screen.findByRole('button', { name: 'Generate Preview' })).toHaveFocus();
+      open.mockRestore();
+    });
+
+    it('says the tab was blocked and requests nothing', async () => {
+      const client = createMockClient();
+      const request = vi.spyOn(client.registrationCard, 'requestPreview');
+      const open = vi.spyOn(window, 'open').mockReturnValue(null);
+      const user = await openTab(client);
+      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('blocked the new tab');
+      expect(request).not.toHaveBeenCalled();
       open.mockRestore();
     });
 

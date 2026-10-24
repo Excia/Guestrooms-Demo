@@ -3,8 +3,11 @@ import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
+import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import FormHelperText from '@mui/material/FormHelperText';
 import TextField from '@mui/material/TextField';
+import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 import { useApi } from '../../../api';
 import type {
@@ -14,12 +17,13 @@ import type {
 import type { FolioDetails } from '../../../api/types';
 import {
   isItemDisabled,
-  isOpenablePreviewUrl,
   ITEM_GRID,
   ITEM_LABELS,
+  ITEM_PARENT,
   REGISTRATION_CARD_CUSTOM_TEXT_MAX,
   setItem,
 } from '../../../app/registrationCard';
+import { openCardErrorMessage, openCardInNewTab } from '../../../app/openCardPreview';
 import type { SystemSettingsErrors } from '../../../app/systemSettings';
 import { fieldId, SectionTitle } from './fieldParts';
 import ToggleRow from './ToggleRow';
@@ -42,44 +46,53 @@ export default function RegistrationCardTab({
 }: RegistrationCardTabProps) {
   const api = useApi();
   const titleId = useId();
+  const baseId = useId();
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const textError = errors['registrationCard.customText']?.[0];
 
   const generatePreview = async () => {
+    if (previewing) return;
     setPreviewing(true);
     setPreviewError(null);
-    // Open the tab inside the click so a popup blocker allows it; it is pointed at the PDF below.
-    const tab = window.open('', '_blank');
-    if (tab) tab.opener = null;
     try {
-      const { url } = await api.registrationCard.requestPreview({ settings: value, folio });
-      if (!isOpenablePreviewUrl(url)) throw new Error('Unsafe preview address');
-      if (tab) tab.location.href = url;
-      else window.open(url, '_blank', 'noopener');
-    } catch {
-      tab?.close();
-      setPreviewError('The preview could not be generated. Try again.');
+      await openCardInNewTab(() => api.registrationCard.requestPreview({ settings: value, folio }));
+    } catch (error) {
+      setPreviewError(openCardErrorMessage(error));
     } finally {
       setPreviewing(false);
     }
   };
 
-  const item = (id: RegistrationCardItemId) => (
-    <FormControlLabel
-      key={id}
-      label={ITEM_LABELS[id]}
-      disabled={!value.enabled || isItemDisabled(value.items, id)}
-      control={
-        <Checkbox
-          checked={value.items[id]}
-          onChange={(e) =>
-            onChange({ ...value, items: setItem(value.items, id, e.target.checked) })
+  const item = (id: RegistrationCardItemId) => {
+    const parent = ITEM_PARENT[id];
+    const blocked = isItemDisabled(value.items, id);
+    const hintId = `${baseId}-${id}-hint`;
+    return (
+      <>
+        <FormControlLabel
+          label={ITEM_LABELS[id]}
+          disabled={!value.enabled || blocked}
+          control={
+            <Checkbox
+              checked={value.items[id]}
+              onChange={(e) =>
+                onChange({ ...value, items: setItem(value.items, id, e.target.checked) })
+              }
+              slotProps={{
+                input: { 'aria-describedby': blocked && parent ? hintId : undefined },
+              }}
+            />
           }
         />
-      }
-    />
-  );
+        {blocked && parent ? (
+          <FormHelperText id={hintId} sx={{ mt: -0.5, ml: 5.25 }}>
+            {`Check ${ITEM_LABELS[parent]} to use this.`}
+          </FormHelperText>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -100,12 +113,18 @@ export default function RegistrationCardTab({
           <SectionTitle id={titleId}>Registration Card Items</SectionTitle>
           <Button
             size="small"
-            startIcon={<FindInPage />}
+            startIcon={previewing ? <CircularProgress size={16} color="inherit" /> : <FindInPage />}
             onClick={() => void generatePreview()}
-            disabled={!value.enabled || previewing}
+            disabled={!value.enabled}
+            // Stays focusable while it works (a disabled button would drop the keyboard's place).
+            aria-disabled={previewing || undefined}
+            sx={previewing ? { cursor: 'progress', opacity: 0.7 } : undefined}
           >
-            Generate Preview
+            {previewing ? 'Generating…' : 'Generate Preview'}
           </Button>
+          <Box role="status" aria-live="polite" sx={visuallyHidden}>
+            {previewing ? 'Generating preview' : ''}
+          </Box>
         </Box>
         {previewError ? (
           <Alert severity="error" role="alert">
@@ -161,7 +180,7 @@ export default function RegistrationCardTab({
                         }
                         slotProps={{
                           htmlInput: {
-                            'aria-label': 'Custom Text',
+                            'aria-label': 'Custom Text content',
                             maxLength: REGISTRATION_CARD_CUSTOM_TEXT_MAX,
                           },
                         }}
