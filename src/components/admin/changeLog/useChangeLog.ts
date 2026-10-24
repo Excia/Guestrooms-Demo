@@ -4,7 +4,7 @@ import type { ChangeLogEntry, ChangeLogQuery } from '../../../api/changeLogTypes
 
 export interface ChangeLogState {
   status: 'loading' | 'error' | 'ready';
-  /** The rows of the last answer; they stay on screen while the next page loads. */
+  /** The rows of the last answer (none after an error); they stay on screen while the next page loads. */
   items: ChangeLogEntry[];
   total: number;
   retry: () => void;
@@ -42,11 +42,12 @@ export function useChangeLog(query: ChangeLogQuery, enabled: boolean): ChangeLog
       )
       .catch(() => {
         if (!controller.signal.aborted) {
-          setSettled((s) => ({
+          setSettled(() => ({
             request: `${attempt}:${key}`,
             failed: true,
-            items: s?.items ?? [],
-            total: s?.total ?? 0,
+            // Rows of an earlier answer would sit under the error and look like this query's result.
+            items: [],
+            total: 0,
           }));
         }
       });

@@ -12,6 +12,7 @@ import Popover from '@mui/material/Popover';
 import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
 import { useId, useState } from 'react';
 import type {
   ChangeEventType,
@@ -31,6 +32,8 @@ export interface ColumnFilterProps {
   filters: ChangeLogFilters;
   onApply: (next: ChangeLogFilters) => void;
   eventTypes: readonly ChangeEventType[];
+  /** Whether the event types have arrived; the Change Type filter has nothing to list before. */
+  typesStatus: 'loading' | 'error' | 'ready';
   /** True while this column has a filter. */
   active: boolean;
 }
@@ -83,6 +86,7 @@ function FilterForm({
   filters,
   onApply,
   eventTypes,
+  typesStatus,
   onDone,
 }: ColumnFilterProps & { onDone: () => void }) {
   const [draft, setDraft] = useState<ChangeLogFilters>(filters);
@@ -136,7 +140,14 @@ function FilterForm({
     <Box
       component="form"
       onSubmit={apply}
-      sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 280, maxWidth: 360 }}
+      sx={(t) => ({
+        p: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 2,
+        minWidth: t.spacing(35),
+        maxWidth: t.spacing(45),
+      })}
     >
       <FormControl>
         <FormLabel id={`${sortName}-label`}>Sort {label}</FormLabel>
@@ -189,6 +200,21 @@ function FilterForm({
       {field === 'changeType' ? (
         <FormControl component="fieldset">
           <FormLabel component="legend">Show these change types</FormLabel>
+          {typesStatus === 'loading' ? (
+            <Typography role="status" variant="body2" color="text.secondary">
+              Loading change types…
+            </Typography>
+          ) : null}
+          {typesStatus === 'error' ? (
+            <Typography role="alert" variant="body2" color="error">
+              The change types could not be loaded.
+            </Typography>
+          ) : null}
+          {typesStatus === 'ready' && eventTypes.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              There are no change types to filter by.
+            </Typography>
+          ) : null}
           <FormGroup>
             {eventTypes.map((type) => (
               <FormControlLabel

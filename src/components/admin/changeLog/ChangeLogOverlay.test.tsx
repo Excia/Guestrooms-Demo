@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { ApiProvider } from '../../../api';
 import { createMockClient } from '../../../api/mock';
 import type { ApiClient } from '../../../api/types';
+import ChangeLogButton from './ChangeLogButton';
 import ChangeLogOverlay from './ChangeLogOverlay';
 
 function renderOverlay(client: ApiClient = createMockClient(), onClose = vi.fn()) {
@@ -161,5 +162,84 @@ describe('ChangeLogOverlay', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     await user.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows no stale rows under the error when a filter fails', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const real = client.changeLog.list.bind(client.changeLog);
+    vi.spyOn(client.changeLog, 'list').mockImplementation((q, o) =>
+      q.actionBy ? Promise.reject(new Error('down')) : real(q, o),
+    );
+    renderOverlay(client);
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Sort and filter Action By' }));
+    await user.type(screen.getByLabelText('Employee name'), 'sam');
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+    expect(await screen.findByText('The change log could not be loaded.')).toBeInTheDocument();
+    expect(
+      screen.queryAllByRole('cell', { name: /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), / }),
+    ).toHaveLength(0);
+  });
+
+  it('never shows a raw event type id and says when the types fail to load', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    vi.spyOn(client.changeLog, 'listEventTypes').mockRejectedValue(new Error('down'));
+    renderOverlay(client);
+    await loaded();
+    expect(screen.queryByText('setting-changed')).not.toBeInTheDocument();
+    expect(screen.queryByText('updated')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Sort and filter Change Type' }));
+    expect(await screen.findByText('The change types could not be loaded.')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('waits for a pause before searching and marks the search button while it is applied', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const list = vi.spyOn(client.changeLog, 'list');
+    renderOverlay(client);
+    await loaded();
+    const before = list.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: 'Search descriptions' }));
+    await user.type(screen.getByRole('textbox', { name: 'Search descriptions' }), 'night audit');
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Search descriptions (search on)', hidden: true }),
+      ).toBeInTheDocument(),
+    );
+    expect(list.mock.calls.length - before).toBe(1);
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await user.click(screen.getByRole('button', { name: 'Clear all filters' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Search descriptions' })).toBeInTheDocument(),
+    );
+  });
+
+  it('starts from the defaults each time it opens', async () => {
+    const user = userEvent.setup();
+    render(
+      <ApiProvider client={createMockClient()}>
+        <ChangeLogButton page="system-settings" />
+      </ApiProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Change Log' }));
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Sort and filter Action By' }));
+    await user.click(screen.getByRole('radio', { name: 'A to Z' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('columnheader', { name: /^Action By/, hidden: true }),
+      ).toHaveAttribute('aria-sort', 'ascending'),
+    );
+    await user.keyboard('{Escape}');
+    await user.keyboard('{Escape}');
+    await user.click(await screen.findByRole('button', { name: 'Change Log' }));
+    await loaded();
+    expect(screen.getByRole('columnheader', { name: /^Date/ })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
   });
 });

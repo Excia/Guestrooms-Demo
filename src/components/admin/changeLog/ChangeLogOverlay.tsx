@@ -1,4 +1,5 @@
 import Close from '@mui/icons-material/Close';
+import ManageSearch from '@mui/icons-material/ManageSearch';
 import Search from '@mui/icons-material/Search';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -14,6 +15,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { visuallyHidden } from '@mui/utils';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useApi } from '../../../api';
 import type {
@@ -28,6 +30,7 @@ import {
   ariaSortFor,
   CHANGE_LOG_ROWS_PER_PAGE,
   changeLogTitle,
+  changeTypeLabel,
   DEFAULT_CHANGE_LOG_SORT,
   formatLogDate,
   formatLogTime,
@@ -43,6 +46,8 @@ export interface ChangeLogOverlayProps {
   open: boolean;
   onClose: () => void;
 }
+
+const SEARCH_DEBOUNCE_MS = 300;
 
 const COLUMNS: { field: ChangeLogSortField | 'description'; label: string; width?: string }[] = [
   { field: 'date', label: 'Date', width: '15%' },
@@ -62,7 +67,10 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
   const [pageNumber, setPageNumber] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(CHANGE_LOG_ROWS_PER_PAGE);
   const [eventTypes, setEventTypes] = useState<ChangeEventType[]>([]);
+  const [typesStatus, setTypesStatus] = useState<'loading' | 'error' | 'ready'>('loading');
   const [searchAnchor, setSearchAnchor] = useState<HTMLElement | null>(null);
+  // What is typed in the search box; it reaches the query after a pause (or on Done).
+  const [searchDraft, setSearchDraft] = useState('');
 
   // The event types table drives the Change Type filter.
   useEffect(() => {
@@ -70,12 +78,28 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
     const controller = new AbortController();
     api.changeLog
       .listEventTypes({ signal: controller.signal })
-      .then(setEventTypes)
+      .then((types) => {
+        setEventTypes(types);
+        setTypesStatus('ready');
+      })
       .catch(() => {
-        // The log still works; the Change Type filter just has nothing to offer.
+        // The log still works; the Change Type filter says the types could not be loaded.
+        if (!controller.signal.aborted) setTypesStatus('error');
       });
     return () => controller.abort();
   }, [api, open]);
+
+  const appliedSearch = filters.search;
+  // Search as the user pauses typing, not on every keystroke.
+  useEffect(() => {
+    const next = searchDraft.trim() || undefined;
+    if (next === appliedSearch) return;
+    const timer = setTimeout(() => {
+      setFilters((f) => ({ ...f, search: next }));
+      setPageNumber(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchDraft, appliedSearch]);
 
   const query: ChangeLogQuery = useMemo(
     () => ({ page, sort, ...filters, pageNumber, limit: rowsPerPage }),
@@ -83,11 +107,21 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
   );
   const { status, items, total, retry } = useChangeLog(query, open);
   const active = activeFilterColumns(filters);
-  const typeLabels = useMemo(() => new Map(eventTypes.map((t) => [t.id, t.label])), [eventTypes]);
+  // Null until the types arrive, so no cell shows a raw id.
+  const typeLabels = useMemo(
+    () => (typesStatus === 'ready' ? new Map(eventTypes.map((t) => [t.id, t.label])) : null),
+    [eventTypes, typesStatus],
+  );
+  const reloading = status === 'loading' && items.length > 0;
 
   const applyFilters = (next: ChangeLogFilters) => {
     setFilters(next);
     setPageNumber(1);
+  };
+
+  const clearAll = () => {
+    setSearchDraft('');
+    applyFilters({});
   };
 
   let body;
@@ -146,11 +180,24 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
         >
           {changeLogTitle(page)}
         </Typography>
+        <Box component="p" role="status" sx={{ ...visuallyHidden }}>
+          {status === 'loading'
+            ? 'Loading change log'
+            : status === 'ready'
+              ? `${total} ${total === 1 ? 'change' : 'changes'}`
+              : ''}
+        </Box>
+        {active.size > 0 ? (
+          <Box sx={{ mb: 1 }}>
+            <Button onClick={clearAll}>Clear all filters</Button>
+          </Box>
+        ) : null}
         <Box sx={{ position: 'relative' }}>
-          <Box sx={{ position: 'absolute', top: 8, right: 0, zIndex: 1 }}>
+          <Box sx={(t) => ({ position: 'absolute', top: t.spacing(1), right: 0, zIndex: 1 })}>
             <IconButton
-              aria-label="Search descriptions"
+              aria-label={`Search descriptions${active.has('search') ? ' (search on)' : ''}`}
               aria-haspopup="dialog"
+              aria-expanded={searchAnchor ? true : undefined}
               onClick={(e) => setSearchAnchor(e.currentTarget)}
               sx={{
                 bgcolor: 'primary.main',
@@ -159,7 +206,7 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                 '&:hover': { bgcolor: 'primary.dark' },
               }}
             >
-              <Search />
+              {active.has('search') ? <ManageSearch /> : <Search />}
             </IconButton>
             <Popover
               open={Boolean(searchAnchor)}
@@ -174,6 +221,8 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                 role="search"
                 onSubmit={(e) => {
                   e.preventDefault();
+                  setFilters((f) => ({ ...f, search: searchDraft.trim() || undefined }));
+                  setPageNumber(1);
                   setSearchAnchor(null);
                 }}
                 sx={{ p: 2, display: 'flex', gap: 1, alignItems: 'center' }}
@@ -182,10 +231,8 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                   autoFocus
                   label="Search descriptions"
                   size="small"
-                  value={filters.search ?? ''}
-                  onChange={(e) =>
-                    applyFilters({ ...filters, search: e.target.value || undefined })
-                  }
+                  value={searchDraft}
+                  onChange={(e) => setSearchDraft(e.target.value)}
                 />
                 <Button type="submit" variant="contained">
                   Done
@@ -193,7 +240,12 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
               </Box>
             </Popover>
           </Box>
-          <Table aria-labelledby={titleId} size="medium">
+          <Table
+            aria-labelledby={titleId}
+            aria-busy={status === 'loading'}
+            size="medium"
+            sx={{ opacity: reloading ? 0.5 : 1 }}
+          >
             <TableHead>
               <TableRow>
                 {COLUMNS.map((c) => (
@@ -220,6 +272,7 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                           filters={filters}
                           onApply={applyFilters}
                           eventTypes={eventTypes}
+                          typesStatus={typesStatus}
                           active={active.has(c.field)}
                         />
                       ) : null}
@@ -237,11 +290,6 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                         ? 'No changes match the filters.'
                         : 'No changes have been recorded for this page in the last year.'}
                     </Typography>
-                    {active.size > 0 ? (
-                      <Box sx={{ textAlign: 'center' }}>
-                        <Button onClick={() => applyFilters({})}>Clear all filters</Button>
-                      </Box>
-                    ) : null}
                   </TableCell>
                 </TableRow>
               ) : null}
@@ -249,7 +297,7 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                 <TableRow key={entry.id} hover>
                   <TableCell>{formatLogDate(entry.date)}</TableCell>
                   <TableCell>{formatLogTime(entry.time)}</TableCell>
-                  <TableCell>{typeLabels.get(entry.changeType) ?? entry.changeType}</TableCell>
+                  <TableCell>{changeTypeLabel(entry.changeType, typeLabels) ?? '…'}</TableCell>
                   <TableCell>{entry.description}</TableCell>
                   <TableCell>{entry.actionBy}</TableCell>
                 </TableRow>
