@@ -26,6 +26,7 @@ export interface ScheduleHoldViewProps {
   tipFocused?: boolean;
   /** The New Reservation panel that placed this hold is open. */
   own?: boolean;
+  timeZone?: string;
 }
 
 /**
@@ -41,10 +42,11 @@ export default memo(function ScheduleHoldView({
   id,
   tipFocused,
   own,
+  timeZone,
 }: ScheduleHoldViewProps) {
   const span = blockSpan(layout, days);
   const [hover, setHover] = useState(false);
-  const tip = holdTipText(hold);
+  const tip = holdTipText(hold, timeZone);
   const body = (
     <Box
       data-body
@@ -98,7 +100,8 @@ export default memo(function ScheduleHoldView({
       })}
     >
       <Tooltip
-        title={tip}
+        // An element, not a string: MUI then adds no second aria-label to the block.
+        title={<span>{tip}</span>}
         open={hover || Boolean(tipFocused)}
         disableInteractive
         slotProps={{ popper: { 'aria-hidden': true } }}

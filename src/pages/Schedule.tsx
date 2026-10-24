@@ -60,6 +60,7 @@ import ScheduleSkeleton from '../components/schedule/ScheduleSkeleton';
 import ScheduleGrid from '../components/schedule/ScheduleGrid';
 import { useSchedule } from '../components/schedule/useSchedule';
 import { useLiveHolds } from '../components/schedule/useLiveHolds';
+import { useSystemSettings } from '../app/useSystemSettings';
 import { otherHolds } from '../app/slotHolds';
 import SaveToast from '../components/shared/SaveToast';
 
@@ -371,6 +372,8 @@ export default function Schedule({
     [data, shownOwnHold],
   );
   const liveHolds = useLiveHolds(allHolds, now);
+  // "Held until HH:mm" reads on the club's clock once System Settings have loaded.
+  const clubZone = useSystemSettings().settings?.timeZone;
   useEffect(() => {
     loadedBlocks.current = data?.blocks ?? [];
   }, [data]);
@@ -593,6 +596,7 @@ export default function Schedule({
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
         holds={liveHolds}
         ownHoldId={shownOwnHold?.id}
+        timeZone={clubZone}
       />
     );
   }
@@ -737,6 +741,7 @@ export default function Schedule({
         side={panelSide}
         now={now}
         onHoldChange={setOwnHold}
+        timeZone={clubZone}
       />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}

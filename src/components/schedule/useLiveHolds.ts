@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ScheduleHold } from '../../api';
 import { liveHolds, nextHoldExpiry } from '../../app/slotHolds';
 
@@ -23,5 +23,6 @@ export function useLiveHolds(
     const timer = setTimeout(() => setClock(now()), wait + 1);
     return () => clearTimeout(timer);
   }, [holds, clock, now]);
-  return liveHolds(holds, clock);
+  // Memoised so the rows that take it as a prop keep their identity between redraws.
+  return useMemo(() => liveHolds(holds, clock), [holds, clock]);
 }

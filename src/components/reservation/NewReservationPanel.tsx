@@ -52,6 +52,7 @@ import {
 import { useAccess } from '../../app/useAccess';
 import { addDays, type IsoDate } from '../../lib/dates';
 import { newRequestId } from '../../lib/requestId';
+import { useLiveHolds } from '../schedule/useLiveHolds';
 import { MAX_NOTES_LENGTH, MAX_PARTY } from '../../api/validation';
 import Select from '../shared/Select';
 import AddGuestDialog from './AddGuestDialog';
@@ -102,7 +103,11 @@ export interface NewReservationPanelProps {
    * when it holds none (no room chosen, closing, saved, expired). The schedule shades it.
    */
   onHoldChange?: (hold: ScheduleHold | null) => void;
+  /** The club's time zone for the hold time in messages; the browser's until it is known. */
+  timeZone?: string;
 }
+
+const NO_HOLDS: readonly ScheduleHold[] = [];
 
 export default function NewReservationPanel({
   titleId,
@@ -120,6 +125,7 @@ export default function NewReservationPanel({
   active = true,
   now,
   onHoldChange,
+  timeZone,
 }: NewReservationPanelProps) {
   const api = useApi();
   const { can } = useAccess();
@@ -234,18 +240,23 @@ export default function NewReservationPanel({
     ? { roomId: form.roomId, startDate: form.arrival, endDate: form.departure }
     : null;
   const [holdId] = useState(newRequestId);
-  const knownHeld = slot ? heldByOther(slot, data?.holds, holdId, clock()) : undefined;
+  // Redrawn at the next expiry, so a hold that ends stops blocking the room without a reload.
+  const liveOthers = useLiveHolds(data?.holds ?? NO_HOLDS, clock);
+  const knownHeld = slot ? heldByOther(slot, liveOthers, holdId, clock()) : undefined;
   const { clash } = useSlotHold({
     holdId,
     slot: knownHeld ? null : slot,
     enabled: active && canCreate && !expired,
+    // The closure tab pauses the timer; coming back asks for the slot again, so a hold that ended
+    // meanwhile is placed anew with a full length.
+    paused: tab !== 0,
     onChange: (hold) => onHoldChange?.(hold),
     onClash: () => onUnknownOutcome(),
   });
   const heldNote = knownHeld
-    ? heldMessage(knownHeld)
+    ? heldMessage(knownHeld, timeZone)
     : clash === 'held'
-      ? 'That room is held by another user.'
+      ? 'That room was just held by another user.'
       : clash === 'conflict'
         ? 'That room is booked or closed on those dates.'
         : null;
@@ -266,8 +277,10 @@ export default function NewReservationPanel({
     if (inFlight.current || expired || !canCreate) return;
     setSubmitted((n) => n + 1);
     // Another user's hold the page already knows of; booked rooms are left to the server's answer.
-    if (knownHeld) {
-      setFailure(heldMessage(knownHeld));
+    // Checked against the clock now: a hold that ended since the last redraw does not block.
+    const heldNow = slot ? heldByOther(slot, data?.holds, holdId, clock()) : undefined;
+    if (heldNow) {
+      setFailure(heldMessage(heldNow, timeZone));
       return;
     }
     setFailure(null);
@@ -412,6 +425,10 @@ export default function NewReservationPanel({
         ) : null}
         <Box role="status" sx={visuallyHidden}>
           {announcement}
+        </Box>
+        {/* The Room field's error arrives later (a hold is refused after the room is picked): say so politely. */}
+        <Box role="status" sx={visuallyHidden}>
+          {tab === 0 ? heldNote : ''}
         </Box>
 
         <Box

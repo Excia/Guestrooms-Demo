@@ -110,6 +110,8 @@ export interface ScheduleGridProps {
   holds?: readonly ScheduleHold[];
   /** The hold of the open New Reservation panel (the one hold its owner interacts with); drawn with a solid outline. */
   ownHoldId?: string | null;
+  /** The club's IANA time zone, for "Held until HH:mm" (the browser's until it is known). */
+  timeZone?: string;
 }
 
 interface DragState {
@@ -169,6 +171,7 @@ interface RowProps {
   onSetHousekeeping?: SetHousekeeping;
   holds: readonly ScheduleHold[] | undefined;
   ownHoldId: string | null | undefined;
+  timeZone: string | undefined;
 }
 
 const itemId = (prefix: string, item: ScheduleItem) => `${prefix}-item-${item.id}`;
@@ -193,6 +196,7 @@ const ScheduleRow = memo(function ScheduleRow({
   onSetHousekeeping,
   holds,
   ownHoldId,
+  timeZone,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
     () => [...(blocks ?? []), ...(closures ?? [])],
@@ -208,6 +212,7 @@ const ScheduleRow = memo(function ScheduleRow({
       room.number,
       { from: formatDialogDate(hold.startDate), to: formatDialogDate(hold.endDate) },
       canInteractWithHold(hold, ownHoldId),
+      timeZone,
     );
   return (
     <Box
@@ -315,6 +320,7 @@ const ScheduleRow = memo(function ScheduleRow({
             days={days}
             label={holdLabel(hold)}
             own={canInteractWithHold(hold, ownHoldId)}
+            timeZone={timeZone}
             tipFocused={focused && activeHold?.id === hold.id}
           />
         );
@@ -356,6 +362,7 @@ export default function ScheduleGrid({
   onSetHousekeeping,
   holds,
   ownHoldId,
+  timeZone,
 }: ScheduleGridProps) {
   const theme = useTheme();
   const idPrefix = useId().replace(/:/g, '');
@@ -667,7 +674,7 @@ export default function ScheduleGrid({
   const activateCell = (room: ScheduleRoom, col: number) => {
     const held = itemAtColumn(holdsByRoom.get(room.id), startDate, days, col);
     if (held) {
-      setAnnouncement(`Room ${room.number} is held. ${holdTipText(held)}.`);
+      setAnnouncement(`Room ${room.number} is held. ${holdTipText(held, timeZone)}.`);
       return;
     }
     const action = emptyCellAction(
@@ -710,7 +717,8 @@ export default function ScheduleGrid({
       // A held slot reacts to nothing but this note.
       const hold = holds?.find((h) => h.id === heldEl.dataset.holdId);
       const room = latest.current.rooms[index];
-      if (hold && room) setAnnouncement(`Room ${room.number} is held. ${holdTipText(hold)}.`);
+      if (hold && room)
+        setAnnouncement(`Room ${room.number} is held. ${holdTipText(hold, timeZone)}.`);
       return;
     }
     if (!target) {
@@ -1156,6 +1164,7 @@ export default function ScheduleGrid({
                 onSetHousekeeping={onSetHousekeeping}
                 holds={holdsByRoom.get(rooms[i].id)}
                 ownHoldId={ownHoldId}
+                timeZone={timeZone}
               />
             ))}
             {band ? (

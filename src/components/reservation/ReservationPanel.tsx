@@ -52,6 +52,8 @@ export interface ReservationPanelProps {
   now?: () => number;
   /** The slot the open New Reservation holds (ticket 152), or null; the page shades it on the grid. */
   onHoldChange?: (hold: ScheduleHold | null) => void;
+  /** The club's time zone, for the hold time in messages. */
+  timeZone?: string;
 }
 
 /**
@@ -85,6 +87,7 @@ export default function ReservationPanel({
   side = RESERVATION_PANEL_SIDE,
   now,
   onHoldChange,
+  timeZone,
 }: ReservationPanelProps) {
   const titleId = useId();
   // The panel keeps showing its last content while the drawer slides out.
@@ -182,6 +185,7 @@ export default function ReservationPanel({
             key={`${shown.roomId ?? ''}|${shown.arrival ?? ''}`}
             now={now}
             onHoldChange={onHoldChange}
+            timeZone={timeZone}
           />
         ) : null}
       </Box>
