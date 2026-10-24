@@ -20,8 +20,10 @@ describe('http keycard API', () => {
     ]);
   });
 
-  it('rejects a body that is not a list of strings', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json([5]));
-    await expect(make(fetchMock).keycards.listEncoders()).rejects.toBeInstanceOf(ApiError);
+  it('rejects a body that is not a list of stored-form keys', async () => {
+    for (const body of [[5], ['12'], ['4800-1937-465201']]) {
+      const fetchMock = vi.fn().mockResolvedValue(json(body));
+      await expect(make(fetchMock).keycards.listEncoders()).rejects.toBeInstanceOf(ApiError);
+    }
   });
 });

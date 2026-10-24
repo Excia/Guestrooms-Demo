@@ -61,6 +61,11 @@ describe('validateEncoderKeys', () => {
     expect(validateEncoderKeys([])).toBe(true);
   });
 
+  it('requires the stored form: separators and spaces are refused', () => {
+    expect(validateEncoderKeys(['0000-0000-000001'])).toBe(false);
+    expect(validateEncoderKeys([' ' + key(1)])).toBe(false);
+  });
+
   it('rejects duplicates, bad keys and blanks', () => {
     expect(validateEncoderKeys([key(1), key(1)])).toBe(false);
     expect(validateEncoderKeys(['x'])).toBe(false);

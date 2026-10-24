@@ -848,7 +848,7 @@ export interface AddOnApi {
 /**
  * Encoder Keys identify the keycard encoders of the club (Visionline). Keys are digits without
  * separators (`src/app/keycards.ts`). The keycard flows (ticket 3.6) read the saved list.
- * Errors: 422 `validation` on save (bad or duplicate key); 502 `visionline-unavailable` on retrieve.
+ * Errors: 422 `validation` on save (a key that is not 14 plain digits, or a duplicate); 5xx on retrieve.
  */
 export interface KeycardApi {
   /** The saved Encoder Keys, in list order. */

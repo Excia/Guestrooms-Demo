@@ -12,7 +12,13 @@ describe('mock keycards API', () => {
 
   it('rejects bad, blank and duplicate keys with 422', async () => {
     const client = createMockClient();
-    for (const keys of [['12'], [''], ['48001937465209', '48001937465209']]) {
+    for (const keys of [
+      ['12'],
+      [''],
+      ['4800-1937-465209'],
+      ['abcdefghijklmn'],
+      ['48001937465209', '48001937465209'],
+    ]) {
       await expect(client.keycards.saveEncoders(keys)).rejects.toMatchObject({ status: 422 });
     }
     expect(await client.keycards.listEncoders()).toHaveLength(2);

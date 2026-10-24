@@ -42,6 +42,7 @@ import type {
   SystemSettingsOptions,
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
+import { isStoredEncoderKey } from '../app/keycards';
 import { expectedLeadOccupantName } from './createRules';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
@@ -590,7 +591,9 @@ const parseAddOnOptions = (body: unknown, status: number): AddOnOptions => {
 };
 
 const parseKeys = (body: unknown, status: number): string[] => {
-  if (!Array.isArray(body) || !body.every(isString)) throw invalid(status, 'encoder keys');
+  if (!Array.isArray(body) || !body.every((k) => isString(k) && isStoredEncoderKey(k))) {
+    throw invalid(status, 'encoder keys');
+  }
   return body;
 };
 
@@ -755,10 +758,10 @@ const parseSchedule =
     if (
       !unique(data.rooms.map((r) => r.id)) ||
       !unique([
-          ...data.blocks.map((b) => b.id),
-          ...data.unassigned.map((b) => b.id),
-          ...data.closures.map((c) => c.id),
-        ]) ||
+        ...data.blocks.map((b) => b.id),
+        ...data.unassigned.map((b) => b.id),
+        ...data.closures.map((c) => c.id),
+      ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {

@@ -52,10 +52,16 @@ export function validateEncoderRows(rows: readonly EncoderRow[]): EncoderErrors 
   return errors;
 }
 
-/** Same rules for a list of keys (the mock and the backend validate what the page sent). */
+/** The stored form of a key: exactly `ENCODER_KEY_LENGTH` digits, no separators. */
+export const isStoredEncoderKey = (value: string): boolean =>
+  new RegExp(`^\\d{${ENCODER_KEY_LENGTH}}$`).test(value);
+
+/**
+ * API-level check of a list of keys (the mock and the backend): every key is already in its stored
+ * form (the UI normalizes before sending) and there are no duplicates.
+ */
 export function validateEncoderKeys(keys: readonly string[]): boolean {
-  const rows = keys.map((value, i) => ({ id: String(i), value }));
-  return rows.every((r) => !isBlankRow(r)) && Object.keys(validateEncoderRows(rows)).length === 0;
+  return keys.every(isStoredEncoderKey) && new Set(keys).size === keys.length;
 }
 
 /** The keys to save: blank rows dropped, separators removed. */
