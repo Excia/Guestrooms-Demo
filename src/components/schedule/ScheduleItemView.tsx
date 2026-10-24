@@ -7,7 +7,7 @@ import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import { memo, useRef, useState, type PointerEventHandler } from 'react';
-import type { HousekeepingStatus, LinkedRoom, ScheduleBlock, ScheduleClosure } from '../../api';
+import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
@@ -214,7 +214,8 @@ export default memo(function ScheduleItemView({
   const isClosure = item.kind === 'closure';
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
-  const settled = !isClosure && !linked && (block.status === 'checked-in' || block.status === 'checked-out');
+  const settled =
+    !isClosure && !linked && (block.status === 'checked-in' || block.status === 'checked-out');
   const hk =
     isClosure || ghost
       ? null
@@ -248,7 +249,10 @@ export default memo(function ScheduleItemView({
           gap: 0.25,
           overflow: 'hidden',
           bgcolor: fill(item, today, t),
-          border: isClosure || settled || linked ? 'none' : `0.5px solid ${t.palette.schedule.nyciBorder}`,
+          border:
+            isClosure || settled || linked
+              ? 'none'
+              : `0.5px solid ${t.palette.schedule.nyciBorder}`,
           borderRadius: `${cl} ${cr} ${cr} ${cl}`,
           boxShadow: t.shadows[1],
         };

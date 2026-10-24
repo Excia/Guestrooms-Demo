@@ -134,7 +134,7 @@ Excia/Guestrooms-Demo#73. Figma: Add-Ons 13533:74182; reservation side is ticket
 
 - **Requirements:** left list with NEW ADD-ON; Add-On Name, Active Start Date, Active End Date with
   "Configure active end date?", **Item / Combo** radio, SKU lookup, Display in Online Booking toggle,
-  **Track Nightly Countdown** toggle with **Nightly Qty** stepper (min 1, max 99 per reservation line,
+  **Track Nightly Countdown** toggle with **Nightly Qty** stepper (whole number, 0 or more, no maximum, D-LM-3; per reservation line,
   nightly pool configurable), Add-On Description (optional, 400 characters), Photos; Associations tabs
   Locations and Room Types; delete, duplicate, SAVE ADD-ON. Add-ons appear in the reservation dropdown
   (price shown is the SKU price); with tracking on, remaining nightly quantity drives availability limits
@@ -145,11 +145,11 @@ Excia/Guestrooms-Demo#73. Figma: Add-Ons 13533:74182; reservation side is ticket
   tabs, photos, delete/duplicate/save, Confirm Leaving, save toast). Fields as in Figma 13533:74182: name, active
   dates, **Item / Combo**, SKU lookup, Display in Online Booking, **Track Nightly Countdown** with the **Nightly Qty.**
   stepper (disabled while tracking is off), description (400 characters), photos (optional, at most 50),
-  Associations **Locations** and **Room Types**. Pure rules in `src/app/addOns.ts` (validation, 1 to 99 stepper
-  range, normalization, `isSelectableOn` for ticket 3.10), unit-tested. API `addOns` (`getOptions`, `list`, `save`,
+  Associations **Locations** and **Room Types**. Pure rules in `src/app/addOns.ts` (validation, 0-or-more stepper
+  with no maximum, normalization, `isSelectableOn` for ticket 3.10), unit-tested. API `addOns` (`getOptions`, `list`, `save`,
   `delete`) on the typed client with a mock; see [api-contract.md](../api-contract.md).
   - **Built defaults (open questions):** Combo is stored and flagged but behaves like an Item (one SKU, no bundle
-    contents) until Q-73-1 is answered; Nightly Qty maximum is 99 (Q-73-2); an add-on with no location or room
+    contents) until Q-73-1 is answered; Nightly Qty has no maximum (Q-73-2, matches legacy); an add-on with no location or room
     type selected is not offered anywhere, with a hint (Q-73-3). A SKU is required (the reservation shows its price).
   - **Not built:** the Add-On Countdown screen (no design), the reservation add-on dropdown (3.10), the two-way
     update of a room type's Add-Ons tab when an association changes here, and a delete check against reservations.

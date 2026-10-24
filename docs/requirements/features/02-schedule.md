@@ -64,9 +64,9 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   15.11.3.2), the block moving to its room row on save (20.4.5.4), and the "Unassigned Only" toggle
   (16.6).
 - **Linked-room blocks and early/late rules (ticket 2.4, branch `feat/21-schedule-blocks`):** `ScheduleBlock.linkedTo`
-  (`LinkedRoom`: room number, reserver name) draws the link icon; by drawn
-  width the icon only, plus the linked room number, plus the reserver name (`linkedTier`, D-21-2); tooltip
-  "Linked to [Room Number]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
+  (`LinkedRoom`: room number, reserver name) draws the link icon, grey at 75% opacity and
+  not clickable or draggable; its text follows the view and the stay length (`linkedBlockText`, D-LM-1, legacy); tooltip
+  "Linked to [Room][ +N Room]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
   Indicators follow D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
   "canceled" block: canceling removes the event from the schedule (Q-21-3 answered). Entry: `entries/21-schedule-blocks.md`.
 - **Not built:** the early/late
@@ -318,9 +318,7 @@ Schedule Block Exploration 12843:35986; States and Variations 12423:59315.
 
 - **Requirements:** `<ScheduleBlock>` renders not yet checked in, checked in, checked out, canceled,
   unassigned, closure, linked states; treatment icon and name color per ticket 3.11. Linked room
-  block tiers by size: link icon only (30-day view, single night); icon plus linked room number (14-day
-  view, single night, may wrap to two lines); reserver name on the second line when the icon and room
-  number fit on one line. Linked rooms show no early/late indicators (owner, 2026-10-24; legacy draws none). Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
+  block text by view and stay length, as in the legacy system (D-LM-1): see `entries/legacy-match.md`. Linked rooms show no early/late indicators (owner, 2026-10-24; legacy draws none). Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
   indicators: Not Yet Checked In shows only early check in; Checked In and Checked Out show only late
   check out, even if both are selected (linked blocks excepted). Truncation with an ellipsis and the full text in the tooltip.
   Owner icon: the svgrepo hand/key icon (D-018).
@@ -353,7 +351,7 @@ Ticket Excia/Guestrooms-Demo#22. Figma: Reservation Menus 17239:17738; Hub-Multi
 - **Implemented:** the split CTA menu is driven by `reservationMenu()` (`src/app/reservationMenu.ts`) per
   state; Cancel Reservation (confirmation dialog, `cancelReservation`), Undo Check In (menu and per room in
   the selector, hidden after the night audit via `ReservationDetail.lastAuditedDate`, and for a reservation with a
-  checked-out room; Add Another Room stays after the audit, Q-22-3), Print Registration
+  checked-out room; Add Another Room is hidden when cancelled, all rooms checked out or the night audit has run for the reservation, D-LM-5), Print Registration
   Card(s) (stub PDF URL in a new tab). Edit Reservation, Assign Room and Add Another Room are notices until
   the hub (3.12). Details in `entries/22-reservation-menus.md`.
 - **Open questions:** Q-22-1, Q-22-2, Q-22-3 to Q-22-6 (entry).
