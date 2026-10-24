@@ -94,7 +94,7 @@ export function closureBlockText(reason: string, startDate: IsoDate, endDate: Is
   const text = reason.trim() === '' ? CLOSURE_EMPTY_LABEL : reason;
   const nights = daysBetween(startDate, endDate);
   return nights <= CLOSURE_SHORT_MAX_NIGHTS && text.length > CLOSURE_SHORT_TEXT_MAX
-    ? `${text.slice(0, CLOSURE_SHORT_TEXT_MAX)}…`
+    ? `${text.slice(0, CLOSURE_SHORT_TEXT_MAX).trimEnd()}…`
     : text;
 }
 
