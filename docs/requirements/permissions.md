@@ -45,7 +45,7 @@ screenshot arrives. Back to the [index](README.md).
 | `page.keycard-integration`    | Admin Setup: Keycard Integration (not in the menu; linked from the Admin Setup navigation)                                                                                                                                                                                                                                                              | route table                   
 | `page.notifications`           | Admin Setup: Notifications                                                                                                                                                                                                                                                                                                                              | route table                   |
 
-That is 22 permissions (`admin`, `reservation.edit` and 20 `page.<id>`). `page.<id>` is derived from every route in
+That is 23 permissions (`admin`, `reservation.edit` and 21 `page.<id>`). `page.<id>` is derived from every route in
 `src/app/routes.ts` except `admin`; adding a route adds its permission. `page.admin` is **not** a
 permission: the `/admin` landing opens for anyone who can open any Admin Setup page.
 
