@@ -22,6 +22,7 @@ import { blockContent, blockFacts, leadName } from './scheduleBlockContent';
 import { blockIndicators, linkedTooltipLines } from './scheduleLinked';
 import { blockLayout, dayHeader, type BlockLayout } from './schedule';
 import type { DropRefusal, DropResult, ScheduleMove } from './scheduleDrag';
+import { closureFullText } from './closures';
 
 type Accepted = Extract<DropResult, { ok: true }>;
 
@@ -566,7 +567,7 @@ export function closureAriaLabel(
   closure: ScheduleClosure,
   room: Pick<ScheduleRoom, 'number'> | undefined,
 ): string {
-  return `Closure, ${closure.reason}, Room ${room?.number ?? ''}, ${formatDialogDate(closure.startDate)} to ${formatDialogDate(closure.endDate)}`.replace(
+  return `Closure, ${closureFullText(closure.reason)}, Room ${room?.number ?? ''}, ${formatDialogDate(closure.startDate)} to ${formatDialogDate(closure.endDate)}`.replace(
     ', Room ,',
     ',',
   );
