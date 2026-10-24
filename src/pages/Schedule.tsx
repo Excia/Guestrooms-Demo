@@ -9,7 +9,13 @@ import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import type { ReservationDetail, ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
+import type {
+  ReservationDetail,
+  ScheduleBlock,
+  ScheduleDays,
+  ScheduleHold,
+  ScheduleRoom,
+} from '../api';
 import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
@@ -52,6 +58,8 @@ import ScheduleFilterPanel from '../components/schedule/ScheduleFilterPanel';
 import ScheduleSkeleton from '../components/schedule/ScheduleSkeleton';
 import ScheduleGrid from '../components/schedule/ScheduleGrid';
 import { useSchedule } from '../components/schedule/useSchedule';
+import { useLiveHolds } from '../components/schedule/useLiveHolds';
+import { otherHolds } from '../app/slotHolds';
 import SaveToast from '../components/shared/SaveToast';
 
 type Accepted = Extract<DropResult, { ok: true }>;
@@ -61,6 +69,8 @@ export interface ScheduleProps {
   today?: IsoDate;
   /** Side the reservation panel flies out from; the one setting in layout.ts by default. Injectable for tests. */
   panelSide?: PanelSide;
+  /** Clock (epoch ms) for hold expiry and the panel's timer. Injectable for tests. */
+  now?: () => number;
 }
 
 interface Pending {
@@ -84,6 +94,7 @@ interface Toast {
 export default function Schedule({
   today: todayProp,
   panelSide = RESERVATION_PANEL_SIDE,
+  now,
 }: ScheduleProps) {
   const api = useApi();
   const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
@@ -297,6 +308,15 @@ export default function Schedule({
   );
 
   const data = schedule.status === 'success' ? schedule.data : null;
+  // Held slots (ticket 152): other users' holds from the schedule data, and the open New Reservation's
+  // own hold as the panel reports it (shown at once, before any reload).
+  const [ownHold, setOwnHold] = useState<ScheduleHold | null>(null);
+  const shownOwnHold = panel?.kind === 'new' ? ownHold : null;
+  const allHolds = useMemo(
+    () => [...otherHolds(data?.holds, shownOwnHold?.id), ...(shownOwnHold ? [shownOwnHold] : [])],
+    [data, shownOwnHold],
+  );
+  const liveHolds = useLiveHolds(allHolds, now);
   useEffect(() => {
     loadedBlocks.current = data?.blocks ?? [];
   }, [data]);
@@ -516,6 +536,8 @@ export default function Schedule({
         onOpen={openDetails}
         onSetHousekeeping={canEditHousekeeping ? setHousekeeping : undefined}
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
+        holds={liveHolds}
+        ownHoldId={shownOwnHold?.id}
       />
     );
   }
@@ -654,6 +676,8 @@ export default function Schedule({
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}
+        now={now}
+        onHoldChange={setOwnHold}
       />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}

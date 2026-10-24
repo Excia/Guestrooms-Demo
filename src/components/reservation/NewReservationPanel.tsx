@@ -24,7 +24,7 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useApi } from '../../api';
-import type { ReservationDetail, ScheduleData } from '../../api';
+import type { ReservationDetail, ScheduleData, ScheduleHold } from '../../api';
 import { ApiError } from '../../api';
 import { stayLimits } from '../../app/dateRange';
 import { ADMIN_HOLD_AUDIENCE, describeHold, formatHold, holdMinutes } from '../../app/holdTimer';
@@ -38,6 +38,7 @@ import {
   type NewReservationForm,
 } from '../../app/newReservation';
 import { RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
+import { heldByOther, heldMessage } from '../../app/slotHolds';
 import { formatMoney } from '../../app/quickStats';
 import { MAX_ADVANCE_DAYS, MAX_STAY_NIGHTS } from '../../app/reservationSearch';
 import { buildRoomOptions } from '../../app/roomOptions';
@@ -62,6 +63,7 @@ import CountStepper from './CountStepper';
 import RoomAutocomplete from './RoomAutocomplete';
 import { useBookingHold } from './useBookingHold';
 import { useHoldTimer } from './useHoldTimer';
+import { useSlotHold } from './useSlotHold';
 
 export interface NewReservationPanelProps {
   titleId: string;
@@ -83,6 +85,11 @@ export interface NewReservationPanelProps {
   active?: boolean;
   /** Injectable clock (epoch ms) for the hold timer; Date.now by default. */
   now?: () => number;
+  /**
+   * The slot this panel holds on the server while a booking is in progress (ticket 152), or null
+   * when it holds none (no room chosen, closing, saved, expired). The schedule shades it.
+   */
+  onHoldChange?: (hold: ScheduleHold | null) => void;
 }
 
 export default function NewReservationPanel({
@@ -98,6 +105,7 @@ export default function NewReservationPanel({
   prefill,
   active = true,
   now,
+  onHoldChange,
 }: NewReservationPanelProps) {
   const api = useApi();
   const { can } = useAccess();
@@ -171,9 +179,9 @@ export default function NewReservationPanel({
   const total = estimateTotal(nights, roomType);
 
   // ---- time limit ----
-  // The time limit is a UI countdown for now (Booking Rules "Reservation Hold" minutes): nothing
-  // server-side holds the room while the panel is open. A real backend needs a hold/reserve call
-  // when the panel opens and a hold token sent with the create request (see README, API conventions).
+  // The time limit is a UI countdown of the Booking Rules "Reservation Hold" minutes. The chosen
+  // room and dates are also held through the (mock) API while the form is open (ticket 152, Q-19-3),
+  // so the grid shades them and other users cannot book them; the backend owns the real expiry.
   const holdState = useBookingHold();
   const minutes =
     holdState.status === 'success' ? holdMinutes(holdState.hold, ADMIN_HOLD_AUDIENCE) : null;
@@ -193,6 +201,28 @@ export default function NewReservationPanel({
           : phase === 'running' && minutes !== null
             ? `Complete this reservation within ${describeHold(minutes * 60_000)}.`
             : '';
+  // The slot the form has chosen is held until the panel closes, the reservation is saved or the
+  // time runs out; a slot another user holds is refused here without asking the server.
+  const clock = now ?? Date.now;
+  const slot = form.roomId
+    ? { roomId: form.roomId, startDate: form.arrival, endDate: form.departure }
+    : null;
+  const [holdId] = useState(newRequestId);
+  const knownHeld = slot ? heldByOther(slot, data?.holds, holdId, clock()) : undefined;
+  const { clash } = useSlotHold({
+    holdId,
+    slot: knownHeld ? null : slot,
+    enabled: active && canCreate && !expired,
+    onChange: (hold) => onHoldChange?.(hold),
+    onClash: () => onUnknownOutcome(),
+  });
+  const heldNote = knownHeld
+    ? heldMessage(knownHeld)
+    : clash === 'held'
+      ? 'That room is held by another user.'
+      : clash === 'conflict'
+        ? 'That room is booked or closed on those dates.'
+        : null;
   useEffect(() => {
     onGuardChange(expired);
     return () => onGuardChange(false);
@@ -209,6 +239,11 @@ export default function NewReservationPanel({
   const submit = () => {
     if (inFlight.current || expired || !canCreate) return;
     setSubmitted((n) => n + 1);
+    // Another user's hold the page already knows of; booked rooms are left to the server's answer.
+    if (knownHeld) {
+      setFailure(heldMessage(knownHeld));
+      return;
+    }
     setFailure(null);
     setRoomError(null);
     if (Object.keys(errors).length > 0) return;
@@ -216,6 +251,7 @@ export default function NewReservationPanel({
     setSaving(true);
     const body = {
       ...toCreateRequest(form, ''),
+      ...(form.roomId ? { holdId } : {}),
       publicNotes: notes.publicNotes || undefined,
       privateNotes: notes.privateNotes || undefined,
     };
@@ -518,7 +554,7 @@ export default function NewReservationPanel({
               onChange={(id) => pick(selectRoom(allRooms, selection, id))}
               loading={!data && !dataFailed}
               unavailable={dataFailed}
-              error={roomError ?? undefined}
+              error={roomError ?? heldNote ?? undefined}
             />
             {dataFailed ? (
               <Button size="small" onClick={onRetryData} sx={{ alignSelf: 'flex-start' }}>
