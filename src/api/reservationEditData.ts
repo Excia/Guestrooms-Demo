@@ -2,11 +2,12 @@
 // backend later.
 import { addRoomVisible } from '../app/reservationMenu';
 import { buildDetail, ensureParties, extrasFor, syncPartyTotals } from './reservationDetailData';
-import { isRoomFreeForStay, type StayHold } from '../app/addRoom';
+import { isRoomFreeForStay } from '../app/addRoom';
 import { assertFree, bump, findRoom } from './scheduleData';
 import type { RoomParty, ScheduleState } from './scheduleData';
 import type {
   AddRoomRequest,
+  ScheduleHold,
   GuestInput,
   Member,
   ReservationDetail,
@@ -18,16 +19,6 @@ import type {
 import { ApiError } from './types';
 
 type MemberLookup = (id: string | undefined) => Member | undefined;
-
-/**
- * Slot holds that make a room unavailable to a new booking (ticket 152, D-152-4).
- * TODO(#171): none exist on main yet, so none are reported; return the other users' holds here
- * when they do (entries/151-edit-panel.md, D-151-10).
- */
-export function holdsOnStay(state: ScheduleState): StayHold[] {
-  void state;
-  return [];
-}
 
 const conflict = (code: string, message: string) => new ApiError(409, message, { code });
 const stale = () => conflict('stale', 'This reservation changed since it was loaded');
@@ -57,6 +48,12 @@ export function addRoom(
   current: ReservationDetail,
   member: MemberLookup,
   onChanged: (reservationId: string) => void,
+  /**
+   * The live slot holds over the stay (ticket 152): another user's hold on the room blocks the add
+   * (409 `held`), the caller's own never does (`mine`), an expired one is not live at `now`.
+   */
+  holds: readonly ScheduleHold[] = [],
+  now: number = Date.now(),
 ): ReservationDetail {
   if (current.version !== request.version) throw stale();
   if (!addRoomVisible(current)) {
@@ -92,10 +89,13 @@ export function addRoom(
   }
   if (
     roomId !== null &&
-    !isRoomFreeForStay(roomId, [], [], block.startDate, block.endDate, holdsOnStay(state))
+    !isRoomFreeForStay(roomId, [], [], block.startDate, block.endDate, holds, now)
   ) {
     state.createdSeq--; // nothing was added
-    throw conflict('conflict', 'The room is held by someone else during this stay');
+    throw new ApiError(409, 'The room is held by another user on those dates', {
+      code: 'held',
+      details: { roomId: [roomId] },
+    });
   }
   const extras = extrasFor(state, request.reservationId);
   // Fix the existing rooms' shares before the new party joins them.

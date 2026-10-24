@@ -153,7 +153,10 @@ describe('large inventory', () => {
     expect(d.blocks.length).toBeGreaterThan(1000);
     expect(new Set(d.blocks.map((x) => x.id)).size).toBe(d.blocks.length);
     const viaClient = await mk({ scheduleSize: 'large' }).schedule.get({ startDate: T, days: 30 });
-    expect(viaClient).toEqual(d);
+    // The client adds the slot holds (ticket 152); the rest is the same windowed data.
+    const { holds, ...rest } = viaClient;
+    expect(holds).toBeInstanceOf(Array);
+    expect(rest).toEqual(d);
   });
   it('queries quickly', () => {
     const s = createScheduleState(T, 'large');

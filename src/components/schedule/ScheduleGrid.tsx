@@ -1,3 +1,5 @@
+import BlockIcon from '@mui/icons-material/Block';
+import CheckIcon from '@mui/icons-material/Check';
 import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
@@ -14,7 +16,13 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import type { ScheduleBlock, ScheduleClosure, ScheduleData, ScheduleRoom } from '../../api';
+import type {
+  ScheduleBlock,
+  ScheduleClosure,
+  ScheduleData,
+  ScheduleHold,
+  ScheduleRoom,
+} from '../../api';
 import { addDays, daysBetween, type IsoDate } from '../../lib/dates';
 import {
   blockLayout,
@@ -26,6 +34,12 @@ import {
   type RoomRowLabel,
 } from '../../app/schedule';
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
+import {
+  dropColumns,
+  isActiveEvent,
+  pastColumnCount,
+  type ActiveEvent,
+} from '../../app/scheduleBlockState';
 import {
   blockAriaLabel,
   turnoverGap,
@@ -40,6 +54,7 @@ import {
   clamp,
   clampShift,
   closureAriaLabel,
+  formatDialogDate,
   itemAtColumn,
   moveCursor,
   refusalMessage,
@@ -55,6 +70,8 @@ import type { SetHousekeeping } from './HousekeepingChip';
 import { unassignedSection } from '../../app/unassignedRows';
 import { isLinkedBlock } from '../../app/scheduleLinked';
 import ScheduleItemView from './ScheduleItemView';
+import ScheduleHoldView from './ScheduleHoldView';
+import { canInteractWithHold, holdAriaLabel, holdTipText } from '../../app/slotHolds';
 import UnassignedSection from './UnassignedSection';
 import {
   BLOCK_HEIGHT,
@@ -78,6 +95,11 @@ export interface ScheduleGridProps {
   /** The rows to show (filters applied), in display order. */
   rooms: readonly ScheduleRoom[];
   today: IsoDate;
+  /**
+   * The event whose panel is open (or that "see on schedule" points at): its blocks are
+   * highlighted. Keep the object stable between renders.
+   */
+  activeEvent?: ActiveEvent | null;
   /** A new range is loading: the grid stays, dimmed. */
   busy?: boolean;
   /** No new moves while the grid is refreshing or a move is in flight: its answer could overwrite them. */
@@ -94,6 +116,15 @@ export interface ScheduleGridProps {
   onOpenCell: (room: ScheduleRoom, date: IsoDate) => void;
   /** Saves a change made in the housekeeping chip's pop-up; absent when the user may not change housekeeping. */
   onSetHousekeeping?: SetHousekeeping;
+  /**
+   * Held slots to shade (ticket 152): live ones only, the caller hides a hold at its expiry. They
+   * cannot be dragged or opened; a click or Enter says the room is held.
+   */
+  holds?: readonly ScheduleHold[];
+  /** The hold of the open New Reservation panel (the one hold its owner interacts with); drawn with a solid outline. */
+  ownHoldId?: string | null;
+  /** The club's IANA time zone, for "Held until HH:mm" (the browser's until it is known). */
+  timeZone?: string;
 }
 
 interface DragState {
@@ -144,6 +175,7 @@ interface RowProps {
   /** Keyboard cursor column when this is the active row, else null. */
   activeCol: number | null;
   draggingId: string | null;
+  activeEvent?: ActiveEvent | null;
   idPrefix: string;
   /** Place of each part of a stay that changed room: "part 2 of 3" and the rooms next to it. */
   links: ReadonlyMap<string, SegmentLink>;
@@ -151,6 +183,9 @@ interface RowProps {
   focused: boolean;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
   onSetHousekeeping?: SetHousekeeping;
+  holds: readonly ScheduleHold[] | undefined;
+  ownHoldId: string | null | undefined;
+  timeZone: string | undefined;
 }
 
 const itemId = (prefix: string, item: ScheduleItem) => `${prefix}-item-${item.id}`;
@@ -168,11 +203,15 @@ const ScheduleRow = memo(function ScheduleRow({
   today,
   activeCol,
   draggingId,
+  activeEvent,
   idPrefix,
   links,
   focused,
   onItemPointerDown,
   onSetHousekeeping,
+  holds,
+  ownHoldId,
+  timeZone,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
     () => [...(blocks ?? []), ...(closures ?? [])],
@@ -180,6 +219,16 @@ const ScheduleRow = memo(function ScheduleRow({
   );
   const activeItem =
     activeCol === null ? undefined : itemAtColumn(items, startDate, days, activeCol);
+  const activeHold =
+    activeCol === null || activeItem ? undefined : itemAtColumn(holds, startDate, days, activeCol);
+  const holdLabel = (hold: ScheduleHold) =>
+    holdAriaLabel(
+      hold,
+      room.number,
+      { from: formatDialogDate(hold.startDate), to: formatDialogDate(hold.endDate) },
+      canInteractWithHold(hold, ownHoldId),
+      timeZone,
+    );
   return (
     <Box
       role="row"
@@ -256,6 +305,7 @@ const ScheduleRow = memo(function ScheduleRow({
             days={days}
             today={today}
             dragging={draggingId === item.id}
+            highlighted={isActiveEvent(item, activeEvent)}
             label={
               item.kind === 'reservation'
                 ? blockAriaLabel(item, room, link, days)
@@ -274,12 +324,31 @@ const ScheduleRow = memo(function ScheduleRow({
           />
         );
       })}
+      {(holds ?? []).map((hold) => {
+        const layout = blockLayout(hold, startDate, days);
+        if (!layout) return null;
+        return (
+          <ScheduleHoldView
+            key={hold.id}
+            id={`${idPrefix}-hold-${hold.id}`}
+            hold={hold}
+            layout={layout}
+            days={days}
+            label={holdLabel(hold)}
+            own={canInteractWithHold(hold, ownHoldId)}
+            timeZone={timeZone}
+            tipFocused={focused && activeHold?.id === hold.id}
+          />
+        );
+      })}
       {activeCol !== null && !activeItem ? (
         <Box
           id={`${idPrefix}-cell-active`}
           role="gridcell"
           aria-colindex={activeCol + 2}
-          aria-label={cellAriaLabel(room, addDays(startDate, activeCol))}
+          aria-label={
+            activeHold ? holdLabel(activeHold) : cellAriaLabel(room, addDays(startDate, activeCol))
+          }
           data-active="true"
           style={{ left: dateAreaX(activeCol / days), width: dateAreaWidth(1 / days) }}
           sx={{ position: 'absolute', top: 0, bottom: 0, pointerEvents: 'none' }}
@@ -299,6 +368,7 @@ export default function ScheduleGrid({
   data,
   rooms,
   today,
+  activeEvent,
   busy,
   locked,
   onDrop,
@@ -307,6 +377,9 @@ export default function ScheduleGrid({
   onOpenCell,
   onOpenClosure,
   onSetHousekeeping,
+  holds,
+  ownHoldId,
+  timeZone,
 }: ScheduleGridProps) {
   const theme = useTheme();
   const idPrefix = useId().replace(/:/g, '');
@@ -317,6 +390,7 @@ export default function ScheduleGrid({
   const todayIndex = daysBetween(startDate, today);
   const blocksByRoom = useMemo(() => groupByRoom(data.blocks), [data.blocks]);
   const closuresByRoom = useMemo(() => groupByRoom(data.closures), [data.closures]);
+  const holdsByRoom = useMemo(() => groupByRoom(holds ?? []), [holds]);
   const links = useMemo(() => segmentLinks(data.blocks, data.rooms), [data.blocks, data.rooms]);
   const labels = useMemo(
     () => rooms.map((r) => roomRowLabel(r, data.locations, data.roomTypes)),
@@ -615,6 +689,11 @@ export default function ScheduleGrid({
 
   // A free date cell: start a reservation there. A closure says so; a block's own column does nothing.
   const activateCell = (room: ScheduleRoom, col: number) => {
+    const held = itemAtColumn(holdsByRoom.get(room.id), startDate, days, col);
+    if (held) {
+      setAnnouncement(`Room ${room.number} is held. ${holdTipText(held, timeZone)}.`);
+      return;
+    }
     const action = emptyCellAction(
       blocksByRoom.get(room.id),
       closuresByRoom.get(room.id),
@@ -650,6 +729,15 @@ export default function ScheduleGrid({
     const index = Number(rowEl.getAttribute('aria-rowindex')) - 2 - latest.current.unassignedRows;
     if (index < 0) return;
     const target = element.closest<HTMLElement>('[data-item-id]');
+    const heldEl = target ? null : element.closest<HTMLElement>('[data-hold-id]');
+    if (heldEl) {
+      // A held slot reacts to nothing but this note.
+      const hold = holds?.find((h) => h.id === heldEl.dataset.holdId);
+      const room = latest.current.rooms[index];
+      if (hold && room)
+        setAnnouncement(`Room ${room.number} is held. ${holdTipText(hold, timeZone)}.`);
+      return;
+    }
     if (!target) {
       // The empty part of a room row. A press that moved (a drag or a scroll) or was cancelled is not a click.
       if (press === 'cancelled') return;
@@ -857,6 +945,14 @@ export default function ScheduleGrid({
     return { span: blockSpan(layout, days), row: drag.row, allowed: drag.result?.ok === true };
   }, [drag, startDate, days]);
 
+  // The columns the dragged stay would cover: its length never changes, only where it starts.
+  const dropCols = useMemo(
+    () => (drag && drag.row !== null ? dropColumns(drag.item, drag.shift, startDate, days) : null),
+    [drag, startDate, days],
+  );
+  const pastCols = pastColumnCount(startDate, days, today);
+  const inDropColumns = (i: number) =>
+    dropCols !== null && i >= dropCols.first && i < dropCols.first + dropCols.count;
   const ghostLayout = drag?.mode === 'pointer' ? blockLayout(drag.item, startDate, days) : null;
   const ghostRow = drag ? rooms.findIndex((r) => r.id === drag.item.roomId) : -1;
   const dragging = drag?.mode === 'pointer';
@@ -1023,12 +1119,23 @@ export default function ScheduleGrid({
                   textAlign: 'center',
                   borderRight: `1px solid ${t.palette.divider}`,
                   bgcolor: i === todayIndex ? t.palette.schedule.today : undefined,
+                  // A past date reads lighter; the day a dragged stay would start on and the ones it
+                  // covers get a thick underline (not color alone).
+                  color: i < pastCols ? t.palette.text.secondary : undefined,
+                  boxShadow: inDropColumns(i)
+                    ? `inset 0 -3px 0 ${t.palette.primary.main}`
+                    : undefined,
                 })}
               >
                 <Typography
                   variant="subtitle2"
                   component="span"
-                  sx={{ fontWeight: i === todayIndex ? 700 : 500, textAlign: 'center' }}
+                  data-drop-column={inDropColumns(i) || undefined}
+                  sx={{
+                    fontWeight: i === todayIndex || inDropColumns(i) ? 700 : 500,
+                    textAlign: 'center',
+                    color: 'inherit',
+                  }}
                 >
                   {days === 7 ? (
                     dayHeader(date)
@@ -1053,6 +1160,7 @@ export default function ScheduleGrid({
             days={days}
             today={today}
             idPrefix={idPrefix}
+            activeEvent={activeEvent}
             onToggle={() => setUnassignedCollapsed((c) => !c)}
             onOpen={(block) => latest.current.onOpen(block)}
             onLinked={() => setAnnouncement(LINKED_ANNOUNCEMENT)}
@@ -1072,6 +1180,44 @@ export default function ScheduleGrid({
                 })}
               />
             ) : null}
+            {pastCols > 0 ? (
+              <Box
+                aria-hidden
+                data-testid="past-dates"
+                style={{ left: dateAreaX(0), width: dateAreaWidth(pastCols / days) }}
+                sx={(t) => ({
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  bgcolor: t.palette.schedule.pastDate,
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                })}
+              />
+            ) : null}
+            {dropCols ? (
+              <Box
+                aria-hidden
+                data-testid="drop-columns"
+                data-count={dropCols.count}
+                style={{
+                  left: dateAreaX(dropCols.first / days),
+                  width: dateAreaWidth(dropCols.count / days),
+                }}
+                sx={(t) => ({
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  boxSizing: 'border-box',
+                  bgcolor: t.palette.schedule.dropColumn,
+                  // Solid edges mark the column range whatever its color.
+                  borderLeft: `2px solid ${t.palette.primary.main}`,
+                  borderRight: `2px solid ${t.palette.primary.main}`,
+                  pointerEvents: 'none',
+                  zIndex: 1,
+                })}
+              />
+            ) : null}
             {rowIndexes.map((i) => (
               <ScheduleRow
                 key={rooms[i].id}
@@ -1086,11 +1232,15 @@ export default function ScheduleGrid({
                 today={today}
                 activeCol={i === cursorRow ? cursor.col : null}
                 draggingId={drag?.item.id ?? null}
+                activeEvent={activeEvent}
                 idPrefix={idPrefix}
                 links={links}
                 focused={gridFocused && keyboardCursor}
                 onItemPointerDown={onItemPointerDown}
                 onSetHousekeeping={onSetHousekeeping}
+                holds={holdsByRoom.get(rooms[i].id)}
+                ownHoldId={ownHoldId}
+                timeZone={timeZone}
               />
             ))}
             {band ? (
@@ -1109,13 +1259,25 @@ export default function ScheduleGrid({
                   bgcolor: band.allowed
                     ? t.palette.schedule.dropAllowed
                     : t.palette.schedule.dropRefused,
-                  outline: `2px dashed ${band.allowed ? t.palette.primary.main : t.palette.error.main}`,
+                  // Allowed: solid outline and a check; refused: dashed outline and a "no entry"
+                  // icon. The shape tells them apart, not only the color.
+                  outline: `2px ${band.allowed ? 'solid' : 'dashed'} ${band.allowed ? t.palette.primary.main : t.palette.error.main}`,
                   outlineOffset: -2,
                   borderRadius: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  px: 0.5,
+                  color: band.allowed ? t.palette.primary.main : t.palette.error.main,
                   pointerEvents: 'none',
                   zIndex: 8,
                 })}
-              />
+              >
+                {band.allowed ? (
+                  <CheckIcon fontSize="small" data-testid="drop-allowed-icon" />
+                ) : (
+                  <BlockIcon fontSize="small" data-testid="drop-refused-icon" />
+                )}
+              </Box>
             ) : null}
             {drag && ghostLayout && ghostRow >= 0 ? (
               <Box

@@ -7,6 +7,7 @@ import type {
   ReservationDetail,
   ScheduleBlock,
   ScheduleClosure,
+  ScheduleHold,
   ScheduleRoom,
   ScheduleRoomType,
 } from '../api/types';
@@ -14,6 +15,7 @@ import { ApiError } from '../api/types';
 import { MAX_PARTY } from '../api/validation';
 import { nightsOverlap, type IsoDate } from '../lib/dates';
 import { estimateTotal, stayNights } from './newReservation';
+import { heldByOther } from './slotHolds';
 import { addRoomVisible } from './reservationMenu';
 
 export interface AddRoomForm {
@@ -41,22 +43,9 @@ export const defaultAddRoomForm = (): AddRoomForm => ({
 });
 
 /**
- * A slot hold (ticket 152, PR #171): someone is completing a booking for the room on these nights.
- * Another user's hold makes the room unavailable for a new booking (D-152-4); the holder's own hold
- * does not. HOOK ONLY: slot holds are not on main yet, so nothing passes any (see
- * entries/151-edit-panel.md, D-151-10). Re-point this type at #171's once it lands.
- */
-export interface StayHold {
-  roomId: string;
-  startDate: IsoDate;
-  endDate: IsoDate;
-  /** Who holds it; absent counts as someone else. */
-  heldBy?: string;
-}
-
-/**
- * True when no booking, no closure and no one else's hold touches the room on any night of
- * [arrival, departure). The
+ * True when no booking, no closure and no other user's live hold touches the room on any night of
+ * [arrival, departure). Holds are the schedule's (ticket 152, D-152-4): the caller's own (`mine`) never
+ * block, and one whose `expiresAt` has passed at `now` (epoch ms) does not either. The
  * reservation's own rooms count too (the same room cannot be added twice); a stay that ends on the
  * arrival day, or starts on the departure day, does not block (same-day turnover).
  */
@@ -66,13 +55,16 @@ export function isRoomFreeForStay(
   closures: readonly Pick<ScheduleClosure, 'roomId' | 'startDate' | 'endDate'>[],
   arrival: IsoDate,
   departure: IsoDate,
-  holds: readonly StayHold[] = [],
-  userId?: string,
+  holds: readonly ScheduleHold[] = [],
+  now: number = Date.now(),
 ): boolean {
   const hits = (x: { roomId: string; startDate: IsoDate; endDate: IsoDate }) =>
     x.roomId === roomId && nightsOverlap(x.startDate, x.endDate, arrival, departure);
-  const othersHolds = holds.filter((h) => userId === undefined || h.heldBy !== userId);
-  return !blocks.some(hits) && !closures.some(hits) && !othersHolds.some(hits);
+  return (
+    !blocks.some(hits) &&
+    !closures.some(hits) &&
+    heldByOther({ roomId, startDate: arrival, endDate: departure }, holds, null, now) === undefined
+  );
 }
 
 /** The rooms that are free for every night of the stay, in the order given. */
@@ -82,11 +74,11 @@ export function roomsFreeForStay(
   closures: readonly ScheduleClosure[],
   arrival: IsoDate,
   departure: IsoDate,
-  holds: readonly StayHold[] = [],
-  userId?: string,
+  holds: readonly ScheduleHold[] = [],
+  now: number = Date.now(),
 ): ScheduleRoom[] {
   return rooms.filter((r) =>
-    isRoomFreeForStay(r.id, blocks, closures, arrival, departure, holds, userId),
+    isRoomFreeForStay(r.id, blocks, closures, arrival, departure, holds, now),
   );
 }
 
@@ -167,6 +159,13 @@ export function addRoomFailure(error: unknown): AddRoomFailure {
   const code = error instanceof ApiError ? error.code : undefined;
   if (status === 403) {
     return { message: 'You may not change this reservation.', refetch: false };
+  }
+  if (code === 'held') {
+    return {
+      message: 'That room is held by another user during this stay. Choose another room.',
+      roomError: true,
+      refetch: true,
+    };
   }
   if (code === 'conflict') {
     return {

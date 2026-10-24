@@ -367,6 +367,8 @@ export const GUEST_TBD = 'TBD';
  */
 export interface CreateReservationRequest {
   requestId: string;
+  /** The hold placed on the slot while the form was open (ticket 152); the server releases it on success. */
+  holdId?: string;
   roomId?: string | null;
   arrival: IsoDate;
   departure: IsoDate;
@@ -389,7 +391,7 @@ export interface CreateReservationRequest {
  * `ReservationDetail.version` the user saw. Idempotent on `requestId`. Answers the reservation as it
  * is now (one more room, new version). Errors: 400 `invalid-id` / `invalid-query`; 403 `forbidden`;
  * 404 (reservation or room); 409 `stale`; 409 `conflict` (the room is booked or closed on a night of
- * the stay); 409 `not-editable` (cancelled, or every room checked out, or the night audit has run:
+ * the stay); 409 `held` (another user holds the room on a night of the stay, ticket 152); 409 `not-editable` (cancelled, or every room checked out, or the night audit has run:
  * the same cases that hide the menu item); 409 `idempotency-conflict`.
  */
 export interface AddRoomRequest {
@@ -542,11 +544,7 @@ export interface UndoCheckInRequest {
 
 /** Why one room could not be checked in (ticket 163, #28). Carried per room, not as an HTTP error. */
 export type CheckInFailureCode =
-  | 'unassigned'
-  | 'room-not-ready'
-  | 'occupied'
-  | 'no-payment-method'
-  | 'not-checkable';
+  'unassigned' | 'room-not-ready' | 'occupied' | 'no-payment-method' | 'not-checkable';
 
 /**
  * Check in some rooms of one reservation, also when the arrival date has passed (ticket 163).
@@ -1390,6 +1388,45 @@ export interface ScheduleData {
    * (no listed room); a room is assigned in the reservation panel. They ignore the room filters.
    */
   unassigned: ScheduleBlock[];
+  /**
+   * Slots held while a booking is in progress (ticket 152), by anyone, overlapping the window. The
+   * server drops a hold at its expiry; the client also hides one whose `expiresAt` has passed.
+   * Absent: none.
+   */
+  holds?: ScheduleHold[];
+}
+
+/**
+ * A slot (room and nights) held while a New Reservation is in progress (ticket 152, Q-19-3). Same
+ * half-open dates as a block. PLACEHOLDER contract: the real backend owns holds and their expiry
+ * (the length is the "Reservation Hold" minutes of Booking Rules, per audience).
+ */
+export interface ScheduleHold {
+  /** Chosen by the holder (a client-generated id, so a repeated request is idempotent). */
+  id: string;
+  roomId: string;
+  /** First held night. */
+  startDate: IsoDate;
+  /** Departure, exclusive. */
+  endDate: IsoDate;
+  /** ISO 8601 instant with offset or "Z" when the hold ends. The server's clock decides. */
+  expiresAt: string;
+  /** The signed-in user placed this hold. Other users' holds only shade the slot. */
+  mine: boolean;
+}
+
+/**
+ * Hold, or move, the hold `holdId` onto a slot. Idempotent on `holdId`: the same id with the same
+ * slot answers the existing hold (the expiry is not extended); the same id with another slot moves
+ * it and keeps its expiry; the same id after expiry starts a new hold. Errors: 400 `invalid-id` /
+ * `invalid-query`; 404 (unknown room); 409 `conflict` (the slot is booked or closed) or 409 `held`
+ * (another user holds an overlapping slot), both with `details.roomId`. Nothing changes on an error.
+ */
+export interface HoldSlotRequest {
+  holdId: string;
+  roomId: string;
+  startDate: IsoDate;
+  endDate: IsoDate;
 }
 
 /**
@@ -1497,6 +1534,10 @@ export interface ScheduleApi {
   ): Promise<ScheduleMoveResult>;
   moveRoom(request: MoveRoomRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
   moveDates(request: MoveDatesRequest, options?: RequestOptions): Promise<ScheduleMoveResult>;
+  /** Hold a slot while a booking is in progress (ticket 152). Idempotent on `holdId`. */
+  holdSlot(request: HoldSlotRequest, options?: RequestOptions): Promise<ScheduleHold>;
+  /** Release a hold (panel closed, saved or cancelled). Idempotent: an unknown or expired id is fine. */
+  releaseHold(holdId: string, options?: RequestOptions): Promise<void>;
 }
 
 // ---- reports ---------------------------------------------------------------------------------

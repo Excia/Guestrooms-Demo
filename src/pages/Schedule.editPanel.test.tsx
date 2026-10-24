@@ -146,6 +146,33 @@ describe('Add Another Room', () => {
     await panel(/Reservation #GR-50310 \(2 Rooms\)/);
   });
 
+  it('does not list a room another user holds on a night of the stay', async () => {
+    const client = createMockClient({ today: TODAY });
+    const grid = await client.schedule.get({ startDate: TODAY, days: 14 });
+    const hold = grid.holds![0];
+    const heldNumber = grid.rooms.find((r) => r.id === hold.roomId)!.number;
+    const created = await client.reservations.create({
+      requestId: 'create-hold-test-1',
+      roomId: null,
+      arrival: hold.startDate,
+      departure: hold.endDate,
+      adults: 1,
+      children: 0,
+      guestName: 'Hold Test',
+      bookingGuestRole: 'occupant',
+    });
+    const user = await loaded(`/schedule?panel=add-room&res=${created.id}`, client);
+    const add = await panel('Add Room to Reservation');
+    const room = within(add).getByRole('combobox', { name: 'Room' });
+    await waitFor(() => expect(room).toBeEnabled());
+    await user.click(room);
+    const list = await screen.findByRole('listbox');
+    expect(within(list).getAllByRole('option').length).toBeGreaterThan(1);
+    expect(
+      within(list).queryByRole('option', { name: `Room ${heldNumber}` }),
+    ).not.toBeInTheDocument();
+  });
+
   it('a retry after a lost answer does not add a second room (the key and body are kept)', async () => {
     const client = createMockClient({ today: TODAY });
     const real = client.reservations.addRoom.bind(client.reservations);

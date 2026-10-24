@@ -73,6 +73,10 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   second line by the legacy detail order (room type, balance due, reserver, Maintenance, block name); month view with a
   stay under 2 nights shows initials and no type icon; the tooltip lists every occupant (TBD for unnamed) and opens on
   every hover and on keyboard focus. Entry: `entries/147-block-content.md`.
+- **Past, active and drag-target states (ticket #150, LP-S.4):** past = checked out (lighter via `palette.schedule.opacity`),
+  past dates washed, the open panel's event outlined with `aria-current`, target columns and header marked while dragging
+  (pointer and keyboard) with shape cues on the drop band, and "today" in the club's time zone. Open: Q-150-1 (does 75% fit
+  solid fills). Entry: `entries/150-block-states.md`.
 - **Not built:** the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot
@@ -363,6 +367,20 @@ Ticket Excia/Guestrooms-Demo#22. Figma: Reservation Menus 17239:17738; Hub-Multi
   the hub (3.12); Add Another Room opens its panel since ticket 151 (`entries/151-edit-panel.md`). Details in `entries/22-reservation-menus.md`.
 - **Open questions:** Q-22-1, Q-22-2, Q-22-3 to Q-22-6 (entry).
 - **Status:** in review (branch `feat/22-reservation-menus`).
+
+## 2.6 Hold shading on the grid (legacy port LP-S.6)
+
+Ticket Excia/Guestrooms-Demo#152 (epic #146); PR Excia/Guestrooms-Demo#171. Figma: none (the held-slot look is a placeholder).
+
+- **Requirements:** while a booking is in progress the chosen slot (room and dates) is shaded on the grid for the hold duration (Booking Rules "Reservation Hold" minutes, per audience); it disappears when the panel closes, saves, cancels or expires; other users' holds also show shaded and cannot be chosen for a new booking; needs a server-side hold in the API contract (functional doc 15.10, 15.10.1; gap C7; Q-19-3).
+- **Implemented:** `ScheduleData.holds`, `schedule.holdSlot` / `schedule.releaseHold` on the typed client, the mock (`src/api/holdData.ts`: idempotent, expiry-based, 409 `conflict` / `held`) and the http client with guards; pure rules `src/app/slotHolds.ts`; `ScheduleHoldView` (tint, stripes, dashed outline, lock icon, "Held until HH:mm" text and tooltip, accessible name); the New Reservation panel holds its slot (`useSlotHold`) and shows other users' holds as a Room field error; `useLiveHolds` hides a hold at its expiry. Details in `entries/152-hold-shading.md`.
+- **Deviations from Figma or the ticket:** F-152-1, F-152-2 (entry).
+- **Assumptions and defaults chosen:** D-152-1 to D-152-5 (entry).
+- **Stubs and placeholders:** a seeded hold by another user in the mock (P-152-1); the look (P-152-2). Legacy has no hold shading.
+- **API:** "Slot holds (ticket 152)" in [api-contract.md](../api-contract.md).
+- **Permissions:** `reservation.edit` to hold a slot.
+- **Open questions:** Q-152-1 to Q-152-6 (entry); Q-19-3 and Q-19-10 progress in [open-questions.md](../open-questions.md).
+- **Status:** in review (mock hold; needs a backend hold and a design), 2026-10-24.
 
 ## LP-S.5 Edit panel: add another room, additional guests, notes
 

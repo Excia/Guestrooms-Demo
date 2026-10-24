@@ -43,3 +43,47 @@ describe('text contrast on schedule fills', () => {
     expect(getContrastRatio(theme.palette.common.black, bg)).toBeGreaterThanOrEqual(4.5);
   });
 });
+
+// Past events (checked out, so the checked-out fill only) are drawn at `opacity.past` over the white
+// grid: text and fill both fade, and the text must still reach AA.
+function fade(color: string, opacity: number): string {
+  const [r, g, b, a = 1] = color.match(/[\d.]+/g)!.map(Number);
+  const m = (v: number) => Math.round(255 * (1 - opacity * a) + v * opacity * a);
+  return `rgb(${m(r)}, ${m(g)}, ${m(b)})`;
+}
+function hexToRgb(hex: string): string {
+  const n = parseInt(hex.slice(1, 7), 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+}
+
+describe('text contrast on a faded past block', () => {
+  const { past } = c.opacity;
+  it.each([['checkedOut', c.checkedOut]])('on %s', (_n, fill) => {
+    const bg = fade(overWhite(fill), past);
+    for (const text of [c.ownerText, c.memberText, '#000000', theme.palette.grey[800]]) {
+      const fg = fade(hexToRgb(text), past);
+      expect(getContrastRatio(fg, bg), `${text} on ${fill} at ${past}`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('past is lighter than normal but still visible', () => {
+    expect(c.opacity.past).toBeLessThan(c.opacity.normal);
+    expect(c.opacity.past).toBeGreaterThanOrEqual(0.5);
+  });
+});
+
+describe('past-date header text', () => {
+  it('has AA contrast on the header and on the past-dates wash over the grid', () => {
+    const over = (bg: string) => {
+      const [r, g, b] = bg.match(/[\d.]+/g)!.map(Number);
+      const a = 0.6; // theme.palette.text.secondary: black at 60%
+      const m = (v: number) => Math.round(v * (1 - a));
+      return `rgb(${m(r)}, ${m(g)}, ${m(b)})`;
+    };
+    const paper = 'rgb(255, 255, 255)';
+    const wash = overWhite(c.pastDate);
+    const todayBg = overWhite(c.today);
+    for (const bg of [paper, wash, todayBg]) {
+      expect(getContrastRatio(over(bg), bg), bg).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});

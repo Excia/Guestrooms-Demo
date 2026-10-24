@@ -59,6 +59,7 @@ import {
 } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
+import { assertNotHeldByOther, dropHold, holdsInWindow, placeHold, seedHolds } from './holdData';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
 import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
@@ -71,6 +72,7 @@ import {
   validateRoomType,
   withoutRoom,
 } from '../app/roomSetup';
+import { addDays } from '../lib/dates';
 import type { ApiClient, IsoDate, PermissionGrant, RequestOptions, RoomChangeRule } from './types';
 import { ApiError } from './types';
 import {
@@ -78,6 +80,8 @@ import {
   assertCheckInRoomRequest,
   assertCreateMemberRequest,
   assertCreateReservationRequest,
+  assertHoldId,
+  assertHoldSlotRequest,
   assertMemberQuery,
   assertEarlyLateRequest,
   assertMoveDatesRequest,
@@ -118,6 +122,8 @@ export interface MockOptions {
   lastAuditedDate?: IsoDate;
   /** The current instant, for the check in / out times (ticket 163); defaults to the real clock. */
   now?: () => Date;
+  /** Slot holds (ticket 152): `seeded` (default) starts with another user's hold on a free slot, `none` with no holds. */
+  holds?: 'seeded' | 'none';
 }
 
 /** Small non-cryptographic hash for the mock (the real backend uses a keyed hash or does not store the code). */
@@ -148,10 +154,12 @@ export function createMockClient({
   roomChangeRule = MOCK_ROOM_CHANGE_RULE,
   lastAuditedDate = mockLastAuditedDate(today),
   now = () => new Date(),
+  holds: holdsMode = 'seeded',
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
   const members = seedMembers();
+  const holdStore = holdsMode === 'seeded' ? seedHolds(schedule, today, now().getTime()) : [];
   const listCheckedIn = new Set<string>();
   const cancelledReservations: CancelledStore = new Map();
   let systemSettings = mockSystemSettings();
@@ -304,9 +312,15 @@ export function createMockClient({
         respond(
           () => {
             assertCreateReservationRequest(request);
-            return replayable(request, () =>
-              createReservation(schedule, request, (id) => members.find((m) => m.id === id)),
-            );
+            return replayable(request, () => {
+              assertNotHeldByOther(holdStore, request, now().getTime());
+              const detail = createReservation(schedule, request, (id) =>
+                members.find((m) => m.id === id),
+              );
+              // The booking now occupies the slot: the holder's hold ends with it.
+              if (request.holdId) dropHold(holdStore, request.holdId);
+              return detail;
+            });
           },
           () => {
             assertCreateReservationRequest(request);
@@ -412,6 +426,13 @@ export function createMockClient({
                 detailFor(request.reservationId),
                 (id) => members.find((m) => m.id === id),
                 (id) => folioStore.delete(id),
+                holdsInWindow(
+                  holdStore,
+                  detailFor(request.reservationId).arrival,
+                  detailFor(request.reservationId).departure,
+                  now().getTime(),
+                ),
+                now().getTime(),
               );
               return detailFor(added.id);
             });
@@ -558,7 +579,16 @@ export function createMockClient({
         respond(
           () => {
             assertScheduleQuery(query);
-            return structuredClone(queryScheduleData(schedule, query));
+            const data = queryScheduleData(schedule, query);
+            return structuredClone({
+              ...data,
+              holds: holdsInWindow(
+                holdStore,
+                query.startDate,
+                addDays(query.startDate, query.days),
+                now().getTime(),
+              ),
+            });
           },
           () => {
             assertScheduleQuery(query);
@@ -571,6 +601,7 @@ export function createMockClient({
               blocks: [],
               closures: [],
               unassigned: [],
+              holds: [],
             };
           },
           o,
@@ -641,6 +672,36 @@ export function createMockClient({
           () => {
             assertSetHousekeepingRequest(request);
             throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
+      holdSlot: (request, o) =>
+        respond(
+          () => {
+            assertHoldSlotRequest(request);
+            if (!canEditReservations()) throw new ApiError(403, 'Not allowed to hold a room');
+            return placeHold(
+              holdStore,
+              schedule,
+              request,
+              now().getTime(),
+              holdFromRules(bookingRules).employee,
+            );
+          },
+          () => {
+            assertHoldSlotRequest(request);
+            throw new ApiError(404, 'Room not found');
+          },
+          o,
+        ),
+      releaseHold: (holdId, o) =>
+        respond(
+          () => {
+            assertHoldId(holdId);
+            dropHold(holdStore, holdId);
+          },
+          () => {
+            assertHoldId(holdId);
           },
           o,
         ),

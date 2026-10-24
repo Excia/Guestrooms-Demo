@@ -10,7 +10,7 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Skeleton from '@mui/material/Skeleton';
 import Typography from '@mui/material/Typography';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useApi } from '../../api';
 import type { ReservationDetail } from '../../api';
 import {
@@ -56,6 +56,8 @@ export interface AddRoomPanelProps {
   onAdded: (detail: ReservationDetail) => void;
   /** The schedule behind the panel must load again (a room was refused or the outcome is unknown). */
   onChanged?: () => void;
+  /** Epoch ms; Date.now by default. Injectable for tests (hold expiry). */
+  now?: () => number;
 }
 
 /**
@@ -72,7 +74,9 @@ export default function AddRoomPanel({
   onClose,
   onAdded,
   onChanged,
+  now,
 }: AddRoomPanelProps) {
+  const clock = useCallback(() => (now ? now() : Date.now()), [now]);
   const api = useApi();
   const state = useReservationDetail(reservationId);
   const detail = state.status === 'success' ? state.detail : null;
@@ -99,9 +103,12 @@ export default function AddRoomPanel({
             inventory.closures,
             detail.arrival,
             detail.departure,
+            // Another user's live hold takes a room out of the list (the caller's own does not).
+            inventory.holds,
+            clock(),
           )
         : [],
-    [inventory, detail],
+    [inventory, detail, clock],
   );
   const freeIds = useMemo(() => new Set(free.map((r) => r.id)), [free]);
   const { locationId, roomTypeId, roomId, autoLocation, autoRoomType } = form;

@@ -1,5 +1,5 @@
 import { ApiError } from '../api/types';
-import type { ScheduleBlock, ScheduleClosure, ScheduleRoom } from '../api/types';
+import type { ScheduleBlock, ScheduleClosure, ScheduleHold, ScheduleRoom } from '../api/types';
 import {
   addRoomBlocker,
   addRoomEstimate,
@@ -50,26 +50,54 @@ describe('rooms free for the whole stay', () => {
   });
 });
 
-describe('slot holds (hook until PR #171 lands)', () => {
+describe('slot holds (ticket 152, D-152-4)', () => {
   const arrival = '2026-10-20';
   const departure = '2026-10-24';
-  const hold = { roomId: 'a', startDate: '2026-10-22', endDate: '2026-10-23', heldBy: 'u2' };
-  it("another user's hold makes the room unavailable; the holder's own hold does not", () => {
-    expect(isRoomFreeForStay('a', [], [], arrival, departure, [hold], 'u1')).toBe(false);
-    expect(isRoomFreeForStay('a', [], [], arrival, departure, [hold], 'u2')).toBe(true);
+  const NOW = Date.parse('2026-10-20T09:00:00Z');
+  const hold = (extra = {}): ScheduleHold => ({
+    id: 'h1',
+    roomId: 'a',
+    startDate: '2026-10-22',
+    endDate: '2026-10-23',
+    expiresAt: '2026-10-20T09:10:00Z',
+    mine: false,
+    ...extra,
+  });
+  it("another user's live hold makes the room unavailable for a night of the stay", () => {
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [hold()], NOW)).toBe(false);
     expect(
-      roomsFreeForStay(rooms, [], [], arrival, departure, [hold], 'u1').map((r) => r.id),
+      roomsFreeForStay(rooms, [], [], arrival, departure, [hold()], NOW).map((r) => r.id),
     ).toEqual(['b', 'c', 'd']);
   });
-  it('a hold outside the stay does not matter, and without holds nothing changes', () => {
-    const later = { ...hold, startDate: '2026-10-24', endDate: '2026-10-25' };
-    expect(isRoomFreeForStay('a', [], [], arrival, departure, [later], 'u1')).toBe(true);
+  it("the caller's own hold does not block", () => {
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [hold({ mine: true })], NOW)).toBe(
+      true,
+    );
+  });
+  it('an expired hold does not block, and one that ends right now is over', () => {
+    const ended = hold({ expiresAt: '2026-10-20T08:59:59Z' });
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [ended], NOW)).toBe(true);
+    expect(
+      isRoomFreeForStay(
+        'a',
+        [],
+        [],
+        arrival,
+        departure,
+        [hold({ expiresAt: '2026-10-20T09:00:00Z' })],
+        NOW,
+      ),
+    ).toBe(true);
+  });
+  it('a hold outside the stay or on another room does not matter; no holds changes nothing', () => {
+    const later = hold({ startDate: '2026-10-24', endDate: '2026-10-25' });
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [later], NOW)).toBe(true);
+    expect(isRoomFreeForStay('b', [], [], arrival, departure, [hold()], NOW)).toBe(true);
     expect(isRoomFreeForStay('a', [], [], arrival, departure)).toBe(true);
   });
-  // TODO(#171): once slot holds exist on main, feed them from the schedule data into
-  // AddRoomPanel and the mock addRoom (`holdsOnStay`) and add an integration test: a room held by
-  // another user is not listed and addRoom answers 409 `conflict`.
-  it.todo('Add Another Room skips rooms held by another user (needs #171)');
+  it('a hold failure shows on the Room field and reloads', () => {
+    expect(addRoomFailure(err(409, 'held'))).toMatchObject({ roomError: true, refetch: true });
+  });
 });
 
 describe('validateAddRoom', () => {

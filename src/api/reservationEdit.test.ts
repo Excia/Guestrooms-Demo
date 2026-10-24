@@ -278,6 +278,89 @@ describe('mock reservations.updateGuests', () => {
   });
 });
 
+describe('mock reservations.addRoom and slot holds (ticket 152)', () => {
+  const NOW = new Date(2026, 9, 16, 9, 0, 0).getTime();
+  let clock = NOW;
+  const mkHeld = () => createMockClient({ today: T, now: () => new Date(clock) });
+  beforeEach(() => {
+    clock = NOW;
+  });
+  const window = { startDate: T, days: 14 } as const;
+
+  /** A reservation covering the nights the seeded hold of another user covers. */
+  async function overlapping(c: ReturnType<typeof mkHeld>) {
+    const seeded = (await c.schedule.get(window)).holds![0];
+    const created = await c.reservations.create({
+      requestId: rid(),
+      roomId: null,
+      arrival: seeded.startDate,
+      departure: seeded.endDate,
+      adults: 1,
+      children: 0,
+      guestName: 'Hold Test',
+      bookingGuestRole: 'occupant',
+    });
+    return { seeded, created };
+  }
+  const addTo = (c: ReturnType<typeof mkHeld>, d: ReservationDetail, roomId: string) =>
+    c.reservations.addRoom({
+      requestId: rid(),
+      reservationId: d.id,
+      version: d.version,
+      roomId,
+      adults: 1,
+      children: 0,
+    });
+
+  it('refuses a room another user holds on a night of the stay (409 held), nothing added', async () => {
+    const c = mkHeld();
+    const { seeded, created } = await overlapping(c);
+    await expect(addTo(c, created, seeded.roomId)).rejects.toMatchObject({
+      status: 409,
+      code: 'held',
+    });
+    expect((await c.reservations.getDetail(created.id)).rooms).toHaveLength(1);
+  });
+
+  it("the caller's own hold on the room does not block", async () => {
+    const c = mkHeld();
+    const { seeded, created } = await overlapping(c);
+    const grid = await c.schedule.get(window);
+    const other = grid.rooms.find(
+      (r) =>
+        r.id !== seeded.roomId &&
+        !grid.blocks.some(
+          (b) => b.roomId === r.id && b.startDate < seeded.endDate && seeded.startDate < b.endDate,
+        ) &&
+        !grid.closures.some(
+          (x) => x.roomId === r.id && x.startDate < seeded.endDate && seeded.startDate < x.endDate,
+        ),
+    )!;
+    const mine = await c.schedule.holdSlot({
+      holdId: 'hold-mine-1',
+      roomId: other.id,
+      startDate: seeded.startDate,
+      endDate: seeded.endDate,
+    });
+    expect(mine.mine).toBe(true);
+    const after = await addTo(c, created, other.id);
+    expect(after.rooms).toHaveLength(2);
+  });
+
+  it('an expired hold does not block', async () => {
+    const c = mkHeld();
+    const { seeded, created } = await overlapping(c);
+    clock = Date.parse(seeded.expiresAt) + 1000;
+    const after = await addTo(c, created, seeded.roomId);
+    expect(after.rooms.map((r) => r.roomId)).toContain(seeded.roomId);
+  });
+
+  it('offers the holds in the schedule window the panel reads', async () => {
+    const c = mkHeld();
+    expect((await c.schedule.get(window)).holds).toHaveLength(1);
+  });
+});
+
 describe('guest slots and party totals', () => {
   it('keeps Guest 3 named with Guest 2 TBD through a save and a reload', async () => {
     const c = mk();

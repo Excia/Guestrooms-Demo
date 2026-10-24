@@ -1202,3 +1202,81 @@ describe('submit and navigation guards', () => {
     }
   });
 });
+
+// ---- block, date and drag-target states (ticket LP-S.4) ---------------------------------------
+
+describe('block states', () => {
+  const byId = (id: string) => document.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
+
+  it('draws a checked-out event lighter, from the opacity token, and an unchecked one at full strength', async () => {
+    await loaded('/schedule?start=2026-10-10');
+    expect(item('Sofia Marchetti')).toHaveStyle({
+      opacity: String(theme.palette.schedule.opacity.past),
+    });
+    expect(item('Thomas Okafor')).toHaveStyle({
+      opacity: String(theme.palette.schedule.opacity.normal),
+    });
+  });
+
+  it('washes the dates before today', async () => {
+    await loaded('/schedule?start=2026-10-12');
+    expect(screen.getByTestId('past-dates')).toBeInTheDocument();
+    expect(header('Monday 10/12')).toBeInTheDocument();
+  });
+
+  it('has no past wash when the range starts today', async () => {
+    await loaded();
+    expect(screen.queryByTestId('past-dates')).not.toBeInTheDocument();
+  });
+
+  it('highlights the event whose panel is open, not by opacity alone', async () => {
+    setup('/schedule?res=rs-5');
+    await screen.findByRole('grid', { name: 'Schedule', hidden: true });
+    await waitFor(() => expect(byId('rr-5')).toHaveAttribute('data-highlighted', 'true'));
+    expect(byId('rr-5')).toHaveAttribute('aria-current', 'true');
+    expect(byId('rr-2')).not.toHaveAttribute('data-highlighted');
+  });
+
+  it('highlights nothing without a panel', async () => {
+    await loaded();
+    expect(document.querySelector('[data-highlighted]')).toBeNull();
+  });
+});
+
+describe('drag target', () => {
+  it('keyboard: highlights the target columns with the stay length kept, and marks the header', async () => {
+    const user = await loaded();
+    await cursorTo(user, 1, 0); // 202: Thomas Okafor, three nights
+    await user.keyboard(' ');
+    expect(screen.getByTestId('drop-columns')).toHaveAttribute('data-count', '3');
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(screen.getByTestId('drop-columns')).toHaveAttribute('data-count', '3');
+    const marked = document.querySelectorAll('[data-drop-column]');
+    expect(marked).toHaveLength(3);
+    expect(marked[0]).toHaveTextContent('10/18');
+    // The band says allowed by shape too: a check, not only a color.
+    expect(screen.getByTestId('drop-allowed-icon')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByTestId('drop-columns')).not.toBeInTheDocument();
+    expect(document.querySelector('[data-drop-column]')).toBeNull();
+  });
+
+  it('keyboard: a refused target shows the no-entry icon and a dashed outline, not only red', async () => {
+    const user = await loaded();
+    await cursorTo(user, 1, 0);
+    await user.keyboard(' {ArrowDown}'); // 203, Henry Lowell has a stay on those nights
+    const band = screen.getByTestId('drop-indicator');
+    expect(band).toHaveAttribute('data-allowed', 'false');
+    expect(screen.getByTestId('drop-refused-icon')).toBeInTheDocument();
+    expect(getComputedStyle(band).outline).toContain('dashed');
+    expect(screen.getByTestId('drop-columns')).toHaveAttribute('data-count', '3');
+  });
+
+  it('pointer: the target columns follow the pointer', async () => {
+    await loaded();
+    mockGeometry();
+    dragItem(item('Thomas Okafor'), { dx: DAY * 2, y: rowY(1) }, { release: false });
+    expect(screen.getByTestId('drop-columns')).toHaveAttribute('data-count', '3');
+    expect(screen.getByTestId('drop-allowed-icon')).toBeInTheDocument();
+  });
+});
