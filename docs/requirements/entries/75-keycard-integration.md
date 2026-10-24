@@ -28,7 +28,7 @@ Ticket Excia/Guestrooms-Demo#75; PR Excia/Guestrooms-Demo#161. Figma: Keycard In
 ## Placeholders and invented values
 
 - **P-75-1:** sample Encoder Keys and the key Visionline "returns" (`src/api/keycardData.ts`), 14 digits.
-- **P-75-2:** key length of 14 digits (`ENCODER_KEY_LENGTH`, Q-75-1), guessed from the Figma mask XXXX-XXXX-XXXXXX.
+- **P-75-2 (provisional, not from the owner or Figma text):** key length of 14 digits (`ENCODER_KEY_LENGTH`, Q-75-1), guessed from the Figma mask XXXX-XXXX-XXXXXX.
 - **P-75-3:** the error dialog sentence "Try doing something to troubleshoot and try again." is the Figma placeholder (Q-75-2).
 
 ## API, permissions, notes
