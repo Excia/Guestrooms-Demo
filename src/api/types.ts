@@ -953,11 +953,6 @@ export const SETTABLE_HOUSEKEEPING_STATUSES: readonly SettableHousekeepingStatus
 export type ScheduleGuestType = 'guest' | 'member' | 'owner' | 'none';
 
 /**
- * One room of a reservation on the grid. A stay occupies the nights [startDate, endDate): `endDate`
- * is the departure day and is NOT occupied, so a departure on another stay's arrival day is a
- * same-day turnover, not an overlap.
- */
-/**
  * The room a linked-room block points at (ticket 2.4). The block takes that room's Early Check In /
  * Late Check Out flags, so the backend sends them here.
  */
@@ -969,6 +964,11 @@ export interface LinkedRoom {
   lateCheckOut?: boolean;
 }
 
+/**
+ * One room of a reservation on the grid. A stay occupies the nights [startDate, endDate): `endDate`
+ * is the departure day and is NOT occupied, so a departure on another stay's arrival day is a
+ * same-day turnover, not an overlap.
+ */
 export interface ScheduleBlock {
   kind: 'reservation';
   /** The reservation-room id; what the move mutations take. */
