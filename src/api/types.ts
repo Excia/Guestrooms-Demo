@@ -206,6 +206,16 @@ export interface ReservationRoomDetail {
   /** Departure, exclusive. */
   departure: IsoDate;
   /**
+   * This room's party (ticket 151): the lead occupant counts as one adult. Absent when the backend
+   * does not say; the UI then falls back to the reservation's totals for a one-room reservation.
+   */
+  adults?: number;
+  children?: number;
+  /** The named guests besides the lead occupant; the rest of the party is "TBD" (ticket 151). */
+  guests?: ReservationGuest[];
+  /** The lead occupant of a room added later (ticket 151); absent: the reservation's. */
+  leadOccupant?: { name: string; memberNumber: string | null };
+  /**
    * Housekeeping state of the assigned room (ticket 163): a `dirty` room cannot be checked in.
    * Absent when the backend does not track it (PLACEHOLDER until ticket 6.4); the UI then lets the
    * check in try and the backend decides.
@@ -232,6 +242,20 @@ export interface ReservationPartialStay {
   arrival: IsoDate;
   /** Departure from that room, exclusive. */
   departure: IsoDate;
+}
+
+/** A named guest of one room besides its lead occupant (ticket 151). */
+export interface ReservationGuest {
+  /** Stable within the room; assigned by the backend. */
+  id: string;
+  kind: 'adult' | 'child';
+  name: string;
+  /** The directory person, when picked from it. */
+  memberId?: string;
+  memberNumber: string | null;
+  email?: string;
+  /** A confirmation email was sent to this guest when they were saved. */
+  confirmationSent?: boolean;
 }
 
 export interface ReservationAddOn {
@@ -352,6 +376,68 @@ export interface CreateReservationRequest {
   privateNotes?: string;
 }
 
+/**
+ * Add another room to a reservation (ticket 151; Figma 16593:31892). The new room takes the
+ * reservation's dates (never sent: the backend owns them). `roomId` null or absent adds an
+ * UNASSIGNED room. `adults` (at least 1, the lead occupant) and `children` are this room's party.
+ * `leadOccupant` names the room's lead occupant (TBD when absent). `version` is the
+ * `ReservationDetail.version` the user saw. Idempotent on `requestId`. Answers the reservation as it
+ * is now (one more room, new version). Errors: 400 `invalid-id` / `invalid-query`; 403 `forbidden`;
+ * 404 (reservation or room); 409 `stale`; 409 `conflict` (the room is booked or closed on a night of
+ * the stay); 409 `not-editable` (cancelled, or every room checked out, or the night audit has run:
+ * the same cases that hide the menu item); 409 `idempotency-conflict`.
+ */
+export interface AddRoomRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+  roomId?: string | null;
+  adults: number;
+  children: number;
+  leadOccupant?: { name: string; memberId?: string };
+}
+
+/** One guest of a room as sent: the lead occupant is not part of the list. */
+export interface GuestInput {
+  kind: 'adult' | 'child';
+  name: string;
+  memberId?: string;
+  email?: string;
+  /** Send the confirmation email now; ignored without an email. Off by default. */
+  sendConfirmation?: boolean;
+}
+
+/**
+ * Set the party of one room and its named guests (ticket 151). `guests` replaces the list: at most
+ * `adults - 1` adults and `children` children (the lead occupant is the first adult); the rest of
+ * the party stays TBD. Idempotent on `requestId`. Answers the reservation as it is now. Errors: 400;
+ * 403 `forbidden`; 404; 409 `stale`; 409 `not-editable` (the room is checked in or out, or the
+ * reservation is cancelled: guests are read-only then); 409 `idempotency-conflict`.
+ */
+export interface UpdateGuestsRequest {
+  requestId: string;
+  reservationId: string;
+  reservationRoomId: string;
+  version: string;
+  adults: number;
+  children: number;
+  guests: GuestInput[];
+}
+
+/**
+ * Save the reservation's notes (ticket 151). Both texts are sent whole (at most MAX_NOTES_LENGTH
+ * each). Idempotent on `requestId`. Answers the reservation as it is now. Errors: 400; 403
+ * `forbidden`; 404; 409 `stale`; 409 `not-editable` (checked out or cancelled); 409
+ * `idempotency-conflict`.
+ */
+export interface UpdateNotesRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+  publicNotes: string;
+  privateNotes: string;
+}
+
 /** Which rate a room change keeps for the nights whose room changed (ticket 2.3, decision D-015). */
 export type RateChoice = 'retain' | 'update';
 
@@ -448,11 +534,7 @@ export interface UndoCheckInRequest {
 
 /** Why one room could not be checked in (ticket 163, #28). Carried per room, not as an HTTP error. */
 export type CheckInFailureCode =
-  | 'unassigned'
-  | 'room-not-ready'
-  | 'occupied'
-  | 'no-payment-method'
-  | 'not-checkable';
+  'unassigned' | 'room-not-ready' | 'occupied' | 'no-payment-method' | 'not-checkable';
 
 /**
  * Check in some rooms of one reservation, also when the arrival date has passed (ticket 163).
@@ -561,6 +643,12 @@ export interface ReservationsApi {
     request: VerifyOverrideCodeRequest,
     options?: RequestOptions,
   ): Promise<{ valid: boolean }>;
+  /** Add another room for the whole stay (ticket 151). Idempotent on `requestId`. */
+  addRoom(request: AddRoomRequest, options?: RequestOptions): Promise<ReservationDetail>;
+  /** Set one room's party and named guests (ticket 151). Idempotent on `requestId`. */
+  updateGuests(request: UpdateGuestsRequest, options?: RequestOptions): Promise<ReservationDetail>;
+  /** Save the reservation's notes (ticket 151). Idempotent on `requestId`. */
+  updateNotes(request: UpdateNotesRequest, options?: RequestOptions): Promise<ReservationDetail>;
   /** Split a room off its reservation (ticket 163). Idempotent on `requestId`. */
   splitRoom(request: SplitRoomRequest, options?: RequestOptions): Promise<ReservationDetail>;
   /** PLACEHOLDER (ticket 3.9). Idempotent on `requestId`. */

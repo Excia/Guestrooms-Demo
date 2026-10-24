@@ -5,10 +5,12 @@ import { isValidIsoDate, type IsoDate } from '../lib/dates';
 // it leaves the view (date range, length, filters) exactly as it was.
 //   ?res=<reservationId>[&rr=<reservationRoomId>]   details of a reservation (and one of its rooms)
 //   ?panel=new[&room=<roomId>&arrival=<date>]       the New Reservation panel (room and Check In prefilled)
+//   ?panel=add-room&res=<reservationId>             Add Another Room to that reservation
 export type PanelState =
   | { kind: 'details'; reservationId: string; reservationRoomId?: string }
   /** `roomId` and `arrival` prefill the form when opened from an empty grid cell. */
   | { kind: 'new'; roomId?: string; arrival?: IsoDate }
+  | { kind: 'add-room'; reservationId: string }
   | null;
 
 const KEYS = {
@@ -27,6 +29,10 @@ function cleanId(value: string | null): string | null {
 }
 
 export function parsePanel(params: URLSearchParams): PanelState {
+  if (params.get(KEYS.panel) === 'add-room') {
+    const reservationId = cleanId(params.get(KEYS.reservation));
+    return reservationId ? { kind: 'add-room', reservationId } : null;
+  }
   if (params.get(KEYS.panel) === 'new') {
     const roomId = cleanId(params.get(KEYS.newRoom));
     const arrival = params.get(KEYS.newArrival);
@@ -56,6 +62,10 @@ export function applyPanel(params: URLSearchParams, panel: PanelState): URLSearc
     next.set(KEYS.panel, 'new');
     if (panel.roomId) next.set(KEYS.newRoom, panel.roomId);
     if (panel.arrival) next.set(KEYS.newArrival, panel.arrival);
+  }
+  if (panel?.kind === 'add-room') {
+    next.set(KEYS.panel, 'add-room');
+    next.set(KEYS.reservation, panel.reservationId);
   }
   if (panel?.kind === 'details') {
     next.set(KEYS.reservation, panel.reservationId);

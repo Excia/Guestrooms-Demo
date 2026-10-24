@@ -24,6 +24,12 @@ import { MOCK_RETRIEVED_ENCODERS, mockEncoderKeys } from './keycardData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
+import { addRoom, updateGuests, updateNotes } from './reservationEditData';
+import {
+  assertAddRoomRequest,
+  assertUpdateGuestsRequest,
+  assertUpdateNotesRequest,
+} from './reservationEditApi';
 import {
   cancelReservation,
   mockLastAuditedDate,
@@ -385,6 +391,66 @@ export function createMockClient({
           () => {
             assertVerifyOverrideCodeRequest(request);
             return { valid: false };
+          },
+          o,
+        ),
+      addRoom: (request, o) =>
+        respond(
+          () => {
+            assertAddRoomRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () => {
+              const added = addRoom(
+                schedule,
+                request,
+                detailFor(request.reservationId),
+                (id) => members.find((m) => m.id === id),
+                (id) => folioStore.delete(id),
+              );
+              return detailFor(added.id);
+            });
+          },
+          () => {
+            assertAddRoomRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      updateGuests: (request, o) =>
+        respond(
+          () => {
+            assertUpdateGuestsRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () => {
+              updateGuests(schedule, request, (id) => members.find((m) => m.id === id));
+              return detailFor(request.reservationId);
+            });
+          },
+          () => {
+            assertUpdateGuestsRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      updateNotes: (request, o) =>
+        respond(
+          () => {
+            assertUpdateNotesRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () => {
+              updateNotes(schedule, request);
+              return detailFor(request.reservationId);
+            });
+          },
+          () => {
+            assertUpdateNotesRequest(request);
+            throw notFound();
           },
           o,
         ),

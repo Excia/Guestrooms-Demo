@@ -4,7 +4,7 @@ import { addDays, daysBetween } from '../lib/dates';
 import { expectedLeadOccupantName } from './createRules';
 import { stayOf } from '../lib/stayPlan';
 import { assertFree, bump, findRoom, nightRate } from './scheduleData';
-import type { ReservationExtras, ScheduleState } from './scheduleData';
+import type { ReservationExtras, RoomParty, ScheduleState } from './scheduleData';
 import type {
   CreateReservationRequest,
   EarlyLateRequest,
@@ -38,6 +38,24 @@ export function extrasFor(state: ScheduleState, reservationId: string): Reservat
     publicNotes: '',
     privateNotes: '',
   });
+}
+
+/**
+ * The party of every room (ticket 151): a room without an entry takes its share of the
+ * reservation's counts (every room has at least one adult; the rest and the children go to the
+ * first room). Entries are created on first use and kept, so later edits never move people around.
+ */
+export function ensureParties(extras: ReservationExtras, roomIds: readonly string[]) {
+  const parties = (extras.parties ??= {});
+  const missing = roomIds.filter((id) => !parties[id]);
+  missing.forEach((id, i) => {
+    parties[id] = {
+      adults: i === 0 ? Math.max(1, extras.adults - (missing.length - 1)) : 1,
+      children: i === 0 ? extras.children : 0,
+      guests: [],
+    } satisfies RoomParty;
+  });
+  return parties;
 }
 
 function reservationStatus(rooms: ReservationRoomDetail[]): ReservationStatus {
@@ -86,7 +104,12 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
     arrival: p.startDate,
     departure: p.endDate,
   });
+  const parties = ensureParties(
+    extras,
+    current.map((b) => b.id),
+  );
   const rooms: ReservationRoomDetail[] = current.map((b) => {
+    const party = parties[b.id];
     const room = state.rooms.find((r) => r.id === b.roomId);
     const chain = group
       .filter((p) => p.roomChange && stayOf(p) === b.id)
@@ -100,8 +123,14 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
       locationName: state.locations.find((l) => l.id === room?.locationId)?.name ?? null,
       roomTypeName: typeName(room?.roomTypeId ?? '')?.name ?? null,
       status: b.status === 'checked-in' || b.status === 'checked-out' ? b.status : 'nyci',
-      ...(b.roomId ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) } : {}),
+      ...(b.roomId
+        ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) }
+        : {}),
       ...(extras.stamps?.[b.id] ?? {}),
+      adults: party.adults,
+      children: party.children,
+      guests: structuredClone(party.guests),
+      ...(party.lead ? { leadOccupant: { ...party.lead } } : {}),
       arrival: b.startDate,
       // The departure of the whole stay, also when later nights are in other rooms.
       departure: chain.reduce((max, p) => (p.endDate > max ? p.endDate : max), b.endDate),
@@ -134,8 +163,8 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
     arrival,
     departure,
     nights: daysBetween(arrival, departure),
-    adults: extras.adults,
-    children: extras.children,
+    adults: rooms.reduce((sum, r) => sum + (r.adults ?? 0), 0),
+    children: rooms.reduce((sum, r) => sum + (r.children ?? 0), 0),
     leadOccupant: extras.leadOccupant
       ? { ...extras.leadOccupant, guestType: lead.guestType }
       : {
