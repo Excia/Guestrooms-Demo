@@ -1,3 +1,4 @@
+import type { RegistrationCardApi, RegistrationCardSettings } from './registrationCardTypes';
 import type { ChangeLogApi } from './changeLogTypes';
 import type { ReservationListApi } from './reservationListTypes';
 
@@ -683,6 +684,8 @@ export interface SystemSettings {
   guestRoomsArea: LookupRef | null;
   guestMember: LookupRef | null;
   folio: FolioDetails;
+  /** The Registration Card tab (ticket 7.8); also decides whether Print Registration Card is offered. */
+  registrationCard: RegistrationCardSettings;
   /** The Online Booking tab (ticket 7.9); read by the online booking flow (Epic 5). */
   onlineBooking: OnlineBookingSettings;
 }
@@ -1243,6 +1246,7 @@ export interface ApiClient {
   members: MembersApi;
   folios: FoliosApi;
   reports: ReportsApi;
+  registrationCard: RegistrationCardApi;
   changeLog: ChangeLogApi;
 }
 

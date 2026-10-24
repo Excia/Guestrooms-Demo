@@ -380,6 +380,16 @@ carry the `ReservationDetail.version` the user saw.
 - Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
 - New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).
 
+## Registration Card (ticket 7.8, branch `feat/95-registration-card`)
+
+| #   | Method and path                      | Request                                                                                              | Response                                                      | Errors                |
+| --- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------- |
+| 1   | `POST /registration-card/preview`    | `{settings: RegistrationCardSettings, folio: FolioDetails}` (the unsaved draft; the folio header for Include Folio Header) | `{url}` of a PDF of a sample card; the UI opens it in a new tab | 400, 422, 5xx         |
+
+- `GET` and `PUT /settings/system` (row 15 above) gain `registrationCard: {enabled, items: {<id>: boolean}, customText (max 500)}`. Item ids: `folioHeader`, `confirmationNumber`, `checkInDate`, `checkOutDate`, `earlyCheckInFlag`, `lateCheckOutFlag`, `roomNumber`, `roomType`, `guestCount`, `averageRoomRate`, `leadOccupantName`, `leadOccupantAddress`, `leadOccupantPhone`, `reserverName`, `reserverPhone`, `publicNotes`, `customText`, `guestSignature`, `staffSignature`. The backend re-checks the 500-character limit (422 `validation`). The client rejects a System Settings response that omits `registrationCard`, so loading System Settings (and everything that reads them) fails against a backend that does not send it yet.
+- The backend's PDF generator follows `buildRegistrationCard` (`src/app/registrationCard.ts`): only checked items print; a phone or address needs its name; Reserved By prints only for a reserver who is not the lead occupant; Average Room Rate is revenue over nights without taxes or service charges; custom text prints above the signatures.
+- `POST /registration-card/preview` also takes an optional `reservation` (the `RegistrationCardReservation` shape in `src/api/registrationCardTypes.ts`); Print Registration Card(s) sends it with the saved settings. The backend may instead render the card from its own copy of the reservation. The URL in the answer must be http(s) or a same-origin path; the UI refuses anything else.
+
 ## Change Log (ticket 7.10, branch `feat/97-change-log-overlay`)
 
 | #   | Method and path               | Request (query parameters)                                                                                                                                                                                                                                                                                                                                                 | Response                                                                                                                                 | Errors                   |

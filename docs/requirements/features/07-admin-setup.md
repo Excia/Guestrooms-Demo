@@ -263,7 +263,14 @@ Excia/Guestrooms-Demo#95 (added during refinement). Figma: tab 13319:41951, PDF 
   Text (500 characters), Guest Signature Area, Staff Signature Area. Unchecking a name disables its phone
   or address; Reserver Name checked with no reserver hides that section; Include Folio Header uses the
   Folio Details (7.1); custom text prints above the signatures. The PDF opens in a new tab (D-003).
-- **Open questions:** Q-95-1.
+- **Implemented (Excia/Guestrooms-Demo#95, in review):** a "Registration Card" tab in `src/pages/SystemSettings.tsx`
+  (`src/components/admin/systemSettings/RegistrationCardTab.tsx`); the values are `SystemSettings.registrationCard`,
+  saved with the rest. Pure rules in `src/app/registrationCard.ts` (item dependencies, validation, `buildRegistrationCard`:
+  what the card prints for a reservation, including the reserver-hidden case). Generate Preview calls the typed API
+  `registrationCard.requestPreview` (mock: a printable HTML page laid out like the PDF frame) and opens the result in a
+  new tab. Print Registration Card(s) leaves the reservation menus while the switch is off. Details in
+  [entries/95-registration-card.md](entries/95-registration-card.md).
+- **Open questions:** Q-95-1 to Q-95-5.
 
 ## 7.9 Online Booking settings tab
 
