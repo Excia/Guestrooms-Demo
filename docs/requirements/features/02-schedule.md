@@ -44,8 +44,8 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   - Block colors are theme tokens under `palette.schedule`.
 - **Decisions:** D-050 to D-056.
 - **Deviations:** the availability control is a 3-item menu (Figma: split button, D-052); the chevron
-  steps and default view are the agent's defaults (D-051); the due-out block color is a placeholder
-  (Q-18-7).
+  steps and default view are the agent's defaults (D-051); the due-out block color was a placeholder
+  (Q-18-7); Figma confirms rgba(228,113,0,.4) (F-HK-2).
 - **Housekeeping "H" chip (built on branch for ticket 2.4):** a 16 / 8 / 4px chip (7 / 14 / 30 day view) after a block's departure edge, filled by `ScheduleBlock.housekeeping` (not checked out, needs cleaning, cleaned, ready, needs maintenance; NYCI is invisible), the "H" letter in the 7 and 14 day views, none when the stay continues past the range; a "+" beside the "H" when `housekeepingNotes` exist, in the 7 and 14 day views only (functional doc 15.13.3). The chip is a button (name like "Housekeeping: needs cleaning. Change status"; pointer and key events on it never drag, pick up or open the block) that opens a small pop-up (doc 15.13.4): a Status select with Not Checked Out, Needs Cleaning, Cleaned, Ready and Needs Maintenance (NYCI is not settable) that saves as soon as a status is picked, Add Notes / Remove Notes with a notes field saved by Save, and an X to close; focus returns to the chip. Needs `reservation.edit`; without it the chip is only drawn. Saved through `schedule.setHousekeeping({ reservationRoomId, status, notes?, requestId, version? })` (`notes` omitted keeps the note, empty removes it; `Idempotency-Key`; 409 `stale` on another `version`); the grid shows the change at once and puts it back with a message if the save fails. **No Figma design for the pop-up** (plain themed MUI placeholder, deviation 54). The status is read out in the block's label. The mock derives the statuses until the backend supplies them. Figma "Housekeeping Block" 12125:14157. Update 2026-10-24 (see `entries/hk-and-status-colors.md`): every assigned stay gets the chip (a stay with no stored status shows Not Checked Out); unassigned and linked-room blocks get none; the linked-room fill is now the Figma grey token `palette.schedule.linked`.
 - **Unassigned section (owner, 2026-10-21; D-21-1):** reservation rooms booked without a room sit at the top
   of the grid, above the room rows, on a light red tinted row (`palette.schedule.unassignedRow`). Counts
@@ -79,7 +79,7 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   `NIGHT_AUDIT_HISTORY_PATH`.
 - **API:** `GET /schedule`, `POST /schedule/move-room`, `POST /schedule/move-dates`
   ([api-contract.md](../api-contract.md)).
-- **Open questions:** Q-18-1 to Q-18-7 (the first three were answered by the defaults in D-050).
+- **Open questions:** Q-18-1 to Q-18-7 (the first three were answered by the defaults in D-050; Q-18-7, the due-out color, is settled by Figma, F-HK-2).
 - **Status:** done (merged 2026-10-20, Excia/Guestrooms-Demo#118).
 
 ## 2.2 Reservation details panel with split CTA

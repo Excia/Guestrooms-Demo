@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { ScheduleBlock, ScheduleBlockStatus } from '../api/types';
-import { housekeepingStatusOf, needsHousekeepingBlock } from './housekeepingBlocks';
+import {
+  SETTABLE_HOUSEKEEPING_STATUSES,
+  type HousekeepingStatus,
+  type ScheduleBlock,
+  type ScheduleBlockStatus,
+} from '../api/types';
+import {
+  HOUSEKEEPING_LABELS,
+  HOUSEKEEPING_OPTIONS,
+  housekeepingStatusLabel,
+  housekeepingStatusOf,
+  needsHousekeepingBlock,
+} from './housekeepingBlocks';
 
 const block = (over: Partial<ScheduleBlock> = {}): ScheduleBlock => ({
   kind: 'reservation',
@@ -46,5 +57,25 @@ describe('housekeepingStatusOf', () => {
   });
   it('is undefined where there is no block', () => {
     expect(housekeepingStatusOf(block({ roomId: '', housekeeping: 'ready' }))).toBeUndefined();
+  });
+});
+
+describe('labels and options', () => {
+  it('has a label for every status, title cased for display', () => {
+    expect(housekeepingStatusLabel('not-checked-out')).toBe('Not Checked Out');
+    expect(housekeepingStatusLabel('needs-maintenance')).toBe('Needs Maintenance');
+    for (const s of Object.keys(HOUSEKEEPING_LABELS) as HousekeepingStatus[]) {
+      expect(housekeepingStatusLabel(s)).not.toBe('');
+    }
+  });
+  it('offers the settable statuses in order, not NYCI', () => {
+    expect(HOUSEKEEPING_OPTIONS.map((o) => o.value)).toEqual(SETTABLE_HOUSEKEEPING_STATUSES);
+    expect(HOUSEKEEPING_OPTIONS.map((o) => o.label)).toEqual([
+      'Not Checked Out',
+      'Needs Cleaning',
+      'Cleaned',
+      'Ready',
+      'Needs Maintenance',
+    ]);
   });
 });
