@@ -406,3 +406,81 @@ describe('http schedule.setHousekeeping', () => {
     });
   });
 });
+
+describe('http schedule holds (ticket 152)', () => {
+  const hold = {
+    id: 'hold-aaaa-1111',
+    roomId: 'rm-201',
+    startDate: '2026-10-20',
+    endDate: '2026-10-22',
+    expiresAt: '2026-10-16T13:00:00.000Z',
+    mine: true,
+  };
+  const request = {
+    holdId: hold.id,
+    roomId: hold.roomId,
+    startDate: hold.startDate,
+    endDate: hold.endDate,
+  };
+  it('accepts holds in the schedule answer and rejects malformed or duplicated ones', async () => {
+    const d = good();
+    const room = d.rooms[0].id;
+    const ok = { ...hold, roomId: room };
+    await expect(
+      make(vi.fn().mockResolvedValue(json({ ...d, holds: [ok] }))).schedule.get(query),
+    ).resolves.toMatchObject({ holds: [ok] });
+    for (const holds of [
+      'x',
+      [{ ...ok, mine: 'yes' }],
+      [{ ...ok, expiresAt: 'later' }],
+      [{ ...ok, endDate: ok.startDate }],
+      [{ ...ok, roomId: 'not-a-room' }],
+      [ok, ok],
+    ]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json({ ...d, holds }))).schedule.get(query),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
+  it("PUTs the slot to the hold's own path and checks the answer is that hold", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json(hold));
+    await expect(make(fetchMock).schedule.holdSlot(request)).resolves.toEqual(hold);
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe('/v1/schedule/holds/hold-aaaa-1111');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string)).toEqual({
+      roomId: hold.roomId,
+      startDate: hold.startDate,
+      endDate: hold.endDate,
+    });
+    for (const wrong of [
+      { ...hold, id: 'other-hold-id' },
+      { ...hold, endDate: '2026-10-23' },
+      {},
+    ]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(wrong))).schedule.holdSlot(request),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
+  it('passes on a refusal and rejects a malformed request before fetching', async () => {
+    await expect(
+      make(vi.fn().mockResolvedValue(json({ code: 'held' }, 409))).schedule.holdSlot(request),
+    ).rejects.toMatchObject({ status: 409, code: 'held' });
+    const fetchMock = vi.fn();
+    await expect(
+      make(fetchMock).schedule.holdSlot({ ...request, endDate: request.startDate }),
+    ).rejects.toMatchObject({ code: 'invalid-query' });
+    await expect(make(fetchMock).schedule.releaseHold('../x')).rejects.toMatchObject({
+      code: 'invalid-query',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('DELETEs the hold and accepts an empty answer', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(make(fetchMock).schedule.releaseHold('hold-aaaa-1111')).resolves.toBeUndefined();
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe('/v1/schedule/holds/hold-aaaa-1111');
+    expect(init.method).toBe('DELETE');
+  });
+});

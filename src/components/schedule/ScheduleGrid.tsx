@@ -16,7 +16,13 @@ import {
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
-import type { ScheduleBlock, ScheduleClosure, ScheduleData, ScheduleRoom } from '../../api';
+import type {
+  ScheduleBlock,
+  ScheduleClosure,
+  ScheduleData,
+  ScheduleHold,
+  ScheduleRoom,
+} from '../../api';
 import { addDays, daysBetween, type IsoDate } from '../../lib/dates';
 import {
   blockLayout,
@@ -48,6 +54,7 @@ import {
   clamp,
   clampShift,
   closureAriaLabel,
+  formatDialogDate,
   itemAtColumn,
   moveCursor,
   refusalMessage,
@@ -63,6 +70,8 @@ import type { SetHousekeeping } from './HousekeepingChip';
 import { unassignedSection } from '../../app/unassignedRows';
 import { isLinkedBlock } from '../../app/scheduleLinked';
 import ScheduleItemView from './ScheduleItemView';
+import ScheduleHoldView from './ScheduleHoldView';
+import { canInteractWithHold, holdAriaLabel, holdTipText } from '../../app/slotHolds';
 import UnassignedSection from './UnassignedSection';
 import {
   BLOCK_HEIGHT,
@@ -107,6 +116,15 @@ export interface ScheduleGridProps {
   onOpenCell: (room: ScheduleRoom, date: IsoDate) => void;
   /** Saves a change made in the housekeeping chip's pop-up; absent when the user may not change housekeeping. */
   onSetHousekeeping?: SetHousekeeping;
+  /**
+   * Held slots to shade (ticket 152): live ones only, the caller hides a hold at its expiry. They
+   * cannot be dragged or opened; a click or Enter says the room is held.
+   */
+  holds?: readonly ScheduleHold[];
+  /** The hold of the open New Reservation panel (the one hold its owner interacts with); drawn with a solid outline. */
+  ownHoldId?: string | null;
+  /** The club's IANA time zone, for "Held until HH:mm" (the browser's until it is known). */
+  timeZone?: string;
 }
 
 interface DragState {
@@ -165,6 +183,9 @@ interface RowProps {
   focused: boolean;
   onItemPointerDown: (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => void;
   onSetHousekeeping?: SetHousekeeping;
+  holds: readonly ScheduleHold[] | undefined;
+  ownHoldId: string | null | undefined;
+  timeZone: string | undefined;
 }
 
 const itemId = (prefix: string, item: ScheduleItem) => `${prefix}-item-${item.id}`;
@@ -188,6 +209,9 @@ const ScheduleRow = memo(function ScheduleRow({
   focused,
   onItemPointerDown,
   onSetHousekeeping,
+  holds,
+  ownHoldId,
+  timeZone,
 }: RowProps) {
   const items = useMemo<ScheduleItem[]>(
     () => [...(blocks ?? []), ...(closures ?? [])],
@@ -195,6 +219,16 @@ const ScheduleRow = memo(function ScheduleRow({
   );
   const activeItem =
     activeCol === null ? undefined : itemAtColumn(items, startDate, days, activeCol);
+  const activeHold =
+    activeCol === null || activeItem ? undefined : itemAtColumn(holds, startDate, days, activeCol);
+  const holdLabel = (hold: ScheduleHold) =>
+    holdAriaLabel(
+      hold,
+      room.number,
+      { from: formatDialogDate(hold.startDate), to: formatDialogDate(hold.endDate) },
+      canInteractWithHold(hold, ownHoldId),
+      timeZone,
+    );
   return (
     <Box
       role="row"
@@ -290,12 +324,31 @@ const ScheduleRow = memo(function ScheduleRow({
           />
         );
       })}
+      {(holds ?? []).map((hold) => {
+        const layout = blockLayout(hold, startDate, days);
+        if (!layout) return null;
+        return (
+          <ScheduleHoldView
+            key={hold.id}
+            id={`${idPrefix}-hold-${hold.id}`}
+            hold={hold}
+            layout={layout}
+            days={days}
+            label={holdLabel(hold)}
+            own={canInteractWithHold(hold, ownHoldId)}
+            timeZone={timeZone}
+            tipFocused={focused && activeHold?.id === hold.id}
+          />
+        );
+      })}
       {activeCol !== null && !activeItem ? (
         <Box
           id={`${idPrefix}-cell-active`}
           role="gridcell"
           aria-colindex={activeCol + 2}
-          aria-label={cellAriaLabel(room, addDays(startDate, activeCol))}
+          aria-label={
+            activeHold ? holdLabel(activeHold) : cellAriaLabel(room, addDays(startDate, activeCol))
+          }
           data-active="true"
           style={{ left: dateAreaX(activeCol / days), width: dateAreaWidth(1 / days) }}
           sx={{ position: 'absolute', top: 0, bottom: 0, pointerEvents: 'none' }}
@@ -324,6 +377,9 @@ export default function ScheduleGrid({
   onOpenCell,
   onOpenClosure,
   onSetHousekeeping,
+  holds,
+  ownHoldId,
+  timeZone,
 }: ScheduleGridProps) {
   const theme = useTheme();
   const idPrefix = useId().replace(/:/g, '');
@@ -334,6 +390,7 @@ export default function ScheduleGrid({
   const todayIndex = daysBetween(startDate, today);
   const blocksByRoom = useMemo(() => groupByRoom(data.blocks), [data.blocks]);
   const closuresByRoom = useMemo(() => groupByRoom(data.closures), [data.closures]);
+  const holdsByRoom = useMemo(() => groupByRoom(holds ?? []), [holds]);
   const links = useMemo(() => segmentLinks(data.blocks, data.rooms), [data.blocks, data.rooms]);
   const labels = useMemo(
     () => rooms.map((r) => roomRowLabel(r, data.locations, data.roomTypes)),
@@ -632,6 +689,11 @@ export default function ScheduleGrid({
 
   // A free date cell: start a reservation there. A closure says so; a block's own column does nothing.
   const activateCell = (room: ScheduleRoom, col: number) => {
+    const held = itemAtColumn(holdsByRoom.get(room.id), startDate, days, col);
+    if (held) {
+      setAnnouncement(`Room ${room.number} is held. ${holdTipText(held, timeZone)}.`);
+      return;
+    }
     const action = emptyCellAction(
       blocksByRoom.get(room.id),
       closuresByRoom.get(room.id),
@@ -667,6 +729,15 @@ export default function ScheduleGrid({
     const index = Number(rowEl.getAttribute('aria-rowindex')) - 2 - latest.current.unassignedRows;
     if (index < 0) return;
     const target = element.closest<HTMLElement>('[data-item-id]');
+    const heldEl = target ? null : element.closest<HTMLElement>('[data-hold-id]');
+    if (heldEl) {
+      // A held slot reacts to nothing but this note.
+      const hold = holds?.find((h) => h.id === heldEl.dataset.holdId);
+      const room = latest.current.rooms[index];
+      if (hold && room)
+        setAnnouncement(`Room ${room.number} is held. ${holdTipText(hold, timeZone)}.`);
+      return;
+    }
     if (!target) {
       // The empty part of a room row. A press that moved (a drag or a scroll) or was cancelled is not a click.
       if (press === 'cancelled') return;
@@ -1167,6 +1238,9 @@ export default function ScheduleGrid({
                 focused={gridFocused && keyboardCursor}
                 onItemPointerDown={onItemPointerDown}
                 onSetHousekeeping={onSetHousekeeping}
+                holds={holdsByRoom.get(rooms[i].id)}
+                ownHoldId={ownHoldId}
+                timeZone={timeZone}
               />
             ))}
             {band ? (

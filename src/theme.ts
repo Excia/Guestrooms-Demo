@@ -31,6 +31,13 @@ export interface ScheduleColors {
   dropRefused: string;
   /** Unassigned section rows (opaque: the sticky row label sits over scrolling blocks). */
   unassignedRow: string;
+  /**
+   * Held slot (ticket 152, no Figma frame: PLACEHOLDER): a tint, diagonal stripes and a dashed
+   * outline, so the hold reads without colour.
+   */
+  hold: string;
+  holdStripe: string;
+  holdBorder: string;
   /** Past dates of the grid (columns before today), a faint wash. */
   pastDate: string;
   /** The columns a dragged reservation would occupy, drawn across all rows. */
@@ -128,6 +135,7 @@ declare module '@mui/material/Typography' {
 const fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
 const primaryMain = '#2e7d32';
 const errorMain = '#d32f2f';
+const infoMain = '#0057b2';
 
 // Figma letter spacing is in px; MUI expects em.
 const font = (sizePx: number, weight: number, lineHeight: number, letterSpacingPx: number) => ({
@@ -148,7 +156,7 @@ const base = createTheme({
       outlinedBorder: alpha(primaryMain, 0.5),
     },
     // Figma info/main #0057b2 (Night Audit button); warning/background #f9ede5 (failed list rows).
-    info: { main: '#0057b2', contrastText: '#ffffff' },
+    info: { main: infoMain, contrastText: '#ffffff' },
     warning: { main: '#c24e00', background: '#f9ede5' },
     error: { main: errorMain },
     text: { primary: '#000000de', secondary: '#00000099' },
@@ -184,6 +192,10 @@ const base = createTheme({
       dropRefused: alpha(errorMain, 0.2),
       // PLACEHOLDER: Figma shows a light pink row; this is the error color at 90% lightness.
       unassignedRow: lighten(errorMain, 0.9),
+      // PLACEHOLDER (F-152-1): Figma has no held-slot frame. Info blue (#0057b2) tint, stripes, outline.
+      hold: alpha(infoMain, 0.12),
+      holdStripe: alpha(infoMain, 0.28),
+      holdBorder: infoMain,
       pastDate: alpha('#000000', 0.04),
       dropColumn: alpha(primaryMain, 0.1),
       opacity: { normal: 1, past: 0.8, active: 1, linked: 0.75, dragging: 0.4, ghost: 0.9 },

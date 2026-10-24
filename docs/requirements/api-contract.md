@@ -509,3 +509,37 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
 - A request that names a room arriving after today fails the whole request (409 `future-arrival`); the UI never sends such a room
   (it lists it as "not yet"). The automatic check out is decided per room.
 
+
+## Slot holds (ticket 152, built on the mock)
+
+A New Reservation in progress holds its room and nights so the grid can shade them and nobody else books them
+(functional doc 15.10; Q-19-3, Q-19-10). **A real backend must own holds and their expiry**: the client only asks, shows and
+hides; it never decides a conflict. The mock (`src/api/holdData.ts`) behaves like such a server.
+
+- `ScheduleData.holds?: ScheduleHold[]` on `GET /schedule`: the live holds (anyone's) that touch the window. Each hold has
+  `id`, `roomId`, `startDate`, `endDate` (exclusive, like a block), `expiresAt` (ISO 8601 instant, the server's clock) and
+  `mine` (the signed-in user placed it). Absent: none. The server drops a hold at expiry; the client also stops drawing one
+  whose `expiresAt` has passed. The http guard rejects a malformed hold, a duplicate id and a hold in an unlisted room.
+- `PUT /schedule/holds/{holdId}` with `{ roomId, startDate, endDate }` (`schedule.holdSlot`): places or moves the hold. The id
+  is chosen by the client (a UUID), so a repeat is idempotent: the same slot answers the existing hold without extending it, a
+  new slot moves it and **keeps its expiry**, and after expiry the same id starts a new hold. The length comes from Booking Rules
+  "Reservation Hold" minutes for the caller's audience (the mock uses employee). Needs `reservation.edit` (403 otherwise).
+  Answers the hold (the client checks the id and slot match). Errors: 400 `invalid-id` / `invalid-query` (no night, bad dates);
+  404 (unknown room); 409 `conflict` (the slot is booked or closed; `details.roomId`); 409 `held` (another user holds an
+  overlapping slot; `details.roomId`). Nothing changes on an error. The older hold of the id stays where it was.
+- `DELETE /schedule/holds/{holdId}` (`schedule.releaseHold`): releases a hold of the caller; 204. Idempotent: an unknown, expired
+  or someone else's id changes nothing and still answers 204. The UI calls it when the panel closes, the time expires or the
+  room is cleared, and treats a failure as harmless (the hold expires by itself).
+- `POST /reservations` (`create`) takes an optional `holdId`. The server refuses a booking on a slot another user holds (409
+  `held`), ends the named hold when the reservation is created, and ignores an unknown or expired id.
+- **Hold ids are not tokens for other users.** `holdId` on `create` only exempts a hold owned by the caller. The ids of other
+  users' holds appear in `ScheduleData.holds`, so the backend must either omit them or ignore them as tokens (the mock refuses
+  with 409 `held`). A hold of the caller under another id (a refresh, a second tab, an orphan) never blocks the caller: the
+  server replaces it when the caller holds an overlapping slot, and the client ignores holds marked `mine` when checking for a clash.
+- One client sends its hold requests in order, one at a time (it waits for the answer before the next, and releases only after a
+  PUT in flight settles), so the server needs no sequence number. A server that cannot rely on that should add one.
+- `expiresAt` is shown as "Held until HH:mm" on the club's clock (System Settings time zone).
+- **Concurrency rules the backend must enforce:** a booking, a move or a room change onto held nights is refused (409 `held`)
+  unless it is the holder's own; hold requests and bookings are serialised per room so two users cannot both win; a hold does
+  not extend itself; expiry is the server's clock only. Other users' holds reach a client only when it loads the schedule (no
+  push yet, Q-152-4).

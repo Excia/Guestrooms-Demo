@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import { useCallback, useId, useRef, useState } from 'react';
-import type { ReservationDetail, ScheduleClosure, ScheduleData } from '../../api';
+import type { ReservationDetail, ScheduleClosure, ScheduleData, ScheduleHold } from '../../api';
 import { RESERVATION_PANEL_SIDE, type PanelSide } from '../../app/layout';
 import type { EarlyLateValues } from '../../app/earlyLate';
 import type { PanelState } from '../../app/panelUrl';
@@ -50,6 +50,10 @@ export interface ReservationPanelProps {
   /** Which edge the panel flies out from; defaults to the one setting in src/app/layout.ts. */
   side?: PanelSide;
   now?: () => number;
+  /** The slot the open New Reservation holds (ticket 152), or null; the page shades it on the grid. */
+  onHoldChange?: (hold: ScheduleHold | null) => void;
+  /** The club's time zone, for the hold time in messages. */
+  timeZone?: string;
 }
 
 /**
@@ -82,6 +86,8 @@ export default function ReservationPanel({
   focusTitleFor,
   side = RESERVATION_PANEL_SIDE,
   now,
+  onHoldChange,
+  timeZone,
 }: ReservationPanelProps) {
   const titleId = useId();
   // The panel keeps showing its last content while the drawer slides out.
@@ -178,6 +184,8 @@ export default function ReservationPanel({
             // A different prefill is a different opening: start the form over.
             key={`${shown.roomId ?? ''}|${shown.arrival ?? ''}`}
             now={now}
+            onHoldChange={onHoldChange}
+            timeZone={timeZone}
           />
         ) : null}
       </Box>

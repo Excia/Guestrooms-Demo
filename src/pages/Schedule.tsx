@@ -14,6 +14,7 @@ import type {
   ScheduleBlock,
   ScheduleClosure,
   ScheduleDays,
+  ScheduleHold,
   ScheduleRoom,
 } from '../api';
 import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
@@ -60,6 +61,9 @@ import ScheduleFilterPanel from '../components/schedule/ScheduleFilterPanel';
 import ScheduleSkeleton from '../components/schedule/ScheduleSkeleton';
 import ScheduleGrid from '../components/schedule/ScheduleGrid';
 import { useSchedule } from '../components/schedule/useSchedule';
+import { useLiveHolds } from '../components/schedule/useLiveHolds';
+import { useSystemSettings } from '../app/useSystemSettings';
+import { otherHolds } from '../app/slotHolds';
 import SaveToast from '../components/shared/SaveToast';
 
 type Accepted = Extract<DropResult, { ok: true }>;
@@ -69,6 +73,8 @@ export interface ScheduleProps {
   today?: IsoDate;
   /** Side the reservation panel flies out from; the one setting in layout.ts by default. Injectable for tests. */
   panelSide?: PanelSide;
+  /** Clock (epoch ms) for hold expiry and the panel's timer. Injectable for tests. */
+  now?: () => number;
 }
 
 interface Pending {
@@ -92,6 +98,7 @@ interface Toast {
 export default function Schedule({
   today: todayProp,
   panelSide = RESERVATION_PANEL_SIDE,
+  now,
 }: ScheduleProps) {
   const api = useApi();
   // "Today" is the club's date (its System Settings time zone), not the browser's.
@@ -379,6 +386,17 @@ export default function Schedule({
   );
 
   const data = schedule.status === 'success' ? schedule.data : null;
+  // Held slots (ticket 152): other users' holds from the schedule data, and the open New Reservation's
+  // own hold as the panel reports it (shown at once, before any reload).
+  const [ownHold, setOwnHold] = useState<ScheduleHold | null>(null);
+  const shownOwnHold = panel?.kind === 'new' ? ownHold : null;
+  const allHolds = useMemo(
+    () => [...otherHolds(data?.holds, shownOwnHold?.id), ...(shownOwnHold ? [shownOwnHold] : [])],
+    [data, shownOwnHold],
+  );
+  const liveHolds = useLiveHolds(allHolds, now);
+  // "Held until HH:mm" reads on the club's clock once System Settings have loaded.
+  const clubZone = useSystemSettings().settings?.timeZone;
   useEffect(() => {
     loadedBlocks.current = data?.blocks ?? [];
   }, [data]);
@@ -600,6 +618,9 @@ export default function Schedule({
         onOpenClosure={openClosure}
         onSetHousekeeping={canEditHousekeeping ? setHousekeeping : undefined}
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
+        holds={liveHolds}
+        ownHoldId={shownOwnHold?.id}
+        timeZone={clubZone}
       />
     );
   }
@@ -742,6 +763,9 @@ export default function Schedule({
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}
+        now={now}
+        onHoldChange={setOwnHold}
+        timeZone={clubZone}
       />
       <Box role="status" sx={visuallyHidden}>
         {note ? <span key={note.id}>{note.text}</span> : null}
