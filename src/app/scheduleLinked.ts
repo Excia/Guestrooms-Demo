@@ -25,10 +25,9 @@ export function linkedTier(widthPx: number): LinkedTier {
 }
 
 /** The tooltip of a linked block: two lines, "Linked to [Room Number]" then "Reserver First Last". */
-export function linkedTooltipLines(linked: Pick<LinkedRoom, 'roomNumber' | 'reserverName'>): [
-  string,
-  string,
-] {
+export function linkedTooltipLines(
+  linked: Pick<LinkedRoom, 'roomNumber' | 'reserverName'>,
+): [string, string] {
   return [`Linked to ${linked.roomNumber}`, linked.reserverName];
 }
 
