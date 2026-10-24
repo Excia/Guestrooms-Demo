@@ -435,7 +435,7 @@ const BLOCK_SEEDS: BlockSeed[] = [
     type: 'guest',
     room: 'rm-C5',
     from: -3,
-    to: 0,
+    to: 1,
     status: 'checked-out',
   },
   // PLACEHOLDER (P-LM-2): checked in and arriving today, so no night audit has posted its room
@@ -729,7 +729,8 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
   for (const block of state.blocks) {
     if (!needsHousekeepingBlock(block)) continue;
     if (block.status === 'checked-in') block.housekeeping = 'not-checked-out';
-    else if (block.status === 'checked-out') block.housekeeping = cleaning[departed++ % 4];
+    else if (block.status === 'checked-out')
+      block.housekeeping = cleaning[departed++ % cleaning.length];
     else if (block.status === 'confirmed' && upcoming < cleaning.length)
       block.housekeeping = cleaning[upcoming++];
     else if (block.status === 'nyci' && !hasNyci) {

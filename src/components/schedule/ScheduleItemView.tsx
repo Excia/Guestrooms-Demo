@@ -60,6 +60,8 @@ export interface ScheduleItemViewProps {
   onActivate?: () => void;
   /** Saves a housekeeping change from the "H" chip; absent when the user may not change it. */
   onSetHousekeeping?: SetHousekeeping;
+  /** Px kept clear at the left edge (a same-day turnover's housekeeping chip), 0 for none. */
+  leadGap?: number;
 }
 
 function fill(item: ScheduleItem, today: IsoDate, t: Theme): string {
@@ -145,6 +147,7 @@ export default memo(function ScheduleItemView({
   onPointerDown,
   onActivate,
   onSetHousekeeping,
+  leadGap = 0,
 }: ScheduleItemViewProps) {
   const theme = useTheme();
   // The tooltip is created on the first hover or keyboard focus, not for every block of the grid.
@@ -308,8 +311,8 @@ export default memo(function ScheduleItemView({
       }
       // Geometry is inline (not sx): it differs for every block and would mint a CSS class each.
       style={{
-        left: dateAreaX(span.start),
-        width: dateAreaWidth(span.end - span.start, theme.spacing(0.25)),
+        left: leadGap ? `calc(${dateAreaX(span.start)} + ${leadGap}px)` : dateAreaX(span.start),
+        width: dateAreaWidth(span.end - span.start, `calc(${theme.spacing(0.25)} + ${leadGap}px)`),
       }}
       onFocus={onActivate ? () => setFocusIn(true) : undefined}
       onBlur={onActivate ? () => setFocusIn(false) : undefined}

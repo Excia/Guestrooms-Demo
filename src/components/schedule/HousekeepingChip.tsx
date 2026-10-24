@@ -6,6 +6,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Popover from '@mui/material/Popover';
 import { type Theme } from '@mui/material/styles';
 import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useId, useState, type KeyboardEvent, type SyntheticEvent } from 'react';
 import type { HousekeepingStatus, ScheduleBlock, SettableHousekeepingStatus } from '../../api';
@@ -95,14 +96,17 @@ export default function HousekeepingChip({
 
   if (!onSave) {
     return (
-      <Box
-        aria-hidden
-        data-housekeeping={current}
-        style={{ width: chip.width }}
-        sx={(t) => ({ ...look(t), overflow: 'hidden' })}
-      >
-        {glyph}
-      </Box>
+      <Tooltip title={chip.title} disableInteractive>
+        <Box
+          role="img"
+          aria-label={chip.readOnlyName}
+          data-housekeeping={current}
+          style={{ width: chip.width }}
+          sx={(t) => ({ ...look(t), overflow: 'hidden' })}
+        >
+          {glyph}
+        </Box>
+      </Tooltip>
     );
   }
 
@@ -134,29 +138,31 @@ export default function HousekeepingChip({
 
   return (
     <>
-      <Box
-        component="button"
-        type="button"
-        aria-label={chip.name}
-        aria-haspopup="dialog"
-        aria-expanded={anchor ? true : undefined}
-        data-housekeeping={current}
-        style={{ width: chip.width }}
-        onPointerDown={stop}
-        onClick={open}
-        onKeyDown={stopKeys}
-        sx={(t) => ({
-          ...look(t),
-          cursor: 'pointer',
-          '&:focus-visible': {
-            outline: `2px solid ${t.palette.primary.main}`,
-            outlineOffset: 1,
-            zIndex: 6,
-          },
-        })}
-      >
-        {glyph}
-      </Box>
+      <Tooltip title={chip.title} disableInteractive>
+        <Box
+          component="button"
+          type="button"
+          aria-label={chip.name}
+          aria-haspopup="dialog"
+          aria-expanded={anchor ? true : undefined}
+          data-housekeeping={current}
+          style={{ width: chip.width }}
+          onPointerDown={stop}
+          onClick={open}
+          onKeyDown={stopKeys}
+          sx={(t) => ({
+            ...look(t),
+            cursor: 'pointer',
+            '&:focus-visible': {
+              outline: `2px solid ${t.palette.primary.main}`,
+              outlineOffset: 1,
+              zIndex: 6,
+            },
+          })}
+        >
+          {glyph}
+        </Box>
+      </Tooltip>
       <Popover
         open={anchor !== null}
         anchorEl={anchor}

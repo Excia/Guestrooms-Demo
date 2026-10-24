@@ -211,7 +211,7 @@ describe('copy', () => {
   });
   it('names a block with guest, confirmation, status, room and dates', () => {
     expect(blockAriaLabel(block({ status: 'nyci' }), { number: '202' })).toBe(
-      'Ada Lovelace, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026',
+      'Ada Lovelace, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026, housekeeping not checked out',
     );
     expect(blockAriaLabel(block({ status: 'checked-in' }), { number: '1' })).toContain(
       'checked in',

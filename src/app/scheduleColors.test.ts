@@ -13,7 +13,12 @@ describe('blockFillToken', () => {
     expect(blockFillToken(res('checked-in'), today)).toBe('checkedIn');
     expect(blockFillToken(res('checked-in', today), today)).toBe('dueOut');
     expect(blockFillToken(res('checked-out', today), today)).toBe('checkedOut');
-    expect(blockFillToken({ ...res('confirmed'), linkedTo: {} }, today)).toBe('linked');
+    expect(
+      blockFillToken(
+        { ...res('confirmed'), linkedTo: { roomNumber: '1', reserverName: 'A B' } },
+        today,
+      ),
+    ).toBe('linked');
     expect(blockFillToken({ kind: 'closure', endDate: today }, today)).toBe('closure');
   });
 });
