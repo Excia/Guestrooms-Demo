@@ -1,5 +1,6 @@
 // Mock schedule: a small realistic inventory and a deterministic 200-room generator, plus the
 // move mutations applied to that in-memory state. Replaced by the backend later.
+import { needsHousekeepingBlock } from '../app/housekeepingBlocks';
 import { addDays, daysBetween, nightsOverlap } from '../lib/dates';
 import { rateOutcome } from '../lib/roomChangeRates';
 import { changedNights, normalizeRuns, planFromBlocks, planProblem, stayOf } from '../lib/stayPlan';
@@ -451,7 +452,7 @@ const BLOCK_SEEDS: BlockSeed[] = [
     type: 'guest',
     room: 'rm-C5',
     from: -3,
-    to: 0,
+    to: 1,
     status: 'checked-out',
   },
   // PLACEHOLDER (P-LM-2): checked in and arriving today, so no night audit has posted its room
@@ -729,19 +730,32 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
     if (extras?.earlyCheckIn) block.earlyCheckIn = true;
     if (extras?.lateCheckOut) block.lateCheckOut = true;
   }
-  // Demo housekeeping states until the backend supplies them: in-house rooms are not checked out,
-  // departed rooms cycle through the cleaning states.
-  const departed: HousekeepingStatus[] = [
+  // PLACEHOLDER (P-HK-1): demo housekeeping states until the backend supplies them. In-house rooms
+  // are not checked out and departed rooms cycle through the cleaning states. Departed stays end
+  // before the default view (it starts today), so the first four confirmed stays also carry the
+  // cleaning states, and the first NYCI stay the NYCI state (drawn invisible), so every chip color
+  // can be seen at once. Other stays carry none and show the default (Not Checked Out).
+  const cleaning: HousekeepingStatus[] = [
     'needs-cleaning',
     'cleaned',
     'ready',
     'needs-maintenance',
   ];
-  let n = 0;
+  let departed = 0;
+  let upcoming = 0;
+  let hasNyci = false;
   let hasNotes = state.blocks.some((b) => b.housekeepingNotes);
   for (const block of state.blocks) {
+    if (!needsHousekeepingBlock(block)) continue;
     if (block.status === 'checked-in') block.housekeeping = 'not-checked-out';
-    else if (block.status === 'checked-out') block.housekeeping = departed[n++ % departed.length];
+    else if (block.status === 'checked-out')
+      block.housekeeping = cleaning[departed++ % cleaning.length];
+    else if (block.status === 'confirmed' && upcoming < cleaning.length)
+      block.housekeeping = cleaning[upcoming++];
+    else if (block.status === 'nyci' && !hasNyci) {
+      block.housekeeping = 'nyci';
+      hasNyci = true;
+    }
     if (block.housekeeping === 'not-checked-out' && !hasNotes) {
       block.housekeepingNotes = 'Guest asked for extra towels.';
       hasNotes = true;
