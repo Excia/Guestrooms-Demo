@@ -4,6 +4,7 @@
 // can hide a hold the moment it ends and the mock can behave like a server.
 import type { IsoDate } from '../lib/dates';
 import { nightsOverlap } from '../lib/dates';
+import { clubClock } from '../lib/clubTime';
 import type { ScheduleHold } from '../api/types';
 
 type Dated = { roomId: string; startDate: IsoDate; endDate: IsoDate };
@@ -52,8 +53,9 @@ export const canInteractWithHold = (
 ): boolean => panelHoldId != null && hold.id === panelHoldId;
 
 /**
- * The live hold of someone else that overlaps the slot, if any. `ownHoldId` is the holder's own hold
- * (moving it onto a slot it already covers is not a clash); the user's own other holds do clash.
+ * The live hold of someone else that overlaps the slot, if any. The caller's own holds (`mine`) never
+ * clash: the server moves or replaces them (a refresh, a second tab or an orphan can leave one under
+ * another id). `ownHoldId` is kept for callers that know the panel's hold before the server marks it.
  */
 export function heldByOther(
   slot: Dated,
@@ -63,6 +65,7 @@ export function heldByOther(
 ): ScheduleHold | undefined {
   return liveHolds(holds, now).find(
     (h) =>
+      !h.mine &&
       h.id !== ownHoldId &&
       h.roomId === slot.roomId &&
       nightsOverlap(h.startDate, h.endDate, slot.startDate, slot.endDate),
@@ -100,16 +103,15 @@ export function holdableSlot(slot: {
   return slot.roomId !== '' && slot.startDate !== '' && slot.startDate < slot.endDate;
 }
 
-/** "14:30" (24 hour, the viewer's local time; the club's time zone follows with ticket 7.1). */
-export function formatHoldTime(expiresAt: string): string {
+/** "14:30" (24 hour) on the club's clock; the browser's until the club's time zone is known. */
+export function formatHoldTime(expiresAt: string, timeZone?: string): string {
   const d = new Date(expiresAt);
-  if (Number.isNaN(d.getTime())) return '';
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return Number.isNaN(d.getTime()) ? '' : clubClock(timeZone, d).time;
 }
 
 /** Tooltip of a hold block (the Figma-less wording the ticket asks for). */
-export const holdTipText = (hold: Pick<ScheduleHold, 'expiresAt'>): string =>
-  `Held until ${formatHoldTime(hold.expiresAt)}`;
+export const holdTipText = (hold: Pick<ScheduleHold, 'expiresAt'>, timeZone?: string): string =>
+  `Held until ${formatHoldTime(hold.expiresAt, timeZone)}`;
 
 /** Accessible name of a hold block; the meaning is in the text, not the shading. */
 export function holdAriaLabel(
@@ -117,12 +119,13 @@ export function holdAriaLabel(
   roomNumber: string | undefined,
   dates: { from: string; to: string },
   own: boolean,
+  timeZone?: string,
 ): string {
-  const until = holdTipText(hold);
+  const until = holdTipText(hold, timeZone);
   const room = roomNumber ? `, Room ${roomNumber}` : '';
   return `${own ? `Your hold, ${until.toLowerCase()}` : until}${room}, ${dates.from} to ${dates.to}`;
 }
 
-/** Message on the Room field when the chosen slot clashes with a hold. */
-export const heldMessage = (hold: Pick<ScheduleHold, 'expiresAt'>): string =>
-  `That room is held by another user until ${formatHoldTime(hold.expiresAt)}.`;
+/** Message on the Room field when the chosen slot clashes with another user's hold. */
+export const heldMessage = (hold: Pick<ScheduleHold, 'expiresAt'>, timeZone?: string): string =>
+  `That room is held by another user until ${formatHoldTime(hold.expiresAt, timeZone)}.`;

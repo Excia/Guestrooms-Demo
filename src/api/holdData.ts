@@ -95,6 +95,19 @@ export function placeHold(
   );
   if (clash?.kind === 'booked' || clash?.kind === 'closed') throw conflictError([request.roomId]);
   if (clash) throw heldError(request.roomId);
+  // The caller's own holds on these nights under other ids (a refresh, a second tab, an orphan) are
+  // replaced by this one rather than refused.
+  for (let i = store.length - 1; i >= 0; i--) {
+    const h = store[i];
+    if (
+      h.ownerId === MOCK_HOLD_OWNER &&
+      h.id !== request.holdId &&
+      h.roomId === request.roomId &&
+      nightsOverlap(h.startDate, h.endDate, request.startDate, request.endDate)
+    ) {
+      store.splice(i, 1);
+    }
+  }
   const existing = store.find((h) => h.id === request.holdId);
   if (existing) {
     if (existing.ownerId !== MOCK_HOLD_OWNER) throw heldError(request.roomId);
@@ -118,8 +131,9 @@ export function dropHold(store: HoldStore, holdId: string): void {
 }
 
 /**
- * A booking on a slot someone else holds is refused (the holder's own hold, named by `holdId`, does
- * not count). On success the caller drops that hold.
+ * A booking on a slot someone else holds is refused, whatever `holdId` it names: another user's hold
+ * id is not a token the caller can use. The caller's own holds never block. On success the caller
+ * drops the hold it named.
  */
 export function assertNotHeldByOther(
   store: HoldStore,
@@ -130,7 +144,7 @@ export function assertNotHeldByOther(
   prune(store, now);
   const clash = store.find(
     (h) =>
-      h.id !== request.holdId &&
+      h.ownerId !== MOCK_HOLD_OWNER &&
       h.roomId === request.roomId &&
       nightsOverlap(h.startDate, h.endDate, request.arrival, request.departure),
   );

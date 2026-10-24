@@ -86,6 +86,16 @@ describe('overlap with holds and bookings', () => {
     expect(heldByOther(slot('2026-10-28', '2026-10-30'), [hold()], null, NOW)).toBeUndefined();
     expect(heldByOther(slot('2026-10-24', '2026-10-26'), [hold()], null, NOW)).toBeUndefined();
   });
+  it("the caller's own holds (mine) never clash, whatever their id", () => {
+    expect(
+      heldByOther(
+        slot('2026-10-26', '2026-10-28'),
+        [hold({ mine: true, id: 'orphan' })],
+        'h9',
+        NOW,
+      ),
+    ).toBeUndefined();
+  });
   it("another room, an expired hold and the holder's own hold do not clash", () => {
     expect(
       heldByOther(slot('2026-10-26', '2026-10-28', 'r2'), [hold()], null, NOW),
@@ -138,5 +148,20 @@ describe('hold text', () => {
     );
     expect(holdAriaLabel(h, undefined, dates, false)).toBe('Held until 14:30, Oct 26 to Oct 28');
     expect(heldMessage(h)).toBe('That room is held by another user until 14:30.');
+  });
+});
+
+describe('hold time on the club clock', () => {
+  it('reads the instant in the club time zone, not the browser', () => {
+    const at = '2026-10-24T18:30:00.000Z';
+    expect(formatHoldTime(at, 'America/New_York')).toBe('14:30');
+    expect(formatHoldTime(at, 'Asia/Tokyo')).toBe('03:30');
+    expect(holdTipText({ expiresAt: at }, 'America/New_York')).toBe('Held until 14:30');
+    expect(heldMessage({ expiresAt: at }, 'America/New_York')).toBe(
+      'That room is held by another user until 14:30.',
+    );
+    expect(
+      holdAriaLabel({ expiresAt: at }, '101', { from: 'a', to: 'b' }, false, 'America/New_York'),
+    ).toBe('Held until 14:30, Room 101, a to b');
   });
 });

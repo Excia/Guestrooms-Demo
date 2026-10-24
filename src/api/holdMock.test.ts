@@ -157,6 +157,27 @@ describe('mock create with holds', () => {
       c.reservations.create(body(other.roomId, other.startDate, other.endDate)),
     ).rejects.toMatchObject({ status: 409, code: 'held' });
   });
+  it("does not let a booking use another user's hold id as a token", async () => {
+    const c = mk();
+    const other = (await c.schedule.get(q)).holds![0];
+    await expect(
+      c.reservations.create(body(other.roomId, other.startDate, other.endDate, other.id)),
+    ).rejects.toMatchObject({ status: 409, code: 'held' });
+    expect((await c.schedule.get(q)).holds).toHaveLength(1);
+  });
+  it("replaces the caller's own hold under another id instead of refusing", async () => {
+    const c = mk({ holds: 'none' });
+    const room = await freeRoom(c, '2026-10-20', '2026-10-22');
+    await c.schedule.holdSlot(slot(room, '2026-10-20', '2026-10-22', 'orphan-hold-1'));
+    await expect(
+      c.schedule.holdSlot(slot(room, '2026-10-21', '2026-10-23')),
+    ).resolves.toMatchObject({ id: ID, mine: true });
+    expect((await c.schedule.get(q)).holds!.map((h) => h.id)).toEqual([ID]);
+    // And the caller's own hold never blocks a booking by the caller.
+    await expect(
+      c.reservations.create(body(room, '2026-10-21', '2026-10-23', 'other-token-9')),
+    ).resolves.toBeDefined();
+  });
   it('lets the holder book the slot and ends the hold', async () => {
     const c = mk({ holds: 'none' });
     const room = await freeRoom(c, '2026-10-20', '2026-10-22');
