@@ -154,11 +154,13 @@ export function queryChangeLog(
       includes(e.description, q.search),
   );
   const sign = sort.direction === 'asc' ? 1 : -1;
+  // Ties fall back to the id in the same direction, so reversing the sort reverses the whole list.
   rows.sort(
     (a, b) =>
-      sign * cmp(sortKey(a, sort.field, labels), sortKey(b, sort.field, labels)) || cmp(b.id, a.id),
+      sign *
+      (cmp(sortKey(a, sort.field, labels), sortKey(b, sort.field, labels)) || cmp(a.id, b.id)),
   );
   const limit = q.limit ?? CHANGE_LOG_ROWS_PER_PAGE;
   const start = ((q.pageNumber ?? 1) - 1) * limit;
-  return { items: rows.slice(start, start + limit), total: rows.length };
+  return { items: structuredClone(rows.slice(start, start + limit)), total: rows.length };
 }

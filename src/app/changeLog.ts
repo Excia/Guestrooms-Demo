@@ -25,6 +25,9 @@ function parseIso(date: string): { y: number; m: number; d: number } | null {
     : null;
 }
 
+/** True for a real calendar date in `YYYY-MM-DD` (rejects 2026-13-45). */
+export const isRealIsoDate = (date: string): boolean => parseIso(date) !== null;
+
 /** "2026-10-21" becomes "Wed, 10/21/26" (the ticket's "Day, MM/DD/YY"). Invalid input comes back unchanged. */
 export function formatLogDate(date: string): string {
   const p = parseIso(date);
@@ -103,4 +106,16 @@ export function rangeProblem(
   what: 'date' | 'time',
 ) {
   return from && to && from > to ? `The "to" ${what} must not be before the "from" ${what}.` : null;
+}
+
+/**
+ * The label of an event type, or null while the types are not known. An id the list does not know
+ * reads "Unknown type"; the raw id is never shown.
+ */
+export function changeTypeLabel(
+  id: string,
+  labels: ReadonlyMap<string, string> | null,
+): string | null {
+  if (!labels) return null;
+  return labels.get(id) ?? 'Unknown type';
 }

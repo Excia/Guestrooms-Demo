@@ -10,6 +10,7 @@ describe('queryChangeLog', () => {
   it('sorts newest first by default and drops entries older than one year', () => {
     expect(all.some((e) => !isWithinRetention(e.date, MOCK_TODAY))).toBe(true);
     const page = queryChangeLog(all, { page: 'system-settings', limit: 200 }, MOCK_TODAY);
+    expect(page.items.length).toBeGreaterThan(0);
     expect(page.items.every((e) => isWithinRetention(e.date, MOCK_TODAY))).toBe(true);
     const keys = page.items.map((e) => e.date + e.time);
     expect(keys).toEqual([...keys].sort().reverse());
@@ -36,16 +37,35 @@ describe('queryChangeLog', () => {
       { ...base, dateFrom: target.date, dateTo: target.date },
       MOCK_TODAY,
     );
+    expect(byDate.items.length).toBeGreaterThan(0);
     expect(byDate.items.every((e) => e.date === target.date)).toBe(true);
-    const byTime = queryChangeLog(all, { ...base, timeFrom: '08:00', timeTo: '09:00' }, MOCK_TODAY);
-    expect(byTime.items.every((e) => e.time >= '08:00' && e.time <= '09:00')).toBe(true);
+    const from = target.time;
+    const to = day.items[20].time > from ? day.items[20].time : '23:59';
+    const byTime = queryChangeLog(all, { ...base, timeFrom: from, timeTo: to }, MOCK_TODAY);
+    expect(byTime.items.length).toBeGreaterThan(0);
+    expect(byTime.items.every((e) => e.time >= from && e.time <= to)).toBe(true);
     const byType = queryChangeLog(all, { ...base, changeTypes: ['updated'] }, MOCK_TODAY);
     expect(byType.items.length).toBeGreaterThan(0);
     expect(byType.items.every((e) => e.changeType === 'updated')).toBe(true);
     const byWho = queryChangeLog(all, { ...base, actionBy: 'sam' }, MOCK_TODAY);
+    expect(byWho.items.length).toBeGreaterThan(0);
     expect(byWho.items.every((e) => e.actionBy === 'Sam Ortega')).toBe(true);
     const byText = queryChangeLog(all, { ...base, search: 'night audit' }, MOCK_TODAY);
     expect(byText.items.length).toBeGreaterThan(0);
+  });
+  it('reverses the whole list, ties included, when the direction flips', () => {
+    const base = { page: 'system-settings', limit: 200 } as const;
+    const asc = queryChangeLog(
+      all,
+      { ...base, sort: { field: 'actionBy', direction: 'asc' } },
+      MOCK_TODAY,
+    );
+    const desc = queryChangeLog(
+      all,
+      { ...base, sort: { field: 'actionBy', direction: 'desc' } },
+      MOCK_TODAY,
+    );
+    expect(desc.items.map((e) => e.id)).toEqual(asc.items.map((e) => e.id).reverse());
   });
   it('sorts by time of day and by change type label', () => {
     const base = { page: 'system-settings', limit: 200 } as const;
@@ -73,6 +93,11 @@ describe('assertChangeLogQuery', () => {
     expect(() => assertChangeLogQuery({ page: 'rooms', timeFrom: '8am' })).toThrow();
     expect(() => assertChangeLogQuery({ page: 'rooms', pageNumber: 0 })).toThrow();
     expect(() => assertChangeLogQuery({ page: 'rooms', dateFrom: 'x' })).toThrow();
+    expect(() => assertChangeLogQuery({ page: 'rooms', dateFrom: '2026-13-45' })).toThrow();
+    expect(() =>
+      assertChangeLogQuery({ page: 'rooms', dateFrom: '2026-05-02', dateTo: '2026-05-01' }),
+    ).toThrow();
+    expect(() => assertChangeLogQuery({ page: 'rooms', changeTypes: ['a,b'] })).toThrow();
   });
 });
 

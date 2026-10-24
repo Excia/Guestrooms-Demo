@@ -2,6 +2,8 @@ import {
   activeFilterColumns,
   ariaSortFor,
   changeLogTitle,
+  changeTypeLabel,
+  isRealIsoDate,
   formatLogDate,
   formatLogTime,
   isWithinRetention,
@@ -82,4 +84,17 @@ describe('filters', () => {
 it('titles the overlay after the page', () => {
   expect(changeLogTitle('system-settings')).toBe('System Settings Change Log');
   expect(changeLogTitle('add-on-items')).toBe('Add-On Items Change Log');
+});
+
+it('labels an event type, never showing the raw id', () => {
+  const labels = new Map([['updated', 'Updated']]);
+  expect(changeTypeLabel('updated', labels)).toBe('Updated');
+  expect(changeTypeLabel('mystery', labels)).toBe('Unknown type');
+  expect(changeTypeLabel('updated', null)).toBeNull();
+});
+
+it('accepts only real calendar dates', () => {
+  expect(isRealIsoDate('2026-02-28')).toBe(true);
+  expect(isRealIsoDate('2026-02-30')).toBe(false);
+  expect(isRealIsoDate('2026-13-45')).toBe(false);
 });
