@@ -84,6 +84,11 @@ describe('reservation menu by state', () => {
     ]);
   });
 
+  it('checked in today, before any audit posted its charges: Add Another Room is offered', async () => {
+    const { user, dialog } = await open('/schedule?res=rs-30', after(), /Reservation #GR-50362/);
+    expect(await menuItems(user, dialog)).toContain('Add Another Room');
+  });
+
   it('read-only users keep Add Another Room (no permission check), Print and Jump to Folio', async () => {
     const { user, dialog } = await open(
       '/schedule?res=rs-5&rr=rr-5',
