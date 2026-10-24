@@ -23,20 +23,28 @@ const b = block('b', '2026-10-16', '2026-10-18');
 const far = block('far', '2026-12-01', '2026-12-03');
 
 describe('unassignedSection', () => {
-  it('has no row when nothing is unassigned in the range', () => {
-    expect(unassignedSection([], '2026-10-16', 7, false)).toEqual({
-      state: 'none',
-      count: 0,
-      rows: [],
-      toggleable: false,
-    });
-    expect(unassignedSection([far], '2026-10-16', 7, false).state).toBe('none');
+  it('keeps one collapsed label row with a disabled toggle when nothing is unassigned', () => {
+    for (const collapsed of [false, true]) {
+      expect(unassignedSection([], '2026-10-16', 7, collapsed)).toEqual({
+        state: 'empty',
+        count: 0,
+        rows: [[]],
+        toggleable: true,
+        toggleDisabled: true,
+      });
+    }
+    expect(unassignedSection([far], '2026-10-16', 7, false).state).toBe('empty');
   });
 
   it('shows a single reservation as one row without a toggle, collapsed or not', () => {
     for (const collapsed of [false, true]) {
       const s = unassignedSection([a, far], '2026-10-16', 7, collapsed);
-      expect(s).toMatchObject({ state: 'single', count: 1, toggleable: false });
+      expect(s).toMatchObject({
+        state: 'single',
+        count: 1,
+        toggleable: false,
+        toggleDisabled: false,
+      });
       expect(s.rows).toEqual([[a]]);
     }
   });
@@ -58,7 +66,7 @@ describe('unassignedSection', () => {
     // a stay ending on the first day does not overlap (departure day is not occupied)
     expect(
       unassignedSection([block('x', '2026-10-14', '2026-10-16')], '2026-10-16', 7, false).state,
-    ).toBe('none');
+    ).toBe('empty');
   });
 });
 
@@ -71,6 +79,13 @@ describe('labels', () => {
     expect(unassignedLabel(unassignedSection(two, '2026-10-16', 7, true))).toEqual({
       title: 'Unassigned',
       count: '(2)',
+    });
+  });
+
+  it('labels the empty row "Unassigned (0)"', () => {
+    expect(unassignedLabel(unassignedSection([], '2026-10-16', 7, false))).toEqual({
+      title: 'Unassigned',
+      count: '(0)',
     });
   });
 

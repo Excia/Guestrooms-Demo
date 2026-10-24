@@ -9,7 +9,7 @@ import { createPermissions, PermissionsProvider } from '../app/permissions';
 import { theme } from '../theme';
 import Schedule from './Schedule';
 
-// The Unassigned section of the grid: its four states, opening a block, and that it takes no part
+// The Unassigned section of the grid: its states, opening a block, and that it takes no part
 // in dragging. Seeds (mock, offsets from today): Harriet Lowell +1..+4, Devon Achterberg +3..+6,
 // Priya Natarajan +9..+12.
 const TODAY = '2026-10-16';
@@ -77,11 +77,35 @@ const statusText = () =>
     .join(' ');
 
 describe('schedule Unassigned section', () => {
-  it('has no row when nothing is unassigned in the range', async () => {
+  it('shows a collapsed "Unassigned (0)" row with a disabled toggle when nothing is unassigned', async () => {
     // 2026-11-20 is past every seed
+    const user = await loaded('/schedule?start=2026-11-20');
+    expect(section()).toHaveAttribute('data-unassigned-section', 'empty');
+    expect(section()).toHaveTextContent('Unassigned(0)');
+    expect(within(section()!).getAllByRole('row')).toHaveLength(1);
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle()).toHaveAttribute('aria-disabled', 'true');
+    expect(toggle()).toHaveAccessibleDescription(
+      'There are no unassigned reservations in this date range.',
+    );
+    // still focusable, and activating it changes nothing
+    toggle()!.focus();
+    expect(toggle()).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(section()).toHaveAttribute('data-unassigned-section', 'empty');
+    expect(toggle()).toHaveFocus();
+  });
+
+  it('keeps room rows numbered after the zero row and the header', async () => {
     await loaded('/schedule?start=2026-11-20');
-    expect(section()).toBeNull();
-    expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+    const firstRoomRow = screen
+      .getAllByRole('row')
+      .find(
+        (r) =>
+          r.closest('[data-unassigned-section]') === null &&
+          r.getAttribute('aria-rowindex') !== '1',
+      )!;
+    expect(firstRoomRow).toHaveAttribute('aria-rowindex', '3');
   });
 
   it('shows one reservation as a single row without a toggle', async () => {

@@ -3,11 +3,13 @@ import RemoveCircle from '@mui/icons-material/RemoveCircle';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
+import { visuallyHidden } from '@mui/utils';
 import type { ScheduleBlock } from '../../api';
 import type { IsoDate } from '../../lib/dates';
 import { blockLayout } from '../../app/schedule';
 import { blockAriaLabel } from '../../app/scheduleGrid';
 import {
+  UNASSIGNED_EMPTY_HINT,
   unassignedLabel,
   unassignedToggleName,
   type UnassignedSection as Section,
@@ -44,9 +46,9 @@ export default function UnassignedSection({
   onOpen,
   onLinked,
 }: UnassignedSectionProps) {
-  if (section.state === 'none') return null;
   const label = unassignedLabel(section);
-  const expanded = section.state !== 'collapsed';
+  const expanded = section.state === 'expanded';
+  const hintId = `${idPrefix}-unassigned-empty`;
   const Icon = expanded ? RemoveCircle : AddCircle;
   return (
     <Box
@@ -107,11 +109,20 @@ export default function UnassignedSection({
                     color="error"
                     aria-expanded={expanded}
                     aria-label={unassignedToggleName()}
-                    onClick={onToggle}
-                    sx={{ p: 0.25 }}
+                    // At zero: aria-disabled, not disabled, so the button keeps keyboard focus and
+                    // the hint is read out (D-UZ-1).
+                    aria-disabled={section.toggleDisabled || undefined}
+                    aria-describedby={section.toggleDisabled ? hintId : undefined}
+                    onClick={section.toggleDisabled ? undefined : onToggle}
+                    sx={{ p: 0.25, opacity: section.toggleDisabled ? 0.5 : undefined }}
                   >
                     <Icon fontSize="small" aria-hidden />
                   </IconButton>
+                ) : null}
+                {section.toggleDisabled ? (
+                  <Box id={hintId} sx={visuallyHidden}>
+                    {UNASSIGNED_EMPTY_HINT}
+                  </Box>
                 ) : null}
                 <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   <Typography variant="subtitle2" component="span" sx={{ lineHeight: 1.2 }}>
