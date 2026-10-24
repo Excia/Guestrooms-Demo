@@ -1,13 +1,14 @@
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 import { useCallback, useId, useRef, useState } from 'react';
-import type { ReservationDetail, ScheduleData } from '../../api';
+import type { ReservationDetail, ScheduleClosure, ScheduleData } from '../../api';
 import { RESERVATION_PANEL_SIDE, type PanelSide } from '../../app/layout';
 import type { EarlyLateValues } from '../../app/earlyLate';
 import type { PanelState } from '../../app/panelUrl';
 import type { IsoDate } from '../../lib/dates';
 import type { RoomChangeSubmission } from './ChangeRoomDialog';
 import AddRoomPanel from './AddRoomPanel';
+import ClosureDetails from './ClosureDetails';
 import NewReservationPanel from './NewReservationPanel';
 import ReservationDetails from './ReservationDetails';
 
@@ -34,6 +35,13 @@ export interface ReservationPanelProps {
   detailRefresh?: number;
   /** The reservation was cancelled or a check in undone (ticket 2.5): the page reloads the schedule. */
   onReservationChanged?: () => void;
+  /** A closure was created or changed (ticket 149): the page reloads the schedule and closes the panel. */
+  onClosureSaved?: (closure: ScheduleClosure, created: boolean) => void;
+  onClosureRemoved?: (closure: ScheduleClosure, roomNumber: string) => void;
+  /** Open the New Room Closure tab filled with this closure. */
+  onDuplicateClosure?: (closure: ScheduleClosure) => void;
+  /** The New Reservation / New Room Closure tab changed; the URL follows. */
+  onNewTabChange?: (tab: 'reservation' | 'closure') => void;
   /** Opens another reservation (a room was split into it); the page puts it in the URL. */
   onOpenReservation?: (reservationId: string) => void;
   /** Add Another Room was chosen in the menu (ticket 151); the page puts the panel in the URL. */
@@ -72,6 +80,10 @@ export default function ReservationPanel({
   reopenChange,
   detailRefresh,
   onReservationChanged,
+  onClosureSaved,
+  onClosureRemoved,
+  onDuplicateClosure,
+  onNewTabChange,
   onOpenReservation,
   onAddRoom,
   onBackToReservation,
@@ -144,6 +156,21 @@ export default function ReservationPanel({
             onAdded={(detail) => onRoomAdded?.(detail)}
             onChanged={onReservationChanged}
           />
+        ) : shown?.kind === 'closure' ? (
+          <ClosureDetails
+            key={shown.closureId}
+            titleId={titleId}
+            closureId={shown.closureId}
+            today={today}
+            data={data}
+            dataFailed={dataFailed}
+            onRetryData={onRetryData}
+            onClose={onClose}
+            onSaved={(closure) => onClosureSaved?.(closure, false)}
+            onRemoved={(closure, room) => onClosureRemoved?.(closure, room)}
+            onUnknownOutcome={onUnknownOutcome}
+            onDuplicate={(closure) => onDuplicateClosure?.(closure)}
+          />
         ) : shown?.kind === 'new' ? (
           <NewReservationPanel
             titleId={titleId}
@@ -157,10 +184,18 @@ export default function ReservationPanel({
             onGuardChange={onGuardChange}
             active={panel !== null}
             prefill={
-              shown.roomId || shown.arrival
-                ? { roomId: shown.roomId, arrival: shown.arrival }
+              shown.roomId || shown.arrival || shown.tab
+                ? {
+                    roomId: shown.roomId,
+                    arrival: shown.arrival,
+                    tab: shown.tab,
+                    end: shown.end,
+                    description: shown.description,
+                  }
                 : undefined
             }
+            onTabChange={onNewTabChange}
+            onClosureSaved={(closure) => onClosureSaved?.(closure, true)}
             // A different prefill is a different opening: start the form over.
             key={`${shown.roomId ?? ''}|${shown.arrival ?? ''}`}
             now={now}

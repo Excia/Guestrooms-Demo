@@ -6,15 +6,17 @@ import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { memo, useRef, useState, type PointerEventHandler } from 'react';
+import { memo, useMemo, useRef, useState, type PointerEventHandler } from 'react';
 import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
 import { blockFillToken, housekeepingFillToken } from '../../app/scheduleColors';
+import { blockContent, blockTooltipLines } from '../../app/scheduleBlockContent';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
 import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
+import { closureBlockText, closureFullText } from '../../app/closures';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
 import {
@@ -47,7 +49,9 @@ export interface ScheduleItemViewProps {
   /**
    * The full text of the block ("Victor Almeida, GR-50271, part 2 of 5, Room 301 → 207"), shown in a
    * tooltip on hover or keyboard focus when the block's text is cut off. Created only when first
-   * needed; the accessible name stays `label` (the tooltip is not announced a second time).
+   * needed; the accessible name stays `label` (the tooltip is not announced a second time). For a
+   * reservation it is the summary line; the facts below it are built from the block when the tooltip
+   * is first created (a plain string keeps this memoized component's props comparable by value).
    */
   tip?: string;
   /** The grid has focus and the keyboard cursor is on this block: show the tooltip like hover does. */
@@ -162,6 +166,10 @@ export default memo(function ScheduleItemView({
     ? linkedBlockText(linked, days, daysBetween(item.startDate, item.endDate))
     : null;
   const span = blockSpan(layout, days);
+  // A short closure shows the first 20 characters of its description; the tooltip has all of it.
+  const closureText =
+    item.kind === 'closure' ? closureBlockText(item.reason, item.startDate, item.endDate) : '';
+  const closureCut = item.kind === 'closure' && closureText !== closureFullText(item.reason);
   const marker = (side: 'left' | 'right') => (
     <Box
       aria-hidden
@@ -183,7 +191,22 @@ export default memo(function ScheduleItemView({
   // Keyboard focus (the grid's cursor) shows the full text like hover does; hover only when cut off.
   // A linked block's tooltip ("Linked to ...") opens on every hover and focus, not only when cut off.
   const tipArmed = armed || Boolean(tipFocused) || focusIn;
-  const tipOpen = Boolean(tipFocused) || focusIn || (hover && (cutOff || Boolean(linked)));
+  // A reservation block's tooltip lists more than the block shows (every occupant, the reserver), so
+  // it opens on every hover; a closure's only repeats its text, so only when that is cut off.
+  const tipOpen =
+    Boolean(tipFocused) ||
+    focusIn ||
+    (hover && (cutOff || Boolean(linked) || item.kind === 'reservation'));
+  const tipLines = useMemo(
+    () =>
+      !tipArmed || linked || tip === undefined
+        ? null
+        : item.kind === 'reservation'
+          ? blockTooltipLines(item, tip)
+          : [tip],
+    [tipArmed, linked, tip, item],
+  );
+  const hasTip = Boolean(linked) || tip !== undefined;
   const tipContent = linked ? (
     <span>
       {linkedTooltipLines(linked).map((line, i) => (
@@ -192,8 +215,14 @@ export default memo(function ScheduleItemView({
         </Box>
       ))}
     </span>
-  ) : tip ? (
-    <span>{tip}</span>
+  ) : tipLines?.length ? (
+    <span>
+      {tipLines.map((line, i) => (
+        <Box key={i} component="span" sx={{ display: 'block' }}>
+          {line}
+        </Box>
+      ))}
+    </span>
   ) : null;
   const isClosure = item.kind === 'closure';
   const closure = item as ScheduleClosure;
@@ -203,6 +232,7 @@ export default memo(function ScheduleItemView({
   const hkStatus = isClosure || ghost ? undefined : housekeepingStatusOf(block);
   const hk = housekeepingChip(hkStatus, layout, days, Boolean(block.housekeepingNotes));
   const markers = isClosure ? { left: false, right: false } : blockMarkers(block, layout);
+  const content = isClosure || linked ? null : blockContent(block, days);
   const bodyBox = (
     <Box
       data-body
@@ -245,7 +275,7 @@ export default memo(function ScheduleItemView({
       ) : (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-            {isClosure ? null : <TypeIcon type={block.guestType} />}
+            {isClosure || !content?.showIcon ? null : <TypeIcon type={block.guestType} />}
             <Typography
               variant="subtitle2"
               component="span"
@@ -256,7 +286,7 @@ export default memo(function ScheduleItemView({
                 minWidth: 0,
               })}
             >
-              {isClosure ? closure.reason : block.guestName}
+              {isClosure ? closureText : content?.title}
             </Typography>
           </Box>
           {isClosure ? null : (
@@ -266,7 +296,7 @@ export default memo(function ScheduleItemView({
               noWrap
               sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
             >
-              {block.confirmationNumber}
+              {content?.detail || block.confirmationNumber}
               {linkText ? ` · ${linkText}` : ''}
             </Typography>
           )}
@@ -326,22 +356,30 @@ export default memo(function ScheduleItemView({
           : undefined
       }
       onPointerEnter={
-        ghost || !tipContent
+        ghost || !hasTip
           ? undefined
           : () => {
-              setCutOff(anyTruncated(bodyRef.current?.querySelectorAll('span') ?? []));
+              setCutOff(
+                closureCut || anyTruncated(bodyRef.current?.querySelectorAll('span') ?? []),
+              );
               setArmed(true);
               setHover(true);
             }
       }
-      onPointerLeave={ghost || !tipContent ? undefined : () => setHover(false)}
+      onPointerLeave={ghost || !hasTip ? undefined : () => setHover(false)}
       sx={(t) => ({
         position: 'absolute',
         top: t.spacing(BLOCK_TOP),
         height: t.spacing(BLOCK_HEIGHT),
         marginLeft: t.spacing(0.125),
         boxSizing: 'border-box',
-        cursor: linked ? 'not-allowed' : ghost ? 'grabbing' : onActivate ? 'pointer' : 'grab',
+        cursor: linked
+          ? 'not-allowed'
+          : ghost
+            ? 'grabbing'
+            : onActivate || isClosure
+              ? 'pointer'
+              : 'grab',
         touchAction: 'auto',
         opacity: dragging ? 0.4 : ghost ? 0.9 : linked ? LINKED_OPACITY : 1,
         zIndex: ghost ? 20 : 2,

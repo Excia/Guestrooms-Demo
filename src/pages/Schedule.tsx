@@ -9,7 +9,13 @@ import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import type { ReservationDetail, ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
+import type {
+  ReservationDetail,
+  ScheduleBlock,
+  ScheduleClosure,
+  ScheduleDays,
+  ScheduleRoom,
+} from '../api';
 import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
@@ -215,6 +221,59 @@ export default function Schedule({
         // A part of a stay that changed room belongs to the reservation room of the whole stay.
         reservationRoomId: stayOf(block),
       }),
+    [openPanel],
+  );
+  // ---- closures (ticket 149) ----
+  const onClosureSaved = useCallback(
+    (_closure: ScheduleClosure, created: boolean) => {
+      retry();
+      notify(created ? 'Closure created.' : 'Closure saved.');
+      closeCurrentPanel();
+    },
+    [retry, notify, closeCurrentPanel],
+  );
+  const onClosureRemoved = useCallback(
+    (_closure: ScheduleClosure, roomNumber: string) => {
+      retry();
+      notify(`Room ${roomNumber} Closure removed.`);
+      closeCurrentPanel();
+    },
+    [retry, notify, closeCurrentPanel],
+  );
+  // Duplicate: the New Room Closure tab, filled with the closure. Replaces the details entry, so
+  // closing still goes Back once.
+  const duplicateClosure = useCallback(
+    (closure: ScheduleClosure) => {
+      const next = applyPanel(latestParams.current, {
+        kind: 'new',
+        tab: 'closure',
+        roomId: closure.roomId,
+        arrival: closure.startDate,
+        end: closure.endDate,
+        description: closure.reason,
+      });
+      latestParams.current = next;
+      setParams(next, { replace: true, state: locationState.current });
+    },
+    [setParams],
+  );
+  const changeNewTab = useCallback(
+    (tab: 'reservation' | 'closure') => {
+      const current = parsePanel(latestParams.current);
+      if (current?.kind !== 'new') return;
+      const next = applyPanel(
+        latestParams.current,
+        tab === 'closure'
+          ? { kind: 'new', tab: 'closure', roomId: current.roomId, arrival: current.arrival }
+          : { kind: 'new', roomId: current.roomId, arrival: current.arrival },
+      );
+      latestParams.current = next;
+      setParams(next, { replace: true, state: locationState.current });
+    },
+    [setParams],
+  );
+  const openClosure = useCallback(
+    (closure: ScheduleClosure) => openPanel({ kind: 'closure', closureId: closure.id }),
     [openPanel],
   );
   // Add Another Room replaces the details entry, so the close button still goes straight back to the
@@ -546,6 +605,7 @@ export default function Schedule({
         }}
         onRefuse={(message) => notify(message, 'warning')}
         onOpen={openDetails}
+        onOpenClosure={openClosure}
         onSetHousekeeping={canEditHousekeeping ? setHousekeeping : undefined}
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
       />
@@ -682,6 +742,10 @@ export default function Schedule({
         roomChangeBusy={roomChanging}
         detailRefresh={detailRefresh}
         onReservationChanged={retry}
+        onClosureSaved={onClosureSaved}
+        onClosureRemoved={onClosureRemoved}
+        onDuplicateClosure={duplicateClosure}
+        onNewTabChange={changeNewTab}
         onOpenReservation={(reservationId) => openPanel({ kind: 'details', reservationId })}
         onAddRoom={openAddRoom}
         onBackToReservation={(reservationId) => showReservation(reservationId)}

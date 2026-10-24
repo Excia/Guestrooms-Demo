@@ -17,6 +17,8 @@ import type {
 } from '../api/types';
 
 export const DEFAULT_SCHEDULE_DAYS: ScheduleDays = 7;
+/** The month view: the longest of the views (30 days). */
+export const MONTH_VIEW_DAYS: ScheduleDays = 30;
 
 /** Labels of the View select. */
 export const SCHEDULE_VIEW_LABELS: Record<ScheduleDays, string> = {

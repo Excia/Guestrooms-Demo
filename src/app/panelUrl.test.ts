@@ -100,3 +100,46 @@ describe('panel URL state: Add Another Room', () => {
     expect(applyPanel(open, { kind: 'details', reservationId: 'rs-3' }).get('panel')).toBeNull();
   });
 });
+
+describe('panel URL state: closures', () => {
+  it('parses the closure tab with its prefill, tolerantly', () => {
+    expect(
+      parsePanel(
+        p('panel=new&tab=closure&room=rm-208&arrival=2026-10-20&end=2026-10-22&desc=Paint'),
+      ),
+    ).toEqual({
+      kind: 'new',
+      tab: 'closure',
+      roomId: 'rm-208',
+      arrival: '2026-10-20',
+      end: '2026-10-22',
+      description: 'Paint',
+    });
+    expect(parsePanel(p('panel=new&tab=closure&end=nope&desc=' + 'x'.repeat(80)))).toEqual({
+      kind: 'new',
+      tab: 'closure',
+      description: 'x'.repeat(50),
+    });
+    // end and desc mean nothing on the reservation tab
+    expect(parsePanel(p('panel=new&end=2026-10-22&desc=Paint'))).toEqual({ kind: 'new' });
+  });
+  it('parses the closure details panel and ignores unsafe ids', () => {
+    expect(parsePanel(p('closure=cl-1'))).toEqual({ kind: 'closure', closureId: 'cl-1' });
+    expect(parsePanel(p('closure=..'))).toBeNull();
+  });
+  it('applies, replaces and closes without touching the view', () => {
+    const view = p('start=2026-11-02&view=14');
+    const open = applyPanel(view, { kind: 'closure', closureId: 'cl-1' });
+    expect(open.get('closure')).toBe('cl-1');
+    const next = applyPanel(open, {
+      kind: 'new',
+      tab: 'closure',
+      end: '2026-11-05',
+      description: 'A',
+    });
+    expect(next.get('closure')).toBeNull();
+    expect(next.get('end')).toBe('2026-11-05');
+    expect(applyPanel(next, { kind: 'new' }).get('tab')).toBeNull();
+    expect(closePanel(next).toString()).toBe(view.toString());
+  });
+});

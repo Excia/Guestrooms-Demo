@@ -1302,6 +1302,22 @@ export interface ScheduleBlock {
   lateCheckOut?: boolean;
   /** Present when this is a linked-room block (link icon, grey, not clickable or draggable). */
   linkedTo?: LinkedRoom;
+  /**
+   * Block content (ticket LP-S.1). `guestName` is the lead occupant. Everything below is optional;
+   * an absent field simply drops its line (see `src/app/scheduleBlockContent.ts`).
+   * Guests in this room, named or not; "+N" on the block is this minus one.
+   */
+  occupantCount?: number;
+  /** Names of the named occupants, lead first. Fewer names than `occupantCount`: the rest are TBD. */
+  occupants?: string[];
+  /** Who made the reservation. */
+  reserverName?: string;
+  /** Group or event block name. */
+  blockName?: string;
+  /** Requested room type name; shown when the reservation has no room yet. */
+  roomTypeName?: string;
+  /** Open folio balance (what the guest still owes); shown when above zero. */
+  balanceCents?: Cents;
   /** Housekeeping chip drawn after the departure edge ("H"); absent when none is shown. */
   housekeeping?: HousekeepingStatus;
   /** Free-text housekeeping note (functional doc 15.13.3 / 15.13.4); absent when there is none. */
@@ -1431,8 +1447,38 @@ export interface SetHousekeepingRequest {
   version?: string;
 }
 
+/**
+ * Create a room closure. Dates are half-open like reservations (`endDate` is the day the room is
+ * free again). `description` may be empty (at most 50 characters). `requestId` is the idempotency
+ * key (body and `Idempotency-Key` header). Answers with the new closure. Errors: 400
+ * `invalid-id` / `invalid-query`; 404 (unknown room); 422 `closure-conflict` (a reservation or
+ * another closure is on the room on those nights; `details.roomId` names the room);
+ * 409 `idempotency-conflict`.
+ */
+export interface SaveClosureRequest {
+  roomId: string;
+  startDate: IsoDate;
+  endDate: IsoDate;
+  description: string;
+  requestId: string;
+}
+
+/** Change a closure (room, dates, description); the same rules and errors as create, and 404 for an unknown closure. */
+export interface UpdateClosureRequest extends SaveClosureRequest {
+  closureId: string;
+}
+
+/** Remove a closure; the room is open again. Errors: 400 `invalid-id`; 404 (unknown closure). */
+export interface DeleteClosureRequest {
+  closureId: string;
+  requestId: string;
+}
+
 export interface ScheduleApi {
   get(query: ScheduleQuery, options?: RequestOptions): Promise<ScheduleData>;
+  createClosure(request: SaveClosureRequest, options?: RequestOptions): Promise<ScheduleClosure>;
+  updateClosure(request: UpdateClosureRequest, options?: RequestOptions): Promise<ScheduleClosure>;
+  deleteClosure(request: DeleteClosureRequest, options?: RequestOptions): Promise<void>;
   setHousekeeping(
     request: SetHousekeepingRequest,
     options?: RequestOptions,

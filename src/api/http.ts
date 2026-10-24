@@ -33,6 +33,10 @@ import type {
   RequestOptions,
   RoomChangeRule,
   MoveDatesRequest,
+  SaveClosureRequest,
+  UpdateClosureRequest,
+  DeleteClosureRequest,
+  ScheduleClosure,
   MoveRoomRequest,
   ScheduleBlock,
   ScheduleData,
@@ -72,6 +76,9 @@ import {
   assertMemberQuery,
   assertEarlyLateRequest,
   assertMoveDatesRequest,
+  assertSaveClosureRequest,
+  assertUpdateClosureRequest,
+  assertDeleteClosureRequest,
   assertMoveRoomRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
@@ -881,6 +888,14 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     (v.housekeeping === undefined ||
       (isString(v.housekeeping) && HOUSEKEEPING_STATUSES.includes(v.housekeeping))) &&
     (v.housekeepingNotes === undefined || isString(v.housekeepingNotes)) &&
+    (v.occupantCount === undefined ||
+      (Number.isInteger(v.occupantCount) && (v.occupantCount as number) >= 0)) &&
+    (v.occupants === undefined || (Array.isArray(v.occupants) && v.occupants.every(isString))) &&
+    (v.reserverName === undefined || isString(v.reserverName)) &&
+    (v.blockName === undefined || isString(v.blockName)) &&
+    (v.roomTypeName === undefined || isString(v.roomTypeName)) &&
+    (v.balanceCents === undefined ||
+      (typeof v.balanceCents === 'number' && Number.isFinite(v.balanceCents))) &&
     (v.linkedTo === undefined ||
       (isObject(v.linkedTo) &&
         isString(v.linkedTo.roomNumber) &&
@@ -957,6 +972,29 @@ const parseSchedule =
       throw invalid(status, 'schedule');
     }
     return data;
+  };
+
+// A saved closure comes back as the closure the request described.
+const sameClosure = (c: ScheduleClosure, r: SaveClosureRequest) =>
+  c.roomId === r.roomId &&
+  c.startDate === r.startDate &&
+  c.endDate === r.endDate &&
+  c.reason === r.description;
+
+const parseClosure =
+  (expect: (closure: ScheduleClosure) => boolean) =>
+  (body: unknown, status: number): ScheduleClosure => {
+    const ok =
+      isObject(body) &&
+      body.kind === 'closure' &&
+      isString(body.id) &&
+      body.id !== '' &&
+      isString(body.roomId) &&
+      isDated(body) &&
+      isString(body.reason) &&
+      typeof body.endMarker === 'boolean';
+    if (!ok || !expect(body as unknown as ScheduleClosure)) throw invalid(status, 'closure');
+    return body as unknown as ScheduleClosure;
   };
 
 // A move answers with the changed blocks. The moved block must be where the request put it. For
@@ -1389,6 +1427,39 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             { startDate: q.startDate, days: String(q.days) },
             o,
             parseSchedule(q),
+          );
+        }),
+      createClosure: (r: SaveClosureRequest, o) =>
+        Promise.resolve().then(() => {
+          assertSaveClosureRequest(r);
+          return request(
+            '/schedule/closures',
+            {},
+            o,
+            parseClosure((c) => sameClosure(c, r)),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      updateClosure: (r: UpdateClosureRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUpdateClosureRequest(r);
+          return request(
+            `/schedule/closures/${encodeURIComponent(r.closureId)}`,
+            {},
+            o,
+            parseClosure((c) => c.id === r.closureId && sameClosure(c, r)),
+            { method: 'PUT', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      deleteClosure: (r: DeleteClosureRequest, o) =>
+        Promise.resolve().then(() => {
+          assertDeleteClosureRequest(r);
+          return request(
+            `/schedule/closures/${encodeURIComponent(r.closureId)}`,
+            {},
+            o,
+            () => undefined,
+            { method: 'DELETE', headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
       moveRoom: (r: MoveRoomRequest, o) =>

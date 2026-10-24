@@ -69,6 +69,10 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   "Linked to [Room][ +N Room]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
   Indicators follow D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
   "canceled" block: canceling removes the event from the schedule (Q-21-3 answered). Entry: `entries/21-schedule-blocks.md`.
+- **Block content, month view and tooltips (ticket #147, LP-S.1):** lead occupant with "+N", else reserver, block name;
+  second line by the legacy detail order (room type, balance due, reserver, Maintenance, block name); month view with a
+  stay under 2 nights shows initials and no type icon; the tooltip lists every occupant (TBD for unnamed) and opens on
+  every hover and on keyboard focus. Entry: `entries/147-block-content.md`.
 - **Not built:** the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot
@@ -117,7 +121,7 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
   - **Opening it:** click a block, or press Enter on it (D-057); Space or M picks the block up to move.
     Click an empty cell, or press Enter on it, to open New Reservation with that room preselected and
     the clicked date as Check In, Check Out empty. A past day becomes today with the note "Check In was
-    set to today because the day you clicked has passed." A closure cell does nothing (announces "Room
+    set to today because the day you clicked has passed." An empty cell under a closure does nothing (announces "Room
     closed."). A press that moves 4px or more is a drag, not a click (D-067, D-083). The Schedule's New
     Reservation button opens the panel without a room.
   - **Split CTA** (`splitCta()`): Check In (one room) / Check In All Rooms / Check In Remaining Rooms;
@@ -138,9 +142,12 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
   - **Unassigned room:** a reservation can be created with an Unassigned room (D-079). The grid shows it
     in the Unassigned section (D-21-1); the details panel says "Shown in the Unassigned section of the
     schedule until a room is assigned."
-  - **Tabs:** "New Reservation" and "New Room Closure" are both selectable; the closure tab shows
-    "Room closures arrive with Room Blocks." and the hold timer pauses there (D-069, D-081). The close X
-    is green (D-068).
+  - **Tabs:** "New Reservation" and "New Room Closure" are both selectable; the closure tab is the New
+    Closure form (ticket 149: Room, Closure Start, Closure End, Description, Save Closure, Cancel) and the
+    hold timer pauses there (D-069, D-081). The close X is green (D-068).
+  - **Closures (ticket 149):** a closure block opens the Closure details panel (`?closure=<id>`, title
+    "Room 208 Closure"): edit start, end and description, Remove closure (confirmation) and Duplicate (the
+    New Room Closure tab filled in). Closure blocks stay non-draggable. See `entries/149-closures.md`.
   - **Hold timer:** employee audience; starts when the hold length has loaded (right after the panel
     opens); placeholder 15 / 10 / 10 minutes; "Time left: mm:ss"; warns and announces under a minute;
     at expiry a dialog offers "Restart timer" or "Back to schedule" (D-059). It is a UI countdown only.
