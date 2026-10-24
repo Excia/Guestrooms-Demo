@@ -12,7 +12,12 @@ import type {
   ScheduleRoom,
   SettableHousekeepingStatus,
 } from '../api/types';
-import { SETTABLE_HOUSEKEEPING_STATUSES } from '../api/types';
+import {
+  HOUSEKEEPING_LABELS,
+  HOUSEKEEPING_OPTIONS,
+  housekeepingStatusLabel,
+  housekeepingStatusOf,
+} from './housekeepingBlocks';
 import { blockIndicators, linkedTooltipLines } from './scheduleLinked';
 import { blockLayout, dayHeader, type BlockLayout } from './schedule';
 import type { DropRefusal, DropResult, ScheduleMove } from './scheduleDrag';
@@ -334,16 +339,11 @@ export interface HousekeepingChip {
   plus: boolean;
   /** Accessible name of the chip button. */
   name: string;
+  /** Accessible name when the chip is only drawn (no edit permission). */
+  readOnlyName: string;
+  /** Tooltip text (also the only cue at 30 days, where the chip is a 4px color sliver). */
+  title: string;
 }
-
-const HOUSEKEEPING_LABELS: Record<HousekeepingStatus, string> = {
-  'not-checked-out': 'not checked out',
-  'needs-cleaning': 'needs cleaning',
-  cleaned: 'cleaned',
-  ready: 'ready',
-  'needs-maintenance': 'needs maintenance',
-  nyci: 'next guest not yet checked in',
-};
 
 /** The chip after a block's departure edge; null when there is none to draw. */
 export function housekeepingChip(
@@ -361,15 +361,34 @@ export function housekeepingChip(
     letter,
     plus: letter && hasNotes,
     name: `Housekeeping: ${label}${hasNotes ? ', with notes' : ''}. Change status`,
+    readOnlyName: `Housekeeping: ${label}${hasNotes ? ', with notes' : ''}`,
+    title: `Housekeeping: ${housekeepingStatusLabel(status)}${hasNotes ? ' (notes)' : ''}`,
   };
 }
 
-/** The statuses staff may pick, in the order of functional doc 15.13.4 (NYCI is not settable). */
-export const HOUSEKEEPING_OPTIONS: readonly { value: SettableHousekeepingStatus; label: string }[] =
-  SETTABLE_HOUSEKEEPING_STATUSES.map((value) => ({
-    value,
-    label: HOUSEKEEPING_LABELS[value].replace(/\b\w/g, (c) => c.toUpperCase()),
-  }));
+export { HOUSEKEEPING_OPTIONS };
+
+/** Space between a chip and its left neighbour's edge, in px (the chip's 0.25 spacing margin). */
+const CHIP_MARGIN_PX = 2;
+
+/**
+ * Pixels a block must leave clear at its left edge: on a same-day turnover the previous stay's
+ * "H" chip sits over the start of the departure column, where this block begins, so the block
+ * starts after the chip (its marker, icon and name stay visible and the chip owns that strip).
+ * 0 when there is no previous stay ending on this block's arrival day or it has no chip drawn.
+ */
+export function turnoverGap(
+  previous: ScheduleBlock | undefined,
+  block: ScheduleBlock,
+  startDate: IsoDate,
+  days: number,
+): number {
+  if (!previous || previous.endDate !== block.startDate) return 0;
+  const layout = blockLayout(previous, startDate, days as 7 | 14 | 30);
+  if (!layout) return 0;
+  const chip = housekeepingChip(housekeepingStatusOf(previous), layout, days);
+  return chip ? chip.width + CHIP_MARGIN_PX : 0;
+}
 
 export interface HousekeepingPatch {
   status: SettableHousekeepingStatus;
@@ -513,6 +532,7 @@ export function blockAriaLabel(
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
   const { early, late } = blockIndicators(block);
+  const hk = housekeepingStatusOf(block);
   return [
     block.guestName,
     block.confirmationNumber,
@@ -522,9 +542,7 @@ export function blockAriaLabel(
     ...(block.linkedTo ? [linkedTooltipLines(block.linkedTo).join(', ')] : []),
     ...(early ? ['early check in'] : []),
     ...(late ? ['late check out'] : []),
-    ...(block.housekeeping && block.housekeeping !== 'nyci'
-      ? [`housekeeping ${HOUSEKEEPING_LABELS[block.housekeeping]}`]
-      : []),
+    ...(hk && hk !== 'nyci' ? [`housekeeping ${HOUSEKEEPING_LABELS[hk]}`] : []),
     ...(link ? [segmentText(link)] : []),
   ].join(', ');
 }

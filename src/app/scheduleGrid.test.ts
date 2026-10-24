@@ -24,6 +24,7 @@ import {
   roomRowAt,
   roomRowScrollTop,
   shiftFromDistance,
+  turnoverGap,
   yearLabel,
 } from './scheduleGrid';
 
@@ -211,7 +212,7 @@ describe('copy', () => {
   });
   it('names a block with guest, confirmation, status, room and dates', () => {
     expect(blockAriaLabel(block({ status: 'nyci' }), { number: '202' })).toBe(
-      'Ada Lovelace, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026',
+      'Ada Lovelace, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026, housekeeping not checked out',
     );
     expect(blockAriaLabel(block({ status: 'checked-in' }), { number: '1' })).toContain(
       'checked in',
@@ -535,5 +536,26 @@ describe('moveDialogCopy for a checked-in stay (D-050, Q-20-5)', () => {
       moveDialogCopy(result, { ...block, status: 'confirmed' as never }, '204', '2026-10-16').body,
     ).toMatch(/^Please confirm moving this room/);
     expect(moveDialogCopy(result, block, '204').body).toMatch(/^Please confirm moving this room/);
+  });
+});
+
+describe('turnoverGap', () => {
+  const prev = block({
+    id: 'p',
+    startDate: '2026-10-18',
+    endDate: '2026-10-20',
+    status: 'checked-out',
+  });
+  const next = block({ id: 'n', startDate: '2026-10-20', endDate: '2026-10-22' });
+  it('keeps the chip width plus its margin clear on a same-day turnover', () => {
+    expect(turnoverGap(prev, next, '2026-10-18', 7)).toBe(18);
+    expect(turnoverGap(prev, next, '2026-10-18', 14)).toBe(10);
+    expect(turnoverGap(prev, next, '2026-10-18', 30)).toBe(6);
+  });
+  it('is 0 without a previous stay, a gap between stays, or a chip', () => {
+    expect(turnoverGap(undefined, next, '2026-10-18', 7)).toBe(0);
+    expect(turnoverGap(prev, { ...next, startDate: '2026-10-21' }, '2026-10-18', 7)).toBe(0);
+    expect(turnoverGap({ ...prev, housekeeping: 'nyci' }, next, '2026-10-18', 7)).toBe(0);
+    expect(turnoverGap({ ...prev, roomId: '' }, next, '2026-10-18', 7)).toBe(0);
   });
 });

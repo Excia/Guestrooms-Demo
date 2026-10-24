@@ -1106,6 +1106,12 @@ export interface ScheduleLocation {
   name: string;
 }
 
+/** A room feature (Room Options setup data); the schedule offers it as a filter. */
+export interface ScheduleFeature {
+  id: string;
+  name: string;
+}
+
 export interface ScheduleRoomType {
   id: string;
   name: string;
@@ -1119,6 +1125,11 @@ export interface ScheduleRoom {
   number: string;
   locationId: string;
   roomTypeId: string;
+  /**
+   * The room's effective features (its own, or its room type's while it inherits details); ids from
+   * `ScheduleData.features`. Absent: none.
+   */
+  featureIds?: string[];
   /**
    * PLACEHOLDER until the Housekeeping report (ticket 6.4): absent means not tracked. A room
    * vacated by a room change during a stay becomes `dirty`.
@@ -1253,6 +1264,8 @@ export interface ScheduleData {
   days: ScheduleDays;
   locations: ScheduleLocation[];
   roomTypes: ScheduleRoomType[];
+  /** The full feature list for the filter panel. Absent: none (the Room Features group is empty). */
+  features?: ScheduleFeature[];
   rooms: ScheduleRoom[];
   blocks: ScheduleBlock[];
   closures: ScheduleClosure[];

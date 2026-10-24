@@ -28,6 +28,7 @@ import {
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
 import {
   blockAriaLabel,
+  turnoverGap,
   blockTipText,
   segmentBadge,
   segmentLinks,
@@ -228,6 +229,19 @@ const ScheduleRow = memo(function ScheduleRow({
       {items.map((item) => {
         const layout = blockLayout(item, startDate, days);
         if (!layout) return null;
+        // A same-day turnover leaves room for the previous stay's housekeeping chip.
+        const leadGap =
+          item.kind === 'reservation'
+            ? turnoverGap(
+                items.find(
+                  (o): o is ScheduleBlock =>
+                    o.kind === 'reservation' && o.endDate === item.startDate,
+                ),
+                item,
+                startDate,
+                days,
+              )
+            : 0;
         const link = item.kind === 'reservation' ? links.get(item.id) : undefined;
         return (
           <ScheduleItemView
@@ -235,6 +249,7 @@ const ScheduleRow = memo(function ScheduleRow({
             id={itemId(idPrefix, item)}
             item={item}
             layout={layout}
+            leadGap={leadGap}
             days={days}
             today={today}
             dragging={draggingId === item.id}
