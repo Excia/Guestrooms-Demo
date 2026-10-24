@@ -389,3 +389,21 @@ carry the `ReservationDetail.version` the user saw.
 
 - Retention: one year. The backend never returns an entry older than one year before today (the mock does the same).
 - The backend writes the entries when an admin page saves or deletes something (Q-97-3 in `entries/97-change-log.md`).
+
+## Add-on items (ticket 7.4, built on the mock)
+
+| Method and path                  | Body / response                                                                                                | Errors                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `GET /add-ons/options`           | `AddOnOptions { skus, locations, roomTypes }`, each a list of `{ id, label }`                                 | 5xx                                      |
+| `GET /add-ons`                   | `AddOnSetup[]`                                                                                                 | 5xx                                      |
+| `POST /add-ons`                  | `AddOnInput` (no `id`) returns the stored `AddOnSetup`                                                         | 422 `validation`                         |
+| `PUT /add-ons/{id}`              | `AddOnInput` returns the stored `AddOnSetup`                                                                   | 422 `validation`, 404 `not-found`        |
+| `DELETE /add-ons/{id}`           | 204                                                                                                            | 404 `not-found`                          |
+
+`AddOnSetup`: `id`, `name` (1 to 50), `startDate`, `endDate | null` (after the start), `kind` (`item` or `combo`),
+`sku` (`{ id, label }`, required; the reservation shows its price), `onlineBooking`, `trackNightly`, `nightlyQty`
+(1 to 99, meaningful only while `trackNightly`; the backend stores 1 otherwise), `description` (at most 400),
+`photos` (at most 50, `{ id, name, url }`), `locationIds`, `roomTypeIds`. The rules are in `src/app/addOns.ts` and
+must be enforced again by the backend, which also answers 422 `validation` when `sku`, a `locationIds` entry or a
+`roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it
+saves. Photo upload and storage are open (Q-72-1).
