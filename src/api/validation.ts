@@ -48,7 +48,7 @@ export function assertScheduleQuery(query: ScheduleQuery): void {
 /** Idempotency keys: 8 to 128 URL-safe characters (a UUID fits). */
 const REQUEST_ID = /^[A-Za-z0-9_-]{8,128}$/;
 
-function assertRequestId(requestId: unknown): void {
+export function assertRequestId(requestId: unknown): void {
   if (typeof requestId !== 'string' || !REQUEST_ID.test(requestId)) {
     throw invalidQuery('request id');
   }

@@ -1,6 +1,8 @@
 import type {
   ApiClient,
   BookingHold,
+  CancelReservationRequest,
+  UndoCheckInRequest,
   ChangeRoomRequest,
   ChangeRoomResult,
   CreateMemberRequest,
@@ -41,6 +43,7 @@ import { expectedLeadOccupantName } from './createRules';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError } from './types';
+import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
 import {
   assertChangeRoomRequest,
   assertCheckInRoomRequest,
@@ -212,7 +215,8 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         l.reservationRoomId !== '',
     ) &&
     isString(v.version) &&
-    v.version !== ''
+    v.version !== '' &&
+    (v.lastAuditedDate === undefined || v.lastAuditedDate === null || isString(v.lastAuditedDate))
   );
 }
 
@@ -313,6 +317,20 @@ const parseEarlyLate =
       throw invalid(status, 'early/late');
     }
     return body as unknown as EarlyLateResult;
+  };
+
+// The cancel answer is the reservation, and it must say it is cancelled.
+const parseCancelled =
+  (request: CancelReservationRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (
+      !isReservationDetail(body) ||
+      body.id !== request.reservationId ||
+      body.status !== 'cancelled'
+    ) {
+      throw invalid(status, 'cancelled reservation');
+    }
+    return body;
   };
 
 const parseCreated =
@@ -974,6 +992,28 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             {},
             o,
             parseChangeRoom(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      cancelReservation: (r: CancelReservationRequest, o) =>
+        Promise.resolve().then(() => {
+          assertCancelReservationRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/cancel`,
+            {},
+            o,
+            parseCancelled(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      undoCheckIn: (r: UndoCheckInRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUndoCheckInRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/undo-check-in`,
+            {},
+            o,
+            parseDetail(r.reservationId),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
