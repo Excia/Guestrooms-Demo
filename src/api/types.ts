@@ -534,7 +534,11 @@ export interface UndoCheckInRequest {
 
 /** Why one room could not be checked in (ticket 163, #28). Carried per room, not as an HTTP error. */
 export type CheckInFailureCode =
-  'unassigned' | 'room-not-ready' | 'occupied' | 'no-payment-method' | 'not-checkable';
+  | 'unassigned'
+  | 'room-not-ready'
+  | 'occupied'
+  | 'no-payment-method'
+  | 'not-checkable';
 
 /**
  * Check in some rooms of one reservation, also when the arrival date has passed (ticket 163).

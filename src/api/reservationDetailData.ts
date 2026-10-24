@@ -123,9 +123,7 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
       locationName: state.locations.find((l) => l.id === room?.locationId)?.name ?? null,
       roomTypeName: typeName(room?.roomTypeId ?? '')?.name ?? null,
       status: b.status === 'checked-in' || b.status === 'checked-out' ? b.status : 'nyci',
-      ...(b.roomId
-        ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) }
-        : {}),
+      ...(b.roomId ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) } : {}),
       ...(extras.stamps?.[b.id] ?? {}),
       adults: party.adults,
       children: party.children,

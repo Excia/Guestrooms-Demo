@@ -113,8 +113,7 @@ export function checkInReservation(
   const group = groupOf(state, request.reservationId);
   if (group.length === 0) throw notFound();
   const extras = extrasFor(state, request.reservationId);
-  if (extras.version !== request.version)
-    throw conflict('stale', 'This reservation changed since it was loaded');
+  if (extras.version !== request.version) throw conflict('stale', 'This reservation changed since it was loaded');
 
   const current = group.filter(
     (b) => b.roomChange?.part !== 'previous' && b.roomChange?.part !== 'next',
@@ -147,8 +146,7 @@ export function checkInReservation(
 
   // The folio must exist before anything changes, so its nights start out unposted for rooms that
   // have not checked in.
-  const folio =
-    (getFolio(state, folioStore, request.reservationId), folioStore.get(request.reservationId)!);
+  const folio = (getFolio(state, folioStore, request.reservationId), folioStore.get(request.reservationId)!);
   const hasPayment = paymentOnFile(state, request.reservationId);
   const stamp = env.now.toISOString();
   const stamps = (extras.stamps ??= {});
@@ -187,11 +185,7 @@ export function checkInReservation(
     extras.version = `r${++state.versionSeq}`;
     const status = buildDetail(state, request.reservationId).status;
     folio.checkInStatus =
-      status === 'checked-in'
-        ? 'checked-in'
-        : status === 'checked-out'
-          ? 'checked-out'
-          : 'not-checked-in';
+      status === 'checked-in' ? 'checked-in' : status === 'checked-out' ? 'checked-out' : 'not-checked-in';
   }
   return { rooms, autoCheckedOut, nightsPosted, integrationErrors: [] };
 }
@@ -220,15 +214,13 @@ export function splitRoom(
   const group = groupOf(state, request.reservationId);
   if (group.length === 0) throw notFound();
   const extras = extrasFor(state, request.reservationId);
-  if (extras.version !== request.version)
-    throw conflict('stale', 'This reservation changed since it was loaded');
+  if (extras.version !== request.version) throw conflict('stale', 'This reservation changed since it was loaded');
   const current = group.filter(
     (b) => b.roomChange?.part !== 'previous' && b.roomChange?.part !== 'next',
   );
   const target = current.find((b) => b.id === request.reservationRoomId);
   if (!target) throw new ApiError(404, 'Reservation room not found');
-  if (current.length < 2)
-    throw conflict('not-splittable', 'A one-room reservation cannot be split');
+  if (current.length < 2) throw conflict('not-splittable', 'A one-room reservation cannot be split');
 
   const seq = ++state.createdSeq;
   const reservationId = `rs-split-${seq}`;
