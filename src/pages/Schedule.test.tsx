@@ -23,7 +23,7 @@ function spied(options: Parameters<typeof createMockClient>[0] = {}) {
   const get = vi.fn((q: ScheduleQuery, o?: { signal?: AbortSignal }) => base.schedule.get(q, o));
   const moveRoom = vi.fn(base.schedule.moveRoom);
   const moveDates = vi.fn(base.schedule.moveDates);
-  const client: ApiClient = { ...base, schedule: { get, moveRoom, moveDates } };
+  const client: ApiClient = { ...base, schedule: { ...base.schedule, get, moveRoom, moveDates } };
   return { client, base, get, moveRoom, moveDates };
 }
 
@@ -590,13 +590,18 @@ function mockGeometry() {
     height: 900,
   });
 }
-/** Client y of the middle of room row `i` (header 60px). */
-const rowY = (i: number) => 60 + 60 * i + 30;
+/** Rows of the Unassigned section on screen (the default mock has two in the first week). */
+const unassignedRows = () =>
+  document.querySelectorAll('[data-unassigned-section] [role=row]').length;
+/** Client y of the middle of room row `i` (header 60px, then the Unassigned rows). */
+const rowY = (i: number) => 60 + 60 * (i + unassignedRows()) + 30;
 const DAY = 190;
 
 function dragItem(el: HTMLElement, to: { dx?: number; y: number }, { release = true } = {}) {
   const x = 700;
-  const y = rowY(Number(el.closest('[role=row]')!.getAttribute('aria-rowindex')) - 2);
+  const y = rowY(
+    Number(el.closest('[role=row]')!.getAttribute('aria-rowindex')) - 2 - unassignedRows(),
+  );
   fireEvent.pointerDown(el, { clientX: x, clientY: y, button: 0, pointerType: 'mouse' });
   fireEvent.pointerMove(window, { clientX: x + 10, clientY: y + 3, pointerType: 'mouse' });
   fireEvent.pointerMove(window, { clientX: x + (to.dx ?? 0), clientY: to.y, pointerType: 'mouse' });

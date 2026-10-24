@@ -2,7 +2,18 @@
 // optimistic move updates, and the copy of the messages and confirm dialogs. The drop rules
 // themselves live in scheduleDrag.ts; nothing here decides what may move.
 import { addDays, daysBetween, nightsOverlap, type IsoDate } from '../lib/dates';
-import type { ScheduleBlock, ScheduleClosure, ScheduleData, ScheduleRoom } from '../api/types';
+import type {
+  HousekeepingStatus,
+  LinkedRoom,
+  ScheduleBlock,
+  ScheduleBlockStatus,
+  ScheduleClosure,
+  ScheduleData,
+  ScheduleRoom,
+  SettableHousekeepingStatus,
+} from '../api/types';
+import { SETTABLE_HOUSEKEEPING_STATUSES } from '../api/types';
+import { blockIndicators, linkedTooltipLines } from './scheduleLinked';
 import { blockLayout, dayHeader, type BlockLayout } from './schedule';
 import type { DropRefusal, DropResult, ScheduleMove } from './scheduleDrag';
 
@@ -39,6 +50,24 @@ export function rowIndexAt(offsetY: number, rowHeight: number, rowCount: number)
   const row = Math.floor(offsetY / rowHeight);
   return row < rowCount ? row : null;
 }
+
+/**
+ * Index of the room row at a vertical offset from the top of the grid content, which holds the
+ * date header row, then the `unassignedRows` of the Unassigned section, then the room rows. Null
+ * over the header, over the Unassigned section or below the last room.
+ */
+export function roomRowAt(
+  offsetY: number,
+  rowHeight: number,
+  unassignedRows: number,
+  roomCount: number,
+): number | null {
+  return rowIndexAt(offsetY - (1 + unassignedRows) * rowHeight, rowHeight, roomCount);
+}
+
+/** Scroll position that brings room row `row` just under the sticky header, past the Unassigned rows. */
+export const roomRowScrollTop = (row: number, rowHeight: number, unassignedRows: number): number =>
+  (unassignedRows + row) * rowHeight;
 
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max);
@@ -127,13 +156,16 @@ export function columnAtX(
  * Only the drawn edge is decided here; which nights the block occupies never changes.
  */
 export function blockMarkers(
-  block: { earlyCheckIn?: boolean; lateCheckOut?: boolean },
+  block: {
+    status?: ScheduleBlockStatus;
+    earlyCheckIn?: boolean;
+    lateCheckOut?: boolean;
+    linkedTo?: LinkedRoom;
+  },
   layout: Pick<BlockLayout, 'continuesAfter'> & Partial<Pick<BlockLayout, 'continuesBefore'>>,
 ): { left: boolean; right: boolean } {
-  return {
-    left: Boolean(block.earlyCheckIn),
-    right: Boolean(block.lateCheckOut) && !layout.continuesAfter,
-  };
+  const { early, late } = blockIndicators(block);
+  return { left: early, right: late && !layout.continuesAfter };
 }
 
 export type EmptyCellAction =
@@ -291,6 +323,107 @@ export function moveDialogCopy(
   };
 }
 
+export interface HousekeepingChip {
+  /** Spoken status. */
+  label: string;
+  /** Chip width in px: 16 (7 days), 8 (14 days), 4 (30 days), from Figma "Housekeeping Block". */
+  width: number;
+  /** The "H" letter is drawn in the 7 and 14 day views only. */
+  letter: boolean;
+  /** The "+" beside the "H": notes exist, shown in the 7 and 14 day views only (functional doc 15.13.3). */
+  plus: boolean;
+  /** Accessible name of the chip button. */
+  name: string;
+}
+
+const HOUSEKEEPING_LABELS: Record<HousekeepingStatus, string> = {
+  'not-checked-out': 'not checked out',
+  'needs-cleaning': 'needs cleaning',
+  cleaned: 'cleaned',
+  ready: 'ready',
+  'needs-maintenance': 'needs maintenance',
+  nyci: 'next guest not yet checked in',
+};
+
+/** The chip after a block's departure edge; null when there is none to draw. */
+export function housekeepingChip(
+  status: HousekeepingStatus | undefined,
+  layout: Pick<BlockLayout, 'continuesAfter'>,
+  days: number,
+  hasNotes = false,
+): HousekeepingChip | null {
+  if (!status || status === 'nyci' || layout.continuesAfter) return null;
+  const letter = days <= 14;
+  const label = HOUSEKEEPING_LABELS[status];
+  return {
+    label,
+    width: days <= 7 ? 16 : days <= 14 ? 8 : 4,
+    letter,
+    plus: letter && hasNotes,
+    name: `Housekeeping: ${label}${hasNotes ? ', with notes' : ''}. Change status`,
+  };
+}
+
+/** The statuses staff may pick, in the order of functional doc 15.13.4 (NYCI is not settable). */
+export const HOUSEKEEPING_OPTIONS: readonly { value: SettableHousekeepingStatus; label: string }[] =
+  SETTABLE_HOUSEKEEPING_STATUSES.map((value) => ({
+    value,
+    label: HOUSEKEEPING_LABELS[value].replace(/\b\w/g, (c) => c.toUpperCase()),
+  }));
+
+export interface HousekeepingPatch {
+  status: SettableHousekeepingStatus;
+  /** Omitted: the note stays. Empty: the note is removed. */
+  notes?: string;
+}
+
+/** The block with a housekeeping change applied (also used, with the old values, to revert it). */
+export function applyHousekeeping(
+  blocks: readonly ScheduleBlock[],
+  id: string,
+  patch: { status: HousekeepingStatus | undefined; notes?: string },
+): ScheduleBlock[] {
+  return blocks.map((b) => {
+    if (b.id !== id) return b;
+    const next: ScheduleBlock = { ...b, housekeeping: patch.status };
+    if (patch.notes !== undefined) {
+      if (patch.notes === '') delete next.housekeepingNotes;
+      else next.housekeepingNotes = patch.notes;
+    }
+    return next;
+  });
+}
+
+export interface HousekeepingFailure {
+  message: string;
+  /** Reload the schedule: the state on screen can no longer be trusted. */
+  refetch: boolean;
+}
+
+/** What to tell the user, and whether to reload, when saving housekeeping failed. The change is reverted either way. */
+export function housekeepingFailure(error: unknown): HousekeepingFailure {
+  const status =
+    typeof (error as { status?: unknown })?.status === 'number'
+      ? (error as { status: number }).status
+      : 0;
+  const code = (error as { code?: unknown })?.code;
+  if (code === 'stale' || status === 404) {
+    return {
+      message:
+        'This reservation changed. Housekeeping was not saved and the schedule has been refreshed.',
+      refetch: true,
+    };
+  }
+  // No answer, an unusable answer or a server error: the change may have been applied.
+  const unknown = status < 400 || status === 408 || status >= 500;
+  return {
+    message: unknown
+      ? 'Housekeeping could not be confirmed. Showing the latest schedule.'
+      : 'Housekeeping could not be saved.',
+    refetch: unknown,
+  };
+}
+
 /** Where a part of a stay that changed room sits in its chain, for the label and the grid text. */
 export interface SegmentLink {
   index: number;
@@ -379,14 +512,19 @@ export function blockAriaLabel(
   link?: SegmentLink,
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
+  const { early, late } = blockIndicators(block);
   return [
     block.guestName,
     block.confirmationNumber,
     status,
-    `Room ${room?.number ?? ''}`.trim(),
+    room ? `Room ${room.number}` : 'Unassigned room',
     `${formatDialogDate(block.startDate)} to ${formatDialogDate(block.endDate)}`,
-    ...(block.earlyCheckIn ? ['early check in'] : []),
-    ...(block.lateCheckOut ? ['late check out'] : []),
+    ...(block.linkedTo ? [linkedTooltipLines(block.linkedTo).join(', ')] : []),
+    ...(early ? ['early check in'] : []),
+    ...(late ? ['late check out'] : []),
+    ...(block.housekeeping && block.housekeeping !== 'nyci'
+      ? [`housekeeping ${HOUSEKEEPING_LABELS[block.housekeeping]}`]
+      : []),
     ...(link ? [segmentText(link)] : []),
   ].join(', ');
 }

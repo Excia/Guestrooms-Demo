@@ -32,6 +32,7 @@ import type {
   ScheduleQuery,
   AddOnOptions,
   AddOnSetup,
+  SetHousekeepingRequest,
   RoomSetup,
   RoomSetupOptions,
   RoomTypeSetup,
@@ -46,7 +47,7 @@ import { assertChangeLogQuery } from './changeLogValidation';
 import { changeLogParams, parseChangeEventTypes, parseChangeLogPage } from './httpChangeLog';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
-import { ApiError } from './types';
+import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
   assertChangeRoomRequest,
   assertCheckInRoomRequest,
@@ -61,6 +62,7 @@ import {
   assertReservationListQuery,
   assertResourceId,
   assertScheduleQuery,
+  assertSetHousekeepingRequest,
 } from './validation';
 import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
 import { parseIsoDate } from '../lib/dates';
@@ -653,6 +655,7 @@ const parseQuickStats =
 const HOUSEKEEPING: readonly string[] = ['clean', 'dirty'];
 const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
 const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
+const HOUSEKEEPING_STATUSES: readonly string[] = [...SETTABLE_HOUSEKEEPING_STATUSES, 'nyci'];
 const isDated = (v: Record<string, unknown>) =>
   isString(v.startDate) && isString(v.endDate) && v.startDate < v.endDate;
 
@@ -675,6 +678,13 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     typeof v.roomTypeLocked === 'boolean' &&
     isString(v.version) &&
     v.version !== '' &&
+    (v.housekeeping === undefined ||
+      (isString(v.housekeeping) && HOUSEKEEPING_STATUSES.includes(v.housekeeping))) &&
+    (v.housekeepingNotes === undefined || isString(v.housekeepingNotes)) &&
+    (v.linkedTo === undefined ||
+      (isObject(v.linkedTo) &&
+        isString(v.linkedTo.roomNumber) &&
+        isString(v.linkedTo.reserverName))) &&
     (v.roomChange === undefined ||
       (isObject(v.roomChange) &&
         (v.roomChange.part === 'previous' ||
@@ -690,7 +700,7 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
 }
 
 // The answer must be for the query that was sent, and every block and closure must sit in a listed
-// room (the grid indexes by room id).
+// room (the grid indexes by room id). Unassigned blocks have no room, so they skip that check.
 const parseSchedule =
   (query: ScheduleQuery) =>
   (body: unknown, status: number): ScheduleData => {
@@ -712,6 +722,7 @@ const parseSchedule =
           (r.housekeeping === undefined || HOUSEKEEPING.includes(r.housekeeping as string)),
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
+      listOf(body.unassigned, isScheduleBlock) &&
       listOf(
         body.closures,
         (c) =>
@@ -730,7 +741,11 @@ const parseSchedule =
     const unique = (ids: string[]) => new Set(ids).size === ids.length;
     if (
       !unique(data.rooms.map((r) => r.id)) ||
-      !unique([...data.blocks.map((b) => b.id), ...data.closures.map((c) => c.id)]) ||
+      !unique([
+          ...data.blocks.map((b) => b.id),
+          ...data.unassigned.map((b) => b.id),
+          ...data.closures.map((c) => c.id),
+        ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {
@@ -1105,6 +1120,22 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             {},
             o,
             parseMove(r.reservationRoomId, (b) => b.roomId === r.toRoomId),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      setHousekeeping: (r: SetHousekeepingRequest, o) =>
+        Promise.resolve().then(() => {
+          assertSetHousekeepingRequest(r);
+          return request(
+            '/schedule/housekeeping',
+            {},
+            o,
+            parseMove(
+              r.reservationRoomId,
+              (b) =>
+                b.housekeeping === r.status &&
+                (r.notes === undefined || (b.housekeepingNotes ?? '') === r.notes),
+            ),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
