@@ -50,9 +50,13 @@ export interface CheckInPlan {
   unassignedIds: string[];
   /** Waiting rooms that are dirty or not ready: listed, not selectable. */
   notReadyIds: string[];
-  /** The earliest arrival among the target rooms (the date the prompt names). */
+  /** Waiting rooms that arrive after today: listed with a "not yet" note, never selectable. */
+  notYetIds: string[];
+  /** The earliest arrival among the rooms that can start (the date the prompt names). */
   originalArrival: IsoDate;
-  /** The departure date and time have passed: check in, then check out automatically. */
+  /** The checkable rooms whose departure date and check-out time have passed: checked out automatically after check in. */
+  checkOutIds: string[];
+  /** At least one checkable room qualifies for the automatic check out (`checkOutIds` is not empty). */
   thenCheckOut: boolean;
   /** No payment method on file: the Payment Methods dialog opens before the check in completes. */
   paymentRequired: boolean;
@@ -60,8 +64,9 @@ export interface CheckInPlan {
 
 export interface CheckInPastDatePlan extends CheckInPlan {
   /**
-   * At least one other room of the reservation is already checked in or out: "adjust the dates" is
-   * replaced by "split this room from the reservation".
+   * The user chose one room and another room of the reservation is already checked in or out:
+   * "adjust the dates" is replaced by "split this room from the reservation". Never offered for
+   * several rooms at once (which room to split would be a guess).
    */
   split: boolean;
 }
@@ -105,6 +110,8 @@ function stayOf(rooms: readonly CheckInRoomFacts[]): { arrival: IsoDate; departu
  * Decides what starting a check in does.
  * - Never: disabled. An arrival still in the future: disabled (check in is only allowed on the
  *   arrival date, whichever level the user holds; the owner may relax this for "any time", Q-163-3).
+ *   With several rooms, one arriving after today does not stop the others: it goes to `notYetIds`
+ *   and the answer is disabled only when no room can start.
  * - Every waiting target room is dirty or not ready: disabled. A mix is fine: the dirty ones are
  *   listed but cannot be selected. Unassigned rooms do not disable the start: the panel shows "Assign now".
  * - Arrival in the past: a confirmation first (`needsPastDateConfirmation`), or with only the
@@ -116,28 +123,41 @@ export function decideCheckIn(input: CheckInInput): CheckInDecision {
   const targets = rooms.filter((r) => input.targetIds.includes(r.id) && r.status === 'nyci');
   if (targets.length === 0) return disabled('nothing-to-check-in');
   if (level === 'never') return disabled('no-permission');
-  const stay = stayOf(targets);
-  if (stay.arrival > clock.date) return disabled('future-arrival');
+  // A room arriving after today cannot start; it is listed, not selectable. Only when no room can
+  // start is the whole check in disabled for the future.
+  const notYetIds = targets.filter((r) => r.arrival > clock.date).map((r) => r.id);
+  const startable = targets.filter((r) => r.arrival <= clock.date);
+  if (startable.length === 0) return disabled('future-arrival');
+  const stay = stayOf(startable);
 
-  const unassignedIds = targets.filter((r) => !r.assigned).map((r) => r.id);
-  const notReadyIds = targets.filter((r) => r.assigned && r.dirty).map((r) => r.id);
-  const checkableIds = targets.filter((r) => r.assigned && !r.dirty).map((r) => r.id);
+  const unassignedIds = startable.filter((r) => !r.assigned).map((r) => r.id);
+  const notReadyIds = startable.filter((r) => r.assigned && r.dirty).map((r) => r.id);
+  const checkable = startable.filter((r) => r.assigned && !r.dirty);
+  const checkableIds = checkable.map((r) => r.id);
   if (checkableIds.length === 0 && unassignedIds.length === 0) return disabled('room-not-ready');
 
+  // Each room is judged on its own departure (the server does the same).
+  const checkOutIds = checkable
+    .filter((r) => departurePassed(r.departure, input.checkOutTime, clock))
+    .map((r) => r.id);
   const plan: CheckInPlan = {
     checkableIds,
     unassignedIds,
     notReadyIds,
+    notYetIds,
     originalArrival: stay.arrival,
-    thenCheckOut: departurePassed(stay.departure, input.checkOutTime, clock),
+    checkOutIds,
+    thenCheckOut: checkOutIds.length > 0,
     paymentRequired: !input.paymentOnFile,
   };
   if (stay.arrival < clock.date) {
-    const split = rooms.some(
-      (r) =>
-        !input.targetIds.includes(r.id) &&
-        (r.status === 'checked-in' || r.status === 'checked-out'),
-    );
+    const split =
+      targets.length === 1 &&
+      rooms.some(
+        (r) =>
+          !input.targetIds.includes(r.id) &&
+          (r.status === 'checked-in' || r.status === 'checked-out'),
+      );
     return {
       kind: level === 'any-time' ? 'needsPastDateConfirmation' : 'needsOverride',
       split,

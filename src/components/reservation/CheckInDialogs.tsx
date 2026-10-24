@@ -103,6 +103,7 @@ export function PastDateCheckInDialog({
 export interface AutoCheckOutDialogProps {
   open: boolean;
   departure: string;
+  rooms: readonly (string | null)[] | null;
   onRunNightAudit: () => void;
   onClose: () => void;
 }
@@ -111,6 +112,7 @@ export interface AutoCheckOutDialogProps {
 export function AutoCheckOutDialog({
   open,
   departure,
+  rooms,
   onRunNightAudit,
   onClose,
 }: AutoCheckOutDialogProps) {
@@ -118,7 +120,7 @@ export function AutoCheckOutDialog({
     <PromptDialog
       open={open}
       title={AUTO_CHECK_OUT_TITLE}
-      message={autoCheckOutMessage(departure)}
+      message={autoCheckOutMessage(departure, rooms)}
       onClose={onClose}
     >
       <Button ref={focusOnMount} variant="outlined" fullWidth onClick={onRunNightAudit}>

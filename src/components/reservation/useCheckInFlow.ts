@@ -32,9 +32,13 @@ export type CheckInStep =
   /** The check in panel. `confirmed`: the prior-date prompt was accepted. */
   | { name: 'panel'; decision: Startable; confirmed: boolean; overrideCode?: string }
   /** Successes and failures of a check in where at least one room failed. */
-  | { name: 'result'; results: RoomCheckInResult[]; autoCheckOutDeparture: string | null }
+  | {
+      name: 'result';
+      results: RoomCheckInResult[];
+      autoCheckOut: { departure: string; rooms: (string | null)[] | null } | null;
+    }
   /** The reservation was checked out automatically after check in. */
-  | { name: 'auto-checkout'; departure: string };
+  | { name: 'auto-checkout'; departure: string; rooms: (string | null)[] | null };
 
 export interface CheckInToast {
   id: number;
@@ -247,7 +251,8 @@ export function useCheckInFlow({
         reservationRoomIds: ids,
         pastDateConfirmed: confirmed,
         ...(overrideCode ? { overrideCode } : {}),
-        checkOutAfter: decision.thenCheckOut && canAutoCheckOut(level),
+        checkOutAfter:
+          canAutoCheckOut(level) && ids.some((id) => decision.checkOutIds.includes(id)),
       });
     } catch (error) {
       const failure = checkInRequestFailure(error);
@@ -269,11 +274,21 @@ export function useCheckInFlow({
     onReloaded(result.reservation);
     const failed = result.rooms.filter((r) => !r.checkedIn);
     const done = result.rooms.filter((r) => r.checkedIn);
-    const nextDeparture = result.autoCheckedOut ? result.reservation.departure : null;
+    const outIds = new Set(
+      result.rooms.filter((r) => r.checkedOutAt).map((r) => r.reservationRoomId),
+    );
+    const outRooms = result.reservation.rooms.filter((r) => outIds.has(r.id));
+    const nextDeparture = outRooms.length
+      ? outRooms.reduce((max, r) => (r.departure > max ? r.departure : max), outRooms[0].departure)
+      : null;
+    // Only some rooms left: the dialog names them instead of the whole reservation.
+    const outNumbers = result.reservation.rooms.every((r) => r.status === 'checked-out')
+      ? null
+      : outRooms.map((r) => r.roomNumber);
     if (failed.length > 0) {
       setStep({
         name: 'result',
-        autoCheckOutDeparture: nextDeparture,
+        autoCheckOut: nextDeparture ? { departure: nextDeparture, rooms: outNumbers } : null,
         results: result.rooms.map((r) => ({
           room: roomLabel(result.reservation, r.reservationRoomId),
           failure: r.checkedIn ? null : checkInFailureText(r.failure),
@@ -282,7 +297,7 @@ export function useCheckInFlow({
       return;
     }
     if (nextDeparture) {
-      setStep({ name: 'auto-checkout', departure: nextDeparture });
+      setStep({ name: 'auto-checkout', departure: nextDeparture, rooms: outNumbers });
       return;
     }
     setStep(null);
@@ -337,8 +352,8 @@ export function useCheckInFlow({
 
   const dismissResult = () => {
     if (step?.name !== 'result') return;
-    const departure = step.autoCheckOutDeparture;
-    setStep(departure ? { name: 'auto-checkout', departure } : null);
+    const out = step.autoCheckOut;
+    setStep(out ? { name: 'auto-checkout', ...out } : null);
   };
 
   return {

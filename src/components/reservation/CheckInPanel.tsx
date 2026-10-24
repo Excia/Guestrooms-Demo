@@ -9,10 +9,14 @@ import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import { useState } from 'react';
 import type { ReservationDetail, ReservationRoomDetail } from '../../api';
-import { checkInFailureText } from '../../app/checkInCopy';
 import {
-  CHECK_OUT_AFTER_NOTICE,
+  checkInFailureText,
+  checkOutAfterNotice,
+  nightsChargedNotice,
+} from '../../app/checkInCopy';
+import {
   checkInCtaLabel,
+  nightsBeforeToday,
   PRIOR_DATE_NOTICE,
   type CheckInDecision,
 } from '../../app/checkInDecision';
@@ -32,6 +36,8 @@ export interface CheckInPanelProps {
   /** The prior-date prompt was accepted: show the notice that asks for the final confirmation. */
   priorDate: boolean;
   timeZone?: string;
+  /** The club's today, for the nights that will be charged. */
+  today: string;
   busy: boolean;
   onBack: () => void;
   onSubmit: (reservationRoomIds: string[]) => void;
@@ -72,6 +78,7 @@ export default function CheckInPanel({
   plan,
   priorDate,
   timeZone,
+  today,
   busy,
   onBack,
   onSubmit,
@@ -87,7 +94,18 @@ export default function CheckInPanel({
     });
   const ids = detail.rooms.filter((r) => selected.has(r.id)).map((r) => r.id);
   const only = detail.rooms[0];
-  const targets = new Set([...plan.checkableIds, ...plan.unassignedIds, ...plan.notReadyIds]);
+  const targets = new Set([
+    ...plan.checkableIds,
+    ...plan.unassignedIds,
+    ...plan.notReadyIds,
+    ...plan.notYetIds,
+  ]);
+  const chosen = detail.rooms.filter((r) => selected.has(r.id));
+  const outRooms = chosen.filter((r) => plan.checkOutIds.includes(r.id));
+  const nightsCharged = chosen.reduce(
+    (sum, r) => sum + nightsBeforeToday(r.arrival, r.departure, today),
+    0,
+  );
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -165,6 +183,7 @@ export default function CheckInPanel({
                 const isTarget = targets.has(room.id);
                 const unassigned = plan.unassignedIds.includes(room.id);
                 const notReady = plan.notReadyIds.includes(room.id);
+                const notYet = plan.notYetIds.includes(room.id);
                 const checkable = plan.checkableIds.includes(room.id);
                 return (
                   <Box component="li" key={room.id}>
@@ -198,6 +217,11 @@ export default function CheckInPanel({
                         {checkInFailureText('room-not-ready')}
                       </Typography>
                     ) : null}
+                    {notYet ? (
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Not yet: this room arrives {formatPanelDate(room.arrival)}.
+                      </Typography>
+                    ) : null}
                     {room.status === 'nyci' && !isTarget ? (
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         Not part of this check in.
@@ -214,11 +238,15 @@ export default function CheckInPanel({
         {priorDate ? (
           <Alert severity="warning" sx={{ mt: 2 }}>
             {PRIOR_DATE_NOTICE}
+            {nightsCharged > 0 ? ` ${nightsChargedNotice(nightsCharged)}` : ''}
           </Alert>
         ) : null}
-        {plan.thenCheckOut ? (
+        {outRooms.length > 0 ? (
           <Alert severity="info" sx={{ mt: 2 }}>
-            {CHECK_OUT_AFTER_NOTICE}
+            {checkOutAfterNotice(
+              outRooms.map((r) => r.roomNumber),
+              outRooms.length === chosen.length,
+            )}
           </Alert>
         ) : null}
       </Box>

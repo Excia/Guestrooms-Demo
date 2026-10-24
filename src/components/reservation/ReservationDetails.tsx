@@ -685,6 +685,7 @@ function Loaded({
         <AutoCheckOutDialog
           open
           departure={step.departure}
+          rooms={step.rooms}
           onRunNightAudit={() => {
             flow.dismissAutoCheckOut();
             void navigate(NIGHT_AUDIT_HISTORY_PATH);
@@ -711,6 +712,7 @@ function Loaded({
           plan={step.decision}
           priorDate={step.confirmed}
           timeZone={systemSettings?.timeZone}
+          today={todayDate}
           busy={flow.busy}
           onBack={flow.close}
           onSubmit={flow.submit}

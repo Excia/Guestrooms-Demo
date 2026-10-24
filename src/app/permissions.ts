@@ -21,12 +21,10 @@ export type AdminPermission = 'admin';
 export type ReservationPermission = 'reservation.edit';
 // Check in has three levels (ticket 163, owner decision): any time, on the arrival date only (a past
 // date then needs an override code), never. Two grants express them; holding neither is "never".
-export type CheckInPermission = 'reservation.check-in.any-time' | 'reservation.check-in.arrival-date';
+export type CheckInPermission =
+  'reservation.check-in.any-time' | 'reservation.check-in.arrival-date';
 export type Permission =
-  | PagePermission
-  | AdminPermission
-  | ReservationPermission
-  | CheckInPermission;
+  PagePermission | AdminPermission | ReservationPermission | CheckInPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 

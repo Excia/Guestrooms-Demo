@@ -262,3 +262,58 @@ describe('roomFactsOf', () => {
     ]);
   });
 });
+
+describe('mixed arrivals and departures on one reservation', () => {
+  const today = { date: '2026-10-24', time: '14:00' };
+  it('a room arriving tomorrow is "not yet"; the room arriving today can still start', () => {
+    const rooms = [
+      room({ id: 'a', arrival: '2026-10-24' }),
+      room({ id: 'b', arrival: '2026-10-25' }),
+    ];
+    const d = decideCheckIn(input({ rooms, targetIds: ['a', 'b'], clock: today }));
+    expect(d).toMatchObject({ kind: 'allowed', checkableIds: ['a'], notYetIds: ['b'] });
+  });
+
+  it('the prompt names the earliest arrival among the rooms that can start, not the future one', () => {
+    const rooms = [
+      room({ id: 'a', arrival: '2026-10-22' }),
+      room({ id: 'b', arrival: '2026-10-25' }),
+    ];
+    expect(decideCheckIn(input({ rooms, targetIds: ['a', 'b'] }))).toMatchObject({
+      kind: 'needsPastDateConfirmation',
+      originalArrival: '2026-10-22',
+      checkableIds: ['a'],
+      notYetIds: ['b'],
+    });
+  });
+
+  it('is disabled for the future only when no room can start', () => {
+    const rooms = [
+      room({ id: 'a', arrival: '2026-10-25' }),
+      room({ id: 'b', arrival: '2026-10-26' }),
+    ];
+    expect(decideCheckIn(input({ rooms, targetIds: ['a', 'b'] }))).toMatchObject({
+      kind: 'disabled',
+      reason: 'future-arrival',
+    });
+  });
+
+  it('judges the automatic check out per room', () => {
+    const rooms = [
+      room({ id: 'a', arrival: '2026-10-20', departure: '2026-10-23' }),
+      room({ id: 'b', arrival: '2026-10-20', departure: '2026-10-27' }),
+    ];
+    const d = decideCheckIn(input({ rooms, targetIds: ['a', 'b'] }));
+    expect(d).toMatchObject({ checkOutIds: ['a'], thenCheckOut: true, checkableIds: ['a', 'b'] });
+  });
+
+  it('a split is offered only for one chosen room, never for several', () => {
+    const rooms = [
+      room({ id: 'a', arrival: '2026-10-20' }),
+      room({ id: 'b', arrival: '2026-10-20' }),
+      room({ id: 'c', arrival: '2026-10-20', status: 'checked-in' }),
+    ];
+    expect(decideCheckIn(input({ rooms, targetIds: ['a'] }))).toMatchObject({ split: true });
+    expect(decideCheckIn(input({ rooms, targetIds: ['a', 'b'] }))).toMatchObject({ split: false });
+  });
+});

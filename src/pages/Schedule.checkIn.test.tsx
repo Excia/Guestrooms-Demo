@@ -453,3 +453,58 @@ describe('results and failures', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('rooms with different dates on one reservation', () => {
+  // rs-32 with its two rooms rewritten: room 106 and room C8 both wait for check in.
+  const withRooms = (
+    edit: (rooms: Awaited<ReturnType<ApiClient['reservations']['getDetail']>>['rooms']) => void,
+  ) => {
+    const base = createMockClient({ today: TODAY });
+    return {
+      ...base,
+      reservations: {
+        ...base.reservations,
+        getDetail: async (id: string) => {
+          const detail = await base.reservations.getDetail(id);
+          if (id === 'rs-32') edit(detail.rooms);
+          return detail;
+        },
+      },
+    } as ApiClient;
+  };
+
+  it('a room arriving later is listed as not yet and left out of the check in', async () => {
+    const client = withRooms((rooms) => {
+      Object.assign(rooms[0], { status: 'nyci', arrival: TODAY, departure: '2026-10-20' });
+      Object.assign(rooms[1], { status: 'nyci', arrival: '2026-10-17', departure: '2026-10-20' });
+    });
+    const { user } = await open('rs-32', { client });
+    await user.click(await screen.findByRole('button', { name: 'Check In All Rooms' }));
+    const checkIn = await dialog('Check in');
+    expect(within(checkIn).getByRole('checkbox', { name: /Room 106/ })).toBeChecked();
+    expect(within(checkIn).queryByRole('checkbox', { name: /Room C8/ })).not.toBeInTheDocument();
+    expect(
+      within(checkIn).getByText(/Not yet: this room arrives 10\/17\/2026/),
+    ).toBeInTheDocument();
+    expect(within(checkIn).getByRole('button', { name: 'Check in 1 room' })).toBeEnabled();
+  });
+
+  it('says which rooms are checked out automatically when only some departures have passed', async () => {
+    const client = withRooms((rooms) => {
+      Object.assign(rooms[0], { status: 'nyci', arrival: '2026-10-12', departure: '2026-10-15' });
+      Object.assign(rooms[1], { status: 'nyci', arrival: '2026-10-12', departure: '2026-10-20' });
+    });
+    const { user } = await open('rs-32', { client });
+    await user.click(await screen.findByRole('button', { name: 'Check In All Rooms' }));
+    await user.click(await screen.findByRole('button', { name: 'Check in for original date' }));
+    const checkIn = await dialog('Check in');
+    expect(
+      within(checkIn).getByText(/The departure date has passed for Room 106\./),
+    ).toBeInTheDocument();
+    // Untick the room that qualifies: the notice goes away.
+    await user.click(within(checkIn).getByRole('checkbox', { name: /Room 106/ }));
+    expect(within(checkIn).queryByText(/departure date has passed/)).not.toBeInTheDocument();
+    // The past-date note says how many nights are charged (room C8: 10/12 to 10/16 = 4 nights).
+    expect(within(checkIn).getByText(/4 nights before today will be charged/)).toBeInTheDocument();
+  });
+});

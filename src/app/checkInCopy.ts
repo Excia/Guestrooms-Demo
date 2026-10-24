@@ -113,8 +113,16 @@ export function integrationErrorMessage(
   return `Checked in, but the ${names.join(' and ')} integration reported an error. Verify the integration status.`;
 }
 
-export function autoCheckOutMessage(departure: string): string {
-  return `This reservation has a check-out date of ${formatPromptDate(departure)} and was checked out automatically. You may want to run the night audit to make sure the folio balance is accurate before settling.`;
+export function autoCheckOutMessage(
+  departure: string,
+  /** The rooms checked out when it was only some of them; null for the whole reservation. */
+  rooms: readonly (string | null)[] | null = null,
+): string {
+  const who = rooms
+    ? rooms.map((n) => (n ? `Room ${n}` : 'The unassigned room')).join(', ')
+    : 'This reservation';
+  const many = rooms !== null && rooms.length > 1;
+  return `${who} ${many ? 'have' : 'has'} a check-out date of ${formatPromptDate(departure)} and ${many ? 'were' : 'was'} checked out automatically. You may want to run the night audit to make sure the folio balance is accurate before settling.`;
 }
 
 export const AUTO_CHECK_OUT_TITLE = 'The check-out date has passed';
@@ -162,3 +170,16 @@ export function checkInRequestFailure(error: unknown): CheckInRequestFailure {
     outcomeUnknown: true,
   };
 }
+
+/** The note above the button naming the rooms that will be checked out automatically after check in. */
+export function checkOutAfterNotice(roomNumbers: readonly (string | null)[], all: boolean): string {
+  if (all) {
+    return 'The departure date has passed. After check in the reservation is checked out automatically.';
+  }
+  const names = roomNumbers.map((n) => (n ? `Room ${n}` : 'the unassigned room')).join(', ');
+  return `The departure date has passed for ${names}. ${roomNumbers.length === 1 ? 'It is' : 'They are'} checked out automatically after check in.`;
+}
+
+/** "3 nights before today will be charged to the folio." */
+export const nightsChargedNotice = (nights: number) =>
+  `${nights} ${nights === 1 ? 'night' : 'nights'} before today will be charged to the folio.`;
