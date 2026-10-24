@@ -3,6 +3,7 @@ import {
   applyScheduleView,
   DEFAULT_SCHEDULE_VIEW,
   parseScheduleView,
+  type ScheduleViewState,
   toggleFilterId,
 } from './scheduleUrl';
 
@@ -130,16 +131,11 @@ describe('filters', () => {
     ).toBe(2);
   });
   it('counts the housekeeping and feature groups once each', () => {
-    const v = {
+    const v: ScheduleViewState = {
       ...DEFAULT_SCHEDULE_VIEW,
-      housekeeping: ['cleaned', 'ready'] as const,
-      featureIds: ['a'],
+      housekeeping: ['cleaned', 'ready'],
+      featureIds: ['a', 'b'],
     };
-    expect(activeFilterCount({ ...v, housekeeping: [...v.housekeeping] })).toBe(2);
-  });
-  it('leaves the location list out of the count when that group is hidden', () => {
-    const v = { ...DEFAULT_SCHEDULE_VIEW, locationIds: ['a'] };
-    expect(activeFilterCount(v)).toBe(1);
-    expect(activeFilterCount(v, false)).toBe(0);
+    expect(activeFilterCount(v)).toBe(2);
   });
 });

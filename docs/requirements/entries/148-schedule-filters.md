@@ -1,7 +1,7 @@
 # LP-S.2 Housekeeping and Room Features filters, filter rules
 
-Ticket Excia/Guestrooms-Demo#148 (epic #146); PR not opened yet. Figma: Filter Menu 13908:94238 shows Locations and Room Types only; the two new groups follow the legacy menu (owner: match legacy).
-**Status:** in review, 2026-10-24.
+Ticket Excia/Guestrooms-Demo#148 (epic #146); PR Excia/Guestrooms-Demo#165. Figma: Filter Menu 13908:94238 shows Locations and Room Types only; the two new groups follow the legacy menu (owner: match legacy).
+**Status:** in review (PR #165), 2026-10-24.
 
 ## Figma deviations
 
@@ -26,7 +26,7 @@ Ticket Excia/Guestrooms-Demo#148 (epic #146); PR not opened yet. Figma: Filter M
 | D-148-1 | 2026-10-24 | The panel has four groups, each with Select all / Select none: Locations (only with two or more locations; a stale `?locations=` is then ignored and not counted), Room Types, Housekeeping Status (Not Checked Out, Needs Cleaning, Cleaned, Maintenance Required, Inspected / Ready) and Room Features (left out when the club has no features)   | Legacy menu; closes C5 item 15.8.1.1 and C6 | owner         | in force |
 | D-148-2 | 2026-10-24 | Housekeeping Status and Room Features start with nothing checked, which is no filter (legacy). Housekeeping: a room stays when one of its reservations overlapping the range has one of the checked statuses; unassigned reservations are hidden unless they have one. Features: a room must have ALL checked features. All groups combine with AND | Legacy `filterRooms` and unassigned list    | owner         | in force |
 | D-148-3 | 2026-10-24 | Available Only: a room with at least one night in the range that has neither a reservation nor a closure. This replaces "free for the whole range" (closes gap item 3)                                                                                                                                                                              | Functional doc 15.7.2; legacy               | owner         | in force |
-| D-148-4 | 2026-10-24 | The filters are in the URL: `housekeeping=<status,...>` and `features=<id,...>`, omitted when empty. Unknown statuses are dropped. The funnel shows the number of applied groups (location list, room types, availability, housekeeping, features)                                                                                                  | Existing URL pattern; closes gap item 6     | ticket, agent | in force |
+| D-148-4 | 2026-10-24 | The filters are in the URL: `housekeeping=<status,...>` and `features=<id,...>`, omitted when empty. Unknown statuses are dropped. Feature ids not in the data are ignored once it loads (not applied, not counted). The funnel shows the number of applied groups (location list, room types, availability, housekeeping, features)                | Existing URL pattern; closes gap item 6     | ticket, agent | in force |
 
 ## Placeholders and invented values
 

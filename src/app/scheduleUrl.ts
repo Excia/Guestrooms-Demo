@@ -98,23 +98,24 @@ export function applyScheduleView(
 }
 
 /** Checkbox toggle of one id in a filter list (null = all selected). Selecting everything gives null. */
-export function toggleFilterId(
-  current: readonly string[] | null,
-  allIds: readonly string[],
-  id: string,
-): string[] | null {
+export function toggleFilterId<Id extends string>(
+  current: readonly Id[] | null,
+  allIds: readonly Id[],
+  id: Id,
+): Id[] | null {
   const base = current ?? allIds;
   const next = base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
   return next.length >= allIds.length && allIds.every((x) => next.includes(x)) ? null : next;
 }
 
 /**
- * Number of applied filters, for the filter button. `hasLocationFilter` false (a club with one
- * location, where the group is hidden) leaves the location list out of the count.
+ * Number of applied filters, for the filter button. Pass the state with the lists already limited
+ * to what the panel offers (no location list for a one-location club, only known feature ids), so
+ * the count matches the visible groups.
  */
-export function activeFilterCount(state: ScheduleViewState, hasLocationFilter = true): number {
+export function activeFilterCount(state: ScheduleViewState): number {
   return (
-    (hasLocationFilter && state.locationIds ? 1 : 0) +
+    (state.locationIds ? 1 : 0) +
     (state.roomTypeIds ? 1 : 0) +
     (state.availability !== 'all' ? 1 : 0) +
     (state.housekeeping.length > 0 ? 1 : 0) +

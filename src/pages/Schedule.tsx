@@ -9,18 +9,14 @@ import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import type {
-  ReservationDetail,
-  ScheduleBlock,
-  ScheduleDays,
-  ScheduleRoom,
-  SettableHousekeepingStatus,
-} from '../api';
+import type { ReservationDetail, ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
 import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
   applyScheduleFilters,
+  filterUnassigned,
   isScheduleEmpty,
+  knownIds,
   shiftScheduleStart,
   showLocationFilter,
   type ScheduleStep,
@@ -304,32 +300,35 @@ export default function Schedule({
   useEffect(() => {
     loadedBlocks.current = data?.blocks ?? [];
   }, [data]);
+  // Only what the panel offers counts: no location list for a one-location club, and no feature
+  // ids that are not in the data (a stale link must not hide every room or show as applied).
+  const effectiveView = useMemo<ScheduleViewState>(
+    () => ({
+      ...view,
+      locationIds: data && showLocationFilter(data.locations) ? view.locationIds : null,
+      featureIds: knownIds(view.featureIds, data?.features ?? []),
+    }),
+    [view, data],
+  );
   const liveRooms = useMemo(
     () =>
       data
         ? applyScheduleFilters(data, {
             // A club with one location has no Locations group, so a stale ?locations= is ignored.
-            locationIds: (showLocationFilter(data.locations) && view.locationIds) || undefined,
+            locationIds: effectiveView.locationIds ?? undefined,
             roomTypeIds: view.roomTypeIds ?? undefined,
             availability: view.availability,
             housekeeping: view.housekeeping,
-            featureIds: view.featureIds,
+            featureIds: effectiveView.featureIds,
           }).rooms
         : [],
-    [
-      data,
-      view.locationIds,
-      view.roomTypeIds,
-      view.availability,
-      view.housekeeping,
-      view.featureIds,
-    ],
+    [data, view.roomTypeIds, view.availability, view.housekeeping, effectiveView],
   );
   // The Housekeeping filter also hides the unassigned reservations that do not match.
   const filteredUnassigned = useMemo(
     () =>
       schedule.status === 'success' && view.housekeeping.length > 0
-        ? applyScheduleFilters(schedule.data, { housekeeping: view.housekeeping }).unassigned
+        ? filterUnassigned(schedule.data.unassigned, view.housekeeping)
         : null,
     [schedule, view.housekeeping],
   );
@@ -580,7 +579,7 @@ export default function Schedule({
           start={start}
           today={today}
           availability={view.availability}
-          activeFilters={activeFilterCount(view, showLocationFilter(filterOptions.locations))}
+          activeFilters={activeFilterCount(effectiveView)}
           filtersOpen={filterAnchor !== null}
           onDays={(days: ScheduleDays) => update({ days })}
           onShift={(direction, step: ScheduleStep) =>
@@ -617,8 +616,8 @@ export default function Schedule({
         onRoomTypes={(roomTypeIds) => update({ roomTypeIds })}
         features={filterOptions.features}
         housekeeping={view.housekeeping}
-        featureIds={view.featureIds}
-        onHousekeeping={(ids) => update({ housekeeping: ids as SettableHousekeepingStatus[] })}
+        featureIds={effectiveView.featureIds}
+        onHousekeeping={(housekeeping) => update({ housekeeping })}
         onFeatures={(featureIds) => update({ featureIds })}
       />
       {pending ? (

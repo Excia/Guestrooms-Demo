@@ -6,13 +6,14 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import Popover from '@mui/material/Popover';
 import Typography from '@mui/material/Typography';
 import { useId } from 'react';
+import type { SettableHousekeepingStatus } from '../../api';
 import { HOUSEKEEPING_FILTER_OPTIONS, showLocationFilter } from '../../app/schedule';
 import { toggleFilterId } from '../../app/scheduleUrl';
 
 const btnSx = { minWidth: 0, px: 1, whiteSpace: 'nowrap', color: 'primary.dark' } as const;
 
-interface Option {
-  id: string;
+interface Option<Id extends string = string> {
+  id: Id;
   name: string;
 }
 
@@ -30,17 +31,17 @@ export interface ScheduleFilterPanelProps {
   /** Room features (Room Options); the group is left out when there are none. */
   features: readonly Option[];
   /** Selected housekeeping statuses and features; empty is no filter (the legacy default). */
-  housekeeping: readonly string[];
+  housekeeping: readonly SettableHousekeepingStatus[];
   featureIds: readonly string[];
-  onHousekeeping: (ids: string[]) => void;
+  onHousekeeping: (ids: SettableHousekeepingStatus[]) => void;
   onFeatures: (ids: string[]) => void;
 }
 
-interface SectionProps {
+interface SectionProps<Id extends string> {
   title: string;
-  options: readonly Option[];
-  selected: readonly string[] | null;
-  onChange: (ids: string[] | null) => void;
+  options: readonly Option<Id>[];
+  selected: readonly Id[] | null;
+  onChange: (ids: Id[] | null) => void;
   /**
    * Opt-in groups (housekeeping, features) start with nothing checked, which means "no filter";
    * Select all checks every box. The others start with everything checked (null).
@@ -48,12 +49,18 @@ interface SectionProps {
   optIn?: boolean;
 }
 
-function Section({ title, options, selected, onChange, optIn = false }: SectionProps) {
+function Section<Id extends string>({
+  title,
+  options,
+  selected,
+  onChange,
+  optIn = false,
+}: SectionProps<Id>) {
   const id = useId();
   const all = options.map((o) => o.id);
-  const isChecked = (optionId: string) =>
+  const isChecked = (optionId: Id) =>
     optIn ? (selected ?? []).includes(optionId) : selected === null || selected.includes(optionId);
-  const toggle = (optionId: string) => {
+  const toggle = (optionId: Id) => {
     if (!optIn) return onChange(toggleFilterId(selected, all, optionId));
     const current = selected ?? [];
     onChange(

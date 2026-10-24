@@ -154,11 +154,22 @@ describe('room features filter', () => {
 
   it('shows "No rooms match" and Clear filters resets the new groups too', async () => {
     const user = userEvent.setup();
-    setup('/schedule?features=nope&housekeeping=ready');
+    setup('/schedule?features=feature-tub&housekeeping=ready');
     expect(await screen.findByText('No rooms match the filters.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear filters' }));
     await waitFor(() => expect(grid()).toBeInTheDocument());
     expect(url()).toBe('/schedule');
+  });
+
+  it('ignores a feature id that is not in the data: rooms stay and it is not counted', async () => {
+    await loaded('/schedule?features=old-id');
+    expect(roomRows().length).toBeGreaterThan(1);
+    expect(screen.getByRole('button', { name: 'Filters' })).toBeInTheDocument();
+  });
+
+  it('counts only known feature ids when some are stale', async () => {
+    await loaded('/schedule?features=old-id,feature-tub');
+    expect(screen.getByRole('button', { name: 'Filters, 1 active' })).toBeInTheDocument();
   });
 });
 

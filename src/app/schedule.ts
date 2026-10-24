@@ -6,6 +6,7 @@ import { SCHEDULE_DAYS } from '../api/types';
 import type {
   HousekeepingStatus,
   ScheduleAvailability,
+  ScheduleBlock,
   ScheduleData,
   ScheduleDays,
   ScheduleLocation,
@@ -183,6 +184,24 @@ export interface ScheduleFilters {
   featureIds?: readonly string[];
 }
 
+/**
+ * Unassigned reservations under the Housekeeping filter: with no status checked all stay,
+ * otherwise only those whose status is checked.
+ */
+export function filterUnassigned(
+  unassigned: readonly ScheduleBlock[],
+  housekeeping: readonly HousekeepingStatus[],
+): ScheduleBlock[] {
+  if (housekeeping.length === 0) return [...unassigned];
+  return unassigned.filter((b) => b.housekeeping && housekeeping.includes(b.housekeeping));
+}
+
+/** The selected ids that still exist in `options` (a stale URL id must neither hide rooms nor count). */
+export const knownIds = (
+  selected: readonly string[],
+  options: readonly { id: string }[],
+): string[] => selected.filter((id) => options.some((o) => o.id === id));
+
 /** True when a night of the range has no reservation and no closure on it (`spans`: the room's). */
 function hasFreeNight(
   startDate: IsoDate,
@@ -250,7 +269,7 @@ export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilter
     blocks: data.blocks.filter((b) => ids.has(b.roomId)),
     closures: data.closures.filter((c) => ids.has(c.roomId)),
     unassigned: statuses
-      ? data.unassigned.filter((b) => b.housekeeping && statuses.has(b.housekeeping))
+      ? filterUnassigned(data.unassigned, filters.housekeeping ?? [])
       : data.unassigned,
   };
 }

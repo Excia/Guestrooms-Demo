@@ -13,6 +13,8 @@ import {
   scheduleRangeEnd,
   shiftScheduleStart,
   showLocationFilter,
+  filterUnassigned,
+  knownIds,
   visibleRowRange,
 } from './schedule';
 
@@ -295,17 +297,23 @@ describe('housekeeping and feature filters', () => {
   });
   it('matches any of several selected statuses', () => {
     const base = all();
-    const one = applyScheduleFilters(base, { housekeeping: ['not-checked-out'] }).rooms.length;
-    const two = applyScheduleFilters(base, { housekeeping: ['not-checked-out', 'cleaned'] }).rooms
-      .length;
-    expect(two).toBeGreaterThanOrEqual(one);
+    const one = applyScheduleFilters(base, { housekeeping: ['not-checked-out'] });
+    const both = applyScheduleFilters(base, { housekeeping: ['not-checked-out', 'cleaned'] });
+    const cleaned = applyScheduleFilters(base, { housekeeping: ['cleaned'] });
+    expect(new Set(ids(both))).toEqual(new Set([...ids(one), ...ids(cleaned)]));
   });
   it('hides unassigned reservations without a selected status', () => {
     const base = all();
     expect(base.unassigned.length).toBeGreaterThan(0);
-    const d = applyScheduleFilters(base, { housekeeping: ['ready'] });
-    expect(d.unassigned.every((b) => b.housekeeping === 'ready')).toBe(true);
-    expect(applyScheduleFilters(base, {}).unassigned).toEqual(base.unassigned);
+    const tagged = base.unassigned.map((b, i) => ({
+      ...b,
+      housekeeping: (i === 0 ? 'ready' : 'cleaned') as 'ready' | 'cleaned',
+    }));
+    const data = { ...base, unassigned: tagged };
+    expect(applyScheduleFilters(data, { housekeeping: ['ready'] }).unassigned).toEqual([tagged[0]]);
+    expect(applyScheduleFilters(data, {}).unassigned).toEqual(tagged);
+    expect(filterUnassigned(tagged, [])).toEqual(tagged);
+    expect(filterUnassigned([{ ...tagged[0], housekeeping: undefined }], ['ready'])).toEqual([]);
   });
   it('ignores the housekeeping of a reservation outside the range', () => {
     const base = all();
@@ -328,10 +336,14 @@ describe('housekeeping and feature filters', () => {
   it('requires a room to have every selected feature', () => {
     const base = all();
     const one = applyScheduleFilters(base, { featureIds: ['feature-tub'] });
-    expect(one.rooms.length).toBeGreaterThan(0);
-    expect(one.rooms.every((r) => r.featureIds?.includes('feature-tub'))).toBe(true);
+    // Only suites have a soaking tub in the mock: 301, 302, 109, 110.
+    expect(new Set(ids(one))).toEqual(new Set(['rm-301', 'rm-302', 'rm-109', 'rm-110']));
+    // Cottages have a view but no tub; suites have both.
+    expect(new Set(ids(applyScheduleFilters(base, { featureIds: ['feature-view'] })))).toContain(
+      'rm-C1',
+    );
     const two = applyScheduleFilters(base, { featureIds: ['feature-tub', 'feature-view'] });
-    expect(two.rooms.every((r) => r.featureIds?.includes('feature-view'))).toBe(true);
+    expect(new Set(ids(two))).toEqual(new Set(['rm-301', 'rm-302', 'rm-109', 'rm-110']));
     expect(applyScheduleFilters(base, { featureIds: ['nope'] }).rooms).toEqual([]);
   });
   it('combines with the other filters (AND)', () => {
@@ -342,6 +354,10 @@ describe('housekeeping and feature filters', () => {
       locationIds: ['north-lodge'],
     });
     expect(ids(d)).toEqual(['rm-109', 'rm-110']);
+  });
+  it('knownIds drops ids that are not in the options', () => {
+    expect(knownIds(['a', 'old', 'b'], [{ id: 'a' }, { id: 'b' }])).toEqual(['a', 'b']);
+    expect(knownIds(['old'], [])).toEqual([]);
   });
   it('shows the location group only for two or more locations', () => {
     expect(showLocationFilter([])).toBe(false);
