@@ -7,12 +7,14 @@ import { changedNights, normalizeRuns, planFromBlocks, planProblem, stayOf } fro
 import type {
   ChangeRoomRequest,
   ChangeRoomResult,
+  DeleteClosureRequest,
   IsoDate,
   HousekeepingStatus,
   LinkedRoom,
   MoveDatesRequest,
   MoveRoomRequest,
   RoomChangeRule,
+  SaveClosureRequest,
   ScheduleBlock,
   SetHousekeepingRequest,
   ScheduleBlockStatus,
@@ -22,6 +24,7 @@ import type {
   ScheduleLocation,
   ScheduleRoom,
   ScheduleRoomType,
+  UpdateClosureRequest,
 } from './types';
 import { ApiError } from './types';
 import { MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
@@ -74,6 +77,8 @@ export interface ScheduleState {
   extras: Record<string, ReservationExtras>;
   /** Source of ids for reservations created through the API. */
   createdSeq: number;
+  /** Source of ids for closures created through the API. */
+  closureSeq: number;
   /** Reservations created without a room: no lane on the grid, so never in `blocks`. */
   unassigned: ScheduleBlock[];
   /**
@@ -643,6 +648,7 @@ function defaultState(today: IsoDate): ScheduleState {
     versionSeq: 1,
     extras: seedExtras(),
     createdSeq: 0,
+    closureSeq: 0,
     unassigned: UNASSIGNED_SEEDS.map((u) => ({
       kind: 'reservation',
       id: u.id,
@@ -758,6 +764,7 @@ function largeState(today: IsoDate): ScheduleState {
     versionSeq: 1,
     extras: {},
     createdSeq: 0,
+    closureSeq: 0,
     unassigned: [],
     rateOverrides: {},
     segmentSeq: 0,
@@ -850,6 +857,67 @@ export function assertFree(state: ScheduleState, placements: Placement[]): void 
     if (hit) clashes.push(p.roomId);
   });
   if (clashes.length) throw conflictError(clashes);
+}
+
+const closureConflictError = (roomId: string) =>
+  new ApiError(422, 'The room already has a reservation or a closure on those dates', {
+    code: 'closure-conflict',
+    details: { roomId: [roomId] },
+  });
+
+function assertClosureFree(state: ScheduleState, request: SaveClosureRequest, ignoreId?: string) {
+  const hit =
+    state.blocks.some(
+      (b) =>
+        b.roomId === request.roomId &&
+        nightsOverlap(b.startDate, b.endDate, request.startDate, request.endDate),
+    ) ||
+    state.closures.some(
+      (c) =>
+        c.id !== ignoreId &&
+        c.roomId === request.roomId &&
+        nightsOverlap(c.startDate, c.endDate, request.startDate, request.endDate),
+    );
+  if (hit) throw closureConflictError(request.roomId);
+}
+
+export function createClosure(state: ScheduleState, request: SaveClosureRequest): ScheduleClosure {
+  findRoom(state, request.roomId);
+  assertClosureFree(state, request);
+  const closure: ScheduleClosure = {
+    kind: 'closure',
+    id: `cl-n${++state.closureSeq}`,
+    roomId: request.roomId,
+    startDate: request.startDate,
+    endDate: request.endDate,
+    reason: request.description,
+    endMarker: false,
+  };
+  state.closures.push(closure);
+  return structuredClone(closure);
+}
+
+export function updateClosure(
+  state: ScheduleState,
+  request: UpdateClosureRequest,
+): ScheduleClosure {
+  const closure = state.closures.find((c) => c.id === request.closureId);
+  if (!closure) throw notFound('Closure');
+  findRoom(state, request.roomId);
+  assertClosureFree(state, request, closure.id);
+  closure.roomId = request.roomId;
+  closure.startDate = request.startDate;
+  // The orange "block ends" marker belonged to the old end.
+  if (closure.endDate !== request.endDate) closure.endMarker = false;
+  closure.endDate = request.endDate;
+  closure.reason = request.description;
+  return structuredClone(closure);
+}
+
+export function deleteClosure(state: ScheduleState, request: DeleteClosureRequest): void {
+  const index = state.closures.findIndex((c) => c.id === request.closureId);
+  if (index < 0) throw notFound('Closure');
+  state.closures.splice(index, 1);
 }
 
 export function findBlock(state: ScheduleState, id: string): ScheduleBlock {
