@@ -64,11 +64,11 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   15.11.3.2), the block moving to its room row on save (20.4.5.4), and the "Unassigned Only" toggle
   (16.6).
 - **Linked-room blocks and early/late rules (ticket 2.4, branch `feat/21-schedule-blocks`):** `ScheduleBlock.linkedTo`
-  (`LinkedRoom`: room number, reserver name, the linked room's early/late flags) draws the link icon; by drawn
+  (`LinkedRoom`: room number, reserver name) draws the link icon; by drawn
   width the icon only, plus the linked room number, plus the reserver name (`linkedTier`, D-21-2); tooltip
   "Linked to [Room Number]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
-  Indicators follow D-21-3 for all blocks (`blockIndicators`, `src/app/scheduleLinked.ts`). The "canceled" block
-  state is not built (Q-21-3). Entry: `entries/21-schedule-blocks.md`.
+  Indicators follow D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
+  "canceled" block: canceling removes the event from the schedule (Q-21-3 answered). Entry: `entries/21-schedule-blocks.md`.
 - **Not built:** the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot
@@ -320,23 +320,21 @@ Schedule Block Exploration 12843:35986; States and Variations 12423:59315.
   unassigned, closure, linked states; treatment icon and name color per ticket 3.11. Linked room
   block tiers by size: link icon only (30-day view, single night); icon plus linked room number (14-day
   view, single night, may wrap to two lines); reserver name on the second line when the icon and room
-  number fit on one line. Linked rooms also show early/late indicators from the room they are linked
-  to. Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
+  number fit on one line. Linked rooms show no early/late indicators (owner, 2026-10-24; legacy draws none). Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
   indicators: Not Yet Checked In shows only early check in; Checked In and Checked Out show only late
-  check out, even if both are selected. Truncation with an ellipsis and the full text in the tooltip.
+  check out, even if both are selected (linked blocks excepted). Truncation with an ellipsis and the full text in the tooltip.
   Owner icon: the svgrepo hand/key icon (D-018).
 - **Implemented:** a base block renderer exists from 2.1 (`ScheduleItemView`: confirmed/NYCI,
   checked-in, checked-out, due-out, closure, guest type colors); minimal early/late edge markers in
   PR #119 (an early check-in sliver on any block with the flag, a late check-out marker only at a
-  real departure edge, D-084). Canceled, unassigned and linked states, the owner icon and the tooltips
-  are not built. **Source conflict:** this ticket says Not Yet Checked In shows only early and Checked In
+  real departure edge, D-084). Canceled blocks do not exist by decision (canceling removes the event, Q-21-3); the owner icon is not built. **Source conflict:** this ticket says Not Yet Checked In shows only early and Checked In
   / Checked Out only late; the markers built in PR #119 follow the flags on the block (the mock sets
   them on a few reservations) and do not filter by status. Ticket 2.4 decides.
 - **Built on branch `feat/21-schedule-blocks` (no PR yet):** housekeeping chip, Unassigned section, linked-room
   blocks with three width tiers and tooltip, status-based early/late rules (D-21-3 settles the source conflict
-  above for all blocks). The `canceled` state and the owner icon are not built. Entry: `entries/21-schedule-blocks.md`.
-- **Open questions:** Q-21-1 (block colors), Q-21-3 (canceled block or no event), Q-21-4 (status for linked indicators).
-- **Status:** in progress (branch `feat/21-schedule-blocks`, not pushed, 2026-10-24); canceled state blocked on Q-21-3.
+  above for all non-linked blocks; linked blocks show none). There is no `canceled` state (event removed on cancel); the owner icon is not built. Entry: `entries/21-schedule-blocks.md`.
+- **Open questions:** Q-21-1 (block colors). Q-21-3 answered (event removed); Q-21-4 moot (linked blocks show no indicators).
+- **Status:** in progress (branch `feat/21-schedule-blocks`, not pushed, 2026-10-24).
 
 ## 2.5 Reservation menus and multi-room selector
 
