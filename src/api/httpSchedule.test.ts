@@ -41,7 +41,7 @@ describe('http schedule.get', () => {
   it('validates linkedTo on a block', async () => {
     const d = good();
     const withLink = (linkedTo: unknown) => ({ ...d, blocks: [{ ...d.blocks[0], linkedTo }] });
-    const ok = { roomNumber: '101', reserverName: 'Ann Lee' };
+    const ok = { roomNumber: '101', reserverName: 'Ann Lee', multilinkageCount: 2 };
     await expect(
       make(vi.fn().mockResolvedValue(json(withLink(ok)))).schedule.get(query),
     ).resolves.toBeDefined();
@@ -50,6 +50,8 @@ describe('http schedule.get', () => {
       {},
       { roomNumber: 101, reserverName: 'Ann Lee' },
       { roomNumber: '101' },
+      { roomNumber: '101', reserverName: 'Ann Lee', multilinkageCount: -1 },
+      { roomNumber: '101', reserverName: 'Ann Lee', multilinkageCount: '2' },
     ]) {
       await expect(
         make(vi.fn().mockResolvedValue(json(withLink(bad)))).schedule.get(query),

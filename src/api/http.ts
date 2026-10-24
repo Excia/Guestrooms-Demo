@@ -225,7 +225,19 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     ) &&
     isString(v.version) &&
     v.version !== '' &&
-    (v.lastAuditedDate === undefined || v.lastAuditedDate === null || isString(v.lastAuditedDate))
+    (v.lastAuditedDate === undefined ||
+      v.lastAuditedDate === null ||
+      isString(v.lastAuditedDate)) &&
+    (v.folioCharges === undefined ||
+      listOf(
+        v.folioCharges,
+        (c) =>
+          isObject(c) &&
+          isString(c.type) &&
+          CHARGE_TYPES.includes(c.type) &&
+          isString(c.status) &&
+          CHARGE_STATUSES.includes(c.status),
+      ))
   );
 }
 
@@ -719,7 +731,10 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     (v.linkedTo === undefined ||
       (isObject(v.linkedTo) &&
         isString(v.linkedTo.roomNumber) &&
-        isString(v.linkedTo.reserverName))) &&
+        isString(v.linkedTo.reserverName) &&
+        (v.linkedTo.multilinkageCount === undefined ||
+          (Number.isInteger(v.linkedTo.multilinkageCount) &&
+            (v.linkedTo.multilinkageCount as number) >= 0)))) &&
     (v.roomChange === undefined ||
       (isObject(v.roomChange) &&
         (v.roomChange.part === 'previous' ||

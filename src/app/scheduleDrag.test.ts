@@ -142,6 +142,9 @@ describe('canDrop: refusals', () => {
     expect(isDraggable(c)).toBe(false);
     expect(isDraggable(out)).toBe(false);
     expect(isDraggable(block({ roomId: 'a1', status: 'checked-in' }))).toBe(true);
+    expect(
+      isDraggable(block({ roomId: 'a1', linkedTo: { roomNumber: '2', reserverName: 'A B' } })),
+    ).toBe(false);
   });
   it('refuses a room with a reservation on the same dates, and names the room', () => {
     const src = block({ roomId: 'a1' });

@@ -75,6 +75,14 @@ beforeAll(() => {
   });
 });
 
+// Moves the grid cursor down to the seeded linked-room block (GR-50351, rr-16).
+async function cursorOnLinked(user: Awaited<ReturnType<typeof loaded>>) {
+  for (let i = 0; i < 40 && !grid().getAttribute('aria-activedescendant')?.endsWith('rr-16'); i++) {
+    await user.keyboard('{ArrowDown}');
+  }
+  expect(grid().getAttribute('aria-activedescendant')).toMatch(/rr-16$/);
+}
+
 describe('opening the details panel', () => {
   it('a click on a block opens its details with the accordion sections, and records it in the URL', async () => {
     const user = await loaded();
@@ -108,6 +116,41 @@ describe('opening the details panel', () => {
     await user.keyboard('{Enter}');
     await panel(/Reservation #GR-50310/);
     expect(url()).toContain('res=rs-5');
+  });
+
+  it('a linked-room block opens nothing and cannot be picked up (click, Enter, Space)', async () => {
+    const user = await loaded();
+    const linked = block('Marcus Feldman');
+    expect(linked).toHaveAttribute('aria-disabled', 'true');
+    await user.click(linked);
+    expect(url()).toBe('/schedule');
+    grid().focus();
+    await cursorOnLinked(user);
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(url()).toBe('/schedule');
+    expect(screen.queryByRole('dialog', { name: /Reservation/ })).not.toBeInTheDocument();
+    expect(
+      screen
+        .getAllByRole('status', { hidden: true })
+        .map((s) => s.textContent)
+        .join(' '),
+    ).not.toMatch(/Picked up/);
+    expect(
+      screen
+        .getAllByRole('status', { hidden: true })
+        .map((st) => st.textContent)
+        .join(' '),
+    ).toContain('Linked room. It cannot be opened or moved from here.');
+  });
+
+  it('the grid cursor on a linked-room block shows its tooltip', async () => {
+    const user = await loaded();
+    grid().focus();
+    await cursorOnLinked(user);
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent(
+      'Linked to 102 +2 Room',
+    );
   });
 
   it('Enter on an empty cell or a closure does nothing', async () => {

@@ -109,7 +109,7 @@ describe('ReservationList', () => {
   });
 
   it('renders status, room and canceled treatments', async () => {
-    setup('/reservations?from=&to=');
+    setup('/reservations?from=&to=&rows=50');
     // Not on the grid: list-only mock reservations.
     const canceled = await rowFor('GR-50401');
     expect(within(canceled).getByText('Canceled')).toHaveStyle({ fontWeight: '700' });
@@ -321,7 +321,7 @@ describe('ReservationList', () => {
     });
 
     it('offers a checkbox only on selectable rows', async () => {
-      setup('/reservations?from=&to=');
+      setup('/reservations?from=&to=&rows=50');
       // Checked in, checked out and canceled single rooms: no checkbox.
       expect(within(await rowFor('GR-50240')).queryByRole('checkbox')).toBeNull();
       expect(within(await rowFor('GR-50188')).queryByRole('checkbox')).toBeNull();

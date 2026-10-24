@@ -58,25 +58,26 @@ describe('validateAddOn', () => {
     );
   });
 
-  it('limits the nightly quantity to 1..99 only while tracking is on', () => {
-    expect(validateAddOn({ ...valid(), trackNightly: true, nightlyQty: 0 }).nightlyQty).toMatch(
-      /1 to 99/,
-    );
-    expect(validateAddOn({ ...valid(), trackNightly: true, nightlyQty: 100 }).nightlyQty).toMatch(
-      /1 to 99/,
+  it('accepts any whole nightly quantity of 0 or more, with no maximum, while tracking is on', () => {
+    const msg = /whole number, 0 or more/;
+    expect(validateAddOn({ ...valid(), trackNightly: true, nightlyQty: -1 }).nightlyQty).toMatch(
+      msg,
     );
     expect(validateAddOn({ ...valid(), trackNightly: true, nightlyQty: 1.5 }).nightlyQty).toMatch(
-      /1 to 99/,
+      msg,
     );
-    expect(validateAddOn({ ...valid(), trackNightly: true, nightlyQty: 99 })).toEqual({});
-    expect(validateAddOn({ ...valid(), trackNightly: false, nightlyQty: 0 })).toEqual({});
+    expect(
+      validateAddOn({ ...valid(), trackNightly: true, nightlyQty: Number.NaN }).nightlyQty,
+    ).toMatch(msg);
+    for (const nightlyQty of [0, 1, 99, 100, 5000]) {
+      expect(validateAddOn({ ...valid(), trackNightly: true, nightlyQty })).toEqual({});
+    }
+    expect(validateAddOn({ ...valid(), trackNightly: false, nightlyQty: -3 })).toEqual({});
   });
 
   it('limits the description to 400 characters', () => {
     expect(ADD_ON_DESCRIPTION_MAX).toBe(400);
-    expect(
-      validateAddOn({ ...valid(), description: 'x'.repeat(400) }).description,
-    ).toBeUndefined();
+    expect(validateAddOn({ ...valid(), description: 'x'.repeat(400) }).description).toBeUndefined();
     expect(validateAddOn({ ...valid(), description: 'x'.repeat(401) }).description).toBe(
       'Use at most 400 characters.',
     );
@@ -86,19 +87,19 @@ describe('validateAddOn', () => {
     const photo = (i: number) => ({ id: `p${i}`, name: `${i}.jpg`, url: '' });
     expect(validateAddOn(valid()).photos).toBeUndefined();
     expect(
-      validateAddOn({ ...valid(), photos: Array.from({ length: 51 }, (_, i) => photo(i)) })
-        .photos,
+      validateAddOn({ ...valid(), photos: Array.from({ length: 51 }, (_, i) => photo(i)) }).photos,
     ).toBe('Use at most 50 photos.');
   });
 });
 
 describe('clampNightlyQty', () => {
-  it('keeps the stepper inside 1..99 and whole', () => {
-    expect([NIGHTLY_QTY.min, NIGHTLY_QTY.max]).toEqual([1, 99]);
-    expect(clampNightlyQty(0)).toBe(1);
-    expect(clampNightlyQty(150)).toBe(99);
+  it('keeps the stepper whole and at 0 or more, with no maximum', () => {
+    expect(NIGHTLY_QTY.min).toBe(0);
+    expect(clampNightlyQty(-4)).toBe(0);
+    expect(clampNightlyQty(0)).toBe(0);
+    expect(clampNightlyQty(150)).toBe(150);
     expect(clampNightlyQty(4.6)).toBe(5);
-    expect(clampNightlyQty(Number.NaN)).toBe(1);
+    expect(clampNightlyQty(Number.NaN)).toBe(0);
   });
 });
 

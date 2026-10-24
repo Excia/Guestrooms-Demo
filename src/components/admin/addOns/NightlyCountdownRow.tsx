@@ -46,7 +46,6 @@ export default function NightlyCountdownRow({
             unit="per night"
             value={qty}
             min={NIGHTLY_QTY.min}
-            max={NIGHTLY_QTY.max}
             disabled={!tracked}
             onChange={(v) => onChange({ trackNightly: tracked, nightlyQty: clampNightlyQty(v) })}
           />

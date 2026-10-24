@@ -3,6 +3,7 @@
 // renders the answer.
 import type { IsoDate } from '../lib/dates';
 import type { ReservationDetail, ReservationRoomDetail } from '../api/types';
+import { nightAuditHasRunForFolio } from './folioNightAudit';
 
 export type MenuActionId =
   | 'undo-check-in'
@@ -30,7 +31,10 @@ const LABELS: Record<MenuActionId, string> = {
 
 const action = (id: MenuActionId): MenuAction => ({ id, label: LABELS[id] });
 
-export type MenuInput = Pick<ReservationDetail, 'status' | 'rooms' | 'lastAuditedDate'> & {
+export type MenuInput = Pick<
+  ReservationDetail,
+  'status' | 'rooms' | 'lastAuditedDate' | 'folioCharges'
+> & {
   /** Holds `reservation.edit`: without it only Print and Jump to Folio remain. Required: no default. */
   canEdit: boolean;
   /**
@@ -105,13 +109,27 @@ export const hasUnassignedRoom = (rooms: readonly ReservationRoomDetail[]) =>
   rooms.some((r) => r.status === 'nyci' && r.roomId === null);
 
 /**
+ * Add Another Room follows the legacy system (owner decision 2026-10-24): hidden once the
+ * reservation is cancelled, every room has checked out, or the night audit has run for it (inferred
+ * from the folio); otherwise offered, also after check in. No permission check.
+ */
+export function addRoomVisible(
+  input: Pick<MenuInput, 'status' | 'rooms' | 'folioCharges'>,
+): boolean {
+  const state = menuState(input);
+  if (state === 'cancelled' || state === 'checked-out') return false;
+  return !nightAuditHasRunForFolio(input.folioCharges);
+}
+
+/**
  * The menu behind the split button, in Figma order.
  * - Not yet checked in: Edit Reservation (Assign Room when a room is unassigned), Cancel
  *   Reservation, Add Another Room, Print Registration Card(s), Jump to Folio.
- * - Checked in: Undo Check In (until the night audit has run), Edit Reservation, Add Another Room
- *   Print, Jump to Folio. Add Another Room stays after the night audit (the ticket's list; Figma shows
- *   it only "before NA": F-22-3, Q-22-3).
- * - Checked out or partly checked out: Print, Jump to Folio. Cancelled: Jump to Folio.
+ * - Checked in: Undo Check In (until the night audit has run), Edit Reservation, Add Another Room,
+ *   Print, Jump to Folio.
+ * - Partly checked out: Add Another Room, Print, Jump to Folio. Checked out: Print, Jump to Folio.
+ *   Cancelled: Jump to Folio.
+ * - Add Another Room is governed by `addRoomVisible` alone (F-22-3, Q-22-3: matches legacy).
  */
 export function reservationMenu(input: MenuInput): MenuAction[] {
   const state = menuState(input);
@@ -120,18 +138,15 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
   const print = input.registrationCardEnabled !== false;
   const edit = hasUnassignedRoom(input.rooms) ? 'assign-room' : 'edit-reservation';
   if (state === 'not-checked-in') {
-    if (canEdit) ids.push(edit, 'cancel-reservation', 'add-room');
-    if (print) ids.push('print-registration-card');
+    if (canEdit) ids.push(edit, 'cancel-reservation');
   } else if (state === 'checked-in') {
     if (canEdit) {
       if (canUndoReservationCheckIn(input)) ids.push('undo-check-in');
       ids.push(edit);
-      ids.push('add-room');
     }
-    if (print) ids.push('print-registration-card');
-  } else if (state !== 'cancelled') {
-    if (print) ids.push('print-registration-card');
   }
+  if (addRoomVisible(input)) ids.push('add-room');
+  if (state !== 'cancelled' && print) ids.push('print-registration-card');
   ids.push('jump-to-folio');
   return ids.map(action);
 }

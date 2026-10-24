@@ -8,7 +8,8 @@ export interface NightsStepperProps {
   label: string;
   value: number;
   min: number;
-  max: number;
+  /** Omit for no upper limit. */
+  max?: number;
   onChange: (value: number) => void;
   disabled?: boolean;
   id?: string;
@@ -29,7 +30,7 @@ export default function NightsStepper({
   unit = 'nights',
 }: NightsStepperProps) {
   const atMin = value <= min;
-  const atMax = value >= max;
+  const atMax = max !== undefined && value >= max;
   return (
     <ButtonGroup
       id={id}

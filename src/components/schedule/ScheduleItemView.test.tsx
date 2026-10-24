@@ -76,17 +76,43 @@ describe('ScheduleItemView linked block', () => {
     expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent('Thomas Okafor');
   });
 
-  it.each([
-    [40, false, false],
-    [90, true, false],
-    [130, true, true],
-  ])('at %ipx shows room number %s and reserver name %s', (width, room, reserver) => {
-    const spy = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockReturnValue({ width } as DOMRect);
-    view(block);
-    expect(screen.queryByText('202') !== null).toBe(room);
-    expect(screen.queryByText('Thomas Okafor') !== null).toBe(reserver);
-    spy.mockRestore();
+  it('is dimmed, not-allowed, aria-disabled and does not start a drag', async () => {
+    const onPointerDown = vi.fn();
+    const onActivate = vi.fn();
+    view(block, { onPointerDown, onActivate });
+    const cell = screen.getByRole('gridcell');
+    expect(cell).toHaveAttribute('aria-disabled', 'true');
+    expect(cell).toHaveStyle({ opacity: '0.75', cursor: 'not-allowed' });
+    await userEvent.tab();
+    await userEvent.keyboard('{Enter} ');
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: cell });
+    expect(onPointerDown).not.toHaveBeenCalled();
+    // The owner's callback only announces why nothing opens.
+    expect(onActivate).toHaveBeenCalledTimes(2);
+  });
+
+  it('writes the room and the reserver in the 7 day view', () => {
+    view({ ...block, linkedTo: { ...block.linkedTo!, multilinkageCount: 2 } }, { days: 7 });
+    expect(screen.getByText('202 +2')).toBeInTheDocument();
+    expect(screen.queryByText('Thomas Okafor')).not.toBeInTheDocument();
+    view(block, { days: 7 });
+    expect(screen.getByText('Thomas Okafor')).toBeInTheDocument();
+  });
+
+  it('14 day view, one night: no first line, the room name on the second line', () => {
+    view(block, { days: 14 });
+    expect(screen.getByText('202')).toHaveStyle({ fontWeight: '400' });
+    expect(screen.queryByText('Thomas Okafor')).not.toBeInTheDocument();
+  });
+
+  it('30 day view, one night: the icon alone', () => {
+    view(block, { days: 30 });
+    expect(screen.getByTestId('linked-icon')).toBeInTheDocument();
+    expect(screen.queryByText('202')).not.toBeInTheDocument();
+  });
+
+  it('a stay of 3 nights shows the room name in bold in the 30 day view', () => {
+    view({ ...block, endDate: '2026-10-13' }, { days: 30 });
+    expect(screen.getByText('202')).toHaveStyle({ fontWeight: '700' });
   });
 });

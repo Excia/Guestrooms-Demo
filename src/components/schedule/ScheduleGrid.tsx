@@ -51,6 +51,7 @@ import {
 } from '../../app/scheduleGrid';
 import type { SetHousekeeping } from './HousekeepingChip';
 import { unassignedSection } from '../../app/unassignedRows';
+import { isLinkedBlock } from '../../app/scheduleLinked';
 import ScheduleItemView from './ScheduleItemView';
 import UnassignedSection from './UnassignedSection';
 import {
@@ -116,6 +117,9 @@ const NAVIGATION_KEYS = new Set([
   'PageUp',
   'PageDown',
 ]);
+
+/** Said when Enter, Space or a click lands on a linked-room block, which is read-only. */
+const LINKED_ANNOUNCEMENT = 'Linked room. It cannot be opened or moved from here.';
 
 const HELP =
   'Use the arrow keys to move between rooms and dates. Press Enter on a reservation to open its details, or on an empty date to start a new reservation there. ' +
@@ -508,6 +512,7 @@ export default function ScheduleGrid({
   const onItemPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>, item: ScheduleItem) => {
       if (event.button !== 0 || event.pointerType === 'touch' || latest.current.locked) return;
+      if (item.kind === 'reservation' && isLinkedBlock(item)) return;
       pointerRef.current?.stop();
       const scroller = scrollRef.current;
       const move = (e: PointerEvent) => updatePointerDrag(e.clientX, e.clientY);
@@ -613,7 +618,10 @@ export default function ScheduleGrid({
     if (element.closest('[data-unassigned-section]')) {
       const id = element.closest<HTMLElement>('[data-item-id]')?.dataset.itemId;
       const unassigned = data.unassigned.find((b) => b.id === id);
-      if (unassigned) latest.current.onOpen(unassigned);
+      if (unassigned) {
+        if (isLinkedBlock(unassigned)) setAnnouncement(LINKED_ANNOUNCEMENT);
+        else latest.current.onOpen(unassigned);
+      }
       return;
     }
     const rowEl = element.closest<HTMLElement>('[role="row"]');
@@ -647,8 +655,11 @@ export default function ScheduleGrid({
     setCursor({ row: index, col: layout?.column ?? 0 });
     scrollRef.current?.focus({ preventScroll: true });
     // A plain click (a drag's click was swallowed in the capture phase) opens the details.
-    if (item.kind === 'reservation') latest.current.onOpen(item);
-    else setAnnouncement('Room closed.');
+    if (item.kind === 'reservation') {
+      // A linked-room block opens nothing (legacy behavior).
+      if (isLinkedBlock(item)) setAnnouncement(LINKED_ANNOUNCEMENT);
+      else latest.current.onOpen(item);
+    } else setAnnouncement('Room closed.');
   };
 
   // ---- keyboard ----------------------------------------------------------------------------
@@ -794,7 +805,9 @@ export default function ScheduleGrid({
       if (item) {
         event.preventDefault();
         // Enter opens the details; Space and M pick the block up to move it.
-        if (key === 'Enter') {
+        if (item.kind === 'reservation' && isLinkedBlock(item)) {
+          setAnnouncement(LINKED_ANNOUNCEMENT);
+        } else if (key === 'Enter') {
           if (item.kind === 'reservation') latest.current.onOpen(item);
           else setAnnouncement('Room closed. Closures have no details.');
         } else pickUp(item, cursorRow);
@@ -1019,6 +1032,7 @@ export default function ScheduleGrid({
             idPrefix={idPrefix}
             onToggle={() => setUnassignedCollapsed((c) => !c)}
             onOpen={(block) => latest.current.onOpen(block)}
+            onLinked={() => setAnnouncement(LINKED_ANNOUNCEMENT)}
           />
           <Box role="rowgroup" sx={{ position: 'relative', height: rowsHeight }}>
             {todayIndex >= 0 && todayIndex < days ? (

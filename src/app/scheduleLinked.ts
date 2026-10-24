@@ -1,35 +1,55 @@
-// Linked-room blocks and the early check in / late check out indicator rules (ticket 2.4, Figma
-// "Linked Room Block" 12455:90329 and "States and Variations" 12423:59315). Pure, no React.
+// Linked-room blocks and the early check in / late check out indicator rules (ticket 2.4). The
+// linked-block text follows the legacy system, not the Figma width tiers (owner decision
+// 2026-10-24). Pure, no React.
 import type { LinkedRoom, ScheduleBlockStatus } from '../api/types';
 
-/** What a linked block shows, from its drawn width. */
-export type LinkedTier =
-  /** The link icon only (30 day view, one night). */
-  | 'icon'
-  /** The link icon and the linked room number, which may wrap to a second line (14 day view, one night). */
-  | 'room'
-  /** The icon and room number on one line, the reserver's name on the second line. */
-  | 'reserver';
+/** Stays of at least this many nights show the linked room name in any view (legacy). */
+export const LINKED_LONG_STAY_NIGHTS = 3;
+
+export interface LinkedText {
+  /** Bold first line: the linked room (and " +N" when several rooms are linked); may be empty. */
+  title: string;
+  /** Second line: the reserver, or the linked room in a short stay of the 14 day view; may be empty. */
+  subtitle: string;
+}
+
+/** The " +N" after the room name when several rooms are linked (`multilinkageCount`). */
+export function multilinkSuffix(linked: Pick<LinkedRoom, 'multilinkageCount'>): string {
+  const count = linked.multilinkageCount ?? 0;
+  return count > 1 ? ` +${count}` : '';
+}
 
 /**
- * Narrowest block widths, in px, for each tier. The Figma frames show the icon alone at about one
- * 30 day column (40 to 60px), the room number at one 14 day column (90px), and the name once the icon
- * and number fit on one line, from one 7 day column (120px) up.
+ * What a linked block writes, by view (`days`: 7, 14 or 30) and the number of nights of its stay
+ * (matches the legacy system, owner decision 2026-10-24):
+ * - first line: the linked room name (plus " +N") in the 7 day view or for a stay of 3+ nights, else empty;
+ * - second line: the reserver in the 7 day view, blank when several rooms are linked; in the 14 day
+ *   view with a stay under 3 nights, the linked room name instead; otherwise blank.
  */
-export const LINKED_TIER_MIN_WIDTH = { room: 64, reserver: 120 } as const;
-
-export function linkedTier(widthPx: number): LinkedTier {
-  if (widthPx >= LINKED_TIER_MIN_WIDTH.reserver) return 'reserver';
-  if (widthPx >= LINKED_TIER_MIN_WIDTH.room) return 'room';
-  return 'icon';
+export function linkedBlockText(
+  linked: Pick<LinkedRoom, 'roomNumber' | 'reserverName' | 'multilinkageCount'>,
+  days: number,
+  nights: number,
+): LinkedText {
+  const several = (linked.multilinkageCount ?? 0) > 1;
+  const long = nights >= LINKED_LONG_STAY_NIGHTS;
+  const title = days === 7 || long ? `${linked.roomNumber}${multilinkSuffix(linked)}` : '';
+  let subtitle = '';
+  if (days === 7) subtitle = several ? '' : linked.reserverName;
+  else if (days === 14 && !long) subtitle = linked.roomNumber;
+  return { title, subtitle };
 }
 
-/** The tooltip of a linked block: two lines, "Linked to [Room Number]" then "Reserver First Last". */
+/** The tooltip of a linked block: "Linked to [Room][ +N Room]" then the reserver's name. */
 export function linkedTooltipLines(
-  linked: Pick<LinkedRoom, 'roomNumber' | 'reserverName'>,
+  linked: Pick<LinkedRoom, 'roomNumber' | 'reserverName' | 'multilinkageCount'>,
 ): [string, string] {
-  return [`Linked to ${linked.roomNumber}`, linked.reserverName];
+  const more = multilinkSuffix(linked);
+  return [`Linked to ${linked.roomNumber}${more ? `${more} Room` : ''}`, linked.reserverName];
 }
+
+/** A linked-room block is read-only: it is not clickable, draggable or openable (legacy behavior). */
+export const isLinkedBlock = (block: { linkedTo?: LinkedRoom }): boolean => Boolean(block.linkedTo);
 
 export interface EarlyLateFlags {
   earlyCheckIn?: boolean;

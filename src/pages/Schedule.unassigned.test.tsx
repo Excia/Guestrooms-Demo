@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
@@ -48,6 +48,33 @@ beforeAll(() => {
     get: () => 3000,
   });
 });
+
+// The first Unassigned seed (Harriet Lowell) as a linked-room block: the mock has none.
+function linkedUnassigned(): ApiClient {
+  const client = createMockClient({ today: TODAY });
+  return {
+    ...client,
+    schedule: {
+      ...client.schedule,
+      get: async (query, options) => {
+        const data = await client.schedule.get(query, options);
+        return {
+          ...data,
+          unassigned: data.unassigned.map((b) =>
+            b.id === 'rr-u1'
+              ? { ...b, linkedTo: { roomNumber: '202', reserverName: 'Thomas Okafor' } }
+              : b,
+          ),
+        };
+      },
+    },
+  };
+}
+const statusText = () =>
+  screen
+    .getAllByRole('status', { hidden: true })
+    .map((s) => s.textContent)
+    .join(' ');
 
 describe('schedule Unassigned section', () => {
   it('has no row when nothing is unassigned in the range', async () => {
@@ -151,5 +178,23 @@ describe('schedule Unassigned section', () => {
       )!;
     // header (1) + two Unassigned rows (2, 3): the first room is row 4
     expect(firstRoomRow).toHaveAttribute('aria-rowindex', '4');
+  });
+  it('a linked-room block here opens nothing on click, says why, and shows its tooltip on focus', async () => {
+    const user = await loaded('/schedule', linkedUnassigned());
+    const cell = screen.getByRole('gridcell', { name: /Harriet Lowell.*Linked to 202/ });
+    expect(cell).toHaveAttribute('aria-disabled', 'true');
+    await user.click(cell);
+    expect(screen.getByTestId('url')).not.toHaveTextContent('res=');
+    expect(statusText()).toContain('Linked room. It cannot be opened or moved from here.');
+  });
+
+  it('Enter on a focused linked-room block here opens nothing and says why', async () => {
+    const user = await loaded('/schedule', linkedUnassigned());
+    const cell = screen.getByRole('gridcell', { name: /Harriet Lowell.*Linked to 202/ });
+    act(() => cell.focus());
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent('Linked to 202');
+    await user.keyboard('{Enter}');
+    expect(screen.getByTestId('url')).not.toHaveTextContent('res=');
+    expect(statusText()).toContain('Linked room. It cannot be opened or moved from here.');
   });
 });

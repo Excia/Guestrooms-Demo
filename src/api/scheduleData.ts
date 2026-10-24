@@ -313,6 +313,7 @@ const BLOCK_SEEDS: BlockSeed[] = [
     linked: {
       roomNumber: '102',
       reserverName: 'Beatrice Quinn',
+      multilinkageCount: 2,
     },
   },
   {
@@ -435,6 +436,19 @@ const BLOCK_SEEDS: BlockSeed[] = [
     from: -3,
     to: 0,
     status: 'checked-out',
+  },
+  // PLACEHOLDER (P-LM-2): checked in and arriving today, so no night audit has posted its room
+  // charges yet and Add Another Room is offered in its menu.
+  {
+    id: 'rr-30',
+    res: 'rs-30',
+    conf: 'GR-50362',
+    guest: 'Naomi Castellano',
+    type: 'guest',
+    room: 'rm-C6',
+    from: 0,
+    to: 2,
+    status: 'checked-in',
   },
 ];
 

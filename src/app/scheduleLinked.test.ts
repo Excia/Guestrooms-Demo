@@ -2,40 +2,57 @@ import { describe, expect, it } from 'vitest';
 import {
   blockIndicators,
   indicatorsForStatus,
-  linkedTier,
+  isLinkedBlock,
+  linkedBlockText,
   linkedTooltipLines,
-  LINKED_TIER_MIN_WIDTH,
 } from './scheduleLinked';
 import { blockAriaLabel, blockMarkers } from './scheduleGrid';
 import type { ScheduleBlock } from '../api/types';
 
-describe('linkedTier', () => {
-  it('shows the icon alone at a 30 day single-night width', () => {
-    expect(linkedTier(40)).toBe('icon');
-    expect(linkedTier(60)).toBe('icon');
+const one = { roomNumber: '202', reserverName: 'Thomas Okafor' };
+const several = { ...one, multilinkageCount: 3 };
+
+describe('linkedBlockText', () => {
+  it('7 day view: room on the first line, reserver on the second, whatever the stay length', () => {
+    for (const nights of [1, 2, 3, 9]) {
+      expect(linkedBlockText(one, 7, nights)).toEqual({ title: '202', subtitle: 'Thomas Okafor' });
+    }
   });
-  it('adds the room number at a 14 day single-night width', () => {
-    expect(linkedTier(90)).toBe('room');
+  it('7 day view with several rooms linked: " +N" after the room, second line blank', () => {
+    expect(linkedBlockText(several, 7, 1)).toEqual({ title: '202 +3', subtitle: '' });
   });
-  it('adds the reserver name once icon and number fit on one line (7 day single night)', () => {
-    expect(linkedTier(120)).toBe('reserver');
-    expect(linkedTier(360)).toBe('reserver');
+  it('14 day view, stay of 3+ nights: the room on the first line only', () => {
+    expect(linkedBlockText(one, 14, 3)).toEqual({ title: '202', subtitle: '' });
+    expect(linkedBlockText(several, 14, 5)).toEqual({ title: '202 +3', subtitle: '' });
   });
-  it('switches exactly at the limits', () => {
-    expect(linkedTier(LINKED_TIER_MIN_WIDTH.room - 1)).toBe('icon');
-    expect(linkedTier(LINKED_TIER_MIN_WIDTH.room)).toBe('room');
-    expect(linkedTier(LINKED_TIER_MIN_WIDTH.reserver - 1)).toBe('room');
-    expect(linkedTier(LINKED_TIER_MIN_WIDTH.reserver)).toBe('reserver');
-    expect(linkedTier(0)).toBe('icon');
+  it('14 day view, stay under 3 nights: empty first line, the room name on the second', () => {
+    expect(linkedBlockText(one, 14, 1)).toEqual({ title: '', subtitle: '202' });
+    expect(linkedBlockText(one, 14, 2)).toEqual({ title: '', subtitle: '202' });
+  });
+  it('30 day view: the room only for a stay of 3+ nights', () => {
+    expect(linkedBlockText(one, 30, 1)).toEqual({ title: '', subtitle: '' });
+    expect(linkedBlockText(one, 30, 2)).toEqual({ title: '', subtitle: '' });
+    expect(linkedBlockText(one, 30, 3)).toEqual({ title: '202', subtitle: '' });
+  });
+  it('a count of 0 or 1 adds nothing', () => {
+    expect(linkedBlockText({ ...one, multilinkageCount: 1 }, 7, 1).title).toBe('202');
+    expect(linkedBlockText({ ...one, multilinkageCount: 0 }, 7, 1).title).toBe('202');
   });
 });
 
 describe('linkedTooltipLines', () => {
-  it('is "Linked to [Room Number]" then the reserver name', () => {
-    expect(linkedTooltipLines({ roomNumber: '202', reserverName: 'Thomas Okafor' })).toEqual([
-      'Linked to 202',
-      'Thomas Okafor',
-    ]);
+  it('is "Linked to [Room]" then the reserver name', () => {
+    expect(linkedTooltipLines(one)).toEqual(['Linked to 202', 'Thomas Okafor']);
+  });
+  it('adds " +N Room" when several rooms are linked', () => {
+    expect(linkedTooltipLines(several)).toEqual(['Linked to 202 +3 Room', 'Thomas Okafor']);
+  });
+});
+
+describe('isLinkedBlock', () => {
+  it('is true only for a block that has a linked room', () => {
+    expect(isLinkedBlock({ linkedTo: one })).toBe(true);
+    expect(isLinkedBlock({})).toBe(false);
   });
 });
 

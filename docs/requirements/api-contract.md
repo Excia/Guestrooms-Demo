@@ -377,6 +377,11 @@ carry the `ReservationDetail.version` the user saw.
 
 - `ReservationDetail.lastAuditedDate?: IsoDate | null` is the latest business date a night audit has run for. The UI hides Undo
   Check In when a checked-in room's check-in business date (arrival, Q-22-5) is on or before it, and when the field is absent.
+- `ReservationDetail.folioCharges?: {type, status}[]` lists the folio's lines (type and status only). The UI hides Add Another
+  Room when any line is `posted` or `settled` and not of type `mpos` (the legacy inference that the night audit has run; D-LM-5).
+  Absent means the menu keeps offering it. The backend may instead send the same fact from its own audit log.
+- `ScheduleBlock.linkedTo.multilinkageCount?: number` (integer, 0 or more) is set when several rooms are linked: the number shown
+  as " +N" after the linked room and in the tooltip (D-LM-1).
 - Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
 - New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).
 
@@ -421,7 +426,7 @@ trimmed, and must not carry a username or password. This is a breaking contract 
 
 `AddOnSetup`: `id`, `name` (1 to 50), `startDate`, `endDate | null` (after the start), `kind` (`item` or `combo`),
 `sku` (`{ id, label }`, required; the reservation shows its price), `onlineBooking`, `trackNightly`, `nightlyQty`
-(1 to 99, meaningful only while `trackNightly`; the backend stores 1 otherwise), `description` (at most 400),
+(a whole number, 0 or more, no maximum, as in the legacy system; meaningful only while `trackNightly`; the backend stores 1 otherwise), `description` (at most 400),
 `photos` (at most 50, `{ id, name, url }`), `locationIds`, `roomTypeIds`. The rules are in `src/app/addOns.ts` and
 must be enforced again by the backend, which also answers 422 `validation` when `sku`, a `locationIds` entry or a
 `roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it

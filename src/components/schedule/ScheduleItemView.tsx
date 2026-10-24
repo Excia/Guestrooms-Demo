@@ -6,12 +6,12 @@ import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { memo, useLayoutEffect, useRef, useState, type PointerEventHandler } from 'react';
-import type { HousekeepingStatus, LinkedRoom, ScheduleBlock, ScheduleClosure } from '../../api';
-import type { IsoDate } from '../../lib/dates';
+import { memo, useRef, useState, type PointerEventHandler } from 'react';
+import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
+import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
-import { linkedTier, linkedTooltipLines, type LinkedTier } from '../../app/scheduleLinked';
+import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
@@ -22,6 +22,9 @@ import {
   dateAreaWidth,
   dateAreaX,
 } from './scheduleLayout';
+
+/** Linked-room blocks are drawn dimmed (legacy: 75%). */
+const LINKED_OPACITY = 0.75;
 
 export interface ScheduleItemViewProps {
   item: ScheduleItem;
@@ -60,6 +63,7 @@ export interface ScheduleItemViewProps {
 function fill(item: ScheduleItem, today: IsoDate, t: Theme): string {
   const c = t.palette.schedule;
   if (item.kind === 'closure') return c.closure;
+  if (item.linkedTo) return t.palette.grey[300];
   switch (item.status) {
     case 'checked-in':
       return item.endDate === today ? c.dueOut : c.checkedIn;
@@ -102,55 +106,38 @@ function TypeIcon({ type }: { type: ScheduleBlock['guestType'] }) {
 }
 
 /**
- * Content of a linked-room block (Figma "Linked Room Block"): the link icon; from the `room` tier the
- * linked room number (it may wrap under the icon); in the `reserver` tier the reserver's name on a
- * second line. Text is cut with an ellipsis; the tooltip has the full text.
+ * Content of a linked-room block (legacy behavior): the link icon with a bold first line, and a
+ * second line; what the lines say depends on the view and the stay length (`linkedBlockText`).
+ * Text is cut with an ellipsis; the tooltip has the full text.
  */
-function LinkedContent({
-  linked,
-  tier,
-  settled,
-}: {
-  linked: LinkedRoom;
-  tier: LinkedTier;
-  settled: boolean;
-}) {
+function LinkedContent({ text }: { text: { title: string; subtitle: string } }) {
   return (
     <>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          flexWrap: tier === 'room' ? 'wrap' : 'nowrap',
-          columnGap: 0.5,
-          minWidth: 0,
-          justifyContent: tier === 'icon' ? 'center' : 'flex-start',
-        }}
-      >
+      <Box sx={{ display: 'flex', alignItems: 'center', columnGap: 0.5, minWidth: 0 }}>
         <LinkIcon
           aria-hidden
           data-testid="linked-icon"
           sx={{ fontSize: (t) => t.spacing(BLOCK_ICON_SPACING), flexShrink: 0 }}
         />
-        {tier === 'icon' ? null : (
+        {text.title ? (
           <Typography
             variant="subtitle2"
             component="span"
-            noWrap={tier === 'reserver'}
-            sx={{ fontWeight: 500, minWidth: 0 }}
+            noWrap
+            sx={{ fontWeight: 700, minWidth: 0 }}
           >
-            {linked.roomNumber}
+            {text.title}
           </Typography>
-        )}
+        ) : null}
       </Box>
-      {tier === 'reserver' ? (
+      {text.subtitle ? (
         <Typography
           variant="caption"
           component="span"
           noWrap
-          sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
+          sx={(t) => ({ color: t.palette.text.primary })}
         >
-          {linked.reserverName}
+          {text.subtitle}
         </Typography>
       ) : null}
     </>
@@ -185,22 +172,11 @@ export default memo(function ScheduleItemView({
   const [cutOff, setCutOff] = useState(false);
   // A tab stop (Unassigned section) has DOM focus; room-row blocks use the grid's cursor (tipFocused).
   const [focusIn, setFocusIn] = useState(false);
-  const [width, setWidth] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const linked = item.kind === 'reservation' ? item.linkedTo : undefined;
-  // A linked block's content follows its drawn width (three tiers); measured, since the width is CSS.
-  // useLayoutEffect so the first paint already uses the right tier (no icon-only flash).
-  useLayoutEffect(() => {
-    const el = bodyRef.current;
-    if (!linked || !el) return;
-    const measure = () => setWidth(el.getBoundingClientRect().width);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [linked]);
-  const tier = linkedTier(width);
+  const linkedText = linked
+    ? linkedBlockText(linked, days, daysBetween(item.startDate, item.endDate))
+    : null;
   const span = blockSpan(layout, days);
   const marker = (side: 'left' | 'right') => (
     <Box
@@ -238,7 +214,8 @@ export default memo(function ScheduleItemView({
   const isClosure = item.kind === 'closure';
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
-  const settled = !isClosure && (block.status === 'checked-in' || block.status === 'checked-out');
+  const settled =
+    !isClosure && !linked && (block.status === 'checked-in' || block.status === 'checked-out');
   const hk =
     isClosure || ghost
       ? null
@@ -272,14 +249,17 @@ export default memo(function ScheduleItemView({
           gap: 0.25,
           overflow: 'hidden',
           bgcolor: fill(item, today, t),
-          border: isClosure || settled ? 'none' : `0.5px solid ${t.palette.schedule.nyciBorder}`,
+          border:
+            isClosure || settled || linked
+              ? 'none'
+              : `0.5px solid ${t.palette.schedule.nyciBorder}`,
           borderRadius: `${cl} ${cr} ${cr} ${cl}`,
           boxShadow: t.shadows[1],
         };
       }}
     >
       {linked ? (
-        <LinkedContent linked={linked} tier={tier} settled={settled} />
+        <LinkedContent text={linkedText!} />
       ) : (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
@@ -331,8 +311,12 @@ export default memo(function ScheduleItemView({
       data-item-id={item.id}
       data-kind={item.kind}
       data-active={active || undefined}
+      aria-disabled={linked ? true : undefined}
+      data-linked={linked ? 'true' : undefined}
       data-unassigned={onActivate ? 'true' : undefined}
       tabIndex={onActivate ? 0 : undefined}
+      // A linked block stays a tab stop (its tooltip opens on focus); its owner only announces why
+      // nothing opens.
       onKeyDown={
         onActivate
           ? (e) => {
@@ -351,7 +335,7 @@ export default memo(function ScheduleItemView({
       onFocus={onActivate ? () => setFocusIn(true) : undefined}
       onBlur={onActivate ? () => setFocusIn(false) : undefined}
       onPointerDown={
-        onPointerDown
+        onPointerDown && !linked
           ? (e) => {
               // Pressing (and then dragging) the block puts its tooltip away.
               setHover(false);
@@ -375,9 +359,9 @@ export default memo(function ScheduleItemView({
         height: t.spacing(BLOCK_HEIGHT),
         marginLeft: t.spacing(0.125),
         boxSizing: 'border-box',
-        cursor: ghost ? 'grabbing' : onActivate ? 'pointer' : 'grab',
+        cursor: linked ? 'not-allowed' : ghost ? 'grabbing' : onActivate ? 'pointer' : 'grab',
         touchAction: 'auto',
-        opacity: dragging ? 0.4 : ghost ? 0.9 : 1,
+        opacity: dragging ? 0.4 : ghost ? 0.9 : linked ? LINKED_OPACITY : 1,
         zIndex: ghost ? 20 : 2,
         pointerEvents: ghost ? 'none' : 'auto',
         '&:hover > [data-body]': ghost ? {} : { filter: 'brightness(0.97)' },
