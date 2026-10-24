@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
@@ -138,26 +138,63 @@ describe('Keycard Integration page', () => {
     expect(inputs()).toHaveLength(3);
   });
 
-  it('shows the error dialog when nothing is retrieved, and Try Again retries', async () => {
+  it('keeps the dialog open while Try Again retries, and keeps focus on it', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
+    let release: (keys: string[]) => void = () => {};
     const retrieve = vi
       .fn<ApiClient['keycards']['retrieveEncoders']>()
       .mockResolvedValueOnce([])
-      .mockRejectedValueOnce(new Error('timeout'))
+      .mockImplementationOnce(() => new Promise<string[]>((resolve) => (release = resolve)))
       .mockImplementation(client.keycards.retrieveEncoders);
     renderPage(withRetrieve(retrieve));
     await loaded();
     await user.click(screen.getByRole('button', { name: 'Retrieve Encoder' }));
     const dialog = await screen.findByRole('dialog', { name: 'No encoders retrieved.' });
-    expect(within(dialog).getByText(/Try doing something to troubleshoot/)).toBeInTheDocument();
-    // Second attempt rejects: the dialog stays.
-    await user.click(within(dialog).getByRole('button', { name: 'Try Again' }));
+    const tryAgain = within(dialog).getByRole('button', { name: 'Try Again' });
+    expect(tryAgain).toHaveFocus();
+    await user.click(tryAgain);
     await waitFor(() => expect(retrieve).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('dialog', { name: 'No encoders retrieved.' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Try Again' }));
+    // Pending: the same dialog, the button busy but still focused, a second click does nothing.
+    expect(dialog).toBeInTheDocument();
+    expect(tryAgain).toHaveAttribute('aria-disabled', 'true');
+    expect(tryAgain).toHaveFocus();
+    fireEvent.click(tryAgain); // pointer-events are off, but Enter on the focused button still arrives
+    expect(retrieve).toHaveBeenCalledTimes(2);
+    release([]);
+    await waitFor(() => expect(tryAgain).toHaveAttribute('aria-disabled', 'false'));
+    expect(dialog).toBeInTheDocument();
+    await user.click(tryAgain);
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(values()).toHaveLength(3);
+  });
+
+  it('keeps focus on Retrieve Encoder while it runs', async () => {
+    const user = userEvent.setup();
+    let release: (keys: string[]) => void = () => {};
+    renderPage(withRetrieve(() => new Promise<string[]>((resolve) => (release = resolve))));
+    await loaded();
+    const button = screen.getByRole('button', { name: 'Retrieve Encoder' });
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveFocus();
+    release(['48001937465203']);
+    await waitFor(() => expect(button).toHaveAttribute('aria-disabled', 'false'));
+  });
+
+  it('keeps edits made while a retrieve is pending', async () => {
+    const user = userEvent.setup();
+    let release: (keys: string[]) => void = () => {};
+    renderPage(withRetrieve(() => new Promise<string[]>((resolve) => (release = resolve))));
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Encoder' }));
+    await user.click(screen.getByRole('button', { name: 'Retrieve Encoder' }));
+    await user.type(inputs()[2], '1234');
+    await user.click(screen.getByRole('button', { name: 'Add Encoder' }));
+    release(['48001937465203']);
+    await screen.findAllByText('1 Encoder Successfully Retrieved');
+    // The typed row is kept (retrieve fills the other blank row), and the added row survives.
+    expect(values()).toEqual(['48001937465201', '48001937465202', '1234', '48001937465203']);
   });
 
   it('Cancel closes the error dialog without changing the list', async () => {
@@ -218,8 +255,19 @@ describe('Keycard Integration page', () => {
       '48001937465202',
       '48001937465209',
     ]);
-    expect(inputs()).toHaveLength(3);
+    expect(inputs()).toHaveLength(4);
     expect(save()).toBeDisabled();
+  });
+
+  it('shows a key typed with hyphens in its saved form after saving', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Encoder' }));
+    await user.type(inputs()[2], '4800-1937-465209');
+    await user.click(save());
+    await screen.findAllByText('Encoder Keys Saved');
+    expect(values()[2]).toBe('48001937465209');
   });
 
   it('shows an error and keeps the edits when saving fails', async () => {

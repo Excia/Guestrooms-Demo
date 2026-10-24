@@ -20,6 +20,7 @@ import {
   encoderKeysToSave,
   encodersChanged,
   isBlankRow,
+  normalizeEncoderKey,
   mergeRetrieved,
   retrievedMessage,
   validateEncoderRows,
@@ -40,6 +41,8 @@ interface Toast {
 }
 
 const inputId = (rowId: string) => `encoder-key-${rowId}`;
+// Figma's Encoder Key table is 685px wide (spacing units of 8px).
+const LIST_WIDTH_UNITS = 85.5;
 const ADD_BUTTON_ID = 'encoder-add';
 
 // Keycard Integration (Figma 2829:6860): the Encoder Keys of the club's keycard encoders, one input
@@ -70,6 +73,11 @@ export default function KeycardIntegration() {
   });
   const pendingFocus = useRef<string | null>(null);
   const retrieveRun = useRef(0);
+  // The rows as last rendered, to count what an async result adds (the state is set functionally).
+  const rowsRef = useRef<EncoderRow[]>([]);
+  useEffect(() => {
+    rowsRef.current = rows;
+  });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -121,9 +129,9 @@ export default function KeycardIntegration() {
   };
 
   const retrieve = async () => {
+    if (retrieving) return;
     const run = ++retrieveRun.current;
     setRetrieving(true);
-    setRetrieveFailed(false);
     try {
       const keys = await api.keycards.retrieveEncoders();
       if (run !== retrieveRun.current) return;
@@ -131,16 +139,23 @@ export default function KeycardIntegration() {
         setRetrieveFailed(true);
         return;
       }
-      const merged = mergeRetrieved(rows, keys, makeId);
-      setRows(merged.rows);
-      if (merged.added === 0)
-        showToast('Every retrieved encoder is already in the list.', 'warning');
-      else showToast(retrievedMessage(merged.added));
+      setRetrieveFailed(false);
+      // Merge into the rows as they are now: edits made while the request ran survive.
+      const { added } = mergeRetrieved(rowsRef.current, keys, makeId);
+      setRows((current) => mergeRetrieved(current, keys, makeId).rows);
+      if (added === 0) showToast('Every retrieved encoder is already in the list.', 'warning');
+      else showToast(retrievedMessage(added));
     } catch {
       if (run === retrieveRun.current) setRetrieveFailed(true);
     } finally {
       if (run === retrieveRun.current) setRetrieving(false);
     }
+  };
+
+  const cancelRetrieve = () => {
+    retrieveRun.current++;
+    setRetrieving(false);
+    setRetrieveFailed(false);
   };
 
   const save = useCallback(async (): Promise<boolean> => {
@@ -156,7 +171,10 @@ export default function KeycardIntegration() {
     try {
       const stored = await api.keycards.saveEncoders(encoderKeysToSave(rows));
       setSaved(stored);
-      setRows((current) => current.filter((r) => !isBlankRow(r)));
+      // Show each saved key in its stored form; blank rows and focus stay where they are.
+      setRows((current) =>
+        current.map((r) => (isBlankRow(r) ? r : { ...r, value: normalizeEncoderKey(r.value) })),
+      );
       showToast('Encoder Keys Saved');
       return true;
     } catch (error) {
@@ -211,7 +229,7 @@ export default function KeycardIntegration() {
     );
   } else {
     body = (
-      <Box sx={{ maxWidth: (t) => t.spacing(85.5) }}>
+      <Box sx={{ maxWidth: (t) => t.spacing(LIST_WIDTH_UNITS) }}>
         {saveError ? (
           <Alert severity="error" sx={{ mb: 2 }}>
             {saveError}
@@ -235,7 +253,9 @@ export default function KeycardIntegration() {
               variant="outlined"
               size="small"
               onClick={() => void retrieve()}
-              disabled={retrieving}
+              // aria-disabled, not disabled: a disabled button drops keyboard focus.
+              className={retrieving ? 'Mui-disabled' : undefined}
+              aria-disabled={retrieving}
               aria-busy={retrieving}
               startIcon={retrieving ? <CircularProgress size={16} color="inherit" /> : undefined}
             >
@@ -323,7 +343,7 @@ export default function KeycardIntegration() {
       <RetrieveErrorDialog
         open={retrieveFailed}
         busy={retrieving}
-        onCancel={() => setRetrieveFailed(false)}
+        onCancel={cancelRetrieve}
         onTryAgain={() => void retrieve()}
       />
       <RemoveAllDialog
@@ -381,7 +401,15 @@ function RetrieveErrorDialog({
         <Button variant="outlined" onClick={onCancel}>
           Cancel
         </Button>
-        <Button ref={focusOnMount} variant="contained" disabled={busy} onClick={onTryAgain}>
+        <Button
+          ref={focusOnMount}
+          variant="contained"
+          className={busy ? 'Mui-disabled' : undefined}
+          aria-disabled={busy}
+          onClick={() => {
+            if (!busy) onTryAgain();
+          }}
+        >
           Try Again
         </Button>
       </DialogActions>
