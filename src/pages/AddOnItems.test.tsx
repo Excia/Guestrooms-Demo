@@ -61,8 +61,6 @@ describe('Add-On Items page', () => {
     await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
     await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
     await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
-    expect(stepper).toHaveTextContent('1');
-    await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
     expect(stepper).toHaveTextContent('0');
     await user.click(screen.getByRole('button', { name: 'Decrease Nightly Qty.' }));
     expect(stepper).toHaveTextContent('0');

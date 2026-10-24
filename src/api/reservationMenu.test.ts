@@ -16,6 +16,18 @@ describe('mock reservations.getDetail lastAuditedDate', () => {
   });
 });
 
+describe('mock reservations.getDetail folioCharges', () => {
+  it('reports a charge as posted only up to the last audited date (mpos charges as they are)', async () => {
+    const early = (await mk().reservations.getDetail('rs-2')).folioCharges!;
+    expect(early.filter((c) => c.type === 'room-rate').every((c) => c.status === 'unposted')).toBe(
+      true,
+    );
+    const late = (await createMockClient({ today: T }).reservations.getDetail('rs-2'))
+      .folioCharges!;
+    expect(late.some((c) => c.type === 'room-rate' && c.status === 'posted')).toBe(true);
+  });
+});
+
 describe('mock reservations.undoCheckIn', () => {
   it('undoes every checked-in room, bumps the version and updates the schedule', async () => {
     const c = mk();
@@ -210,6 +222,35 @@ describe('http reservations cancel and undo', () => {
     expect(detail.lastAuditedDate).toBeUndefined();
     const read = await client.reservations.getDetail('rs-3');
     expect(read.lastAuditedDate).toBeUndefined();
+  });
+
+  it('rejects folioCharges with an unknown type or status', async () => {
+    for (const folioCharges of [[{ type: 'x', status: 'posted' }], [{ type: 'manual' }], 'x']) {
+      const fetchMock = vi.fn<typeof fetch>(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ ...body('confirmed'), folioCharges }), { status: 200 }),
+        ),
+      );
+      const client = createHttpClient('https://api.test', { fetch: fetchMock });
+      await expect(client.reservations.getDetail('rs-3')).rejects.toMatchObject({
+        code: 'invalid-response',
+      });
+    }
+    const ok = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            ...body('confirmed'),
+            folioCharges: [{ type: 'room-rate', status: 'posted' }],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const detail = await createHttpClient('https://api.test', { fetch: ok }).reservations.getDetail(
+      'rs-3',
+    );
+    expect(detail.folioCharges).toHaveLength(1);
   });
 
   it('undo check in posts to its path', async () => {

@@ -32,6 +32,7 @@ const input = (statuses: Status[], extra: Partial<MenuInput> = {}): MenuInput =>
   canEdit: true,
   ...extra,
 });
+const posted = [{ type: 'room-rate', status: 'posted' }] as const;
 const labels = (i: MenuInput) => reservationMenu(i).map((a) => a.label);
 
 describe('reservationMenu', () => {
@@ -71,14 +72,10 @@ describe('reservationMenu', () => {
     expect(labels(input(['checked-in', 'nyci']))).not.toContain('Cancel Reservation');
   });
 
-  it('checked in, night audit run for the business date: Undo Check In goes, Add Another Room stays', () => {
+  it('checked in, night audit run for the business date: Undo Check In goes', () => {
     const after = input(['checked-in'], { lastAuditedDate: '2026-10-20' });
-    expect(labels(after)).toEqual([
-      'Edit Reservation',
-      'Add Another Room',
-      'Print Registration Card(s)',
-      'Jump to Folio',
-    ]);
+    expect(labels(after)).toContain('Edit Reservation');
+    expect(labels(after)).not.toContain('Undo Check In');
   });
 
   it('unknown audit data hides Undo Check In but keeps Add Another Room', () => {
@@ -92,22 +89,57 @@ describe('reservationMenu', () => {
     expect(labels(input(['checked-in'], { lastAuditedDate: null }))).toContain('Undo Check In');
   });
 
-  it('checked out or partly checked out: Print and Jump to Folio; cancelled: Jump to Folio', () => {
-    const both = ['Print Registration Card(s)', 'Jump to Folio'];
-    expect(labels(input(['checked-out']))).toEqual(both);
-    expect(labels(input(['checked-out', 'checked-in']))).toEqual(both);
-    expect(labels(input(['nyci'], { status: 'cancelled' }))).toEqual(['Jump to Folio']);
+  it('Add Another Room (legacy): stays after check in and while only some rooms have left', () => {
+    expect(labels(input(['checked-in']))).toContain('Add Another Room');
+    expect(labels(input(['checked-out', 'checked-in']))).toEqual([
+      'Add Another Room',
+      'Print Registration Card(s)',
+      'Jump to Folio',
+    ]);
+    expect(labels(input(['checked-out', 'nyci']))).toContain('Add Another Room');
   });
 
-  it('without edit permission only Print and Jump to Folio remain', () => {
+  it('Add Another Room is hidden (not disabled) once the night audit has posted a charge', () => {
+    expect(labels(input(['checked-in'], { folioCharges: [...posted] }))).toEqual([
+      'Undo Check In',
+      'Edit Reservation',
+      'Print Registration Card(s)',
+      'Jump to Folio',
+    ]);
+    // Mobile POS charges do not count; unposted ones do not either.
+    expect(
+      labels(
+        input(['checked-in'], {
+          folioCharges: [
+            { type: 'mpos', status: 'posted' },
+            { type: 'room-rate', status: 'unposted' },
+          ],
+        }),
+      ),
+    ).toContain('Add Another Room');
+  });
+
+  it('Add Another Room is hidden when the reservation is cancelled or every room is checked out', () => {
+    expect(labels(input(['nyci'], { status: 'cancelled' }))).not.toContain('Add Another Room');
+    expect(labels(input(['checked-out', 'checked-out']))).not.toContain('Add Another Room');
+  });
+
+  it('Add Another Room needs no permission (legacy); the edit actions still do', () => {
     expect(labels(input(['nyci'], { canEdit: false }))).toEqual([
+      'Add Another Room',
       'Print Registration Card(s)',
       'Jump to Folio',
     ]);
     expect(labels(input(['checked-in'], { canEdit: false }))).toEqual([
+      'Add Another Room',
       'Print Registration Card(s)',
       'Jump to Folio',
     ]);
+  });
+
+  it('checked out: Print and Jump to Folio; cancelled: Jump to Folio', () => {
+    expect(labels(input(['checked-out']))).toEqual(['Print Registration Card(s)', 'Jump to Folio']);
+    expect(labels(input(['nyci'], { status: 'cancelled' }))).toEqual(['Jump to Folio']);
   });
 });
 

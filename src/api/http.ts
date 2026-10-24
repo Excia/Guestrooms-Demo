@@ -221,7 +221,19 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
     ) &&
     isString(v.version) &&
     v.version !== '' &&
-    (v.lastAuditedDate === undefined || v.lastAuditedDate === null || isString(v.lastAuditedDate))
+    (v.lastAuditedDate === undefined ||
+      v.lastAuditedDate === null ||
+      isString(v.lastAuditedDate)) &&
+    (v.folioCharges === undefined ||
+      listOf(
+        v.folioCharges,
+        (c) =>
+          isObject(c) &&
+          isString(c.type) &&
+          CHARGE_TYPES.includes(c.type) &&
+          isString(c.status) &&
+          CHARGE_STATUSES.includes(c.status),
+      ))
   );
 }
 
@@ -743,10 +755,10 @@ const parseSchedule =
     if (
       !unique(data.rooms.map((r) => r.id)) ||
       !unique([
-          ...data.blocks.map((b) => b.id),
-          ...data.unassigned.map((b) => b.id),
-          ...data.closures.map((c) => c.id),
-        ]) ||
+        ...data.blocks.map((b) => b.id),
+        ...data.unassigned.map((b) => b.id),
+        ...data.closures.map((c) => c.id),
+      ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {

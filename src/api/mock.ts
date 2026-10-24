@@ -212,7 +212,19 @@ export function createMockClient({
             assertResourceId(id, 'reservation');
             const cancelled = cancelledReservations.get(id);
             if (cancelled) return structuredClone(cancelled);
-            return { ...buildDetail(schedule, id), lastAuditedDate };
+            return {
+              ...buildDetail(schedule, id),
+              lastAuditedDate,
+              // The night audit posts charges up to the last audited date; a later charge that
+              // the mock folio shows as posted is reported as still waiting for the audit.
+              folioCharges: getFolio(schedule, folioStore, id).charges.map((c) => ({
+                type: c.type,
+                status:
+                  c.status === 'posted' && c.type !== 'mpos' && c.date > lastAuditedDate
+                    ? 'unposted'
+                    : c.status,
+              })),
+            };
           },
           () => {
             throw notFound();

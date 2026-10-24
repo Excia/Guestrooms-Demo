@@ -75,24 +75,27 @@ describe('reservation menu by state', () => {
     ]);
   });
 
-  it('checked in after the night audit ran for that date: no Undo Check In', async () => {
+  it('checked in after the night audit ran: no Undo Check In, Add Another Room hidden', async () => {
     const { user, dialog } = await open('/schedule?res=rs-2', after(), /Reservation #GR-50240/);
     expect(await menuItems(user, dialog)).toEqual([
       'Edit Reservation',
-      'Add Another Room',
       'Print Registration Card(s)',
       'Jump to Folio',
     ]);
   });
 
-  it('read-only users keep only Print and Jump to Folio', async () => {
+  it('read-only users keep Add Another Room (no permission check), Print and Jump to Folio', async () => {
     const { user, dialog } = await open(
       '/schedule?res=rs-5&rr=rr-5',
       before(),
       /Reservation #GR-50310/,
       [],
     );
-    expect(await menuItems(user, dialog)).toEqual(['Print Registration Card(s)', 'Jump to Folio']);
+    expect(await menuItems(user, dialog)).toEqual([
+      'Add Another Room',
+      'Print Registration Card(s)',
+      'Jump to Folio',
+    ]);
   });
 
   it('Print Registration Card(s) opens the PDF in a new tab', async () => {
