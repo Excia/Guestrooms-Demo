@@ -116,3 +116,68 @@ describe('ScheduleItemView linked block', () => {
     expect(screen.getByText('202')).toHaveStyle({ fontWeight: '700' });
   });
 });
+
+describe('ScheduleItemView block content', () => {
+  const plain: ScheduleBlock = {
+    ...block,
+    linkedTo: undefined,
+    guestType: 'owner',
+    guestName: 'Ada Lovelace',
+    occupantCount: 3,
+    occupants: ['Ada Lovelace', 'Bill Lovelace'],
+    reserverName: 'Thomas Okafor',
+    endDate: '2026-10-11',
+  };
+
+  it('writes the lead occupant with +N and the reserver as the detail', () => {
+    view(plain, { days: 14 });
+    expect(screen.getByText('Ada Lovelace +2')).toBeInTheDocument();
+    expect(screen.getByText('Thomas Okafor')).toBeInTheDocument();
+    expect(screen.queryByText('C-1')).not.toBeInTheDocument();
+  });
+
+  it('keeps the confirmation number when there is no detail', () => {
+    view({ ...plain, reserverName: undefined, occupantCount: undefined }, { days: 14 });
+    expect(screen.getByText('C-1')).toBeInTheDocument();
+  });
+
+  it('shows the room type of an unassigned reservation', () => {
+    view({ ...plain, roomId: '', roomTypeName: 'Suite' }, { days: 14 });
+    expect(screen.getByText('Suite')).toBeInTheDocument();
+  });
+
+  it('month view, one night: initials and no guest-type icon', () => {
+    const { container } = view(plain, { days: 30 });
+    expect(screen.getByText('A.L. +2')).toBeInTheDocument();
+    expect(container.querySelector('svg[data-testid="HistoryEduIcon"]')).toBeNull();
+  });
+
+  it('month view, two nights: full name and the icon', () => {
+    const { container } = view({ ...plain, endDate: '2026-10-12' }, { days: 30 });
+    expect(screen.getByText('Ada Lovelace +2')).toBeInTheDocument();
+    expect(container.querySelector('svg[data-testid="HistoryEduIcon"]')).not.toBeNull();
+  });
+
+  it('truncates the text with an ellipsis (noWrap) and keeps the full text in the tooltip', async () => {
+    view(plain, {
+      days: 30,
+      tip: ['Ada Lovelace, C-1, Room 1', 'Occupants: Ada Lovelace, Bill Lovelace, TBD'],
+    });
+    expect(screen.getByText('A.L. +2')).toHaveStyle({ textOverflow: 'ellipsis' });
+    await userEvent.hover(screen.getByRole('gridcell'));
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent(
+      'Occupants: Ada Lovelace, Bill Lovelace, TBD',
+    );
+  });
+
+  it('opens the tooltip on hover even when the text is not cut off, and on keyboard focus', async () => {
+    const { unmount } = view(plain, { days: 14, tip: ['one', 'two'] });
+    await userEvent.hover(screen.getByRole('gridcell'));
+    const tip = await screen.findByRole('tooltip', { hidden: true });
+    expect(tip).toHaveTextContent('onetwo');
+    unmount();
+    view(plain, { days: 14, tip: ['one', 'two'], onActivate: () => {} });
+    await userEvent.tab();
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent('onetwo');
+  });
+});

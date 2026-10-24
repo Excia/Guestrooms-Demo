@@ -26,6 +26,7 @@ import {
   type RoomRowLabel,
 } from '../../app/schedule';
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
+import { blockTooltipLines } from '../../app/scheduleBlockContent';
 import {
   blockAriaLabel,
   turnoverGap,
@@ -265,7 +266,7 @@ const ScheduleRow = memo(function ScheduleRow({
             linkText={link ? segmentBadge(link) : undefined}
             tip={
               item.kind === 'reservation'
-                ? blockTipText(item, room, link)
+                ? blockTooltipLines(item, blockTipText(item, room, link))
                 : (item as ScheduleClosure).reason
             }
           />

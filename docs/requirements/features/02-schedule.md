@@ -69,6 +69,10 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   "Linked to [Room][ +N Room]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
   Indicators follow D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
   "canceled" block: canceling removes the event from the schedule (Q-21-3 answered). Entry: `entries/21-schedule-blocks.md`.
+- **Block content, month view and tooltips (ticket #147, LP-S.1):** lead occupant with "+N", else reserver, block name;
+  second line by the legacy detail order (room type, balance due, reserver, Maintenance, block name); month view with a
+  stay under 2 nights shows initials and no type icon; the tooltip lists every occupant (TBD for unnamed) and opens on
+  every hover and on keyboard focus. Entry: `entries/147-block-content.md`.
 - **Not built:** the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot

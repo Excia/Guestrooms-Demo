@@ -12,6 +12,7 @@ import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
 import { blockFillToken, housekeepingFillToken } from '../../app/scheduleColors';
+import { blockContent } from '../../app/scheduleBlockContent';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
 import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
@@ -47,9 +48,10 @@ export interface ScheduleItemViewProps {
   /**
    * The full text of the block ("Victor Almeida, GR-50271, part 2 of 5, Room 301 → 207"), shown in a
    * tooltip on hover or keyboard focus when the block's text is cut off. Created only when first
-   * needed; the accessible name stays `label` (the tooltip is not announced a second time).
+   * needed; the accessible name stays `label` (the tooltip is not announced a second time). An array
+   * is one line each.
    */
-  tip?: string;
+  tip?: string | readonly string[];
   /** The grid has focus and the keyboard cursor is on this block: show the tooltip like hover does. */
   tipFocused?: boolean;
   onPointerDown?: PointerEventHandler<HTMLElement>;
@@ -183,7 +185,13 @@ export default memo(function ScheduleItemView({
   // Keyboard focus (the grid's cursor) shows the full text like hover does; hover only when cut off.
   // A linked block's tooltip ("Linked to ...") opens on every hover and focus, not only when cut off.
   const tipArmed = armed || Boolean(tipFocused) || focusIn;
-  const tipOpen = Boolean(tipFocused) || focusIn || (hover && (cutOff || Boolean(linked)));
+  // A reservation block's tooltip lists more than the block shows (every occupant, the reserver), so
+  // it opens on every hover; a closure's only repeats its text, so only when that is cut off.
+  const tipOpen =
+    Boolean(tipFocused) ||
+    focusIn ||
+    (hover && (cutOff || Boolean(linked) || item.kind === 'reservation'));
+  const tipLines = typeof tip === 'string' ? [tip] : tip;
   const tipContent = linked ? (
     <span>
       {linkedTooltipLines(linked).map((line, i) => (
@@ -192,8 +200,14 @@ export default memo(function ScheduleItemView({
         </Box>
       ))}
     </span>
-  ) : tip ? (
-    <span>{tip}</span>
+  ) : tipLines?.length ? (
+    <span>
+      {tipLines.map((line, i) => (
+        <Box key={i} component="span" sx={{ display: 'block' }}>
+          {line}
+        </Box>
+      ))}
+    </span>
   ) : null;
   const isClosure = item.kind === 'closure';
   const closure = item as ScheduleClosure;
@@ -203,6 +217,7 @@ export default memo(function ScheduleItemView({
   const hkStatus = isClosure || ghost ? undefined : housekeepingStatusOf(block);
   const hk = housekeepingChip(hkStatus, layout, days, Boolean(block.housekeepingNotes));
   const markers = isClosure ? { left: false, right: false } : blockMarkers(block, layout);
+  const content = isClosure || linked ? null : blockContent(block, days);
   const bodyBox = (
     <Box
       data-body
@@ -245,7 +260,7 @@ export default memo(function ScheduleItemView({
       ) : (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-            {isClosure ? null : <TypeIcon type={block.guestType} />}
+            {isClosure || !content?.showIcon ? null : <TypeIcon type={block.guestType} />}
             <Typography
               variant="subtitle2"
               component="span"
@@ -256,7 +271,7 @@ export default memo(function ScheduleItemView({
                 minWidth: 0,
               })}
             >
-              {isClosure ? closure.reason : block.guestName}
+              {isClosure ? closure.reason : content?.title}
             </Typography>
           </Box>
           {isClosure ? null : (
@@ -266,7 +281,7 @@ export default memo(function ScheduleItemView({
               noWrap
               sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
             >
-              {block.confirmationNumber}
+              {content?.detail || block.confirmationNumber}
               {linkText ? ` · ${linkText}` : ''}
             </Typography>
           )}
