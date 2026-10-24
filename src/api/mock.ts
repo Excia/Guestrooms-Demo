@@ -37,6 +37,9 @@ import {
   changeRoomDuringStay,
   createScheduleState,
   moveDates,
+  createClosure,
+  updateClosure,
+  deleteClosure,
   moveRoom,
   setHousekeeping,
 } from './scheduleData';
@@ -64,6 +67,9 @@ import {
   assertMemberQuery,
   assertEarlyLateRequest,
   assertMoveDatesRequest,
+  assertSaveClosureRequest,
+  assertUpdateClosureRequest,
+  assertDeleteClosureRequest,
   assertMoveRoomRequest,
   assertSetHousekeepingRequest,
   assertPostChargeRequest,
@@ -395,6 +401,42 @@ export function createMockClient({
               closures: [],
               unassigned: [],
             };
+          },
+          o,
+        ),
+      createClosure: (request, o) =>
+        respond(
+          () => {
+            assertSaveClosureRequest(request);
+            return replayable(request, () => createClosure(schedule, request));
+          },
+          () => {
+            assertSaveClosureRequest(request);
+            throw new ApiError(404, 'Room not found');
+          },
+          o,
+        ),
+      updateClosure: (request, o) =>
+        respond(
+          () => {
+            assertUpdateClosureRequest(request);
+            return replayable(request, () => updateClosure(schedule, request));
+          },
+          () => {
+            assertUpdateClosureRequest(request);
+            throw new ApiError(404, 'Closure not found');
+          },
+          o,
+        ),
+      deleteClosure: (request, o) =>
+        respond(
+          () => {
+            assertDeleteClosureRequest(request);
+            return replayable(request, () => deleteClosure(schedule, request));
+          },
+          () => {
+            assertDeleteClosureRequest(request);
+            throw new ApiError(404, 'Closure not found');
           },
           o,
         ),

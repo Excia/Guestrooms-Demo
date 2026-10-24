@@ -1,6 +1,9 @@
 import { daysBetween, isValidMonth, parseIsoDate } from '../lib/dates';
 import type {
   ChangeRoomRequest,
+  DeleteClosureRequest,
+  SaveClosureRequest,
+  UpdateClosureRequest,
   CreateMemberRequest,
   CreateReservationRequest,
   EarlyLateRequest,
@@ -276,4 +279,33 @@ export function assertPostChargeRequest(request: PostChargeRequest): void {
   assertRequestId(request.requestId);
   assertResourceId(request.reservationId, 'reservation');
   assertResourceId(request.chargeId, 'charge');
+}
+
+/** Closure descriptions are at most this long (legacy limit). */
+export const MAX_CLOSURE_DESCRIPTION_LENGTH = 50;
+
+export function assertSaveClosureRequest(request: SaveClosureRequest): void {
+  assertRequestId(request.requestId);
+  assertResourceId(request.roomId, 'room');
+  const start = parseIsoDate(request.startDate);
+  const end = parseIsoDate(request.endDate);
+  if (
+    start === null ||
+    end === null ||
+    !(request.startDate < request.endDate) ||
+    typeof request.description !== 'string' ||
+    request.description.length > MAX_CLOSURE_DESCRIPTION_LENGTH
+  ) {
+    throw invalidQuery('closure request');
+  }
+}
+
+export function assertUpdateClosureRequest(request: UpdateClosureRequest): void {
+  assertSaveClosureRequest(request);
+  assertResourceId(request.closureId, 'closure');
+}
+
+export function assertDeleteClosureRequest(request: DeleteClosureRequest): void {
+  assertRequestId(request.requestId);
+  assertResourceId(request.closureId, 'closure');
 }
