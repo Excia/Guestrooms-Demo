@@ -397,3 +397,16 @@ carry the `ReservationDetail.version` the user saw.
 must be enforced again by the backend, which also answers 422 `validation` when `sku`, a `locationIds` entry or a
 `roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it
 saves. Photo upload and storage are open (Q-72-1).
+
+## Keycard integration (ticket 7.6, built on the mock)
+
+| Method and path                         | Body / response                                                          | Errors                                 |
+| --------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------- |
+| `GET /keycards/encoders`                | `string[]`: the saved Encoder Keys, in list order                        | 5xx                                    |
+| `PUT /keycards/encoders`                | `string[]` replaces the list; returns what was stored                    | 422 `validation`                       |
+| `POST /keycards/encoders/retrieve`      | no body; `string[]` of the encoders Visionline knows (empty when none); does not save | 502 `visionline-unavailable`, 5xx |
+
+An Encoder Key is digits only, `ENCODER_KEY_LENGTH` (14, Q-75-1) long, without separators; the list has no blanks
+and no duplicates (`src/app/keycards.ts`; the backend enforces the same). The UI treats an empty answer and any
+error from retrieve the same way (the "No encoders retrieved" dialog). Authentication with Visionline is the
+backend's concern (Q-75-3).

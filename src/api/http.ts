@@ -577,6 +577,11 @@ const parseAddOnOptions = (body: unknown, status: number): AddOnOptions => {
   return body as unknown as AddOnOptions;
 };
 
+const parseKeys = (body: unknown, status: number): string[] => {
+  if (!Array.isArray(body) || !body.every(isString)) throw invalid(status, 'encoder keys');
+  return body;
+};
+
 const STAT_COUNTS = [
   'arrivalsToday',
   'departuresToday',
@@ -1218,6 +1223,13 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           : request('/add-ons', {}, o, parseAddOn, { method: 'POST', body: input }),
       delete: (id, o) =>
         request(`/add-ons/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
+    keycards: {
+      listEncoders: (o) => request('/keycards/encoders', {}, o, parseKeys),
+      saveEncoders: (keys, o) =>
+        request('/keycards/encoders', {}, o, parseKeys, { method: 'PUT', body: keys }),
+      retrieveEncoders: (o) =>
+        request('/keycards/encoders/retrieve', {}, o, parseKeys, { method: 'POST' }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },

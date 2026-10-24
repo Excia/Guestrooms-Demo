@@ -16,6 +16,7 @@ import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
+import { MOCK_RETRIEVED_ENCODERS, mockEncoderKeys } from './keycardData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
@@ -33,6 +34,7 @@ import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from '
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
+import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { validateSystemSettings } from '../app/systemSettings';
 import {
@@ -110,6 +112,7 @@ export function createMockClient({
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
   let addOns = mockAddOns();
+  let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
   const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
@@ -644,6 +647,33 @@ export function createMockClient({
             addOns = addOns.filter((a) => a.id !== id);
           },
           () => undefined,
+          o,
+        ),
+    },
+    keycards: {
+      listEncoders: (o) =>
+        respond(
+          () => [...encoderKeys],
+          () => [],
+          o,
+        ),
+      saveEncoders: (keys, o) =>
+        respond(
+          () => {
+            if (!validateEncoderKeys(keys)) {
+              throw new ApiError(422, 'Encoder keys are not valid', { code: 'validation' });
+            }
+            encoderKeys = [...keys];
+            return [...encoderKeys];
+          },
+          () => [...keys],
+          o,
+        ),
+      // The Visionline connection does not exist yet (Q-75-3): a fixed success response.
+      retrieveEncoders: (o) =>
+        respond(
+          () => [...MOCK_RETRIEVED_ENCODERS],
+          () => [],
           o,
         ),
     },

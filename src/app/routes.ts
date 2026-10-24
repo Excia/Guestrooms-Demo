@@ -38,6 +38,8 @@ export const ADD_ON_ITEMS_PATH = '/admin/add-on-items';
 
 /** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
 export const BOOKING_RULES_PATH = '/admin/booking-rules';
+/** Keycard Integration (ticket 7.6); the Admin Setup navigation links to it, the menu does not. */
+export const KEYCARD_INTEGRATION_PATH = '/admin/keycard-integration';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -101,6 +103,13 @@ export const routes = [
     id: 'booking-rules',
     path: BOOKING_RULES_PATH,
     title: 'Booking Rules',
+    section: 'admin',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
+  },
+  {
+    id: 'keycard-integration',
+    path: KEYCARD_INTEGRATION_PATH,
+    title: 'Keycard Integration',
     section: 'admin',
     showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
   },
