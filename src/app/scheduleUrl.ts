@@ -1,8 +1,8 @@
 // The schedule's view state in the URL query string, so reload, Back and shared links work.
 // Parsing is tolerant: anything unknown or malformed falls back to the default for that field.
 import { isValidIsoDate, type IsoDate } from '../lib/dates';
-import type { ScheduleAvailability, ScheduleDays } from '../api/types';
-import { DEFAULT_SCHEDULE_DAYS, parseScheduleDays } from './schedule';
+import type { ScheduleAvailability, ScheduleDays, SettableHousekeepingStatus } from '../api/types';
+import { DEFAULT_SCHEDULE_DAYS, HOUSEKEEPING_FILTER_OPTIONS, parseScheduleDays } from './schedule';
 
 export interface ScheduleViewState {
   /** First column's date; null means "today" (so a bookmark of the plain page keeps following it). */
@@ -12,6 +12,10 @@ export interface ScheduleViewState {
   locationIds: string[] | null;
   roomTypeIds: string[] | null;
   availability: ScheduleAvailability;
+  /** Housekeeping statuses to keep; [] (the default) is no filter, as in the legacy menu. */
+  housekeeping: SettableHousekeepingStatus[];
+  /** Room features a room must all have; [] (the default) is no filter. */
+  featureIds: string[];
 }
 
 export const DEFAULT_SCHEDULE_VIEW: ScheduleViewState = {
@@ -20,6 +24,8 @@ export const DEFAULT_SCHEDULE_VIEW: ScheduleViewState = {
   locationIds: null,
   roomTypeIds: null,
   availability: 'all',
+  housekeeping: [],
+  featureIds: [],
 };
 
 const PARAMS = {
@@ -28,6 +34,8 @@ const PARAMS = {
   locations: 'locations',
   types: 'types',
   rooms: 'rooms',
+  housekeeping: 'housekeeping',
+  features: 'features',
 };
 const AVAILABILITY: readonly ScheduleAvailability[] = ['all', 'available', 'booked'];
 
@@ -49,6 +57,9 @@ function parseList(value: string | null): string[] | null {
   return ids.length > 0 ? ids : null;
 }
 
+/** Unlike the Locations list, absent, empty and noise all mean "no filter" (the legacy default). */
+const parseOptIn = (value: string | null): string[] => parseList(value) ?? [];
+
 export function parseScheduleView(source: string | URLSearchParams): ScheduleViewState {
   const params = typeof source === 'string' ? new URLSearchParams(source) : source;
   const start = params.get(PARAMS.start);
@@ -59,6 +70,10 @@ export function parseScheduleView(source: string | URLSearchParams): ScheduleVie
     locationIds: parseList(params.get(PARAMS.locations)),
     roomTypeIds: parseList(params.get(PARAMS.types)),
     availability: AVAILABILITY.find((a) => a === rooms) ?? 'all',
+    housekeeping: HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.id).filter((id) =>
+      parseOptIn(params.get(PARAMS.housekeeping)).includes(id),
+    ),
+    featureIds: parseOptIn(params.get(PARAMS.features)),
   };
 }
 
@@ -77,6 +92,8 @@ export function applyScheduleView(
   set(PARAMS.locations, state.locationIds && state.locationIds.join(','));
   set(PARAMS.types, state.roomTypeIds && state.roomTypeIds.join(','));
   set(PARAMS.rooms, state.availability === 'all' ? null : state.availability);
+  set(PARAMS.housekeeping, state.housekeeping.length > 0 ? state.housekeeping.join(',') : null);
+  set(PARAMS.features, state.featureIds.length > 0 ? state.featureIds.join(',') : null);
   return next;
 }
 
@@ -91,11 +108,16 @@ export function toggleFilterId(
   return next.length >= allIds.length && allIds.every((x) => next.includes(x)) ? null : next;
 }
 
-/** Number of narrowed filters, for the filter button's badge. */
-export function activeFilterCount(state: ScheduleViewState): number {
+/**
+ * Number of applied filters, for the filter button. `hasLocationFilter` false (a club with one
+ * location, where the group is hidden) leaves the location list out of the count.
+ */
+export function activeFilterCount(state: ScheduleViewState, hasLocationFilter = true): number {
   return (
-    (state.locationIds ? 1 : 0) +
+    (hasLocationFilter && state.locationIds ? 1 : 0) +
     (state.roomTypeIds ? 1 : 0) +
-    (state.availability !== 'all' ? 1 : 0)
+    (state.availability !== 'all' ? 1 : 0) +
+    (state.housekeeping.length > 0 ? 1 : 0) +
+    (state.featureIds.length > 0 ? 1 : 0)
   );
 }

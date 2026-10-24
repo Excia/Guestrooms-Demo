@@ -9,13 +9,20 @@ import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useApi } from '../api';
-import type { ReservationDetail, ScheduleBlock, ScheduleDays, ScheduleRoom } from '../api';
+import type {
+  ReservationDetail,
+  ScheduleBlock,
+  ScheduleDays,
+  ScheduleRoom,
+  SettableHousekeepingStatus,
+} from '../api';
 import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
   applyScheduleFilters,
   isScheduleEmpty,
   shiftScheduleStart,
+  showLocationFilter,
   type ScheduleStep,
 } from '../app/schedule';
 import { applyRoomPlan, changeRoomFailure, mergeRoomPlan, revertRoomPlan } from '../app/changeRoom';
@@ -301,12 +308,30 @@ export default function Schedule({
     () =>
       data
         ? applyScheduleFilters(data, {
-            locationIds: view.locationIds ?? undefined,
+            // A club with one location has no Locations group, so a stale ?locations= is ignored.
+            locationIds: (showLocationFilter(data.locations) && view.locationIds) || undefined,
             roomTypeIds: view.roomTypeIds ?? undefined,
             availability: view.availability,
+            housekeeping: view.housekeeping,
+            featureIds: view.featureIds,
           }).rooms
         : [],
-    [data, view.locationIds, view.roomTypeIds, view.availability],
+    [
+      data,
+      view.locationIds,
+      view.roomTypeIds,
+      view.availability,
+      view.housekeeping,
+      view.featureIds,
+    ],
+  );
+  // The Housekeeping filter also hides the unassigned reservations that do not match.
+  const filteredUnassigned = useMemo(
+    () =>
+      schedule.status === 'success' && view.housekeeping.length > 0
+        ? applyScheduleFilters(schedule.data, { housekeeping: view.housekeeping }).unassigned
+        : null,
+    [schedule, view.housekeeping],
   );
   const rooms = frozenRooms ?? liveRooms;
 
@@ -419,8 +444,9 @@ export default function Schedule({
     ? {
         locations: data.locations,
         roomTypes: data.roomTypes,
+        features: data.features ?? [],
       }
-    : { locations: [], roomTypes: [] };
+    : { locations: [], roomTypes: [], features: [] };
   const filtered =
     schedule.status === 'success' && !isScheduleEmpty(schedule.data) && rooms.length === 0;
   const toRoom = pending
@@ -459,7 +485,15 @@ export default function Schedule({
         <Typography variant="subtitle1">No rooms match the filters.</Typography>
         <Button
           sx={{ mt: 1 }}
-          onClick={() => update({ locationIds: null, roomTypeIds: null, availability: 'all' })}
+          onClick={() =>
+            update({
+              locationIds: null,
+              roomTypeIds: null,
+              availability: 'all',
+              housekeeping: [],
+              featureIds: [],
+            })
+          }
         >
           Clear filters
         </Button>
@@ -468,7 +502,9 @@ export default function Schedule({
   } else {
     body = (
       <ScheduleGrid
-        data={schedule.data}
+        data={
+          filteredUnassigned ? { ...schedule.data, unassigned: filteredUnassigned } : schedule.data
+        }
         rooms={rooms}
         today={today}
         busy={schedule.refreshing}
@@ -544,7 +580,7 @@ export default function Schedule({
           start={start}
           today={today}
           availability={view.availability}
-          activeFilters={activeFilterCount(view)}
+          activeFilters={activeFilterCount(view, showLocationFilter(filterOptions.locations))}
           filtersOpen={filterAnchor !== null}
           onDays={(days: ScheduleDays) => update({ days })}
           onShift={(direction, step: ScheduleStep) =>
@@ -579,6 +615,11 @@ export default function Schedule({
         roomTypeIds={view.roomTypeIds}
         onLocations={(locationIds) => update({ locationIds })}
         onRoomTypes={(roomTypeIds) => update({ roomTypeIds })}
+        features={filterOptions.features}
+        housekeeping={view.housekeeping}
+        featureIds={view.featureIds}
+        onHousekeeping={(ids) => update({ housekeeping: ids as SettableHousekeepingStatus[] })}
+        onFeatures={(featureIds) => update({ featureIds })}
       />
       {pending ? (
         <MoveConfirmDialog

@@ -12,13 +12,17 @@ describe('parseScheduleView', () => {
   });
   it('reads every field', () => {
     expect(
-      parseScheduleView('?start=2026-11-10&view=14&locations=a,b&types=king&rooms=booked'),
+      parseScheduleView(
+        '?start=2026-11-10&view=14&locations=a,b&types=king&rooms=booked&housekeeping=cleaned&features=f1',
+      ),
     ).toEqual({
       start: '2026-11-10',
       days: 14,
       locationIds: ['a', 'b'],
       roomTypeIds: ['king'],
       availability: 'booked',
+      housekeeping: ['cleaned'],
+      featureIds: ['f1'],
     });
   });
   it('treats an empty list as "none" and an absent one as "all"', () => {
@@ -58,7 +62,11 @@ describe('applyScheduleView', () => {
       locationIds: [],
       roomTypeIds: ['king', 'suite'],
       availability: 'available',
+      housekeeping: ['cleaned', 'ready'],
+      featureIds: ['f1', 'f2'],
     });
+    expect(next.get('housekeeping')).toBe('cleaned,ready');
+    expect(next.get('features')).toBe('f1,f2');
     expect(next.get('start')).toBe('2026-11-10');
     expect(next.get('view')).toBe('14');
     expect(next.get('locations')).toBe('');
@@ -73,8 +81,33 @@ describe('applyScheduleView', () => {
       locationIds: ['x'],
       roomTypeIds: [],
       availability: 'booked' as const,
+      housekeeping: ['needs-cleaning' as const],
+      featureIds: ['f1'],
     };
     expect(parseScheduleView(applyScheduleView(new URLSearchParams(), state))).toEqual(state);
+  });
+});
+
+describe('housekeeping and feature parameters', () => {
+  it('default to no filter when absent, empty or noise', () => {
+    for (const q of ['', 'housekeeping=&features=', 'housekeeping=,,&features=,']) {
+      const v = parseScheduleView(q);
+      expect(v.housekeeping).toEqual([]);
+      expect(v.featureIds).toEqual([]);
+    }
+  });
+  it('keeps only known statuses, in menu order, and drops duplicates', () => {
+    const v = parseScheduleView('housekeeping=ready,bogus,not-checked-out,ready&features=a,a,b');
+    expect(v.housekeeping).toEqual(['not-checked-out', 'ready']);
+    expect(v.featureIds).toEqual(['a', 'b']);
+  });
+  it('are left out of the URL when empty', () => {
+    const next = applyScheduleView(
+      new URLSearchParams('housekeeping=cleaned&features=a'),
+      DEFAULT_SCHEDULE_VIEW,
+    );
+    expect(next.has('housekeeping')).toBe(false);
+    expect(next.has('features')).toBe(false);
   });
 });
 
@@ -95,5 +128,18 @@ describe('filters', () => {
     expect(
       activeFilterCount({ ...DEFAULT_SCHEDULE_VIEW, locationIds: [], availability: 'booked' }),
     ).toBe(2);
+  });
+  it('counts the housekeeping and feature groups once each', () => {
+    const v = {
+      ...DEFAULT_SCHEDULE_VIEW,
+      housekeeping: ['cleaned', 'ready'] as const,
+      featureIds: ['a'],
+    };
+    expect(activeFilterCount({ ...v, housekeeping: [...v.housekeeping] })).toBe(2);
+  });
+  it('leaves the location list out of the count when that group is hidden', () => {
+    const v = { ...DEFAULT_SCHEDULE_VIEW, locationIds: ['a'] };
+    expect(activeFilterCount(v)).toBe(1);
+    expect(activeFilterCount(v, false)).toBe(0);
   });
 });

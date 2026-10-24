@@ -14,6 +14,7 @@ export function queryScheduleData(
     days,
     locations: all.locations,
     roomTypes: all.roomTypes,
+    features: all.features,
     rooms: all.rooms,
     blocks: all.blocks.filter((b) => nightsOverlap(b.startDate, b.endDate, startDate, end)),
     unassigned: all.unassigned.filter((b) => nightsOverlap(b.startDate, b.endDate, startDate, end)),

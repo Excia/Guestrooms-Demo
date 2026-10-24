@@ -1,16 +1,18 @@
-import { nightsOverlap } from '../lib/dates';
+import { addDays, nightsOverlap } from '../lib/dates';
 import { queryScheduleData } from '../api/scheduleQuery';
 import { createScheduleState } from '../api/scheduleData';
 import {
   applyScheduleFilters,
   blockLayout,
   dayHeader,
+  HOUSEKEEPING_FILTER_OPTIONS,
   groupByRoom,
   parseScheduleDays,
   roomRowLabel,
   scheduleDates,
   scheduleRangeEnd,
   shiftScheduleStart,
+  showLocationFilter,
   visibleRowRange,
 } from './schedule';
 
@@ -177,16 +179,66 @@ describe('applyScheduleFilters', () => {
     const booked = new Set(all().blocks.map((b) => b.roomId));
     expect(d.rooms.every((r) => booked.has(r.id))).toBe(true);
   });
-  it('available only: no reservation and no closure in range', () => {
+  it('available only: a room with at least one free night in the range', () => {
     const base = all();
     const d = applyScheduleFilters(base, { availability: 'available' });
-    const busy = new Set([...base.blocks, ...base.closures].map((x) => x.roomId));
-    expect(d.rooms.length).toBeGreaterThan(0);
-    expect(d.rooms.every((r) => !busy.has(r.id))).toBe(true);
-    expect(d.blocks).toEqual([]);
-    // A closure-only room is neither available nor booked.
-    expect(ids(d)).not.toContain('rm-208');
-    expect(ids(applyScheduleFilters(base, { availability: 'booked' }))).not.toContain('rm-208');
+    const taken = (roomId: string, night: string) =>
+      [...base.blocks, ...base.closures].some(
+        (x) => x.roomId === roomId && x.startDate <= night && night < x.endDate,
+      );
+    const nights = Array.from({ length: base.days }, (_, i) => addDays(base.startDate, i));
+    for (const r of base.rooms) {
+      const free = nights.some((n) => !taken(r.id, n));
+      expect(ids(d).includes(r.id), r.id).toBe(free);
+    }
+    // A partly booked room now counts as available (it did not before).
+    expect(d.blocks.length).toBeGreaterThan(0);
+    // A room with a block or closure on every night does not.
+    const full = {
+      ...base,
+      blocks: [
+        {
+          ...base.blocks[0],
+          roomId: base.rooms[0].id,
+          startDate: addDays(base.startDate, -1),
+          endDate: addDays(base.startDate, base.days + 1),
+        },
+      ],
+      closures: [],
+    };
+    expect(ids(applyScheduleFilters(full, { availability: 'available' }))).not.toContain(
+      base.rooms[0].id,
+    );
+  });
+  it('available only: a reservation plus a closure that cover every night leave no free night', () => {
+    const base = all();
+    const room = base.rooms[0];
+    const half = Math.floor(base.days / 2);
+    const data = {
+      ...base,
+      rooms: [room],
+      blocks: [
+        {
+          ...base.blocks[0],
+          roomId: room.id,
+          startDate: base.startDate,
+          endDate: addDays(base.startDate, half),
+        },
+      ],
+      closures: [
+        {
+          kind: 'closure' as const,
+          id: 'c',
+          roomId: room.id,
+          startDate: addDays(base.startDate, half),
+          endDate: addDays(base.startDate, base.days),
+          reason: 'x',
+          endMarker: false,
+        },
+      ],
+    };
+    expect(applyScheduleFilters(data, { availability: 'available' }).rooms).toEqual([]);
+    expect(applyScheduleFilters(data, { availability: 'booked' }).rooms).toHaveLength(1);
   });
   it('decides by the selected range: a longer view books more rooms', () => {
     const week = applyScheduleFilters(
@@ -208,6 +260,93 @@ describe('applyScheduleFilters', () => {
     const d = queryScheduleData(createScheduleState(T), { startDate: '2026-10-18', days: 7 });
     // rm-210 / rm-206 (GR-50290) depart on day +1; rm-201 GR-50240 departs on day +2 = range start.
     expect(d.blocks.find((b) => b.confirmationNumber === 'GR-50240')).toBeUndefined();
+  });
+});
+
+describe('housekeeping and feature filters', () => {
+  const T = '2026-10-16';
+  const all = () => queryScheduleData(createScheduleState(T), { startDate: T, days: 14 });
+  const ids = (d: { rooms: { id: string }[] }) => d.rooms.map((r) => r.id);
+
+  it('has the five legacy statuses in menu order', () => {
+    expect(HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.name)).toEqual([
+      'Not Checked Out',
+      'Needs Cleaning',
+      'Cleaned',
+      'Maintenance Required',
+      'Inspected / Ready',
+    ]);
+  });
+  it('treats absent and empty lists as no filter', () => {
+    const n = all().rooms.length;
+    expect(applyScheduleFilters(all(), { housekeeping: [], featureIds: [] }).rooms).toHaveLength(n);
+  });
+  it('keeps the rooms whose reservations carry a selected status, and their blocks', () => {
+    const base = all();
+    const d = applyScheduleFilters(base, { housekeeping: ['not-checked-out'] });
+    const expected = new Set(
+      base.blocks.filter((b) => b.housekeeping === 'not-checked-out').map((b) => b.roomId),
+    );
+    expect(expected.size).toBeGreaterThan(0);
+    expect(new Set(ids(d))).toEqual(expected);
+    const keep = new Set(ids(d));
+    expect(d.blocks.every((b) => keep.has(b.roomId))).toBe(true);
+    expect(d.blocks.length).toBe(base.blocks.filter((b) => keep.has(b.roomId)).length);
+  });
+  it('matches any of several selected statuses', () => {
+    const base = all();
+    const one = applyScheduleFilters(base, { housekeeping: ['not-checked-out'] }).rooms.length;
+    const two = applyScheduleFilters(base, { housekeeping: ['not-checked-out', 'cleaned'] }).rooms
+      .length;
+    expect(two).toBeGreaterThanOrEqual(one);
+  });
+  it('hides unassigned reservations without a selected status', () => {
+    const base = all();
+    expect(base.unassigned.length).toBeGreaterThan(0);
+    const d = applyScheduleFilters(base, { housekeeping: ['ready'] });
+    expect(d.unassigned.every((b) => b.housekeeping === 'ready')).toBe(true);
+    expect(applyScheduleFilters(base, {}).unassigned).toEqual(base.unassigned);
+  });
+  it('ignores the housekeeping of a reservation outside the range', () => {
+    const base = all();
+    const room = base.rooms[0];
+    const data = {
+      ...base,
+      rooms: [room],
+      blocks: [
+        {
+          ...base.blocks[0],
+          roomId: room.id,
+          housekeeping: 'cleaned' as const,
+          startDate: addDays(T, 40),
+          endDate: addDays(T, 42),
+        },
+      ],
+    };
+    expect(applyScheduleFilters(data, { housekeeping: ['cleaned'] }).rooms).toEqual([]);
+  });
+  it('requires a room to have every selected feature', () => {
+    const base = all();
+    const one = applyScheduleFilters(base, { featureIds: ['feature-tub'] });
+    expect(one.rooms.length).toBeGreaterThan(0);
+    expect(one.rooms.every((r) => r.featureIds?.includes('feature-tub'))).toBe(true);
+    const two = applyScheduleFilters(base, { featureIds: ['feature-tub', 'feature-view'] });
+    expect(two.rooms.every((r) => r.featureIds?.includes('feature-view'))).toBe(true);
+    expect(applyScheduleFilters(base, { featureIds: ['nope'] }).rooms).toEqual([]);
+  });
+  it('combines with the other filters (AND)', () => {
+    const base = all();
+    const d = applyScheduleFilters(base, {
+      featureIds: ['feature-balcony'],
+      roomTypeIds: ['suite'],
+      locationIds: ['north-lodge'],
+    });
+    expect(ids(d)).toEqual(['rm-109', 'rm-110']);
+  });
+  it('shows the location group only for two or more locations', () => {
+    expect(showLocationFilter([])).toBe(false);
+    expect(showLocationFilter([{}])).toBe(false);
+    expect(showLocationFilter([{}, {}])).toBe(true);
   });
 });
 

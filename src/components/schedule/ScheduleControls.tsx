@@ -194,10 +194,12 @@ export default function ScheduleControls({
           aria-label={activeFilters > 0 ? `Filters, ${activeFilters} active` : 'Filters'}
           aria-haspopup="dialog"
           aria-expanded={filtersOpen}
+          color={activeFilters > 0 ? 'primary' : 'default'}
           sx={navSx}
           onClick={(e) => onToggleFilters(e.currentTarget)}
         >
-          <Badge color="primary" variant="dot" invisible={activeFilters === 0}>
+          {/* Applied state: the primary (green) funnel, plus the count, so it is not color alone. */}
+          <Badge color="primary" badgeContent={activeFilters > 0 ? activeFilters : null}>
             <FilterAlt />
           </Badge>
         </IconButton>

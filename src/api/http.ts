@@ -761,6 +761,7 @@ const parseSchedule =
       body.days === query.days &&
       listOf(body.locations, named) &&
       listOf(body.roomTypes, named) &&
+      (body.features === undefined || listOf(body.features, named)) &&
       listOf(
         body.rooms,
         (r) =>
@@ -769,6 +770,7 @@ const parseSchedule =
           isString(r.number) &&
           isString(r.locationId) &&
           isString(r.roomTypeId) &&
+          (r.featureIds === undefined || listOf(r.featureIds, isString)) &&
           (r.housekeeping === undefined || HOUSEKEEPING.includes(r.housekeeping as string)),
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
