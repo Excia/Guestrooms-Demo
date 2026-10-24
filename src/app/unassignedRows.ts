@@ -48,9 +48,7 @@ export function unassignedLabel(section: UnassignedSection): { title: string; co
     : { title: 'Unassigned' };
 }
 
-/** Accessible name of the toggle: what pressing it does. */
-export function unassignedToggleName(section: UnassignedSection): string {
-  return section.state === 'collapsed'
-    ? `Expand ${section.count} unassigned reservations`
-    : `Collapse ${section.count} unassigned reservations`;
+/** Accessible name of the toggle: one fixed name; `aria-expanded` carries the state. */
+export function unassignedToggleName(): string {
+  return 'Unassigned reservations';
 }

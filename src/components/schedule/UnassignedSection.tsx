@@ -55,7 +55,8 @@ export default function UnassignedSection({
     >
       {section.rows.map((blocks, index) => (
         <Box
-          key={blocks[0]?.id ?? 'label'}
+          // The first row keeps one key through expand/collapse so the toggle is not remounted (focus).
+          key={index === 0 ? 'head' : blocks[0].id}
           role="row"
           aria-rowindex={index + 2}
           style={{ top: rowTop(index) }}
@@ -101,7 +102,7 @@ export default function UnassignedSection({
                     size="small"
                     color="error"
                     aria-expanded={expanded}
-                    aria-label={unassignedToggleName(section)}
+                    aria-label={unassignedToggleName()}
                     onClick={onToggle}
                     sx={{ p: 0.25 }}
                   >
@@ -133,6 +134,7 @@ export default function UnassignedSection({
                 days={days}
                 today={today}
                 label={blockAriaLabel(block, undefined)}
+                tip={`${block.guestName}, ${block.confirmationNumber}`}
                 onActivate={() => onOpen(block)}
               />
             );

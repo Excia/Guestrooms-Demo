@@ -40,7 +40,7 @@ async function loaded(url = '/schedule', client: ApiClient = createMockClient({ 
 }
 
 const section = () => document.querySelector<HTMLElement>('[data-unassigned-section]');
-const toggle = () => screen.queryByRole('button', { name: /unassigned reservations$/ });
+const toggle = () => screen.queryByRole('button', { name: 'Unassigned reservations' });
 
 beforeAll(() => {
   Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
@@ -77,7 +77,7 @@ describe('schedule Unassigned section', () => {
     expect(within(rows[0]).getByText(/Harriet Lowell/)).toBeInTheDocument();
     expect(within(rows[1]).getByText(/Devon Achterberg/)).toBeInTheDocument();
     expect(toggle()).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle()).toHaveAccessibleName('Collapse 2 unassigned reservations');
+    expect(toggle()).toHaveAccessibleName('Unassigned reservations');
     // the grid counts the extra rows
     expect(screen.getByRole('grid', { name: 'Schedule' })).toHaveAttribute('aria-rowcount');
   });
@@ -90,10 +90,21 @@ describe('schedule Unassigned section', () => {
     expect(section()).toHaveTextContent('Unassigned(2)');
     expect(screen.queryByText(/Harriet Lowell/)).not.toBeInTheDocument();
     expect(toggle()).toHaveAttribute('aria-expanded', 'false');
-    expect(toggle()).toHaveAccessibleName('Expand 2 unassigned reservations');
+    expect(toggle()).toHaveAccessibleName('Unassigned reservations');
     await user.click(toggle()!);
     expect(section()).toHaveAttribute('data-unassigned-section', 'expanded');
     expect(screen.getByText(/Harriet Lowell/)).toBeInTheDocument();
+  });
+
+  it('keeps keyboard focus on the toggle after collapse and expand', async () => {
+    const user = await loaded();
+    toggle()!.focus();
+    await user.keyboard('{Enter}');
+    expect(section()).toHaveAttribute('data-unassigned-section', 'collapsed');
+    expect(toggle()).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(section()).toHaveAttribute('data-unassigned-section', 'expanded');
+    expect(toggle()).toHaveFocus();
   });
 
   it('counts follow the visible range', async () => {

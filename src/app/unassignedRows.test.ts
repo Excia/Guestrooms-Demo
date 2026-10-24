@@ -74,12 +74,7 @@ describe('labels', () => {
     });
   });
 
-  it('names the toggle by its action', () => {
-    expect(unassignedToggleName(unassignedSection([a, b], '2026-10-16', 7, false))).toBe(
-      'Collapse 2 unassigned reservations',
-    );
-    expect(unassignedToggleName(unassignedSection([a, b], '2026-10-16', 7, true))).toBe(
-      'Expand 2 unassigned reservations',
-    );
+  it('names the toggle with one fixed name, whatever the state', () => {
+    expect(unassignedToggleName()).toBe('Unassigned reservations');
   });
 });
