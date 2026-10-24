@@ -263,6 +263,11 @@ Excia/Guestrooms-Demo#96 (added during refinement). Figma: Online Booking tab 15
   **Add-Ons Popup**: Display Add-Ons Popup after room selection and before the details screen (the per-user
   version is in Booking Rules). Values feed Epic 5 and save with the rest of System Settings. Fee amounts
   are out of scope (D-007).
+- **Implemented (Excia/Guestrooms-Demo#96, in review):** an "Online Booking" tab in `src/pages/SystemSettings.tsx`
+  (`src/components/admin/systemSettings/OnlineBookingTab.tsx`); the values are `SystemSettings.onlineBooking`, saved with
+  the rest. Pure rules in `src/app/onlineBookingSettings.ts`: limits (150 and 300), URL check, and what Epic 5 reads
+  (`globalBookingMessage`, `cancellationNotice`, `showAddOnsPopup`). Details in
+  [entries/96-online-booking-settings.md](entries/96-online-booking-settings.md).
 - **Open questions:** Q-96-1, Q-96-2.
 
 ## 7.10 Change Log overlay

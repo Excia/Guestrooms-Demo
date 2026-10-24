@@ -15,16 +15,18 @@ import {
   validateSystemSettings,
   type SystemSettingsField,
 } from '../app/systemSettings';
+import { isOnlineBookingField } from '../app/onlineBookingSettings';
 import { useLeaveGuard } from '../app/useLeaveGuard';
 import { useSystemSettings } from '../app/useSystemSettings';
 import AdminShell from '../components/admin/AdminShell';
 import FolioDetailsTab from '../components/admin/systemSettings/FolioDetailsTab';
 import { fieldId } from '../components/admin/systemSettings/fieldParts';
+import OnlineBookingTab from '../components/admin/systemSettings/OnlineBookingTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
 
-type TabId = 'settings' | 'folio';
+type TabId = 'settings' | 'folio' | 'online';
 const tabId = (id: string) => `system-settings-tab-${id}`;
 const panelId = (id: string) => `system-settings-panel-${id}`;
 
@@ -72,7 +74,11 @@ export default function SystemSettings() {
     const found = validateSystemSettings(draft);
     const first = firstErrorField(found);
     if (first) {
-      const target: TabId = isFolioField(first) ? 'folio' : 'settings';
+      const target: TabId = isFolioField(first)
+        ? 'folio'
+        : isOnlineBookingField(first)
+          ? 'online'
+          : 'settings';
       focusAfterTab.current = first;
       if (target !== tab) setTab(target);
       else {
@@ -162,6 +168,12 @@ export default function SystemSettings() {
             id={tabId('folio')}
             aria-controls={panelId('folio')}
           />
+          <Tab
+            value="online"
+            label="Online Booking"
+            id={tabId('online')}
+            aria-controls={panelId('online')}
+          />
         </Tabs>
         {saveError ? (
           <Alert severity="error" sx={{ mb: 3 }}>
@@ -177,6 +189,12 @@ export default function SystemSettings() {
         >
           {tab === 'settings' ? (
             <SettingsTab value={draft} onChange={setDraft} errors={errors} options={options} />
+          ) : tab === 'online' ? (
+            <OnlineBookingTab
+              value={draft.onlineBooking}
+              onChange={(onlineBooking) => setDraft({ ...draft, onlineBooking })}
+              errors={errors}
+            />
           ) : (
             <>
               <Typography sx={{ mb: 3 }}>
