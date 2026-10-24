@@ -63,6 +63,11 @@ export interface RegistrationCardPreviewRequest {
   settings: RegistrationCardSettings;
   /** The folio header (System Settings, Folio Details) for Include Folio Header. */
   folio: FolioDetails;
+  /**
+   * Render this reservation instead of the sample one: the card of a real reservation uses the saved
+   * settings. The backend normally builds it from its own copy of the reservation (by `reservationId`).
+   */
+  reservation?: RegistrationCardReservation;
 }
 
 export interface RegistrationCardApi {

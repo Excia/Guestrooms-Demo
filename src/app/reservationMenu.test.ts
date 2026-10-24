@@ -5,7 +5,6 @@ import {
   cancelConfirmation,
   menuState,
   nightAuditHasRun,
-  registrationCardUrl,
   reservationMenu,
   type MenuInput,
 } from './reservationMenu';
@@ -160,10 +159,6 @@ describe('night audit rule', () => {
 });
 
 describe('print and cancel copy', () => {
-  it('the registration card URL is a stub path with the id encoded', () => {
-    expect(registrationCardUrl('rs 1')).toBe('/files/registration-cards/rs%201.pdf');
-  });
-
   it('names one reservation or all rooms', () => {
     expect(cancelConfirmation({ confirmationNumber: 'GR-1', rooms: 1 })).toMatchObject({
       title: 'Cancel this reservation?',

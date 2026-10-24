@@ -7,7 +7,7 @@ import {
   type RegistrationCardReservation,
   type RegistrationCardSettings,
 } from '../api/registrationCardTypes';
-import type { FolioDetails } from '../api/types';
+import type { FolioDetails, ReservationDetail } from '../api/types';
 import { parseIsoDate } from '../lib/dates';
 import { formatMoney } from './quickStats';
 
@@ -35,11 +35,16 @@ export const ITEM_LABELS: Record<RegistrationCardItemId, string> = {
   staffSignature: 'Staff Signature Area',
 };
 
-/** An item that only makes sense while another is checked ("if the name is unchecked, its phone or address is disabled"). */
+/**
+ * An item that only makes sense while another is checked ("if the name is unchecked, its phone or
+ * address is disabled"; a flag sits under its date, Figma 15957:187205).
+ */
 export const ITEM_PARENT: Partial<Record<RegistrationCardItemId, RegistrationCardItemId>> = {
   leadOccupantAddress: 'leadOccupantName',
   leadOccupantPhone: 'leadOccupantName',
   reserverPhone: 'reserverName',
+  earlyCheckInFlag: 'checkInDate',
+  lateCheckOutFlag: 'checkOutDate',
 };
 
 /** Rows of the item grid as Figma 13319:41951 draws it: left column, right column (null: empty). */
@@ -89,8 +94,8 @@ export function isItemDisabled(
 }
 
 /**
- * Checks or unchecks an item. Unchecking a name also unchecks the phone and address that depend on it,
- * so a disabled box never shows a tick the card would not honor.
+ * Checks or unchecks an item. Unchecking an item also unchecks those that depend on it (a name's phone
+ * and address, a date's flag), so a disabled box never shows a tick the card would not honor.
  */
 export function setItem(
   items: RegistrationCardSettings['items'],
@@ -272,13 +277,56 @@ function addressLines(a: RegistrationCardReservation['leadOccupant']['address'])
 
 /**
  * Only a web address, a blob or a site path may be opened in a new tab; anything else the backend
- * might send (a `javascript:` address, say) is refused.
+ * might send (a `javascript:` address, say) is refused. The address is resolved the way a browser
+ * does (it drops tabs and turns `\\` into `/`), so `/\\evil.example.com` is seen as another host.
  */
 export function isOpenablePreviewUrl(url: string): boolean {
-  if (url.startsWith('/') && !url.startsWith('//')) return true;
+  if (url.trim() === '' || typeof window === 'undefined') return false;
   try {
-    return ['http:', 'https:', 'blob:'].includes(new URL(url).protocol);
+    const origin = window.location.origin;
+    const resolved = new URL(url, origin);
+    if (resolved.protocol === 'blob:') return true;
+    if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+      // A relative or same-origin address is a site path; a different host must have been written out.
+      return resolved.origin === origin || /^https?:\/\//i.test(url);
+    }
+    return false;
   } catch {
     return false;
   }
+}
+
+/**
+ * What a real reservation prints on its card. The reservation detail does not carry the lead
+ * occupant's phone or address or a separate reserver yet, so those stay empty (the backend fills
+ * them from the guest record); the room, dates and revenue are the selected room's.
+ */
+export function registrationCardReservation(
+  detail: ReservationDetail,
+  roomId?: string,
+): RegistrationCardReservation {
+  const room = detail.rooms.find((r) => r.id === roomId) ?? detail.rooms[0];
+  const own = detail.stay.lines.filter((l) => l.reservationRoomId === room?.id);
+  const lines = own.length > 0 ? own : detail.stay.lines;
+  return {
+    confirmationNumber: detail.confirmationNumber,
+    checkIn: detail.arrival,
+    checkOut: detail.departure,
+    earlyCheckIn: detail.earlyCheckIn,
+    lateCheckOut: detail.lateCheckOut,
+    roomNumber: room?.roomNumber ?? '',
+    roomType: room?.roomTypeName ?? '',
+    adults: detail.adults,
+    children: detail.children,
+    stayTotalCents: lines.reduce((sum, l) => sum + l.amountCents, 0),
+    nights: lines.length > 0 ? lines.length : detail.nights,
+    leadOccupant: {
+      name: detail.leadOccupant.name,
+      memberNumber: detail.leadOccupant.memberNumber,
+      phone: '',
+      address: { street: '', city: '', state: '', zip: '' },
+    },
+    reserver: null,
+    publicNotes: detail.publicNotes,
+  };
 }

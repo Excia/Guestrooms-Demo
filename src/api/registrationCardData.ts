@@ -89,7 +89,7 @@ hr{border:0;border-top:1px solid lightgray;margin:16px 0}
 export function previewRegistrationCardUrl(request: RegistrationCardPreviewRequest): string {
   const card = buildRegistrationCard(
     request.settings,
-    SAMPLE_RESERVATION,
+    request.reservation ?? SAMPLE_RESERVATION,
     request.folio,
     'Pine Ridge Club',
   );

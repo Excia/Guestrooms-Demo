@@ -136,10 +136,6 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
   return ids.map(action);
 }
 
-/** Where Print Registration Card(s) opens. Stub: the backend will generate the PDF (D-003). */
-export const registrationCardUrl = (reservationId: string) =>
-  `/files/registration-cards/${encodeURIComponent(reservationId)}.pdf`;
-
 /** Copy of the Cancel Reservation confirmation (not in Figma; the button labels come from the requirements doc 20.3.4, Q-22-1). */
 export function cancelConfirmation(input: { confirmationNumber: string; rooms: number }) {
   const all = input.rooms > 1;
