@@ -4,6 +4,7 @@ import type {
   CreateMemberRequest,
   CreateReservationRequest,
   EarlyLateRequest,
+  HoldSlotRequest,
   MoveDatesRequest,
   MoveGuard,
   MoveRoomRequest,
@@ -165,6 +166,7 @@ export const MAX_NOTES_LENGTH = 2000;
 
 export function assertCreateReservationRequest(request: CreateReservationRequest): void {
   assertRequestId(request.requestId);
+  if (request.holdId !== undefined) assertRequestId(request.holdId);
   if (request.roomId !== undefined && request.roomId !== null) {
     assertResourceId(request.roomId, 'room');
   }
@@ -276,4 +278,20 @@ export function assertPostChargeRequest(request: PostChargeRequest): void {
   assertRequestId(request.requestId);
   assertResourceId(request.reservationId, 'reservation');
   assertResourceId(request.chargeId, 'charge');
+}
+
+/** A hold request: a hold id (a UUID fits), a room and at least one night. */
+export function assertHoldSlotRequest(request: HoldSlotRequest): void {
+  assertRequestId(request.holdId);
+  assertResourceId(request.roomId, 'room');
+  const start = parseIsoDate(request.startDate);
+  const end = parseIsoDate(request.endDate);
+  if (start === null || end === null || request.startDate >= request.endDate) {
+    throw invalidQuery('hold request');
+  }
+}
+
+/** The id of a hold to release (it goes into the URL path). */
+export function assertHoldId(holdId: string): void {
+  assertRequestId(holdId);
 }

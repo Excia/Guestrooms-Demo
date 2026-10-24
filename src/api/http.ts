@@ -17,6 +17,7 @@ import type {
   CreateReservationRequest,
   DashboardStats,
   EarlyLateRequest,
+  HoldSlotRequest,
   EarlyLateResult,
   Folio,
   PostChargeRequest,
@@ -32,6 +33,7 @@ import type {
   MoveDatesRequest,
   MoveRoomRequest,
   ScheduleBlock,
+  ScheduleHold,
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
@@ -68,6 +70,8 @@ import {
   assertCreateReservationRequest,
   assertMemberQuery,
   assertEarlyLateRequest,
+  assertHoldId,
+  assertHoldSlotRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
   assertPostChargeRequest,
@@ -772,6 +776,20 @@ const parseQuickStats =
     return body as unknown as QuickStats;
   };
 
+/** A hold on the grid: where, until when, and whose. The id is the holder's own (ticket 152). */
+function isScheduleHold(v: unknown): v is ScheduleHold {
+  return (
+    isObject(v) &&
+    isString(v.id) &&
+    v.id !== '' &&
+    isString(v.roomId) &&
+    isDated(v) &&
+    isString(v.expiresAt) &&
+    Number.isFinite(Date.parse(v.expiresAt)) &&
+    typeof v.mine === 'boolean'
+  );
+}
+
 const HOUSEKEEPING: readonly string[] = ['clean', 'dirty'];
 const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
 const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
@@ -848,6 +866,7 @@ const parseSchedule =
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
       listOf(body.unassigned, isScheduleBlock) &&
+      (body.holds === undefined || listOf(body.holds, isScheduleHold)) &&
       listOf(
         body.closures,
         (c) =>
@@ -872,11 +891,29 @@ const parseSchedule =
         ...data.closures.map((c) => c.id),
       ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
-      !data.closures.every((c) => roomIds.has(c.roomId))
+      !data.closures.every((c) => roomIds.has(c.roomId)) ||
+      !unique((data.holds ?? []).map((h) => h.id)) ||
+      !(data.holds ?? []).every((h) => roomIds.has(h.roomId))
     ) {
       throw invalid(status, 'schedule');
     }
     return data;
+  };
+
+// A hold answers with the hold that was asked for: the same id, on the same slot.
+const parseHold =
+  (asked: HoldSlotRequest) =>
+  (body: unknown, status: number): ScheduleHold => {
+    if (
+      !isScheduleHold(body) ||
+      body.id !== asked.holdId ||
+      body.roomId !== asked.roomId ||
+      body.startDate !== asked.startDate ||
+      body.endDate !== asked.endDate
+    ) {
+      throw invalid(status, 'hold');
+    }
+    return body;
   };
 
 // A move answers with the changed blocks. The moved block must be where the request put it. For
@@ -1304,6 +1341,21 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             ),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
+        }),
+      holdSlot: (r: HoldSlotRequest, o) =>
+        Promise.resolve().then(() => {
+          assertHoldSlotRequest(r);
+          return request(`/schedule/holds/${encodeURIComponent(r.holdId)}`, {}, o, parseHold(r), {
+            method: 'PUT',
+            body: { roomId: r.roomId, startDate: r.startDate, endDate: r.endDate },
+          });
+        }),
+      releaseHold: (holdId: string, o) =>
+        Promise.resolve().then(() => {
+          assertHoldId(holdId);
+          return request(`/schedule/holds/${encodeURIComponent(holdId)}`, {}, o, () => undefined, {
+            method: 'DELETE',
+          });
         }),
       moveDates: (r: MoveDatesRequest, o) =>
         Promise.resolve().then(() => {
