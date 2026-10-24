@@ -4,6 +4,7 @@
 import { daysBetween } from '../lib/dates';
 import type { ScheduleBlock, ScheduleGuestType } from '../api/types';
 import { housekeepingStatusOf } from './housekeepingBlocks';
+import { MONTH_VIEW_DAYS } from './schedule';
 import { formatMoney } from './quickStats';
 
 /** The fields of a block the content rules read. */
@@ -28,12 +29,19 @@ export type BlockContentSource = Pick<
 /** Month (30 day) view: stays shorter than this many nights are compact (initials, no type icon). */
 export const COMPACT_MONTH_NIGHTS = 2;
 
-/** "Daniel Whitfield" becomes "D.W."; one word gives "M."; nothing gives "". */
+/**
+ * "Daniel Whitfield" becomes "D.W."; one word gives "M."; nothing gives "". Leading punctuation
+ * ("(TBD)") is skipped and characters outside the basic plane (emoji, some names) stay whole.
+ */
 export function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '';
-  const first = words[0][0];
-  const last = words.length > 1 ? words[words.length - 1][0] : '';
+  const letters = name
+    .trim()
+    .split(/\s+/)
+    .map((word) => Array.from(word.replace(/^[^\p{L}\p{N}]+/u, ''))[0])
+    .filter((c): c is string => Boolean(c));
+  if (letters.length === 0) return '';
+  const first = letters[0];
+  const last = letters.length > 1 ? letters[letters.length - 1] : '';
   return `${first}.${last ? `${last}.` : ''}`.toUpperCase();
 }
 
@@ -49,7 +57,7 @@ const plus = (n: number) => (n > 0 ? ` +${n}` : '');
  * icon is hidden, which makes room in a one-day-wide block. `days` is the view length (7, 14, 30).
  */
 export function isCompactMonth(days: number, startDate: string, endDate: string): boolean {
-  return days === 30 && daysBetween(startDate, endDate) < COMPACT_MONTH_NIGHTS;
+  return days === MONTH_VIEW_DAYS && daysBetween(startDate, endDate) < COMPACT_MONTH_NIGHTS;
 }
 
 export interface BlockContent {
@@ -59,7 +67,8 @@ export interface BlockContent {
    * Second line, the most relevant detail, or "" when there is none (the confirmation number then
    * takes the line):
    * 1. no room yet: the room type;
-   * 2. checked in or out: "Balance due: $X" while the folio is open, else the reserver;
+   * 2. checked in or out: "Balance due: $X" while the folio balance is above zero (zero or negative
+   *    shows nothing), else the reserver when not the lead occupant;
    * 3. the reserver, when not the lead occupant;
    * 4. "Maintenance", when the room needs maintenance;
    * 5. the block name.
@@ -72,11 +81,25 @@ export interface BlockContent {
 }
 
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const isPlaceholder = (name: string) => name === '' || /^tbd$/i.test(name);
+
+/** Named occupants without blanks. */
+const namedOccupants = (block: BlockContentSource): string[] =>
+  (block.occupants ?? []).map((n) => n.trim()).filter((n) => n !== '' && !isPlaceholder(n));
+
+/** The lead occupant's name: `guestName`, or the first named occupant when that is blank or TBD. */
+export function leadName(block: BlockContentSource): string {
+  const lead = block.guestName.trim();
+  return isPlaceholder(lead) ? (namedOccupants(block)[0] ?? '') : lead;
+}
+
+const owes = (block: BlockContentSource): block is BlockContentSource & { balanceCents: number } =>
+  block.balanceCents !== undefined && block.balanceCents > 0;
 
 /** The text of a (non-linked) reservation block in a view of `days` days (7, 14 or 30). */
 export function blockContent(block: BlockContentSource, days: number): BlockContent {
   const compact = isCompactMonth(days, block.startDate, block.endDate);
-  const lead = block.guestName.trim();
+  const lead = leadName(block);
   const reserver = block.reserverName?.trim() ?? '';
   const extra = plus(extraGuests(block.occupantCount));
   const person = (name: string) => (compact ? initials(name) : name);
@@ -85,22 +108,25 @@ export function blockContent(block: BlockContentSource, days: number): BlockCont
   if (lead) title = `${person(lead)}${extra}`;
   else if (reserver) title = `${person(reserver)}${extra}`;
   else if (block.blockName) title = block.blockName;
-  else title = block.occupantCount ? String(block.occupantCount) : '';
+  else if (block.occupantCount) {
+    title = `${block.occupantCount} ${block.occupantCount === 1 ? 'guest' : 'guests'}`;
+  } else title = '';
 
   const unassigned = block.roomId === '';
   const settled = block.status === 'checked-in' || block.status === 'checked-out';
-  const reserverLine = reserver ? `${reserver}${extra}` : '';
+  const otherReserver = reserver !== '' && (!lead || !same(reserver, lead));
   let detail = '';
   if (unassigned) {
     detail = block.roomTypeName ?? '';
   } else if (settled) {
-    detail =
-      block.balanceCents !== undefined && block.balanceCents > 0
-        ? `Balance due: ${formatMoney(block.balanceCents)}`
-        : reserverLine;
-  } else if (reserver && (!lead || !same(reserver, lead))) {
+    detail = owes(block)
+      ? `Balance due: ${formatMoney(block.balanceCents)}`
+      : otherReserver
+        ? reserver
+        : '';
+  } else if (otherReserver) {
     detail = reserver;
-  } else if (housekeepingStatusOf(block as ScheduleBlock) === 'needs-maintenance') {
+  } else if (housekeepingStatusOf(block) === 'needs-maintenance') {
     detail = 'Maintenance';
   }
   if (!detail && block.blockName && title !== block.blockName) detail = block.blockName;
@@ -119,26 +145,30 @@ const GUEST_TYPE_LABEL: Record<ScheduleGuestType, string | null> = {
 export const guestTypeLabel = (type: ScheduleGuestType): string | null => GUEST_TYPE_LABEL[type];
 
 /**
- * Tooltip lines of a reservation block: `summary` (guest, confirmation number, room), then the
- * guest type, the reserver when not the lead, every occupant (unnamed guests as TBD), the requested
- * room type of an unassigned reservation, the block name and an open balance.
+ * The facts a block states beyond its summary, shared by the tooltip and the accessible name:
+ * the guest type, then the reserver when not the lead, every occupant (unnamed guests as TBD, only
+ * when more than one guest), the requested room type of an unassigned reservation, the block name
+ * and an open balance.
  */
-export function blockTooltipLines(block: BlockContentSource, summary: string): string[] {
-  const lines = [summary];
-  const type = guestTypeLabel(block.guestType);
-  if (type) lines.push(type);
-  const lead = block.guestName.trim();
+export function blockFacts(block: BlockContentSource): { type: string | null; details: string[] } {
+  const lead = leadName(block);
   const reserver = block.reserverName?.trim();
-  if (reserver && !same(reserver, lead)) lines.push(`Reserver: ${reserver}`);
-  const named = block.occupants ?? (lead ? [lead] : []);
+  const details: string[] = [];
+  if (reserver && !same(reserver, lead)) details.push(`Reserver: ${reserver}`);
+  const named = namedOccupants(block);
+  if (named.length === 0 && lead) named.push(lead);
   const unnamed = Math.max(0, (block.occupantCount ?? named.length) - named.length);
   if (named.length + unnamed > 1) {
-    lines.push(`Occupants: ${[...named, ...Array<string>(unnamed).fill('TBD')].join(', ')}`);
+    details.push(`Occupants: ${[...named, ...Array<string>(unnamed).fill('TBD')].join(', ')}`);
   }
-  if (block.roomId === '' && block.roomTypeName) lines.push(`Room type: ${block.roomTypeName}`);
-  if (block.blockName) lines.push(`Block: ${block.blockName}`);
-  if (block.balanceCents !== undefined && block.balanceCents > 0) {
-    lines.push(`Balance due: ${formatMoney(block.balanceCents)}`);
-  }
-  return lines;
+  if (block.roomId === '' && block.roomTypeName) details.push(`Room type: ${block.roomTypeName}`);
+  if (block.blockName) details.push(`Block: ${block.blockName}`);
+  if (owes(block)) details.push(`Balance due: ${formatMoney(block.balanceCents)}`);
+  return { type: guestTypeLabel(block.guestType), details };
+}
+
+/** Tooltip lines of a reservation block: `summary` (guest, confirmation number, room), then the facts. */
+export function blockTooltipLines(block: BlockContentSource, summary: string): string[] {
+  const { type, details } = blockFacts(block);
+  return [summary, ...(type ? [type] : []), ...details];
 }

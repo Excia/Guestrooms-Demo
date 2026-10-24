@@ -982,8 +982,6 @@ describe('long block text', () => {
     expect(cell.querySelectorAll('[title]')).toHaveLength(0);
     expect(cell).not.toHaveAttribute('title');
     expect(tip).toHaveTextContent('Victor Almeida, GR-50271, Room 301');
-    // Every occupant, named or TBD (the mock block has three guests, one named).
-    expect(tip).toHaveTextContent('Occupants: Victor Almeida, TBD, TBD');
     // The accessible name is unchanged and the cell is not described twice.
     expect(cell.getAttribute('aria-label')).toBe(label);
     expect(cell).not.toHaveAttribute('aria-describedby');

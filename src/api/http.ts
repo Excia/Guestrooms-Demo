@@ -728,6 +728,14 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     (v.housekeeping === undefined ||
       (isString(v.housekeeping) && HOUSEKEEPING_STATUSES.includes(v.housekeeping))) &&
     (v.housekeepingNotes === undefined || isString(v.housekeepingNotes)) &&
+    (v.occupantCount === undefined ||
+      (Number.isInteger(v.occupantCount) && (v.occupantCount as number) >= 0)) &&
+    (v.occupants === undefined || (Array.isArray(v.occupants) && v.occupants.every(isString))) &&
+    (v.reserverName === undefined || isString(v.reserverName)) &&
+    (v.blockName === undefined || isString(v.blockName)) &&
+    (v.roomTypeName === undefined || isString(v.roomTypeName)) &&
+    (v.balanceCents === undefined ||
+      (typeof v.balanceCents === 'number' && Number.isFinite(v.balanceCents))) &&
     (v.linkedTo === undefined ||
       (isObject(v.linkedTo) &&
         isString(v.linkedTo.roomNumber) &&

@@ -6,13 +6,13 @@ import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { memo, useRef, useState, type PointerEventHandler } from 'react';
+import { memo, useMemo, useRef, useState, type PointerEventHandler } from 'react';
 import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
 import { blockFillToken, housekeepingFillToken } from '../../app/scheduleColors';
-import { blockContent } from '../../app/scheduleBlockContent';
+import { blockContent, blockTooltipLines } from '../../app/scheduleBlockContent';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
 import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
@@ -48,10 +48,11 @@ export interface ScheduleItemViewProps {
   /**
    * The full text of the block ("Victor Almeida, GR-50271, part 2 of 5, Room 301 → 207"), shown in a
    * tooltip on hover or keyboard focus when the block's text is cut off. Created only when first
-   * needed; the accessible name stays `label` (the tooltip is not announced a second time). An array
-   * is one line each.
+   * needed; the accessible name stays `label` (the tooltip is not announced a second time). For a
+   * reservation it is the summary line; the facts below it are built from the block when the tooltip
+   * is first created (a plain string keeps this memoized component's props comparable by value).
    */
-  tip?: string | readonly string[];
+  tip?: string;
   /** The grid has focus and the keyboard cursor is on this block: show the tooltip like hover does. */
   tipFocused?: boolean;
   onPointerDown?: PointerEventHandler<HTMLElement>;
@@ -191,7 +192,16 @@ export default memo(function ScheduleItemView({
     Boolean(tipFocused) ||
     focusIn ||
     (hover && (cutOff || Boolean(linked) || item.kind === 'reservation'));
-  const tipLines = typeof tip === 'string' ? [tip] : tip;
+  const tipLines = useMemo(
+    () =>
+      !tipArmed || linked || tip === undefined
+        ? null
+        : item.kind === 'reservation'
+          ? blockTooltipLines(item, tip)
+          : [tip],
+    [tipArmed, linked, tip, item],
+  );
+  const hasTip = Boolean(linked) || tip !== undefined;
   const tipContent = linked ? (
     <span>
       {linkedTooltipLines(linked).map((line, i) => (
@@ -341,7 +351,7 @@ export default memo(function ScheduleItemView({
           : undefined
       }
       onPointerEnter={
-        ghost || !tipContent
+        ghost || !hasTip
           ? undefined
           : () => {
               setCutOff(anyTruncated(bodyRef.current?.querySelectorAll('span') ?? []));
@@ -349,7 +359,7 @@ export default memo(function ScheduleItemView({
               setHover(true);
             }
       }
-      onPointerLeave={ghost || !tipContent ? undefined : () => setHover(false)}
+      onPointerLeave={ghost || !hasTip ? undefined : () => setHover(false)}
       sx={(t) => ({
         position: 'absolute',
         top: t.spacing(BLOCK_TOP),

@@ -26,7 +26,6 @@ import {
   type RoomRowLabel,
 } from '../../app/schedule';
 import { canDrop, isDraggable, type DropResult, type ScheduleItem } from '../../app/scheduleDrag';
-import { blockTooltipLines } from '../../app/scheduleBlockContent';
 import {
   blockAriaLabel,
   turnoverGap,
@@ -256,7 +255,7 @@ const ScheduleRow = memo(function ScheduleRow({
             dragging={draggingId === item.id}
             label={
               item.kind === 'reservation'
-                ? blockAriaLabel(item, room, link)
+                ? blockAriaLabel(item, room, link, days)
                 : closureAriaLabel(item, room)
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
@@ -266,7 +265,7 @@ const ScheduleRow = memo(function ScheduleRow({
             linkText={link ? segmentBadge(link) : undefined}
             tip={
               item.kind === 'reservation'
-                ? blockTooltipLines(item, blockTipText(item, room, link))
+                ? blockTipText(item, room, link)
                 : (item as ScheduleClosure).reason
             }
           />
@@ -732,7 +731,7 @@ export default function ScheduleGrid({
     const result = evaluate(item, row, 0);
     setDrag({ item, row, shift: 0, dx: 0, dy: 0, result, mode: 'keyboard' });
     setAnnouncement(
-      `Picked up ${blockAriaLabel(item, rooms[row])}. Use the arrow keys to choose a room or date, Enter to drop, Escape to cancel.`,
+      `Picked up ${blockAriaLabel(item, rooms[row], undefined, days)}. Use the arrow keys to choose a room or date, Enter to drop, Escape to cancel.`,
     );
   };
 
