@@ -765,10 +765,10 @@ const parseSchedule =
     if (
       !unique(data.rooms.map((r) => r.id)) ||
       !unique([
-        ...data.blocks.map((b) => b.id),
-        ...data.unassigned.map((b) => b.id),
-        ...data.closures.map((c) => c.id),
-      ]) ||
+          ...data.blocks.map((b) => b.id),
+          ...data.unassigned.map((b) => b.id),
+          ...data.closures.map((c) => c.id),
+        ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {

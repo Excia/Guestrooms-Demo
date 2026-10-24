@@ -108,7 +108,7 @@ export const hasUnassignedRoom = (rooms: readonly ReservationRoomDetail[]) =>
  * reservation is cancelled, every room has checked out, or the night audit has run for it (inferred
  * from the folio); otherwise offered, also after check in. No permission check.
  */
-export function canAddRoom(input: Pick<MenuInput, 'status' | 'rooms' | 'folioCharges'>): boolean {
+export function addRoomVisible(input: Pick<MenuInput, 'status' | 'rooms' | 'folioCharges'>): boolean {
   const state = menuState(input);
   if (state === 'cancelled' || state === 'checked-out') return false;
   return !nightAuditHasRunForFolio(input.folioCharges);
@@ -122,7 +122,7 @@ export function canAddRoom(input: Pick<MenuInput, 'status' | 'rooms' | 'folioCha
  *   Print, Jump to Folio.
  * - Partly checked out: Add Another Room, Print, Jump to Folio. Checked out: Print, Jump to Folio.
  *   Cancelled: Jump to Folio.
- * - Add Another Room is governed by `canAddRoom` alone (F-22-3, Q-22-3: matches legacy).
+ * - Add Another Room is governed by `addRoomVisible` alone (F-22-3, Q-22-3: matches legacy).
  */
 export function reservationMenu(input: MenuInput): MenuAction[] {
   const state = menuState(input);
@@ -137,7 +137,7 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
       ids.push(edit);
     }
   }
-  if (canAddRoom(input)) ids.push('add-room');
+  if (addRoomVisible(input)) ids.push('add-room');
   if (state !== 'cancelled') ids.push('print-registration-card');
   ids.push('jump-to-folio');
   return ids.map(action);
