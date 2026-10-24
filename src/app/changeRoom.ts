@@ -118,6 +118,8 @@ export function mergeScheduleWindows(parts: readonly ScheduleData[]): ScheduleDa
     ...first,
     blocks: byId(parts.map((p) => p.blocks)),
     closures: byId(parts.map((p) => p.closures)),
+    // Holds over any of the windows (ticket 151 reads them for Add Another Room).
+    ...(parts.some((p) => p.holds) ? { holds: byId(parts.map((p) => p.holds ?? [])) } : {}),
   };
 }
 

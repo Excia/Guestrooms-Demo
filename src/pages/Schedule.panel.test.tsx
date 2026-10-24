@@ -323,7 +323,7 @@ describe('split CTA', () => {
     const dialog = await panel(/Reservation #GR-50310/);
     await within(dialog).findByRole('button', { name: 'Check In' });
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Add Another Room' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit Reservation' }));
     expect(await within(dialog).findByText(/Reservation Hub \(ticket 3\.12\)/)).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Jump to Folio' }));
@@ -909,7 +909,7 @@ describe('small review items', () => {
     const dialog = await panel(/Reservation #GR-50310/);
     await within(dialog).findByRole('button', { name: 'Check In' });
     await user.click(within(dialog).getByRole('button', { name: 'More reservation actions' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Add Another Room' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit Reservation' }));
     const text = await within(dialog).findByText(/Reservation Hub \(ticket 3\.12\)/);
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
     expect(text.closest('[role=status]')).not.toBeNull();

@@ -84,6 +84,23 @@ describe('panel URL state', () => {
   });
 });
 
+describe('panel URL state: Add Another Room', () => {
+  it('parses and applies the add-room panel with its reservation', () => {
+    expect(parsePanel(p('panel=add-room&res=rs-3'))).toEqual({
+      kind: 'add-room',
+      reservationId: 'rs-3',
+    });
+    expect(parsePanel(p('panel=add-room'))).toBeNull();
+    expect(parsePanel(p('panel=add-room&res=..'))).toBeNull();
+    const view = p('start=2026-11-02&view=14');
+    const open = applyPanel(view, { kind: 'add-room', reservationId: 'rs-3' });
+    expect(open.get('panel')).toBe('add-room');
+    expect(open.get('res')).toBe('rs-3');
+    expect(closePanel(open).toString()).toBe(view.toString());
+    expect(applyPanel(open, { kind: 'details', reservationId: 'rs-3' }).get('panel')).toBeNull();
+  });
+});
+
 describe('panel URL state: closures', () => {
   it('parses the closure tab with its prefill, tolerantly', () => {
     expect(

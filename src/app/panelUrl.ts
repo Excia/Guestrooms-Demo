@@ -8,6 +8,7 @@ import { isValidIsoDate, type IsoDate } from '../lib/dates';
 //   ?panel=new[&room=<roomId>&arrival=<date>]       the New Reservation panel (room and Check In prefilled)
 //   ?panel=new&tab=closure[&room=&arrival=&end=&desc=]  its New Room Closure tab (start, end and description prefilled)
 //   ?closure=<closureId>                            the Closure details panel
+//   ?panel=add-room&res=<reservationId>             Add Another Room to that reservation
 export type PanelState =
   | { kind: 'details'; reservationId: string; reservationRoomId?: string }
   /** `roomId` and `arrival` prefill the form when opened from an empty grid cell. */
@@ -22,6 +23,7 @@ export type PanelState =
       description?: string;
     }
   | { kind: 'closure'; closureId: string }
+  | { kind: 'add-room'; reservationId: string }
   | null;
 
 const KEYS = {
@@ -44,6 +46,10 @@ function cleanId(value: string | null): string | null {
 }
 
 export function parsePanel(params: URLSearchParams): PanelState {
+  if (params.get(KEYS.panel) === 'add-room') {
+    const reservationId = cleanId(params.get(KEYS.reservation));
+    return reservationId ? { kind: 'add-room', reservationId } : null;
+  }
   if (params.get(KEYS.panel) === 'new') {
     const roomId = cleanId(params.get(KEYS.newRoom));
     const arrival = params.get(KEYS.newArrival);
@@ -90,6 +96,10 @@ export function applyPanel(params: URLSearchParams, panel: PanelState): URLSearc
     if (panel.tab) next.set(KEYS.tab, panel.tab);
     if (panel.end) next.set(KEYS.end, panel.end);
     if (panel.description) next.set(KEYS.description, panel.description);
+  }
+  if (panel?.kind === 'add-room') {
+    next.set(KEYS.panel, 'add-room');
+    next.set(KEYS.reservation, panel.reservationId);
   }
   if (panel?.kind === 'closure') next.set(KEYS.closure, panel.closureId);
   if (panel?.kind === 'details') {

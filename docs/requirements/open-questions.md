@@ -240,3 +240,17 @@ Share is computed (Q-67-1).
 | ------ | ------------------------------------------------------------------------------------------------------------ | -------------- | --------------------------------------- | -------- | -------------- | ------ |
 | Q-83-1 | Designs for Waitlist, Add-On Countdown, Member Directory and Room Blocks                                     | Blocked        | Placeholder pages                       | Designer | 84, 85, 86, 87 | open   |
 | Q-89-1 | The exact casing rule for button labels (and the capitalization of "Return to Site" in Figma's two variants) | Consistency    | "Return to Site" in the header and menu | Designer | 89, 90         | open   |
+
+## Edit panel: add another room, guests, notes (ticket 151)
+
+Details in [entries/151-edit-panel.md](entries/151-edit-panel.md).
+
+| ID      | Question                                                                                                            | Why it matters        | Built default                                                                   | Decider  | Tickets | Status |
+| ------- | ------------------------------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------- | -------- | ------- | ------ |
+| Q-151-1 | Add Another Room after the night audit "does not hide; it behaves differently" (Q-22-3): how, exactly?              | Add Another Room rule | Hidden once the audit has posted a charge (D-LM-5); the panel also refuses      | Owner    | 151     | open   |
+| Q-151-2 | Maximum guests per room (legacy: the room's or room type's maximum occupancy; the schedule data has none)           | Guest steppers        | 20 per room (`MAX_PARTY`)                                                       | Backend  | 151     | open   |
+| Q-151-3 | Legacy keeps notes per reservation room and saves public and private separately with a confirmation                 | Notes                 | One pair per reservation, one Save, no confirmation                             | Owner    | 151     | open   |
+| Q-151-4 | Guests of a checked-in room: the ticket says read-only, legacy only disables the steppers                           | Guests                | Read-only once the room is checked in or out                                    | Owner    | 151     | open   |
+| Q-151-5 | Editing the lead occupant, reserver and booking guest, and the contact-card window (C12)                            | Guests                | Not built; the lead occupant is Guest 1 and read-only                           | Owner    | 151     | open   |
+| Q-151-6 | Does an added room start "not yet checked in" on an already checked-in reservation?                                 | Add room              | Yes                                                                             | Owner    | 151     | open   |
+| Q-151-7 | Confirmation emails: legacy asks the notification rules ("send on prompt"); the mock only flags "Confirmation sent" | Guests                | Per-guest switch, off by default, shown only with an email address              | Backend  | 151     | open   |

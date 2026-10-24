@@ -3,7 +3,6 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import Groups from '@mui/icons-material/Groups';
 import PlaylistAdd from '@mui/icons-material/PlaylistAdd';
 import Description from '@mui/icons-material/Description';
-import Badge from '@mui/icons-material/Badge';
 import Accordion from '@mui/material/Accordion';
 import AccordionDetails from '@mui/material/AccordionDetails';
 import AccordionSummary from '@mui/material/AccordionSummary';
@@ -12,11 +11,12 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import { useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
-import type { ReservationDetail } from '../../api';
+import type { ReservationDetail, ReservationRoomDetail } from '../../api';
 import { formatPanelDate } from '../../app/newReservation';
-import { guestCountText } from '../../app/reservationPanel';
 import { formatMoney } from '../../app/quickStats';
 import { folioPath } from '../../app/routes';
+import GuestsSection from './GuestsSection';
+import NotesSection from './NotesSection';
 
 type SectionId = 'guests' | 'add-ons' | 'notes' | 'rates';
 
@@ -38,42 +38,6 @@ const stubAction = (label: string, reason: string, onStub: (message: string) => 
     {label}
   </Button>
 );
-
-function GuestDetails({
-  detail,
-  onStub,
-}: {
-  detail: ReservationDetail;
-  onStub: (m: string) => void;
-}) {
-  const lead = detail.leadOccupant;
-  return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="subtitle2">
-          {guestCountText(detail.adults, detail.children)}
-        </Typography>
-        {stubAction(
-          'Edit guests',
-          'Editing guests arrives with the Reservation Hub (ticket 3.12).',
-          onStub,
-        )}
-      </Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-        <Badge aria-hidden color="primary" fontSize="small" />
-        <Box>
-          <Typography variant="body2">
-            <strong>{lead.name}</strong>
-            {lead.memberNumber ? ` (${lead.memberNumber})` : ''}
-          </Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Lead occupant
-          </Typography>
-        </Box>
-      </Box>
-    </Box>
-  );
-}
 
 function AddOns({ detail, onStub }: { detail: ReservationDetail; onStub: (m: string) => void }) {
   return (
@@ -105,30 +69,6 @@ function AddOns({ detail, onStub }: { detail: ReservationDetail; onStub: (m: str
           onStub,
         )}
       </Box>
-    </Box>
-  );
-}
-
-function Notes({ detail, onStub }: { detail: ReservationDetail; onStub: (m: string) => void }) {
-  const note = (label: string, text: string) => (
-    <Box sx={{ mb: 1.5 }}>
-      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-        {label}
-      </Typography>
-      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-        {text || 'None'}
-      </Typography>
-    </Box>
-  );
-  return (
-    <Box>
-      {note('Public Notes', detail.publicNotes)}
-      {note('Private Notes', detail.privateNotes)}
-      {stubAction(
-        'Edit notes',
-        'Editing notes arrives with the Reservation Hub (ticket 3.12).',
-        onStub,
-      )}
     </Box>
   );
 }
@@ -186,24 +126,52 @@ function Rates({ detail, onStub }: { detail: ReservationDetail; onStub: (m: stri
 
 export interface DetailsAccordionProps {
   detail: ReservationDetail;
-  /** Sections whose editing is built later report why here. */
+  /** The room selected in the room selector: Guest Details shows its guests. */
+  room: ReservationRoomDetail;
+  /** Holds `reservation.edit`. */
+  canEdit: boolean;
+  /** The reservation as it is after a save (guests, notes) or a reload that a failure triggered. */
+  onReloaded: (detail: ReservationDetail) => void;
+  /** A save was applied: the schedule behind the panel reloads. */
+  onChanged?: () => void;
+  /** Polite notice (saved, failed outside the section) and sections built later. */
   onStub: (message: string) => void;
 }
 
 /**
  * The four sections at the foot of the panel (Figma "ResDetailsAccordion"): one open at a time,
- * each a button with aria-expanded (Enter/Space toggle). Content is read-only here; editing
- * belongs to the Reservation Hub (ticket 3.12) and reports that through `onStub`.
+ * each a button with aria-expanded (Enter/Space toggle). Guest Details and Notes edit in place
+ * (ticket 151); Add-Ons and payments belong to later tickets and report that through `onStub`.
  */
-export default function DetailsAccordion({ detail, onStub }: DetailsAccordionProps) {
+export default function DetailsAccordion({
+  detail,
+  room,
+  canEdit,
+  onReloaded,
+  onChanged,
+  onStub,
+}: DetailsAccordionProps) {
   const [open, setOpen] = useState<SectionId | null>(null);
   const body = (id: SectionId) =>
     id === 'guests' ? (
-      <GuestDetails detail={detail} onStub={onStub} />
+      <GuestsSection
+        detail={detail}
+        room={room}
+        canEdit={canEdit}
+        onReloaded={onReloaded}
+        onChanged={onChanged}
+        say={onStub}
+      />
     ) : id === 'add-ons' ? (
       <AddOns detail={detail} onStub={onStub} />
     ) : id === 'notes' ? (
-      <Notes detail={detail} onStub={onStub} />
+      <NotesSection
+        detail={detail}
+        canEdit={canEdit}
+        onReloaded={onReloaded}
+        onChanged={onChanged}
+        say={onStub}
+      />
     ) : (
       <Rates detail={detail} onStub={onStub} />
     );

@@ -1,4 +1,7 @@
 import type {
+  AddRoomRequest,
+  UpdateGuestsRequest,
+  UpdateNotesRequest,
   AddPaymentMethodRequest,
   CheckInReservationRequest,
   CheckInReservationResult,
@@ -89,6 +92,11 @@ import {
   assertSetHousekeepingRequest,
 } from './validation';
 import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
+import {
+  assertAddRoomRequest,
+  assertUpdateGuestsRequest,
+  assertUpdateNotesRequest,
+} from './reservationEditApi';
 import { parseIsoDate } from '../lib/dates';
 
 export interface HttpClientOptions {
@@ -185,6 +193,30 @@ const isPartialStays = (v: unknown) =>
       isString(p.departure),
   );
 
+const isGuestShape = (g: unknown) =>
+  isObject(g) &&
+  isString(g.id) &&
+  g.id !== '' &&
+  (g.kind === 'adult' || g.kind === 'child') &&
+  isCount(g.slot) &&
+  Number.isInteger(g.slot) &&
+  g.slot >= 0 &&
+  isString(g.name) &&
+  (g.memberNumber === null || isString(g.memberNumber)) &&
+  (g.memberId === undefined || isString(g.memberId)) &&
+  (g.email === undefined || isString(g.email)) &&
+  (g.confirmationSent === undefined || isFlag(g.confirmationSent));
+
+// The per-room party is optional on the wire; when present it must be complete.
+const isRoomParty = (r: Record<string, unknown>) =>
+  (r.adults === undefined || isCount(r.adults)) &&
+  (r.children === undefined || isCount(r.children)) &&
+  (r.guests === undefined || listOf(r.guests, isGuestShape)) &&
+  (r.leadOccupant === undefined ||
+    (isObject(r.leadOccupant) &&
+      isString(r.leadOccupant.name) &&
+      (r.leadOccupant.memberNumber === null || isString(r.leadOccupant.memberNumber))));
+
 // Light shape guard on what the details panel reads. A mismatch is an invalid-response error.
 function isReservationDetail(v: unknown): v is ReservationDetail {
   return (
@@ -217,7 +249,8 @@ function isReservationDetail(v: unknown): v is ReservationDetail {
         isString(r.status) &&
         ROOM_STATUSES.includes(r.status) &&
         isPartialStays(r.previousStays) &&
-        isPartialStays(r.upcomingStays),
+        isPartialStays(r.upcomingStays) &&
+        isRoomParty(r),
     ) &&
     (v.rooms as unknown[]).length >= 1 &&
     isFlag(v.earlyCheckIn) &&
@@ -383,6 +416,52 @@ const parseCancelled =
       body.status !== 'cancelled'
     ) {
       throw invalid(status, 'cancelled reservation');
+    }
+    return withKnownAudit(body);
+  };
+
+// An added room answers the reservation with one more room (and the room asked for, when given).
+const parseRoomAdded =
+  (request: AddRoomRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (
+      !isReservationDetail(body) ||
+      body.id !== request.reservationId ||
+      body.rooms.length < 2 ||
+      (request.roomId && !body.rooms.some((r) => r.roomId === request.roomId))
+    ) {
+      throw invalid(status, 'reservation with the added room');
+    }
+    return withKnownAudit(body);
+  };
+
+// The guests answer must show the room's party as it was asked for.
+const parseGuestsUpdated =
+  (request: UpdateGuestsRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    const room = isReservationDetail(body)
+      ? body.rooms.find((r) => r.id === request.reservationRoomId)
+      : undefined;
+    if (
+      !isReservationDetail(body) ||
+      body.id !== request.reservationId ||
+      !room ||
+      room.adults !== request.adults ||
+      room.children !== request.children ||
+      (room.guests?.length ?? 0) !== request.guests.length
+    ) {
+      throw invalid(status, 'reservation guests');
+    }
+    return withKnownAudit(body);
+  };
+
+// The notes answer is the reservation. Its note texts are not compared with the request: a real
+// backend may trim or normalize them, and the UI shows what comes back.
+const parseNotesUpdated =
+  (request: UpdateNotesRequest) =>
+  (body: unknown, status: number): ReservationDetail => {
+    if (!isReservationDetail(body) || body.id !== request.reservationId) {
+      throw invalid(status, 'reservation notes');
     }
     return withKnownAudit(body);
   };
@@ -1299,6 +1378,39 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             method: 'POST',
             body: r,
           });
+        }),
+      addRoom: (r: AddRoomRequest, o) =>
+        Promise.resolve().then(() => {
+          assertAddRoomRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/rooms`,
+            {},
+            o,
+            parseRoomAdded(r),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      updateGuests: (r: UpdateGuestsRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUpdateGuestsRequest(r);
+          return request(
+            `/reservation-rooms/${encodeURIComponent(r.reservationRoomId)}/guests`,
+            {},
+            o,
+            parseGuestsUpdated(r),
+            { method: 'PUT', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      updateNotes: (r: UpdateNotesRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUpdateNotesRequest(r);
+          return request(
+            `/reservations/${encodeURIComponent(r.reservationId)}/notes`,
+            {},
+            o,
+            parseNotesUpdated(r),
+            { method: 'PUT', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
         }),
       splitRoom: (r: SplitRoomRequest, o) =>
         Promise.resolve().then(() => {

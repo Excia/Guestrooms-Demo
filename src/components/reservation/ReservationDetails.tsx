@@ -24,6 +24,7 @@ import { type EarlyLateValues } from '../../app/earlyLate';
 import { checkInLevel, RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
 import { RESERVATION_PANEL_SIDE, toastSideFor } from '../../app/layout';
 import { splitConfirmation } from '../../app/checkInCopy';
+import { roomParty } from '../../app/roomGuests';
 import {
   checkInText,
   checkOutText,
@@ -92,6 +93,8 @@ export interface ReservationDetailsProps {
   onReservationChanged?: () => void;
   /** Opens another reservation in the panel (the one a room was split into). */
   onOpenReservation?: (reservationId: string) => void;
+  /** Add Another Room: the page opens that panel for this reservation (ticket 151). */
+  onAddRoom?: (reservationId: string) => void;
   /** The current instant, for the club clock's time of day (check-out time rule). Injectable for tests. */
   now?: () => number;
 }
@@ -347,6 +350,7 @@ export default function ReservationDetails({
   reopenChange,
   onReservationChanged,
   onOpenReservation,
+  onAddRoom,
   now,
 }: ReservationDetailsProps) {
   const state = useReservationDetail(reservationId, refreshToken);
@@ -419,6 +423,7 @@ export default function ReservationDetails({
       reopenChange={reopenChange}
       onReservationChanged={onReservationChanged}
       onOpenReservation={onOpenReservation}
+      onAddRoom={onAddRoom}
       now={now}
     />
   );
@@ -439,6 +444,7 @@ function Loaded({
   reopenChange,
   onReservationChanged,
   onOpenReservation,
+  onAddRoom,
   now,
 }: {
   detail: ReservationDetail;
@@ -456,6 +462,7 @@ function Loaded({
   reopenChange?: ReservationDetailsProps['reopenChange'];
   onReservationChanged?: () => void;
   onOpenReservation?: (reservationId: string) => void;
+  onAddRoom?: (reservationId: string) => void;
   now?: () => number;
 }) {
   const navigate = useNavigate();
@@ -510,6 +517,8 @@ function Loaded({
     busy: roomChangeBusy,
   });
   const multi = detail.rooms.length > 1;
+  const party = roomParty(detail, room);
+  const lead = room.leadOccupant ?? detail.leadOccupant;
 
   // ---- check in (ticket 163) ----
   const level = checkInLevel(can);
@@ -620,7 +629,7 @@ function Loaded({
         actions.undoCheckIn();
         return;
       case 'add-room':
-        say('Adding another room arrives with the Reservation Hub (ticket 3.12).');
+        onAddRoom?.(detail.id);
         return;
       case 'edit-reservation':
       case 'assign-room':
@@ -866,7 +875,7 @@ function Loaded({
             Guests
           </Typography>
           <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 700 }}>
-            {guestCountText(detail.adults, detail.children)}
+            {guestCountText(party.adults, party.children)}
           </Typography>
           <Typography
             variant="caption"
@@ -878,8 +887,8 @@ function Loaded({
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Badge aria-hidden color="primary" fontSize="small" />
             <Typography variant="body1">
-              {detail.leadOccupant.name}
-              {detail.leadOccupant.memberNumber ? ` (${detail.leadOccupant.memberNumber})` : ''}
+              {lead.name}
+              {lead.memberNumber ? ` (${lead.memberNumber})` : ''}
             </Typography>
           </Box>
         </Box>
@@ -898,7 +907,14 @@ function Loaded({
           </Alert>
         ) : null}
       </Box>
-      <DetailsAccordion detail={detail} onStub={say} />
+      <DetailsAccordion
+        detail={detail}
+        room={room}
+        canEdit={canEdit}
+        onReloaded={onReloaded}
+        onChanged={onReservationChanged}
+        onStub={say}
+      />
       {dialogs}
       <ConfirmDialog
         open={cancelOpen}

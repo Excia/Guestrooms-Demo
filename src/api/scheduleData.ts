@@ -24,6 +24,7 @@ import type {
   ScheduleLocation,
   ScheduleRoom,
   ScheduleRoomType,
+  ReservationGuest,
   UpdateClosureRequest,
 } from './types';
 import { ApiError } from './types';
@@ -90,6 +91,15 @@ export interface ScheduleState {
   segmentSeq: number;
 }
 
+/** One room's party in the mock (ticket 151). */
+export interface RoomParty {
+  adults: number;
+  children: number;
+  guests: ReservationGuest[];
+  /** The lead occupant of a room added later. */
+  lead?: { name: string; memberNumber: string | null };
+}
+
 /** Details-panel data of one reservation (the mock's stand-in for the reservation record). */
 export interface ReservationExtras {
   adults: number;
@@ -105,6 +115,11 @@ export interface ReservationExtras {
   leadOccupant?: { name: string; memberNumber: string | null };
   /** When each reservation room was checked in / out (ISO instants), keyed by reservation-room id (ticket 163). */
   stamps?: Record<string, { checkedInAt?: string; checkedOutAt?: string }>;
+  /**
+   * Each room's party and named guests, keyed by reservation-room id (ticket 151). Filled in lazily:
+   * a room without an entry takes its share of `adults` / `children` above.
+   */
+  parties?: Record<string, RoomParty>;
   /** A mock card was put on file through the placeholder Payment Methods dialog (ticket 163). */
   paymentAdded?: boolean;
 }

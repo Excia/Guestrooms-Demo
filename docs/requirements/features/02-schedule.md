@@ -171,10 +171,10 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
   "Back to schedule" is not drawn on the details panel in Figma (only the close X) and is a text button
   on the New Reservation variant; the close X is green where Figma has grey (D-068); the ARCHIVE flow
   is not built (D-062). See [figma-deviations.md](../figma-deviations.md).
-- **Not built (Figma frames exist):** Edit Reservation form, Add Another Room panel, the "Search
+- **Not built (Figma frames exist):** Edit Reservation form, the "Search
   Results CTA Placement" frame, and the left search icon on the Lead Occupant field.
 - **Stubs (each shows a polite notice, none is a silent no-op):** Check In / Check Out variants,
-  Manage Reservation, Edit Room, Print Registration Card, Edit Guests, add-ons, Edit notes, Payment.
+  Manage Reservation, Edit Room, Print Registration Card, add-ons, Payment (Add Another Room, Edit Guests and Edit notes are built since ticket 151).
   Most notices say "ticket 3.12" (developer wording; the log lists 3.12 as Early/Late and the Hub as
   3.3 and 3.4, so the number may be wrong: Q-19-13). Jump to Folio (and the Folio button of the Rates & Payment section) go to the reservation's folio view `/reservations/:id/folio` since ticket 4.1 (PR #131) exists; before that they went to the `/open-folios` stub (changed in the ticket 2.3 branch when it was merged with main).
   A read-only user (no `reservation.edit`) still sees the primary CTA enabled (stubs); the reason is
@@ -363,8 +363,8 @@ Ticket Excia/Guestrooms-Demo#22. Figma: Reservation Menus 17239:17738; Hub-Multi
   state; Cancel Reservation (confirmation dialog, `cancelReservation`), Undo Check In (menu and per room in
   the selector, hidden after the night audit via `ReservationDetail.lastAuditedDate`, and for a reservation with a
   checked-out room; Add Another Room is hidden when cancelled, all rooms checked out or the night audit has run for the reservation, D-LM-5), Print Registration
-  Card(s) (stub PDF URL in a new tab). Edit Reservation, Assign Room and Add Another Room are notices until
-  the hub (3.12). Details in `entries/22-reservation-menus.md`.
+  Card(s) (stub PDF URL in a new tab). Edit Reservation and Assign Room are notices until
+  the hub (3.12); Add Another Room opens its panel since ticket 151 (`entries/151-edit-panel.md`). Details in `entries/22-reservation-menus.md`.
 - **Open questions:** Q-22-1, Q-22-2, Q-22-3 to Q-22-6 (entry).
 - **Status:** in review (branch `feat/22-reservation-menus`).
 
@@ -381,3 +381,17 @@ Ticket Excia/Guestrooms-Demo#152 (epic #146); PR Excia/Guestrooms-Demo#171. Figm
 - **Permissions:** `reservation.edit` to hold a slot.
 - **Open questions:** Q-152-1 to Q-152-6 (entry); Q-19-3 and Q-19-10 progress in [open-questions.md](../open-questions.md).
 - **Status:** in review (mock hold; needs a backend hold and a design), 2026-10-24.
+
+## LP-S.5 Edit panel: add another room, additional guests, notes
+
+Ticket Excia/Guestrooms-Demo#151 (legacy port, epic #146). Figma: Add Another Room 16593:31892.
+
+- **Requirements:** Add Another Room opens a panel with the New Reservation fields, dates fixed to the reservation's, the
+  reservation number on top and an "Add Room to Reservation" CTA; only rooms free for the whole stay can be chosen; afterwards the
+  details show every room. Guest Details edits one room's adults, children and the "Guest 2..." guests (Update, Cancel, optional
+  confirmation email), read-only once the room is checked in. Notes can be edited and saved and are shown in the details.
+- **Implemented:** `AddRoomPanel` (`?panel=add-room&res=`), `GuestsSection`, `NotesSection`; rules in `src/app/addRoom.ts`,
+  `roomGuests.ts`, `reservationNotes.ts`; `reservations.addRoom`, `updateGuests`, `updateNotes` in the typed client, the mock and the
+  HTTP guards. The schedule reloads behind the panel after each change.
+- **Open questions:** Q-151-1 to Q-151-7 (entry `entries/151-edit-panel.md`). Q-22-3 (after the audit) stays open for the new scope.
+- **Status:** in review (branch `feat/151-edit-panel-rooms-guests`).

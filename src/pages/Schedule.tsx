@@ -30,6 +30,7 @@ import {
 } from '../app/schedule';
 import { applyRoomPlan, changeRoomFailure, mergeRoomPlan, revertRoomPlan } from '../app/changeRoom';
 import { stayOf } from '../lib/stayPlan';
+import { addRoomSuccessMessage } from '../app/addRoom';
 import { applyPanel, closePanel, parsePanel } from '../app/panelUrl';
 import type { EarlyLateValues } from '../app/earlyLate';
 import {
@@ -304,6 +305,37 @@ export default function Schedule({
   const openClosure = useCallback(
     (closure: ScheduleClosure) => openPanel({ kind: 'closure', closureId: closure.id }),
     [openPanel],
+  );
+  // Add Another Room replaces the details entry, so the close button still goes straight back to the
+  // schedule; "Back to reservation" puts the details back in the same entry (ticket 151).
+  const openAddRoom = useCallback(
+    (reservationId: string) => {
+      const next = applyPanel(latestParams.current, { kind: 'add-room', reservationId });
+      latestParams.current = next;
+      setParams(next, { replace: true, state: locationState.current });
+    },
+    [setParams],
+  );
+  const showReservation = useCallback(
+    (reservationId: string, reservationRoomId?: string) => {
+      const next = applyPanel(latestParams.current, {
+        kind: 'details',
+        reservationId,
+        ...(reservationRoomId ? { reservationRoomId } : {}),
+      });
+      latestParams.current = next;
+      setParams(next, { replace: true, state: locationState.current });
+    },
+    [setParams],
+  );
+  const onRoomAdded = useCallback(
+    (detail: ReservationDetail) => {
+      retry();
+      notify(addRoomSuccessMessage(detail.confirmationNumber));
+      // The new room is the last one of the reservation.
+      showReservation(detail.id, detail.rooms[detail.rooms.length - 1]?.id);
+    },
+    [retry, notify, showReservation],
   );
   const onCreated = useCallback(
     (detail: ReservationDetail) => {
@@ -760,6 +792,9 @@ export default function Schedule({
         onDuplicateClosure={duplicateClosure}
         onNewTabChange={changeNewTab}
         onOpenReservation={(reservationId) => openPanel({ kind: 'details', reservationId })}
+        onAddRoom={openAddRoom}
+        onBackToReservation={(reservationId) => showReservation(reservationId)}
+        onRoomAdded={onRoomAdded}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}
