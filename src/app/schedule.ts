@@ -3,13 +3,17 @@
 // through src/lib/dates.ts so DST never shifts a day.
 import { addDays, daysBetween, nightsOverlap, parseIsoDate, type IsoDate } from '../lib/dates';
 import { SCHEDULE_DAYS } from '../api/types';
+import { HOUSEKEEPING_OPTIONS, housekeepingStatusOf } from './housekeepingBlocks';
 import type {
+  HousekeepingStatus,
   ScheduleAvailability,
+  ScheduleBlock,
   ScheduleData,
   ScheduleDays,
   ScheduleLocation,
   ScheduleRoom,
   ScheduleRoomType,
+  SettableHousekeepingStatus,
 } from '../api/types';
 
 export const DEFAULT_SCHEDULE_DAYS: ScheduleDays = 7;
@@ -151,19 +155,77 @@ export const isScheduleEmpty = (data: Pick<ScheduleData, 'rooms'>): boolean =>
 // The product fetches every room and filters here: the drag rules need the sibling rooms of a
 // multi-room reservation, which a server-side filter would leave out.
 
+/**
+ * The Housekeeping filter group: the settable statuses, with the chip's ids, order and labels
+ * (`housekeepingBlocks.ts`). NYCI is not filterable: its chip is drawn invisible and staff cannot set it.
+ */
+export const HOUSEKEEPING_FILTER_OPTIONS: readonly {
+  id: SettableHousekeepingStatus;
+  name: string;
+}[] = HOUSEKEEPING_OPTIONS.map((o) => ({ id: o.value, name: o.label }));
+
+/** Whether the Locations group is offered: only when the club has two or more locations. */
+export const showLocationFilter = (locations: readonly unknown[]): boolean => locations.length >= 2;
+
 export interface ScheduleFilters {
   /** Absent: every location. An empty list ("Select None") matches nothing. */
   locationIds?: readonly string[];
   roomTypeIds?: readonly string[];
   availability?: ScheduleAvailability;
+  /**
+   * Housekeeping statuses, as the legacy menu: absent or empty is no filter. Otherwise a room stays
+   * when one of its reservations in the range shows one of the statuses (`housekeepingStatusOf`, so a
+   * stay with no stored status counts as Not Checked Out, as its chip does), and an unassigned
+   * reservation stays on the same test. The blocks of a kept room all stay.
+   */
+  housekeeping?: readonly HousekeepingStatus[];
+  /** Room features, as the legacy menu: absent or empty is no filter; otherwise a room needs ALL of them. */
+  featureIds?: readonly string[];
+}
+
+/**
+ * Unassigned reservations under the Housekeeping filter: with no status checked all stay. With one
+ * checked they go, because a reservation without a room has no "H" block (`housekeepingStatusOf`),
+ * as in the legacy system, where it has no housekeeping event.
+ */
+export function filterUnassigned(
+  unassigned: readonly ScheduleBlock[],
+  housekeeping: readonly HousekeepingStatus[],
+): ScheduleBlock[] {
+  if (housekeeping.length === 0) return [...unassigned];
+  return unassigned.filter((b) => {
+    const status = housekeepingStatusOf(b);
+    return status !== undefined && housekeeping.includes(status);
+  });
+}
+
+/** The selected ids that still exist in `options` (a stale URL id must neither hide rooms nor count). */
+export const knownIds = (
+  selected: readonly string[],
+  options: readonly { id: string }[],
+): string[] => selected.filter((id) => options.some((o) => o.id === id));
+
+/** True when a night of the range has no reservation and no closure on it (`spans`: the room's). */
+function hasFreeNight(
+  startDate: IsoDate,
+  days: number,
+  spans: readonly { startDate: IsoDate; endDate: IsoDate }[] | undefined,
+): boolean {
+  if (!spans || spans.length === 0) return true;
+  for (let i = 0; i < days; i++) {
+    const night = addDays(startDate, i);
+    if (!spans.some((x) => x.startDate <= night && night < x.endDate)) return true;
+  }
+  return false;
 }
 
 /**
  * Keeps the rooms that match the filters, and only their blocks and closures.
  * - Locations and room types: a room must be in a selected location AND a selected room type.
  * - 'booked': at least one reservation overlaps the data's range.
- * - 'available': no reservation and no closure overlaps the range (a room that is free all range).
- *   A room with only a closure is therefore neither available nor booked.
+ * - 'available': at least one night of the range is free (no reservation and no closure on it), as
+ *   the legacy system does. A room with a closure on every free night is not available.
+ * - Housekeeping and features: see `ScheduleFilters`. `unassigned` follows the housekeeping test.
  */
 export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilters): ScheduleData {
   const { startDate, days } = data;
@@ -171,15 +233,27 @@ export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilter
   const locations = filters.locationIds && new Set(filters.locationIds);
   const types = filters.roomTypeIds && new Set(filters.roomTypeIds);
   const availability = filters.availability ?? 'all';
+  const statuses = filters.housekeeping?.length ? new Set(filters.housekeeping) : null;
+  const features = filters.featureIds?.length ? filters.featureIds : null;
 
   const booked = new Set<string>();
-  const closed = new Set<string>();
-  if (availability !== 'all') {
-    for (const b of data.blocks) {
-      if (nightsOverlap(b.startDate, b.endDate, startDate, end)) booked.add(b.roomId);
+  const occupied = new Map<string, { startDate: IsoDate; endDate: IsoDate }[]>();
+  const withStatus = new Set<string>();
+  for (const b of data.blocks) {
+    if (!nightsOverlap(b.startDate, b.endDate, startDate, end)) continue;
+    booked.add(b.roomId);
+    if (statuses) {
+      const status = housekeepingStatusOf(b);
+      if (status && statuses.has(status)) withStatus.add(b.roomId);
     }
+    if (availability === 'available')
+      occupied.set(b.roomId, [...(occupied.get(b.roomId) ?? []), b]);
+  }
+  if (availability === 'available') {
     for (const c of data.closures) {
-      if (nightsOverlap(c.startDate, c.endDate, startDate, end)) closed.add(c.roomId);
+      if (nightsOverlap(c.startDate, c.endDate, startDate, end)) {
+        occupied.set(c.roomId, [...(occupied.get(c.roomId) ?? []), c]);
+      }
     }
   }
 
@@ -188,7 +262,11 @@ export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilter
       (!locations || locations.has(r.locationId)) &&
       (!types || types.has(r.roomTypeId)) &&
       (availability === 'all' ||
-        (availability === 'booked' ? booked.has(r.id) : !booked.has(r.id) && !closed.has(r.id))),
+        (availability === 'booked'
+          ? booked.has(r.id)
+          : hasFreeNight(startDate, days, occupied.get(r.id)))) &&
+      (!statuses || withStatus.has(r.id)) &&
+      (!features || features.every((f) => r.featureIds?.includes(f))),
   );
   const ids = new Set(rooms.map((r) => r.id));
   return {
@@ -196,5 +274,8 @@ export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilter
     rooms,
     blocks: data.blocks.filter((b) => ids.has(b.roomId)),
     closures: data.closures.filter((c) => ids.has(c.roomId)),
+    unassigned: statuses
+      ? filterUnassigned(data.unassigned, filters.housekeeping ?? [])
+      : data.unassigned,
   };
 }

@@ -17,12 +17,14 @@ import type {
   SetHousekeepingRequest,
   ScheduleBlockStatus,
   ScheduleClosure,
+  ScheduleFeature,
   ScheduleGuestType,
   ScheduleLocation,
   ScheduleRoom,
   ScheduleRoomType,
 } from './types';
 import { ApiError } from './types';
+import { MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 
 // PLACEHOLDER: verify against Figma. The frames carry no location or room-type names; these match
 // the dashboard placeholders (PLACEHOLDER_LOCATIONS and the reservation room types).
@@ -40,6 +42,19 @@ export const SCHEDULE_ROOM_TYPES: ScheduleRoomType[] = [
   { id: 'cottage', name: 'Two-Bedroom Cottage', nightlyRate: 42900 },
 ];
 
+// PLACEHOLDER: the Room Options features, assigned to rooms by room type below.
+export const SCHEDULE_FEATURES: ScheduleFeature[] = MOCK_ROOM_SETUP_OPTIONS.features.map((f) => ({
+  id: f.id,
+  name: f.label,
+}));
+
+const FEATURES_BY_ROOM_TYPE: Record<string, string[]> = {
+  'king-deluxe': ['feature-fridge', 'feature-coffee', 'feature-balcony'],
+  'queen-standard': ['feature-fridge', 'feature-coffee'],
+  suite: ['feature-fridge', 'feature-coffee', 'feature-balcony', 'feature-view', 'feature-tub'],
+  cottage: ['feature-coffee', 'feature-view'],
+};
+
 /** Mock inventory size: `default` is about 30 rooms; `large` is 200 rooms with 60+ days of stays. */
 export type ScheduleSize = 'default' | 'large';
 
@@ -49,6 +64,7 @@ export interface ScheduleState {
   today: IsoDate;
   locations: ScheduleLocation[];
   roomTypes: ScheduleRoomType[];
+  features: ScheduleFeature[];
   rooms: ScheduleRoom[];
   blocks: ScheduleBlock[];
   closures: ScheduleClosure[];
@@ -94,6 +110,7 @@ const room = (
   number,
   locationId,
   roomTypeId,
+  featureIds: [...(FEATURES_BY_ROOM_TYPE[roomTypeId] ?? [])],
 });
 
 function defaultRooms(): ScheduleRoom[] {
@@ -554,6 +571,7 @@ function defaultState(today: IsoDate): ScheduleState {
     today,
     locations: structuredClone(SCHEDULE_LOCATIONS),
     roomTypes: structuredClone(SCHEDULE_ROOM_TYPES),
+    features: structuredClone(SCHEDULE_FEATURES),
     rooms: defaultRooms(),
     blocks: BLOCK_SEEDS.map((s) => ({
       kind: 'reservation',
@@ -691,6 +709,7 @@ function largeState(today: IsoDate): ScheduleState {
     today,
     locations: LARGE_LOCATIONS,
     roomTypes: structuredClone(SCHEDULE_ROOM_TYPES),
+    features: structuredClone(SCHEDULE_FEATURES),
     rooms,
     blocks,
     closures,

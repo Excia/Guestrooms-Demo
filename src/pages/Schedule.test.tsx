@@ -260,15 +260,14 @@ describe('filters', () => {
     await user.click(screen.getByRole('button', { name: /all rooms/i }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Booked only' }));
     await waitFor(() => expect(rows().length).toBeLessThan(all));
-    const booked = rows().length;
     expect(url()).toContain('rooms=booked');
     await user.click(screen.getByRole('button', { name: /booked only/i }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Available only' }));
     await waitFor(() => expect(url()).toContain('rooms=available'));
-    const available = rows().length;
-    // every room is booked, closed or free: booked + available never exceed all (header row counted once each)
-    expect(booked + available - 2).toBeLessThanOrEqual(all);
-    expect(rows().some((r) => r.textContent?.startsWith('203'))).toBe(false);
+    // Available means at least one free night, so a partly booked room is listed too.
+    expect(rows().length).toBeGreaterThan(1);
+    // 202 is booked only on the first three nights of the week.
+    expect(rows().some((r) => r.textContent?.startsWith('202'))).toBe(true);
   });
 });
 
