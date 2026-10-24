@@ -19,7 +19,14 @@ export type AdminPermission = 'admin';
 // create one; without it the panel is read-only. More action permissions follow once the
 // Permissions page is designed.
 export type ReservationPermission = 'reservation.edit';
-export type Permission = PagePermission | AdminPermission | ReservationPermission;
+// Check in has three levels (ticket 163, owner decision): any time, on the arrival date only (a past
+// date then needs an override code), never. Two grants express them; holding neither is "never".
+export type CheckInPermission = 'reservation.check-in.any-time' | 'reservation.check-in.arrival-date';
+export type Permission =
+  | PagePermission
+  | AdminPermission
+  | ReservationPermission
+  | CheckInPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 
@@ -27,9 +34,15 @@ export const pagePermission = (id: PermissionPageId): PagePermission => `page.${
 
 export const RESERVATION_EDIT_PERMISSION: ReservationPermission = 'reservation.edit';
 
+export const CHECK_IN_ANY_TIME_PERMISSION: CheckInPermission = 'reservation.check-in.any-time';
+export const CHECK_IN_ARRIVAL_DATE_PERMISSION: CheckInPermission =
+  'reservation.check-in.arrival-date';
+
 export const ALL_PERMISSIONS: readonly Permission[] = [
   ADMIN_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
+  CHECK_IN_ANY_TIME_PERMISSION,
+  CHECK_IN_ARRIVAL_DATE_PERMISSION,
   ...routes.filter((r) => r.id !== 'admin').map((r) => pagePermission(r.id as PermissionPageId)),
 ];
 
@@ -51,6 +64,15 @@ export function createPermissions(granted?: readonly Permission[]): Permissions 
   return {
     can: (permission) => isKnownPermission(permission) && (set ? set.has(permission) : true),
   };
+}
+
+export type CheckInLevel = 'any-time' | 'arrival-date-only' | 'never';
+
+/** The strongest check-in level the user holds. Pure; the UI and the mock backend use the same rule. */
+export function checkInLevel(can: Permissions['can']): CheckInLevel {
+  if (can(CHECK_IN_ANY_TIME_PERMISSION)) return 'any-time';
+  if (can(CHECK_IN_ARRIVAL_DATE_PERMISSION)) return 'arrival-date-only';
+  return 'never';
 }
 
 /** Alias kept for tests and mock setups written against the earlier name. */

@@ -9,7 +9,8 @@ import {
   mockStats,
   noGrant,
 } from './mockData';
-import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
+import { checkInLevel, RESERVATION_EDIT_PERMISSION } from '../app/permissions';
+import { clubClock } from '../lib/clubTime';
 import { permissionsFromGrant } from './grant';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
 import { previewRegistrationCardUrl } from './registrationCardData';
@@ -29,6 +30,13 @@ import {
   undoCheckIn,
   type CancelledStore,
 } from './reservationMenuData';
+import {
+  addPaymentMethod,
+  checkInReservation,
+  isMockOverrideCode,
+  paymentOnFile,
+  splitRoom,
+} from './checkInData';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
@@ -73,6 +81,12 @@ import {
   assertScheduleQuery,
 } from './validation';
 import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
+import {
+  assertAddPaymentMethodRequest,
+  assertCheckInReservationRequest,
+  assertSplitRoomRequest,
+  assertVerifyOverrideCodeRequest,
+} from './checkInApi';
 
 export interface MockOptions {
   scenario?: MockScenario;
@@ -90,6 +104,8 @@ export interface MockOptions {
   roomChangeRule?: RoomChangeRule;
   /** The latest business date a night audit has run for (ticket 2.5); defaults to the day before `today`. */
   lastAuditedDate?: IsoDate;
+  /** The current instant, for the check in / out times (ticket 163); defaults to the real clock. */
+  now?: () => Date;
 }
 
 export const MOCK_PAGE_SIZE = 4;
@@ -112,6 +128,7 @@ export function createMockClient({
   scheduleSize = 'default',
   roomChangeRule = MOCK_ROOM_CHANGE_RULE,
   lastAuditedDate = mockLastAuditedDate(today),
+  now = () => new Date(),
 }: MockOptions = {}): ApiClient {
   // Per client: schedule moves mutate it, so every test and every page load starts fresh.
   const schedule = createScheduleState(today, scheduleSize);
@@ -173,6 +190,31 @@ export function createMockClient({
 
   const notFound = () => new ApiError(404, 'Reservation not found');
 
+  /** The details panel's data: the schedule's reservation plus what the audit and payment add. */
+  function detailFor(id: string) {
+    return {
+      ...buildDetail(schedule, id),
+      lastAuditedDate,
+      paymentOnFile: paymentOnFile(schedule, id),
+      // The night audit posts charges up to the last audited date; a later charge that
+      // the mock folio shows as posted is reported as still waiting for the audit.
+      folioCharges: getFolio(schedule, folioStore, id).charges.map((c) => ({
+        type: c.type,
+        status:
+          c.status === 'posted' && c.type !== 'mpos' && c.date > lastAuditedDate
+            ? ('unposted' as const)
+            : c.status,
+      })),
+    };
+  }
+  const checkInEnv = () => ({
+    now: now(),
+    // The mock's "today" is configured; only the time of day follows the club's real clock.
+    clock: { date: schedule.today, time: clubClock(systemSettings.timeZone, now()).time },
+    checkOutTime: systemSettings.checkOutTime,
+    level: checkInLevel(permissionsFromGrant(grant).can),
+  });
+
   return {
     dashboard: {
       getStats: (o) =>
@@ -220,19 +262,7 @@ export function createMockClient({
             assertResourceId(id, 'reservation');
             const cancelled = cancelledReservations.get(id);
             if (cancelled) return structuredClone(cancelled);
-            return {
-              ...buildDetail(schedule, id),
-              lastAuditedDate,
-              // The night audit posts charges up to the last audited date; a later charge that
-              // the mock folio shows as posted is reported as still waiting for the audit.
-              folioCharges: getFolio(schedule, folioStore, id).charges.map((c) => ({
-                type: c.type,
-                status:
-                  c.status === 'posted' && c.type !== 'mpos' && c.date > lastAuditedDate
-                    ? 'unposted'
-                    : c.status,
-              })),
-            };
+            return detailFor(id);
           },
           () => {
             throw notFound();
@@ -310,6 +340,66 @@ export function createMockClient({
           },
           () => {
             assertUndoCheckInRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      checkIn: (request, o) =>
+        respond(
+          () => {
+            assertCheckInReservationRequest(request);
+            return replayable(request, () => {
+              const applied = checkInReservation(schedule, folioStore, checkInEnv(), request);
+              return { ...applied, reservation: detailFor(request.reservationId) };
+            });
+          },
+          () => {
+            assertCheckInReservationRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      verifyOverrideCode: (request, o) =>
+        respond(
+          () => {
+            assertVerifyOverrideCodeRequest(request);
+            return { valid: isMockOverrideCode(request.code) };
+          },
+          () => {
+            assertVerifyOverrideCodeRequest(request);
+            return { valid: false };
+          },
+          o,
+        ),
+      splitRoom: (request, o) =>
+        respond(
+          () => {
+            assertSplitRoomRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
+            }
+            return replayable(request, () => {
+              const created = splitRoom(schedule, folioStore, request);
+              return detailFor(created.id);
+            });
+          },
+          () => {
+            assertSplitRoomRequest(request);
+            throw notFound();
+          },
+          o,
+        ),
+      addPaymentMethod: (request, o) =>
+        respond(
+          () => {
+            assertAddPaymentMethodRequest(request);
+            return replayable(request, () => {
+              addPaymentMethod(schedule, request);
+              return detailFor(request.reservationId);
+            });
+          },
+          () => {
+            assertAddPaymentMethodRequest(request);
             throw notFound();
           },
           o,

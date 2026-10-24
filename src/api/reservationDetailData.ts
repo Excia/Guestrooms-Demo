@@ -46,6 +46,24 @@ function reservationStatus(rooms: ReservationRoomDetail[]): ReservationStatus {
   return 'confirmed';
 }
 
+/**
+ * A room that cannot take a guest (ticket 163): marked dirty, or the stay before it in the same room
+ * left it needing cleaning or maintenance. PLACEHOLDER rule until Housekeeping (ticket 6.4).
+ */
+export function roomNotReady(state: ScheduleState, block: ScheduleBlock): boolean {
+  if (!block.roomId) return false;
+  if (state.rooms.find((r) => r.id === block.roomId)?.housekeeping === 'dirty') return true;
+  const before = state.blocks
+    .filter(
+      (o) =>
+        o.roomId === block.roomId &&
+        o.reservationId !== block.reservationId &&
+        o.endDate <= block.startDate,
+    )
+    .sort((x, y) => y.endDate.localeCompare(x.endDate))[0];
+  return before?.housekeeping === 'needs-cleaning' || before?.housekeeping === 'needs-maintenance';
+}
+
 /** The reservation's rooms: on the grid, or (created without a room) in the unassigned list. */
 const stayBlocks = (state: ScheduleState, reservationId: string): ScheduleBlock[] =>
   [...state.blocks, ...state.unassigned].filter((b) => b.reservationId === reservationId);
@@ -82,6 +100,8 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
       locationName: state.locations.find((l) => l.id === room?.locationId)?.name ?? null,
       roomTypeName: typeName(room?.roomTypeId ?? '')?.name ?? null,
       status: b.status === 'checked-in' || b.status === 'checked-out' ? b.status : 'nyci',
+      ...(b.roomId ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) } : {}),
+      ...(extras.stamps?.[b.id] ?? {}),
       arrival: b.startDate,
       // The departure of the whole stay, also when later nights are in other rooms.
       departure: chain.reduce((max, p) => (p.endDate > max ? p.endDate : max), b.endDate),
