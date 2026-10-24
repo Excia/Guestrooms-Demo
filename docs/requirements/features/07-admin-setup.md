@@ -292,4 +292,9 @@ table sits next to it).
   Description, Action By; newest first; sort and filter by date, time, change type and action by;
   pagination; the X closes; **retention one year** on admin setup screens (enforced by the API contract);
   the event types table drives the Change Type filter.
-- **Open questions:** Q-97-1, Q-97-2.
+- **Implemented (Excia/Guestrooms-Demo#97, in review):** `src/components/admin/changeLog/` (`ChangeLogOverlay`,
+  `ColumnFilter`, `ChangeLogButton`, `useChangeLog`); `AdminShell` takes `changeLog="<page>"` and shows the button
+  (System Settings, Booking Rules, Room Types, Rooms, Add-On Items wired). Pure rules in `src/app/changeLog.ts` (formats,
+  retention, sort toggling, filters); typed API `changeLog` (`src/api/changeLogTypes.ts`) with a mock that filters,
+  sorts, pages and drops entries older than a year. Details in [entries/97-change-log.md](entries/97-change-log.md).
+- **Open questions:** Q-97-1, Q-97-2, Q-97-3.

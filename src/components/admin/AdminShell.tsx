@@ -3,8 +3,10 @@ import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
+import type { ChangeLogPageId } from '../../api/changeLogTypes';
 import { ADMIN_NAV } from '../../app/adminNav';
 import { useAccess } from '../../app/useAccess';
+import ChangeLogButton from './changeLog/ChangeLogButton';
 
 export interface AdminShellProps {
   /** Label of the current left-navigation item. */
@@ -20,6 +22,8 @@ export interface AdminShellProps {
   title: string;
   /** The page's primary save button. */
   actions?: ReactNode;
+  /** Adds the Change Log button, which opens the overlay for this page (ticket 7.10). */
+  changeLog?: ChangeLogPageId;
   children: ReactNode;
 }
 
@@ -32,6 +36,7 @@ export default function AdminShell({
   sidebarLabel,
   title,
   actions,
+  changeLog,
   children,
 }: AdminShellProps) {
   const { canAccessPage } = useAccess();
@@ -139,7 +144,12 @@ export default function AdminShell({
           >
             {title}
           </Typography>
-          {actions}
+          {changeLog || actions ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {changeLog ? <ChangeLogButton page={changeLog} /> : null}
+              {actions}
+            </Box>
+          ) : null}
         </Box>
         {children}
       </Box>
