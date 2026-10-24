@@ -14,6 +14,7 @@ import {
   unassignedToggleName,
   type UnassignedSection as Section,
 } from '../../app/unassignedRows';
+import { isActiveEvent, type ActiveEvent } from '../../app/scheduleBlockState';
 import { isLinkedBlock } from '../../app/scheduleLinked';
 import ScheduleItemView from './ScheduleItemView';
 import { LABEL_VAR, LABEL_WIDTH, ROW_HEIGHT, ROW_VAR, rowTop } from './scheduleLayout';
@@ -24,6 +25,8 @@ export interface UnassignedSectionProps {
   days: 7 | 14 | 30;
   today: IsoDate;
   idPrefix: string;
+  /** The event whose panel is open: its blocks are highlighted. */
+  activeEvent?: ActiveEvent | null;
   onToggle: () => void;
   /** A block was activated by keyboard; clicks are handled by the grid. */
   onOpen: (block: ScheduleBlock) => void;
@@ -42,6 +45,7 @@ export default function UnassignedSection({
   days,
   today,
   idPrefix,
+  activeEvent,
   onToggle,
   onOpen,
   onLinked,
@@ -148,6 +152,7 @@ export default function UnassignedSection({
                 layout={layout}
                 days={days}
                 today={today}
+                highlighted={isActiveEvent(block, activeEvent)}
                 label={blockAriaLabel(block, undefined, undefined, days)}
                 tip={`${block.guestName}, ${block.confirmationNumber}`}
                 onActivate={() => (isLinkedBlock(block) ? onLinked() : onOpen(block))}

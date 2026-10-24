@@ -73,6 +73,10 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   second line by the legacy detail order (room type, balance due, reserver, Maintenance, block name); month view with a
   stay under 2 nights shows initials and no type icon; the tooltip lists every occupant (TBD for unnamed) and opens on
   every hover and on keyboard focus. Entry: `entries/147-block-content.md`.
+- **Past, active and drag-target states (ticket #150, LP-S.4):** past = checked out (lighter via `palette.schedule.opacity`),
+  past dates washed, the open panel's event outlined with `aria-current`, target columns and header marked while dragging
+  (pointer and keyboard) with shape cues on the drop band, and "today" in the club's time zone. Open: Q-150-1 (does 75% fit
+  solid fills). Entry: `entries/150-block-states.md`.
 - **Not built:** the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot

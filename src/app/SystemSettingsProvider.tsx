@@ -57,6 +57,7 @@ export function SystemSettingsProvider({ children }: { children: ReactNode }) {
   const current = loaded?.api === api ? loaded : null;
   const value = useMemo<SystemSettingsState>(
     () => ({
+      provided: true,
       status: current?.status ?? (requested ? 'loading' : 'idle'),
       settings: current?.settings ?? null,
       load,

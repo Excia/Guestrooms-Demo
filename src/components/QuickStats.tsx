@@ -8,7 +8,8 @@ import type { Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
-import { isValidIsoDate, todayIso, type IsoDate, type WeekStart } from '../app/dateSelection';
+import { isValidIsoDate, type IsoDate, type WeekStart } from '../app/dateSelection';
+import { useClubToday } from '../app/useClubToday';
 import {
   CONTROL_LABELS,
   DEFAULT_VIEW,
@@ -267,8 +268,9 @@ export default function QuickStats({
   today: todayProp,
   weekStartsOn = 0,
 }: QuickStatsProps) {
-  // Frozen at mount: a dashboard left open past midnight keeps yesterday's defaults until reloaded.
-  const [today] = useState(() => todayProp ?? todayIso());
+  // The club's date. The default periods below are fixed when the dashboard mounts: one left open
+  // past midnight keeps yesterday's periods until reloaded.
+  const today = useClubToday(todayProp);
   const id = useId();
   const [view, setView] = useState<QuickStatsView>(DEFAULT_VIEW);
   const [periods, setPeriods] = useState(() => defaultPeriods(today, weekStartsOn));

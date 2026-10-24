@@ -31,6 +31,34 @@ export interface ScheduleColors {
   dropRefused: string;
   /** Unassigned section rows (opaque: the sticky row label sits over scrolling blocks). */
   unassignedRow: string;
+  /** Past dates of the grid (columns before today), a faint wash. */
+  pastDate: string;
+  /** The columns a dragged reservation would occupy, drawn across all rows. */
+  dropColumn: string;
+  /** Opacity of a whole block by state. */
+  opacity: ScheduleOpacity;
+}
+
+/**
+ * Block opacity tokens. The legacy schedule draws past events at 50%, current and future at 75% and
+ * the active event at 100%. This build's blocks are solid fills (Figma), so `normal` stays 1 until
+ * the designer confirms 75% (entries/150-block-states.md, Q-150-1); `past` is 0.8, the lightest
+ * value whose text still reaches WCAG AA (4.5:1) on the checked-out fill (see the contrast test);
+ * the legacy 50% gives about 3:1.
+ */
+export interface ScheduleOpacity {
+  /** Current and future events. */
+  normal: number;
+  /** Events checked out. */
+  past: number;
+  /** The event whose panel is open (or shown through "see on schedule"). */
+  active: number;
+  /** Linked-room block (legacy: 75%). */
+  linked: number;
+  /** The original block while it is being dragged. */
+  dragging: number;
+  /** The copy that follows the pointer. */
+  ghost: number;
 }
 
 /** Folio screen colors (Figma Balance Summary 16575:25666 and the status chips 12050:11503). */
@@ -156,6 +184,9 @@ const base = createTheme({
       dropRefused: alpha(errorMain, 0.2),
       // PLACEHOLDER: Figma shows a light pink row; this is the error color at 90% lightness.
       unassignedRow: lighten(errorMain, 0.9),
+      pastDate: alpha('#000000', 0.04),
+      dropColumn: alpha(primaryMain, 0.1),
+      opacity: { normal: 1, past: 0.8, active: 1, linked: 0.75, dragging: 0.4, ghost: 0.9 },
     },
   },
   shape: { borderRadius: 4 },
