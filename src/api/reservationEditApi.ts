@@ -43,6 +43,10 @@ function assertGuest(guest: GuestInput): void {
     guest === null ||
     typeof guest !== 'object' ||
     (guest.kind !== 'adult' && guest.kind !== 'child') ||
+    typeof guest.slot !== 'number' ||
+    !Number.isInteger(guest.slot) ||
+    guest.slot < 0 ||
+    guest.slot >= MAX_PARTY ||
     typeof guest.name !== 'string' ||
     guest.name.trim() === '' ||
     guest.name.length > MAX_NAME_LENGTH ||
@@ -69,6 +73,14 @@ export function assertUpdateGuestsRequest(request: UpdateGuestsRequest): void {
   const adults = request.guests.filter((g) => g.kind === 'adult').length;
   const children = request.guests.length - adults;
   if (adults > request.adults - 1 || children > request.children) throw invalid('guests');
+  // Each guest takes its own slot: inside the room's slots, none used twice per kind.
+  const taken = new Set<string>();
+  for (const g of request.guests) {
+    const limit = g.kind === 'adult' ? request.adults - 1 : request.children;
+    const key = `${g.kind}:${g.slot}`;
+    if (g.slot >= limit || taken.has(key)) throw invalid('guests');
+    taken.add(key);
+  }
 }
 
 export function assertUpdateNotesRequest(request: UpdateNotesRequest): void {

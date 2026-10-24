@@ -1,6 +1,7 @@
 import { roomsFreeForStay } from '../app/addRoom';
 import { createHttpClient } from './http';
 import { createMockClient } from './mock';
+import { ensureParties } from './reservationDetailData';
 import type { ReservationDetail } from './types';
 
 const T = '2026-10-16';
@@ -181,11 +182,12 @@ describe('mock reservations.updateGuests', () => {
       guests: [
         {
           kind: 'adult',
+          slot: 0,
           name: members.items[0].name,
           memberId: members.items[0].id,
           sendConfirmation: true,
         },
-        { kind: 'child', name: 'Kid One' },
+        { kind: 'child', slot: 0, name: 'Kid One' },
       ],
     });
     expect(after.adults).toBe(3);
@@ -196,7 +198,7 @@ describe('mock reservations.updateGuests', () => {
         name: members.items[0].name,
         confirmationSent: true,
       }),
-      expect.objectContaining({ kind: 'child', name: 'Kid One' }),
+      expect.objectContaining({ kind: 'child', slot: 0, name: 'Kid One' }),
     ]);
     expect(after.version).not.toBe(before.version);
   });
@@ -205,7 +207,7 @@ describe('mock reservations.updateGuests', () => {
     const c = mk();
     const members = await c.members.search({ q: 'Daniel' });
     const m = members.items[0];
-    const guest = { kind: 'adult' as const, name: m.name, memberId: m.id };
+    const guest = { kind: 'adult' as const, slot: 0, name: m.name, memberId: m.id };
     const one = await c.reservations.updateGuests({
       ...(await base(c)),
       adults: 2,
@@ -245,7 +247,7 @@ describe('mock reservations.updateGuests', () => {
         ...(await base(c)),
         adults: 1,
         children: 0,
-        guests: [{ kind: 'adult', name: 'Too Many' }],
+        guests: [{ kind: 'adult', slot: 0, name: 'Too Many' }],
       }),
     ).rejects.toMatchObject({ status: 400 });
     await expect(
@@ -273,6 +275,108 @@ describe('mock reservations.updateGuests', () => {
     const request = { ...(await base(c)), adults: 3, children: 0, guests: [] };
     const first = await c.reservations.updateGuests(request);
     expect(await c.reservations.updateGuests(request)).toEqual(first);
+  });
+});
+
+describe('guest slots and party totals', () => {
+  it('keeps Guest 3 named with Guest 2 TBD through a save and a reload', async () => {
+    const c = mk();
+    const d = await c.reservations.getDetail('rs-3');
+    await c.reservations.updateGuests({
+      requestId: rid(),
+      reservationId: 'rs-3',
+      reservationRoomId: d.rooms[0].id,
+      version: d.version,
+      adults: 3,
+      children: 2,
+      guests: [
+        { kind: 'child', slot: 1, name: 'Di' },
+        { kind: 'adult', slot: 1, name: 'Bo' },
+      ],
+    });
+    const after = await c.reservations.getDetail('rs-3');
+    expect(after.rooms[0].guests?.map((g) => [g.kind, g.slot, g.name])).toEqual([
+      ['adult', 1, 'Bo'],
+      ['child', 1, 'Di'],
+    ]);
+  });
+
+  it('refuses a slot outside the party or used twice', async () => {
+    const c = mk();
+    const d = await c.reservations.getDetail('rs-3');
+    const base = {
+      reservationId: 'rs-3',
+      reservationRoomId: d.rooms[0].id,
+      version: d.version,
+      adults: 3,
+      children: 0,
+    };
+    await expect(
+      c.reservations.updateGuests({
+        ...base,
+        requestId: rid(),
+        guests: [{ kind: 'adult', slot: 2, name: 'A' }],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      c.reservations.updateGuests({
+        ...base,
+        requestId: rid(),
+        guests: [
+          { kind: 'adult', slot: 0, name: 'A' },
+          { kind: 'adult', slot: 0, name: 'B' },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      c.reservations.updateGuests({
+        ...base,
+        requestId: rid(),
+        guests: [{ kind: 'adult', slot: -1, name: 'A' }],
+      }),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('totals follow the rooms after guests change in one room of several', async () => {
+    const c = mk();
+    const d = await c.reservations.getDetail('rs-7');
+    const second = d.rooms[1];
+    const after = await c.reservations.updateGuests({
+      requestId: rid(),
+      reservationId: 'rs-7',
+      reservationRoomId: second.id,
+      version: d.version,
+      adults: 3,
+      children: 1,
+      guests: [],
+    });
+    expect(after.adults).toBe(d.adults - (second.adults ?? 0) + 3);
+    expect(after.children).toBe(d.children - (second.children ?? 0) + 1);
+    // reading again changes nothing
+    const again = await c.reservations.getDetail('rs-7');
+    expect(again.adults).toBe(after.adults);
+  });
+});
+
+describe('mock ensureParties', () => {
+  it('does not share out again what rooms that already have a party use', () => {
+    const extras = {
+      adults: 5,
+      children: 1,
+      parties: {
+        'rr-old': { adults: 2, children: 0, guests: [] },
+      },
+    } as never;
+    // the room whose id was replaced has no party now; the rest of the totals is its share
+    const parties = ensureParties(extras, ['rr-old', 'rr-new']);
+    expect(parties['rr-new']).toMatchObject({ adults: 3, children: 1 });
+    expect(parties['rr-old'].adults).toBe(2);
+  });
+  it('gives every missing room at least one adult', () => {
+    const extras = { adults: 1, children: 0 } as never;
+    const parties = ensureParties(extras, ['a', 'b']);
+    expect(parties.a.adults).toBe(1);
+    expect(parties.b.adults).toBe(1);
   });
 });
 
@@ -394,13 +498,13 @@ describe('http add room, guests and notes', () => {
         version: 'r1',
         adults: 2,
         children: 0,
-        guests: [{ kind: 'adult', name: 'A', email: 'not-an-email' }],
+        guests: [{ kind: 'adult', slot: 0, name: 'A', email: 'not-an-email' }],
       }),
     ).rejects.toMatchObject({ status: 400 });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('checks that guests and notes answers show what was saved', async () => {
+  it('checks that the guests answer shows the saved party; the notes answer need not echo the text', async () => {
     const c = mk();
     const d = await c.reservations.getDetail('rs-3');
     const guests = {
@@ -410,7 +514,7 @@ describe('http add room, guests and notes', () => {
       version: d.version,
       adults: 3,
       children: 0,
-      guests: [{ kind: 'adult' as const, name: 'Pat' }],
+      guests: [{ kind: 'adult' as const, slot: 0, name: 'Pat' }],
     };
     const saved = await c.reservations.updateGuests(guests);
     const ok = client(saved);
@@ -429,11 +533,13 @@ describe('http add room, guests and notes', () => {
       publicNotes: 'p',
       privateNotes: 'q',
     };
-    await expect(client(d).api.reservations.updateNotes(notes)).rejects.toMatchObject({
-      code: 'invalid-response',
-    });
-    const { api } = client({ ...d, publicNotes: 'p', privateNotes: 'q' });
-    expect((await api.reservations.updateNotes(notes)).publicNotes).toBe('p');
+    // a backend may trim or normalize the text: it is not compared with the request
+    const { api } = client({ ...d, publicNotes: 'p', privateNotes: 'q ' });
+    expect((await api.reservations.updateNotes(notes)).privateNotes).toBe('q ');
+    // but it must be the same reservation
+    await expect(
+      client({ ...d, id: 'rs-9' }).api.reservations.updateNotes(notes),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
   });
 
   it('rejects a malformed per-room party in any detail answer', async () => {
@@ -441,7 +547,10 @@ describe('http add room, guests and notes', () => {
     const bad = {
       ...d,
       rooms: [
-        { ...d.rooms[0], guests: [{ id: '', kind: 'adult', name: 'x', memberNumber: null }] },
+        {
+          ...d.rooms[0],
+          guests: [{ id: '', kind: 'adult', slot: 0, name: 'x', memberNumber: null }],
+        },
         d.rooms[1],
       ],
     };

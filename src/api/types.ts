@@ -249,6 +249,11 @@ export interface ReservationGuest {
   /** Stable within the room; assigned by the backend. */
   id: string;
   kind: 'adult' | 'child';
+  /**
+   * Position among the room's adult (or child) guests, from 0: "Guest 2" is adult slot 0, and a
+   * guest in slot 1 with slot 0 empty is "Guest 3" with "Guest 2" still TBD.
+   */
+  slot: number;
   name: string;
   /** The directory person, when picked from it. */
   memberId?: string;
@@ -400,6 +405,8 @@ export interface AddRoomRequest {
 /** One guest of a room as sent: the lead occupant is not part of the list. */
 export interface GuestInput {
   kind: 'adult' | 'child';
+  /** The slot this guest takes (see `ReservationGuest.slot`); slots left out stay TBD. */
+  slot: number;
   name: string;
   memberId?: string;
   email?: string;
@@ -409,8 +416,9 @@ export interface GuestInput {
 
 /**
  * Set the party of one room and its named guests (ticket 151). `guests` replaces the list: at most
- * `adults - 1` adults and `children` children (the lead occupant is the first adult); the rest of
- * the party stays TBD. Idempotent on `requestId`. Answers the reservation as it is now. Errors: 400;
+ * `adults - 1` adults and `children` children (the lead occupant is the first adult), each with its
+ * own `slot` (adults 0 to `adults - 2`, children 0 to `children - 1`, no slot twice per kind); the
+ * rest of the party stays TBD. Idempotent on `requestId`. Answers the reservation as it is now. Errors: 400;
  * 403 `forbidden`; 404; 409 `stale`; 409 `not-editable` (the room is checked in or out, or the
  * reservation is cancelled: guests are read-only then); 409 `idempotency-conflict`.
  */

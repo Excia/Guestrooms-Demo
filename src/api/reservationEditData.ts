@@ -1,7 +1,8 @@
 // Mock add room, guests and notes (ticket 151), on the schedule's in-memory state. Replaced by the
 // backend later.
 import { addRoomVisible } from '../app/reservationMenu';
-import { buildDetail, ensureParties, extrasFor } from './reservationDetailData';
+import { buildDetail, ensureParties, extrasFor, syncPartyTotals } from './reservationDetailData';
+import { isRoomFreeForStay, type StayHold } from '../app/addRoom';
 import { assertFree, bump, findRoom } from './scheduleData';
 import type { RoomParty, ScheduleState } from './scheduleData';
 import type {
@@ -17,6 +18,16 @@ import type {
 import { ApiError } from './types';
 
 type MemberLookup = (id: string | undefined) => Member | undefined;
+
+/**
+ * Slot holds that make a room unavailable to a new booking (ticket 152, D-152-4).
+ * TODO(#171): none exist on main yet, so none are reported; return the other users' holds here
+ * when they do (entries/151-edit-panel.md, D-151-10).
+ */
+export function holdsOnStay(state: ScheduleState): StayHold[] {
+  void state;
+  return [];
+}
 
 const conflict = (code: string, message: string) => new ApiError(409, message, { code });
 const stale = () => conflict('stale', 'This reservation changed since it was loaded');
@@ -79,6 +90,13 @@ export function addRoom(
       throw error;
     }
   }
+  if (
+    roomId !== null &&
+    !isRoomFreeForStay(roomId, [], [], block.startDate, block.endDate, holdsOnStay(state))
+  ) {
+    state.createdSeq--; // nothing was added
+    throw conflict('conflict', 'The room is held by someone else during this stay');
+  }
   const extras = extrasFor(state, request.reservationId);
   // Fix the existing rooms' shares before the new party joins them.
   const parties = ensureParties(
@@ -99,6 +117,7 @@ export function addRoom(
         }
       : {}),
   };
+  syncPartyTotals(extras, [...rooms.map((b) => b.id), block.id]);
   for (const other of rooms) {
     other.roomCount = rooms.length + 1;
     bump(state, other);
@@ -130,6 +149,7 @@ export function updateGuests(
   const extras = extrasFor(state, request.reservationId);
   const party: RoomParty = ensureParties(extras, [room.id])[room.id];
   const kept = [...party.guests];
+  const order = (g: { kind: string; slot: number }) => (g.kind === 'adult' ? 0 : 1000) + g.slot;
   party.adults = request.adults;
   party.children = request.children;
   party.guests = request.guests.map((input) => {
@@ -140,6 +160,7 @@ export function updateGuests(
     return {
       id: old?.id ?? `g-${++state.segmentSeq}`,
       kind: input.kind,
+      slot: input.slot,
       name: input.name.trim(),
       ...(input.memberId ? { memberId: input.memberId } : {}),
       memberNumber: person?.memberNumber ?? null,
@@ -149,6 +170,11 @@ export function updateGuests(
         : {}),
     };
   });
+  party.guests.sort((a, b) => order(a) - order(b));
+  syncPartyTotals(
+    extras,
+    detail.rooms.map((r) => r.id),
+  );
   bumpVersion(state, request.reservationId);
   return buildDetail(state, request.reservationId);
 }

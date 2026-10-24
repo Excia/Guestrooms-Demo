@@ -23,6 +23,7 @@ const err = (status: number, code?: string) =>
 const guest = (kind: 'adult' | 'child', name: string, extra = {}): ReservationGuest => ({
   id: `g-${name}`,
   kind,
+  slot: 0,
   name,
   memberNumber: null,
   ...extra,
@@ -107,6 +108,59 @@ describe('the draft and its slots', () => {
     expect(isGuestsDirty(draft, stepCount(draft, 'child', 1))).toBe(true);
     expect(setSlot(draft, 'adult', 9, null)).toBe(draft);
   });
+
+  it('moving a guest to another slot is a change', () => {
+    const moved = setSlot(setSlot(draft, 'adult', 0, null), 'adult', 1, draft.adultSlots[0]);
+    expect(moved.adultSlots.map((g) => g?.name ?? null)).toEqual([null, 'Ann']);
+    expect(isGuestsDirty(draft, moved)).toBe(true);
+  });
+
+  it('slot positions survive a save and a reload: Guest 3 named, Guest 2 still TBD', () => {
+    const wide = { adults: 3, children: 2, guests: [] };
+    const empty = draftFromRoom(one, wide);
+    const named = setSlot(
+      setSlot(
+        empty,
+        'adult',
+        1,
+        guestFromMember({ id: 'm1', memberNumber: 'M1', name: 'Bo', email: '', phone: '' }),
+      ),
+      'child',
+      1,
+      guestFromMember({ id: 'm2', memberNumber: 'M2', name: 'Di', email: '', phone: '' }),
+    );
+    const request = toUpdateGuestsRequest(
+      named,
+      { id: 'rs-1', version: 'r1' },
+      'rr-1',
+      'req-12345678',
+    );
+    expect(request.guests).toEqual([
+      { kind: 'adult', slot: 1, name: 'Bo', memberId: 'm1' },
+      { kind: 'child', slot: 1, name: 'Di', memberId: 'm2' },
+    ]);
+    // the backend answers with the same slots
+    const reloaded = draftFromRoom(one, {
+      ...wide,
+      guests: request.guests.map((g, i) => ({ ...g, id: `g${i}`, memberNumber: null })),
+    });
+    expect(reloaded.adultSlots.map((g) => g?.name ?? null)).toEqual([null, 'Bo']);
+    expect(reloaded.childSlots.map((g) => g?.name ?? null)).toEqual([null, 'Di']);
+    expect(isGuestsDirty(reloaded, named)).toBe(false);
+  });
+
+  it('a guest without a usable slot takes the first free one', () => {
+    const d = draftFromRoom(one, {
+      adults: 3,
+      children: 0,
+      guests: [
+        guest('adult', 'A', { slot: 1 }),
+        guest('adult', 'B', { slot: 1 }),
+        guest('adult', 'C', { slot: 9 }),
+      ],
+    });
+    expect(d.adultSlots.map((g) => g?.name)).toEqual(['B', 'A']);
+  });
 });
 
 describe('the request and the confirmation emails', () => {
@@ -138,8 +192,15 @@ describe('the request and the confirmation emails', () => {
       adults: 3,
       children: 1,
       guests: [
-        { kind: 'adult', name: 'Ann', memberId: 'm1', email: 'a@x.org', sendConfirmation: true },
-        { kind: 'child', name: 'Cy' },
+        {
+          kind: 'adult',
+          slot: 0,
+          name: 'Ann',
+          memberId: 'm1',
+          email: 'a@x.org',
+          sendConfirmation: true,
+        },
+        { kind: 'child', slot: 0, name: 'Cy' },
       ],
     });
     expect(confirmationsToSend(named)).toBe(1);

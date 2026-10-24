@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
@@ -146,6 +146,40 @@ describe('Add Another Room', () => {
     await panel(/Reservation #GR-50310 \(2 Rooms\)/);
   });
 
+  it('a retry after a lost answer does not add a second room (the key and body are kept)', async () => {
+    const client = createMockClient({ today: TODAY });
+    const real = client.reservations.addRoom.bind(client.reservations);
+    let lost = true;
+    client.reservations.addRoom = async (request) => {
+      const answer = await real(request);
+      if (lost) {
+        lost = false;
+        throw new Error('connection lost');
+      }
+      return answer;
+    };
+    const user = await loaded('/schedule?res=rs-5&rr=rr-5', client);
+    const details = await panel(/Reservation #GR-50310/);
+    await user.click(
+      await within(details).findByRole('button', { name: 'More reservation actions' }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: 'Add Another Room' }));
+    const add = await panel('Add Room to Reservation');
+    await user.click(within(add).getByRole('button', { name: 'Add Room to Reservation' }));
+    expect(await within(add).findByRole('alert')).toHaveTextContent(/not added twice/);
+    await user.click(within(add).getByRole('button', { name: 'Add Room to Reservation' }));
+    await panel(/Reservation #GR-50310 \(2 Rooms\)/);
+    expect((await client.reservations.getDetail('rs-5')).rooms).toHaveLength(2);
+  });
+
+  it('labels the total honestly when the new room has no rate yet', async () => {
+    await loaded('/schedule?panel=add-room&res=rs-5');
+    const add = await panel('Add Room to Reservation');
+    expect(
+      await within(add).findByText(/Estimated Reservation Total \(excludes the new room\)/),
+    ).toBeInTheDocument();
+  });
+
   it('a reservation that can no longer take a room says so and cannot add', async () => {
     const user = await loaded('/schedule?panel=add-room&res=rs-1');
     const add = await panel('Add Room to Reservation');
@@ -272,6 +306,19 @@ describe('Notes', () => {
     const field = within(dialog).getByRole('textbox', { name: 'Public Notes' });
     expect(field).toHaveAccessibleDescription(/of 2000 characters/);
     expect(field).toHaveValue('Guest is celebrating a birthday!');
+  });
+
+  it('over-long notes focus the field with the problem and describe it', async () => {
+    const user = await loaded('/schedule?res=rs-5&rr=rr-5');
+    const dialog = await panel(/Reservation #GR-50310/);
+    await user.click(await within(dialog).findByRole('button', { name: 'Notes' }));
+    await user.click(await within(dialog).findByRole('button', { name: 'Edit notes' }));
+    const priv = within(dialog).getByRole('textbox', { name: 'Private Notes' });
+    fireEvent.change(priv, { target: { value: 'x'.repeat(2001) } });
+    await user.click(within(dialog).getByRole('button', { name: 'Save Notes' }));
+    await waitFor(() => expect(priv).toHaveFocus());
+    expect(priv).toBeInvalid();
+    expect(priv).toHaveAccessibleDescription(/at most 2000/);
   });
 
   it('a user without reservation.edit can read the notes but not edit them', async () => {

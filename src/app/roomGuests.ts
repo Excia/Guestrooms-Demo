@@ -62,19 +62,39 @@ const toDraftGuest = (g: ReservationGuest): DraftGuest => ({
   confirmationSent: g.confirmationSent === true,
 });
 
+/** Puts each named guest in its saved slot; one without a usable slot takes the first free one. */
+function place(guests: readonly ReservationGuest[], length: number): (DraftGuest | null)[] {
+  const slots: (DraftGuest | null)[] = Array.from({ length }, () => null);
+  const spill: ReservationGuest[] = [];
+  for (const g of guests) {
+    if (Number.isInteger(g.slot) && g.slot >= 0 && g.slot < length && slots[g.slot] === null) {
+      slots[g.slot] = toDraftGuest(g);
+    } else spill.push(g);
+  }
+  for (const g of spill) {
+    const free = slots.indexOf(null);
+    if (free >= 0) slots[free] = toDraftGuest(g);
+  }
+  return slots;
+}
+
 /** The draft to start editing from: the saved party and guests of the room. */
 export function draftFromRoom(
   detail: Pick<ReservationDetail, 'adults' | 'children' | 'rooms'>,
   room: Pick<ReservationRoomDetail, 'adults' | 'children' | 'guests'>,
 ): GuestsDraft {
   const party = roomParty(detail, room);
-  const adultGuests = party.guests.filter((g) => g.kind === 'adult').map(toDraftGuest);
-  const childGuests = party.guests.filter((g) => g.kind === 'child').map(toDraftGuest);
   return {
     adults: party.adults,
     children: party.children,
-    adultSlots: fill(adultGuests, Math.max(0, party.adults - 1)),
-    childSlots: fill(childGuests, party.children),
+    adultSlots: place(
+      party.guests.filter((g) => g.kind === 'adult'),
+      Math.max(0, party.adults - 1),
+    ),
+    childSlots: place(
+      party.guests.filter((g) => g.kind === 'child'),
+      party.children,
+    ),
   };
 }
 
@@ -164,11 +184,12 @@ export const isGuestsDirty = (saved: GuestsDraft, draft: GuestsDraft): boolean =
 
 const toInput =
   (kind: 'adult' | 'child') =>
-  (g: DraftGuest | null): GuestInput[] =>
+  (g: DraftGuest | null, slot: number): GuestInput[] =>
     g
       ? [
           {
             kind,
+            slot,
             name: g.name,
             ...(g.memberId ? { memberId: g.memberId } : {}),
             ...(g.email ? { email: g.email } : {}),

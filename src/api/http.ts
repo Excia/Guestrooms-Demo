@@ -194,6 +194,9 @@ const isGuestShape = (g: unknown) =>
   isString(g.id) &&
   g.id !== '' &&
   (g.kind === 'adult' || g.kind === 'child') &&
+  isCount(g.slot) &&
+  Number.isInteger(g.slot) &&
+  g.slot >= 0 &&
   isString(g.name) &&
   (g.memberNumber === null || isString(g.memberNumber)) &&
   (g.memberId === undefined || isString(g.memberId)) &&
@@ -448,16 +451,12 @@ const parseGuestsUpdated =
     return withKnownAudit(body);
   };
 
-// The notes answer must carry the notes that were sent.
+// The notes answer is the reservation. Its note texts are not compared with the request: a real
+// backend may trim or normalize them, and the UI shows what comes back.
 const parseNotesUpdated =
   (request: UpdateNotesRequest) =>
   (body: unknown, status: number): ReservationDetail => {
-    if (
-      !isReservationDetail(body) ||
-      body.id !== request.reservationId ||
-      body.publicNotes !== request.publicNotes ||
-      body.privateNotes !== request.privateNotes
-    ) {
+    if (!isReservationDetail(body) || body.id !== request.reservationId) {
       throw invalid(status, 'reservation notes');
     }
     return withKnownAudit(body);

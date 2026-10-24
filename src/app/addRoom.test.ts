@@ -50,6 +50,28 @@ describe('rooms free for the whole stay', () => {
   });
 });
 
+describe('slot holds (hook until PR #171 lands)', () => {
+  const arrival = '2026-10-20';
+  const departure = '2026-10-24';
+  const hold = { roomId: 'a', startDate: '2026-10-22', endDate: '2026-10-23', heldBy: 'u2' };
+  it("another user's hold makes the room unavailable; the holder's own hold does not", () => {
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [hold], 'u1')).toBe(false);
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [hold], 'u2')).toBe(true);
+    expect(
+      roomsFreeForStay(rooms, [], [], arrival, departure, [hold], 'u1').map((r) => r.id),
+    ).toEqual(['b', 'c', 'd']);
+  });
+  it('a hold outside the stay does not matter, and without holds nothing changes', () => {
+    const later = { ...hold, startDate: '2026-10-24', endDate: '2026-10-25' };
+    expect(isRoomFreeForStay('a', [], [], arrival, departure, [later], 'u1')).toBe(true);
+    expect(isRoomFreeForStay('a', [], [], arrival, departure)).toBe(true);
+  });
+  // TODO(#171): once slot holds exist on main, feed them from the schedule data into
+  // AddRoomPanel and the mock addRoom (`holdsOnStay`) and add an integration test: a room held by
+  // another user is not listed and addRoom answers 409 `conflict`.
+  it.todo('Add Another Room skips rooms held by another user (needs #171)');
+});
+
 describe('validateAddRoom', () => {
   const free = new Set(['a']);
   it('needs an adult and keeps counts in range; the room is optional', () => {

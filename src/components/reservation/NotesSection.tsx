@@ -61,12 +61,12 @@ export default function NotesSection({
   const [failure, setFailure] = useState<string | null>(null);
   const save = useIdempotentSave();
   const editButton = useRef<HTMLButtonElement>(null);
-  const firstField = useRef<HTMLTextAreaElement>(null);
+  const fields = useRef<Partial<Record<keyof NotesDraft, HTMLTextAreaElement | null>>>({});
   const [refocus, setRefocus] = useState(0);
 
   if (draft && !editable) setDraft(null);
   useEffect(() => {
-    if (draft) firstField.current?.focus();
+    if (draft) fields.current.publicNotes?.focus();
     // Only when the editor opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft === null]);
@@ -108,7 +108,9 @@ export default function NotesSection({
         multiline
         minRows={3}
         value={draft[key]}
-        inputRef={key === 'publicNotes' ? firstField : undefined}
+        inputRef={(el: HTMLTextAreaElement | null) => {
+          fields.current[key] = el;
+        }}
         onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
         error={Boolean(errors[key])}
         helperText={errors[key] ?? `${draft[key].length} of ${MAX_NOTES_LENGTH} characters`}
@@ -126,7 +128,12 @@ export default function NotesSection({
     setAttempted(true);
     setFailure(null);
     const invalid = validateNotes(draft);
-    if (Object.keys(invalid).length > 0) return;
+    if (Object.keys(invalid).length > 0) {
+      // The first field with a problem takes focus (its message is its description).
+      const first = (['publicNotes', 'privateNotes'] as const).find((k) => invalid[k]);
+      if (first) fields.current[first]?.focus();
+      return;
+    }
     const body = { reservationId: detail.id, version: detail.version, ...draft };
     void save
       .run(JSON.stringify(body), (requestId) =>

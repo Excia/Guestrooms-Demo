@@ -48,14 +48,26 @@ export function extrasFor(state: ScheduleState, reservationId: string): Reservat
 export function ensureParties(extras: ReservationExtras, roomIds: readonly string[]) {
   const parties = (extras.parties ??= {});
   const missing = roomIds.filter((id) => !parties[id]);
+  // What the rooms that already have a party use is not shared out again (a room whose id was
+  // replaced must not double the totals); `extras.adults` / `children` are kept as the totals.
+  const kept = roomIds.filter((id) => parties[id]).map((id) => parties[id]);
+  const adultsLeft = extras.adults - kept.reduce((sum, p) => sum + p.adults, 0);
+  const childrenLeft = extras.children - kept.reduce((sum, p) => sum + p.children, 0);
   missing.forEach((id, i) => {
     parties[id] = {
-      adults: i === 0 ? Math.max(1, extras.adults - (missing.length - 1)) : 1,
-      children: i === 0 ? extras.children : 0,
+      adults: i === 0 ? Math.max(1, adultsLeft - (missing.length - 1)) : 1,
+      children: i === 0 ? Math.max(0, childrenLeft) : 0,
       guests: [],
     } satisfies RoomParty;
   });
   return parties;
+}
+
+/** Keeps the reservation's stored totals equal to the sum of its rooms' parties. */
+export function syncPartyTotals(extras: ReservationExtras, roomIds: readonly string[]): void {
+  const parties = ensureParties(extras, roomIds);
+  extras.adults = roomIds.reduce((sum, id) => sum + parties[id].adults, 0);
+  extras.children = roomIds.reduce((sum, id) => sum + parties[id].children, 0);
 }
 
 function reservationStatus(rooms: ReservationRoomDetail[]): ReservationStatus {
@@ -123,7 +135,9 @@ export function buildDetail(state: ScheduleState, reservationId: string): Reserv
       locationName: state.locations.find((l) => l.id === room?.locationId)?.name ?? null,
       roomTypeName: typeName(room?.roomTypeId ?? '')?.name ?? null,
       status: b.status === 'checked-in' || b.status === 'checked-out' ? b.status : 'nyci',
-      ...(b.roomId ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) } : {}),
+      ...(b.roomId
+        ? { housekeeping: roomNotReady(state, b) ? ('dirty' as const) : ('clean' as const) }
+        : {}),
       ...(extras.stamps?.[b.id] ?? {}),
       adults: party.adults,
       children: party.children,

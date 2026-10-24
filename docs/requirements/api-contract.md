@@ -391,28 +391,36 @@ carry the `ReservationDetail.version` the user saw.
 ## Edit panel: add another room, guests, notes (ticket 151, built on the mock)
 
 All three are idempotent on `requestId` (body and `Idempotency-Key` header) and carry the `ReservationDetail.version` the user saw;
-each answers the `ReservationDetail` as it is now, with a new `version`.
+each answers the `ReservationDetail` as it is now, with a new `version`. Add room needs **no permission** (owner decision,
+D-LM-5 / Q-LM-2: legacy has none), so it has no 403 row; guests and notes need `reservation.edit` (403 `forbidden`).
 
 | #   | Method and path                      | Request                                                                                                  | Errors                                                                                               |
 | --- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| 1   | `POST /reservations/{id}/rooms`      | `AddRoomRequest {requestId, reservationId, version, roomId?, adults, children, leadOccupant?}`           | 400; 403; 404 (reservation or room); 409 `stale`, `conflict`, `not-editable`, `idempotency-conflict` |
+| 1   | `POST /reservations/{id}/rooms`      | `AddRoomRequest {requestId, reservationId, version, roomId?, adults, children, leadOccupant?}`           | 400; 404 (reservation or room); 409 `stale`, `conflict`, `not-editable`, `idempotency-conflict` |
 | 2   | `PUT /reservation-rooms/{id}/guests` | `UpdateGuestsRequest {requestId, reservationId, reservationRoomId, version, adults, children, guests[]}` | 400; 403; 404; 409 `stale`, `not-editable`, `idempotency-conflict`                                   |
 | 3   | `PUT /reservations/{id}/notes`       | `UpdateNotesRequest {requestId, reservationId, version, publicNotes, privateNotes}`                      | 400; 403; 404; 409 `stale`, `not-editable`, `idempotency-conflict`                                   |
 
 - Add room: the new room takes the arrival and departure of the whole stay (dates are never sent). `roomId` null or absent adds an
   UNASSIGNED room. 409 `conflict` when the room is booked or closed on any night of the stay. 409 `not-editable` in the cases that
   hide the menu item (cancelled, every room checked out, the night audit has run: a posted or settled non-POS folio line). There is
-  **no permission check** (legacy, D-LM-5); the backend decides. Existing rooms keep their party; `ReservationDetail.adults` and
+  **no permission check** (owner decision, D-LM-5; no 403). Existing rooms keep their party; `ReservationDetail.adults` and
   `children` are the totals of the rooms. The answer has one more room, and the requested `roomId` among them.
-- Guests: `guests` replaces the room's named guests (`{kind: 'adult' | 'child', name, memberId?, email?, sendConfirmation?}`); the
-  lead occupant is the first adult, so at most `adults - 1` adults and `children` children may be named (400 otherwise); the rest of the
-  party is TBD. 409 `not-editable` once the room is checked in or out. `sendConfirmation` is ignored without an email address; the
+- Guests: `guests` replaces the room's named guests (`{kind: 'adult' | 'child', slot, name, memberId?, email?, sendConfirmation?}`); the
+  lead occupant is the first adult, so at most `adults - 1` adults and `children` children may be named (400 otherwise). `slot` is the
+  guest's position among the room's adults (0 to `adults - 2`) or children (0 to `children - 1`); a slot may not be used twice per kind
+  (400). Slots left out stay TBD, so naming Guest 3 and leaving Guest 2 TBD (adult slot 1) survives a save and a reload. The rest of the
+  party is TBD. Requires `reservation.edit`. 409 `not-editable` once the room is checked in or out. `sendConfirmation` is ignored without an email address; the
   guest then comes back with `confirmationSent: true`. A guest that stays (same kind, name and `memberId`) keeps its `id`.
-- Notes: both texts are sent whole, at most 2000 characters each. 409 `not-editable` once checked out.
-- `ReservationRoomDetail` gains optional `adults`, `children`, `guests[]` (`ReservationGuest {id, kind, name, memberId?, memberNumber,
+- Notes: both texts are sent whole, at most 2000 characters each. 409 `not-editable` once checked out. Requires `reservation.edit`.
+  The answer is the reservation; the UI shows the note texts it returns (the backend may trim or normalize them, so they are not compared with the request).
+- `ReservationRoomDetail` gains optional `adults`, `children`, `guests[]` (`ReservationGuest {id, kind, slot, name, memberId?, memberNumber,
 email?, confirmationSent?}`) and `leadOccupant`. Absent means the backend does not say: the UI then shows the reservation's totals for a
   one-room reservation and one adult per other room.
-- The HTTP client checks that the answers show what was asked: the added room, the room's counts and guest count, the saved notes.
+- The HTTP client checks that the answers show what was asked: the added room and the room's counts and guest count (not the note texts).
+- Retry after an unknown outcome (no answer, 408, 5xx): the UI sends the same body with the same `Idempotency-Key` and does not refresh the
+  version first, so the backend must replay the first answer instead of adding a second room.
+- Slot holds (ticket 152): another user's hold must make a room unavailable to Add Another Room as to any new booking (409 `conflict`). Not
+  built until PR #171 lands (`holdsOnStay`, D-151-10).
 
 ## Registration Card (ticket 7.8, branch `feat/95-registration-card`)
 

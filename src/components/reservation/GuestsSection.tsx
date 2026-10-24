@@ -246,7 +246,7 @@ export default function GuestsSection({
   }
 
   const dirty = isGuestsDirty(saved, draft);
-  const room_left = MAX_PARTY - totalGuests(draft);
+  const roomLeft = MAX_PARTY - totalGuests(draft);
   return (
     <Box
       component="form"
@@ -269,14 +269,14 @@ export default function GuestsSection({
           label="Adults"
           value={draft.adults}
           min={MIN_ADULTS}
-          max={draft.adults + (canStep(draft, 'adult', 1) ? room_left : 0)}
+          max={draft.adults + (canStep(draft, 'adult', 1) ? roomLeft : 0)}
           onChange={(v) => setDraft(stepCount(draft, 'adult', v > draft.adults ? 1 : -1))}
         />
         <CountStepper
           label="Children"
           value={draft.children}
           min={0}
-          max={draft.children + (canStep(draft, 'child', 1) ? room_left : 0)}
+          max={draft.children + (canStep(draft, 'child', 1) ? roomLeft : 0)}
           onChange={(v) => setDraft(stepCount(draft, 'child', v > draft.children ? 1 : -1))}
         />
       </Box>

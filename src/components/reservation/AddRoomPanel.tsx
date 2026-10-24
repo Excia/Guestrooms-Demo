@@ -153,10 +153,21 @@ export default function AddRoomPanel({
     setSubmitted((n) => n + 1);
     setFailure(null);
     setRoomError(null);
-    // Rooms that could not be loaded cannot be checked: the backend would still refuse a clash,
-    // but an unassigned room needs no inventory.
+    // A chosen room cannot be checked while the free rooms are loading or failed: say so (an
+    // unassigned room needs no inventory).
+    if (form.roomId !== '' && stay.status !== 'ready') {
+      setFailure(
+        stay.status === 'error'
+          ? 'The rooms could not be loaded, so the chosen room cannot be checked. Retry loading rooms, or choose Unassigned.'
+          : 'The rooms are still loading. Try again in a moment.',
+      );
+      return;
+    }
     if (Object.keys(errors).length > 0) return;
     const body = toAddRoomRequest(form, detail, '');
+    // The body (with the version on screen) is the fingerprint: after an unknown outcome the screen
+    // is NOT refreshed (see below), so a retry is the same request with the same key and the
+    // backend replays the answer instead of adding a second room.
     void save
       .run(JSON.stringify({ ...body, requestId: undefined }), (requestId) =>
         api.reservations.addRoom({ ...body, requestId }),
@@ -174,6 +185,9 @@ export default function AddRoomPanel({
         }
         if (!failed.refetch) return;
         onChanged?.();
+        // Unknown outcome: keep the version, the inventory and the idempotency key as they were, so
+        // pressing Add again replays the request. Anything else is reloaded.
+        if (failed.outcomeUnknown) return;
         stay.reload();
         api.reservations.getDetail(reservationId).then(state.replace, () => undefined);
       });
@@ -440,7 +454,7 @@ export default function AddRoomPanel({
           </Alert>
         ) : null}
         <Typography variant="body2" sx={{ mb: 1.5 }}>
-          Estimated Reservation Total:{' '}
+          Estimated Reservation Total{total === null ? ' (excludes the new room)' : ''}:{' '}
           {reservationTotal === null ? 'to be calculated' : formatMoney(reservationTotal)}
         </Typography>
         <Button
