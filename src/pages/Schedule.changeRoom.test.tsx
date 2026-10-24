@@ -835,6 +835,24 @@ describe('the tooltip of the block under the grid cursor follows the input modal
     await waitFor(() => expect(tips()).toHaveLength(0));
   });
 
+  it('is gone, with no active descendant, when focus moves to an Unassigned block; Shift+Tab restores it', async () => {
+    const user = await ready();
+    grid().focus();
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('tooltip', { hidden: true });
+    expect(grid()).toHaveAttribute('aria-activedescendant');
+    await user.tab();
+    expect(grid()).not.toHaveFocus();
+    expect(grid().contains(document.activeElement)).toBe(true);
+    expect(grid()).not.toHaveAttribute('aria-activedescendant');
+    await waitFor(() =>
+      expect(tips().filter((t) => t.textContent?.includes('GR-50240'))).toHaveLength(0),
+    );
+    await user.tab({ shift: true });
+    expect(grid()).toHaveFocus();
+    expect(grid()).toHaveAttribute('aria-activedescendant');
+  });
+
   it('is gone when the grid loses focus', async () => {
     const user = await ready();
     grid().focus();

@@ -851,11 +851,18 @@ export default function ScheduleGrid({
         aria-rowcount={rooms.length + 1 + unassignedRows}
         aria-colcount={days + 1}
         aria-busy={busy || undefined}
-        aria-activedescendant={activeId}
+        aria-activedescendant={gridFocused ? activeId : undefined}
         aria-describedby={`${idPrefix}-help`}
         tabIndex={0}
         onKeyDown={onKeyDown}
         onFocus={(e) => {
+          // Focus on a tab stop inside the grid (an Unassigned block) is not the grid's cursor: put the
+          // cursor's tooltip and aria-activedescendant away. Focus back on the grid restores them.
+          if (e.target !== e.currentTarget) {
+            setGridFocused(false);
+            setKeyboardCursor(false);
+            return;
+          }
           setGridFocused(true);
           // Keyboard focus (Tab, or focus handed back by a closing panel) is :focus-visible; a mouse
           // press that focuses the grid is not.
