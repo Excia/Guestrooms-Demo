@@ -40,6 +40,9 @@ All present in `createHttpClient` (`src/api/http.ts`) and in the mock.
 | 5   | `GET /reservations/{id}`     | none                                                                                                                          | `Reservation`                                                                                                                                                                      | 400 `invalid-id`, 404                                                      |
 | 6   | `GET /schedule`              | `startDate`, `days` (7, 14 or 30)                                                                                             | `ScheduleData`                                                                                                                                                                     | 400 `invalid-query`                                                        |
 | 7   | `POST /schedule/move-room`   | `MoveRoomRequest`; header `Idempotency-Key`                                                                                   | `{ blocks: ScheduleBlock[] }`                                                                                                                                                      | 400, 404, 409 (`conflict`, `not-movable`, `stale`, `idempotency-conflict`) |
+| 8a  | `POST /schedule/closures`    | `SaveClosureRequest`; header `Idempotency-Key`                                                                           | `ScheduleClosure` (201)                                                                                                                                                            | 400, 404 (room), 422 `closure-conflict`, 409 `idempotency-conflict`        |
+| 8b  | `PUT /schedule/closures/{id}` | `UpdateClosureRequest`; header `Idempotency-Key`                                                                         | `ScheduleClosure`                                                                                                                                                                  | as 8a, and 404 (closure)                                                   |
+| 8c  | `DELETE /schedule/closures/{id}` | header `Idempotency-Key`                                                                                              | 204                                                                                                                                                                                | 400, 404                                                                   |
 | 8   | `POST /schedule/move-dates`  | `MoveDatesRequest`; header `Idempotency-Key`                                                                                  | `{ blocks: ScheduleBlock[] }`                                                                                                                                                      | same as 7                                                                  |
 
 Notes on `Reservation` (list/get): `id`, `confirmationNumber`, `guestName`, `roomType`, `roomNumber`
@@ -445,3 +448,15 @@ rejects anything else with 422 (a hyphenated key is refused; the UI normalizes b
 and no duplicates (`src/app/keycards.ts`; the backend enforces the same). The UI treats an empty answer and any
 error from retrieve the same way (the "No encoders retrieved" dialog). Authentication with Visionline is the
 backend's concern (Q-75-3).
+
+## Room closures (ticket 149)
+
+- `SaveClosureRequest {roomId, startDate, endDate, description, requestId}`; dates are half-open like
+  reservations (`endDate` is the day the room is free again, so `startDate < endDate`); `description` is empty
+  or at most 50 characters. `UpdateClosureRequest` adds `closureId` (the path carries it too).
+- **Conflict:** a reservation or another closure in the room on any of those nights answers **422**
+  `closure-conflict` with `details.roomId: [<id>]`; the UI shows it on the Room field. The client also
+  checks the loaded window first; the server stays authoritative (a stay outside the window).
+- `requestId` is the `Idempotency-Key` (same rules as moves). Delete answers 204. The grid reloads the
+  schedule after every save or removal (the endpoint has no list of changed blocks).
+- A new closure has `endMarker: false` (the orange "block ends" marker is seed data only).
