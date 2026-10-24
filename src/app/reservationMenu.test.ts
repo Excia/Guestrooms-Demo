@@ -5,7 +5,6 @@ import {
   cancelConfirmation,
   menuState,
   nightAuditHasRun,
-  registrationCardUrl,
   reservationMenu,
   type MenuInput,
 } from './reservationMenu';
@@ -36,6 +35,18 @@ const posted = [{ type: 'room-rate', status: 'posted' }] as const;
 const labels = (i: MenuInput) => reservationMenu(i).map((a) => a.label);
 
 describe('reservationMenu', () => {
+  it('hides Print Registration Card(s) in every state when the setting is off, keeps it when unknown', () => {
+    for (const statuses of [['nyci'], ['checked-in'], ['checked-out']] as const) {
+      const off = labels(input([...statuses], { registrationCardEnabled: false }));
+      expect(off).not.toContain('Print Registration Card(s)');
+      expect(off).toContain('Jump to Folio');
+      expect(labels(input([...statuses], { registrationCardEnabled: true }))).toContain(
+        'Print Registration Card(s)',
+      );
+      expect(labels(input([...statuses]))).toContain('Print Registration Card(s)');
+    }
+  });
+
   it('not yet checked in', () => {
     expect(labels(input(['nyci']))).toEqual([
       'Edit Reservation',
@@ -180,10 +191,6 @@ describe('night audit rule', () => {
 });
 
 describe('print and cancel copy', () => {
-  it('the registration card URL is a stub path with the id encoded', () => {
-    expect(registrationCardUrl('rs 1')).toBe('/files/registration-cards/rs%201.pdf');
-  });
-
   it('names one reservation or all rooms', () => {
     expect(cancelConfirmation({ confirmationNumber: 'GR-1', rooms: 1 })).toMatchObject({
       title: 'Cancel this reservation?',

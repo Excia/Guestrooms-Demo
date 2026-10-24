@@ -37,6 +37,11 @@ export type MenuInput = Pick<
 > & {
   /** Holds `reservation.edit`: without it only Print and Jump to Folio remain. Required: no default. */
   canEdit: boolean;
+  /**
+   * The Registration Card switch of System Settings (ticket 7.8). False hides Print Registration
+   * Card(s); undefined (settings not loaded yet, or no provider) leaves it in the menu.
+   */
+  registrationCardEnabled?: boolean;
 };
 
 export type MenuState =
@@ -108,7 +113,9 @@ export const hasUnassignedRoom = (rooms: readonly ReservationRoomDetail[]) =>
  * reservation is cancelled, every room has checked out, or the night audit has run for it (inferred
  * from the folio); otherwise offered, also after check in. No permission check.
  */
-export function addRoomVisible(input: Pick<MenuInput, 'status' | 'rooms' | 'folioCharges'>): boolean {
+export function addRoomVisible(
+  input: Pick<MenuInput, 'status' | 'rooms' | 'folioCharges'>,
+): boolean {
   const state = menuState(input);
   if (state === 'cancelled' || state === 'checked-out') return false;
   return !nightAuditHasRunForFolio(input.folioCharges);
@@ -128,6 +135,7 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
   const state = menuState(input);
   const { canEdit } = input;
   const ids: MenuActionId[] = [];
+  const print = input.registrationCardEnabled !== false;
   const edit = hasUnassignedRoom(input.rooms) ? 'assign-room' : 'edit-reservation';
   if (state === 'not-checked-in') {
     if (canEdit) ids.push(edit, 'cancel-reservation');
@@ -138,14 +146,10 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
     }
   }
   if (addRoomVisible(input)) ids.push('add-room');
-  if (state !== 'cancelled') ids.push('print-registration-card');
+  if (state !== 'cancelled' && print) ids.push('print-registration-card');
   ids.push('jump-to-folio');
   return ids.map(action);
 }
-
-/** Where Print Registration Card(s) opens. Stub: the backend will generate the PDF (D-003). */
-export const registrationCardUrl = (reservationId: string) =>
-  `/files/registration-cards/${encodeURIComponent(reservationId)}.pdf`;
 
 /** Copy of the Cancel Reservation confirmation (not in Figma; the button labels come from the requirements doc 20.3.4, Q-22-1). */
 export function cancelConfirmation(input: { confirmationNumber: string; rooms: number }) {

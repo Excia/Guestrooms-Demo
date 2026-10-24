@@ -12,6 +12,7 @@ import {
 import { RESERVATION_EDIT_PERMISSION } from '../app/permissions';
 import { permissionsFromGrant } from './grant';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
+import { previewRegistrationCardUrl } from './registrationCardData';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
@@ -534,6 +535,14 @@ export function createMockClient({
         respond(
           () => mockCustomReports(),
           () => [],
+          o,
+        ),
+    },
+    registrationCard: {
+      requestPreview: (request, o) =>
+        respond(
+          () => ({ url: previewRegistrationCardUrl(request) }),
+          () => ({ url: previewRegistrationCardUrl(request) }),
           o,
         ),
     },

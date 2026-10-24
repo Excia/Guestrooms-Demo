@@ -12,6 +12,7 @@ import {
   firstErrorField,
   isDirty,
   isFolioField,
+  isRegistrationCardField,
   validateSystemSettings,
   type SystemSettingsField,
 } from '../app/systemSettings';
@@ -21,12 +22,13 @@ import { useSystemSettings } from '../app/useSystemSettings';
 import AdminShell from '../components/admin/AdminShell';
 import FolioDetailsTab from '../components/admin/systemSettings/FolioDetailsTab';
 import { fieldId } from '../components/admin/systemSettings/fieldParts';
+import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
 import OnlineBookingTab from '../components/admin/systemSettings/OnlineBookingTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
 
-type TabId = 'settings' | 'folio' | 'online';
+type TabId = 'settings' | 'folio' | 'registration' | 'online';
 const tabId = (id: string) => `system-settings-tab-${id}`;
 const panelId = (id: string) => `system-settings-panel-${id}`;
 
@@ -76,9 +78,11 @@ export default function SystemSettings() {
     if (first) {
       const target: TabId = isFolioField(first)
         ? 'folio'
-        : isOnlineBookingField(first)
-          ? 'online'
-          : 'settings';
+        : isRegistrationCardField(first)
+          ? 'registration'
+          : isOnlineBookingField(first)
+            ? 'online'
+            : 'settings';
       focusAfterTab.current = first;
       if (target !== tab) setTab(target);
       else {
@@ -169,6 +173,12 @@ export default function SystemSettings() {
             aria-controls={panelId('folio')}
           />
           <Tab
+            value="registration"
+            label="Registration Card"
+            id={tabId('registration')}
+            aria-controls={panelId('registration')}
+          />
+          <Tab
             value="online"
             label="Online Booking"
             id={tabId('online')}
@@ -189,6 +199,13 @@ export default function SystemSettings() {
         >
           {tab === 'settings' ? (
             <SettingsTab value={draft} onChange={setDraft} errors={errors} options={options} />
+          ) : tab === 'registration' ? (
+            <RegistrationCardTab
+              value={draft.registrationCard}
+              onChange={(registrationCard) => setDraft({ ...draft, registrationCard })}
+              folio={draft.folio}
+              errors={errors}
+            />
           ) : tab === 'online' ? (
             <OnlineBookingTab
               value={draft.onlineBooking}

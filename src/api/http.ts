@@ -44,6 +44,7 @@ import type {
 import { normalizeRuns } from '../lib/stayPlan';
 import { isStoredEncoderKey } from '../app/keycards';
 import { expectedLeadOccupantName } from './createRules';
+import { REGISTRATION_CARD_ITEM_IDS } from './registrationCardTypes';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { changeLogParams, parseChangeEventTypes, parseChangeLogPage } from './httpChangeLog';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
@@ -449,6 +450,21 @@ function parseCustomReports(body: unknown, status: number): CustomReportSummary[
 
 const isLookup = (v: unknown) => isObject(v) && isString(v.id) && isString(v.label);
 
+function parsePreviewUrl(body: unknown, status: number): { url: string } {
+  if (!isObject(body) || !isString(body.url) || body.url === '') {
+    throw invalid(status, 'registration card preview');
+  }
+  return { url: body.url };
+}
+
+const isRegistrationCard = (v: unknown) =>
+  isObject(v) &&
+  typeof v.enabled === 'boolean' &&
+  isString(v.customText) &&
+  isObject(v.items) &&
+  REGISTRATION_CARD_ITEM_IDS.every(
+    (id) => typeof (v.items as Record<string, unknown>)[id] === 'boolean',
+  );
 const isOnlineBooking = (v: unknown) =>
   isObject(v) &&
   isString(v.globalMessage) &&
@@ -476,6 +492,7 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !isObject(body.alternativeBaseRate2) ||
     !isString(body.serviceChargeLabel) ||
     !isObject(body.folio) ||
+    !isRegistrationCard(body.registrationCard) ||
     !isOnlineBooking(body.onlineBooking) ||
     !(body.transferItem === null || isLookup(body.transferItem)) ||
     !(body.guestRoomsArea === null || isLookup(body.guestRoomsArea)) ||
@@ -1294,6 +1311,10 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
+    registrationCard: {
+      requestPreview: (body, o) =>
+        request('/registration-card/preview', {}, o, parsePreviewUrl, { method: 'POST', body }),
+    },
     changeLog: {
       list: (query, o) =>
         Promise.resolve().then(() => {

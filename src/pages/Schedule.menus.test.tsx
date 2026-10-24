@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
+import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
 import { GrantedAccess } from '../app/testing';
 import { theme } from '../theme';
 import Schedule from './Schedule';
@@ -15,17 +16,21 @@ function setup(
   url: string,
   client: ApiClient,
   granted?: Parameters<typeof GrantedAccess>[0]['granted'],
+  withSettings = false,
 ) {
+  const routes = (
+    <MemoryRouter initialEntries={[url]}>
+      <Routes>
+        <Route path="/schedule" element={<Schedule today={TODAY} />} />
+        <Route path="*" element={<p>Elsewhere</p>} />
+      </Routes>
+    </MemoryRouter>
+  );
   return render(
     <ThemeProvider theme={theme}>
       <GrantedAccess granted={granted}>
         <ApiProvider client={client}>
-          <MemoryRouter initialEntries={[url]}>
-            <Routes>
-              <Route path="/schedule" element={<Schedule today={TODAY} />} />
-              <Route path="*" element={<p>Elsewhere</p>} />
-            </Routes>
-          </MemoryRouter>
+          {withSettings ? <SystemSettingsProvider>{routes}</SystemSettingsProvider> : routes}
         </ApiProvider>
       </GrantedAccess>
     </ThemeProvider>,
@@ -41,9 +46,10 @@ async function open(
   client: ApiClient,
   name: RegExp,
   granted?: Parameters<typeof setup>[2],
+  withSettings = false,
 ) {
   const user = userEvent.setup();
-  setup(url, client, granted);
+  setup(url, client, granted, withSettings);
   const dialog = await screen.findByRole('dialog', { name });
   await within(dialog).findByRole('button', { name: 'More reservation actions' });
   return { user, dialog };
@@ -103,7 +109,41 @@ describe('reservation menu by state', () => {
     ]);
   });
 
-  it('Print Registration Card(s) opens the PDF in a new tab', async () => {
+  it('Print Registration Card(s) renders the saved settings for this reservation in a new tab', async () => {
+    const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
+    const open_ = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    const client = before();
+    const settings = await client.systemSettings.get();
+    // A saved setting that differs from the default: the room type prints.
+    await client.systemSettings.save({
+      ...settings,
+      registrationCard: {
+        ...settings.registrationCard,
+        items: { ...settings.registrationCard.items, roomType: true },
+      },
+    });
+    const request = vi
+      .spyOn(client.registrationCard, 'requestPreview')
+      .mockResolvedValue({ url: 'blob:card' });
+    const { user, dialog } = await open(
+      '/schedule?res=rs-5&rr=rr-5',
+      client,
+      /Reservation #GR-50310/,
+      undefined,
+      true,
+    );
+    await waitFor(async () => {
+      expect(await menuItems(user, dialog)).toContain('Print Registration Card(s)');
+    });
+    await user.click(screen.getByRole('menuitem', { name: 'Print Registration Card(s)' }));
+    await waitFor(() => expect(tab.location.href).toBe('blob:card'));
+    const sent = request.mock.calls[0][0];
+    expect(sent.settings.items.roomType).toBe(true);
+    expect(sent.reservation?.confirmationNumber).toBe('GR-50310');
+    open_.mockRestore();
+  });
+
+  it('says so when the registration card cannot be opened', async () => {
     const open_ = vi.spyOn(window, 'open').mockReturnValue(null);
     const { user, dialog } = await open(
       '/schedule?res=rs-5&rr=rr-5',
@@ -112,8 +152,44 @@ describe('reservation menu by state', () => {
     );
     await menuItems(user, dialog);
     await user.click(screen.getByRole('menuitem', { name: 'Print Registration Card(s)' }));
-    expect(open_).toHaveBeenCalledWith('/files/registration-cards/rs-5.pdf', '_blank', 'noopener');
+    expect(await within(dialog).findByText(/blocked the new tab/)).toBeInTheDocument();
     open_.mockRestore();
+  });
+});
+
+describe('Registration Card setting', () => {
+  it('hides Print Registration Card(s) once System Settings turns the card off', async () => {
+    const client = before();
+    const settings = await client.systemSettings.get();
+    await client.systemSettings.save({
+      ...settings,
+      registrationCard: { ...settings.registrationCard, enabled: false },
+    });
+    const { user, dialog } = await open(
+      '/schedule?res=rs-5&rr=rr-5',
+      client,
+      /Reservation #GR-50310/,
+      undefined,
+      true,
+    );
+    // The settings arrive after the panel opens; poll the menu, closing it between looks.
+    await waitFor(async () => {
+      const items = await menuItems(user, dialog);
+      await user.keyboard('{Escape}');
+      expect(items).not.toContain('Print Registration Card(s)');
+      expect(items).toContain('Jump to Folio');
+    });
+  });
+
+  it('keeps Print Registration Card(s) while the card is on', async () => {
+    const { user, dialog } = await open(
+      '/schedule?res=rs-5&rr=rr-5',
+      before(),
+      /Reservation #GR-50310/,
+      undefined,
+      true,
+    );
+    expect(await menuItems(user, dialog)).toContain('Print Registration Card(s)');
   });
 });
 

@@ -1,3 +1,4 @@
+import { defaultRegistrationCard } from '../app/registrationCard';
 import type { OnlineBookingSettings, SystemSettings, SystemSettingsOptions } from './types';
 
 // PLACEHOLDER sample data until the backend exists (see docs/requirements/placeholders.md).
@@ -72,6 +73,11 @@ export const mockSystemSettings = (): SystemSettings => ({
     phone: 'XXX-XXX-XXXX',
     customText: '',
     logo: null,
+  },
+  registrationCard: {
+    ...defaultRegistrationCard(),
+    customText:
+      'By signing, the guest agrees to the club policies, including the cancellation policy and charges for damages.',
   },
   onlineBooking: mockOnlineBookingSettings(),
 });
