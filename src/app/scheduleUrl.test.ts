@@ -98,7 +98,9 @@ describe('housekeeping and feature parameters', () => {
     }
   });
   it('keeps only known statuses, in menu order, and drops duplicates', () => {
-    const v = parseScheduleView('housekeeping=ready,bogus,not-checked-out,ready&features=a,a,b');
+    const v = parseScheduleView(
+      'housekeeping=ready,bogus,nyci,not-checked-out,ready&features=a,a,b',
+    );
     expect(v.housekeeping).toEqual(['not-checked-out', 'ready']);
     expect(v.featureIds).toEqual(['a', 'b']);
   });

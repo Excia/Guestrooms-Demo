@@ -72,13 +72,7 @@ describe('filter panel groups', () => {
       within(hk)
         .getAllByRole('checkbox')
         .map((c) => c.getAttribute('aria-label') ?? c.closest('label')?.textContent),
-    ).toEqual([
-      'Not Checked Out',
-      'Needs Cleaning',
-      'Cleaned',
-      'Maintenance Required',
-      'Inspected / Ready',
-    ]);
+    ).toEqual(['Not Checked Out', 'Needs Cleaning', 'Cleaned', 'Ready', 'Needs Maintenance']);
   });
 
   it('starts with nothing checked in the housekeeping and feature groups (no filter)', async () => {

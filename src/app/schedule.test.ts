@@ -1,3 +1,5 @@
+import { SETTABLE_HOUSEKEEPING_STATUSES } from '../api/types';
+import { housekeepingStatusLabel, housekeepingStatusOf } from './housekeepingBlocks';
 import { addDays, nightsOverlap } from '../lib/dates';
 import { queryScheduleData } from '../api/scheduleQuery';
 import { createScheduleState } from '../api/scheduleData';
@@ -270,14 +272,42 @@ describe('housekeeping and feature filters', () => {
   const all = () => queryScheduleData(createScheduleState(T), { startDate: T, days: 14 });
   const ids = (d: { rooms: { id: string }[] }) => d.rooms.map((r) => r.id);
 
-  it('has the five legacy statuses in menu order', () => {
-    expect(HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.name)).toEqual([
-      'Not Checked Out',
-      'Needs Cleaning',
-      'Cleaned',
-      'Maintenance Required',
-      'Inspected / Ready',
+  it('offers exactly the settable statuses, in order, with the chip labels', () => {
+    expect(HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.id)).toEqual([
+      ...SETTABLE_HOUSEKEEPING_STATUSES,
     ]);
+    expect(HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.name)).toEqual(
+      SETTABLE_HOUSEKEEPING_STATUSES.map(housekeepingStatusLabel),
+    );
+    expect(HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.id)).not.toContain('nyci');
+  });
+  it('a stay with no stored status counts as Not Checked Out, like its chip', () => {
+    const base = all();
+    const room = base.rooms[0];
+    const stay = { ...base.blocks[0], roomId: room.id, startDate: T, endDate: addDays(T, 2) };
+    const noStatus = { ...stay, housekeeping: undefined };
+    const data = { ...base, rooms: [room], blocks: [noStatus] };
+    expect(applyScheduleFilters(data, { housekeeping: ['not-checked-out'] }).rooms).toEqual([room]);
+    expect(applyScheduleFilters(data, { housekeeping: ['cleaned'] }).rooms).toEqual([]);
+    const stored = { ...data, blocks: [{ ...stay, housekeeping: 'cleaned' as const }] };
+    expect(applyScheduleFilters(stored, { housekeeping: ['not-checked-out'] }).rooms).toEqual([]);
+    expect(applyScheduleFilters(stored, { housekeeping: ['cleaned'] }).rooms).toEqual([room]);
+    // NYCI is not filterable: it matches none of the options.
+    const nyci = { ...data, blocks: [{ ...stay, housekeeping: 'nyci' as const }] };
+    for (const o of HOUSEKEEPING_FILTER_OPTIONS) {
+      expect(applyScheduleFilters(nyci, { housekeeping: [o.id] }).rooms).toEqual([]);
+    }
+  });
+  it('a linked-room block carries no status, so it never matches', () => {
+    const base = all();
+    const room = base.rooms[0];
+    const linked = {
+      ...base.blocks[0],
+      roomId: room.id,
+      linkedTo: { roomNumber: '102', reserverName: 'A B' },
+    };
+    const data = { ...base, rooms: [room], blocks: [linked] };
+    expect(applyScheduleFilters(data, { housekeeping: ['not-checked-out'] }).rooms).toEqual([]);
   });
   it('treats absent and empty lists as no filter', () => {
     const n = all().rooms.length;
@@ -287,7 +317,7 @@ describe('housekeeping and feature filters', () => {
     const base = all();
     const d = applyScheduleFilters(base, { housekeeping: ['not-checked-out'] });
     const expected = new Set(
-      base.blocks.filter((b) => b.housekeeping === 'not-checked-out').map((b) => b.roomId),
+      base.blocks.filter((b) => housekeepingStatusOf(b) === 'not-checked-out').map((b) => b.roomId),
     );
     expect(expected.size).toBeGreaterThan(0);
     expect(new Set(ids(d))).toEqual(expected);
@@ -302,18 +332,16 @@ describe('housekeeping and feature filters', () => {
     const cleaned = applyScheduleFilters(base, { housekeeping: ['cleaned'] });
     expect(new Set(ids(both))).toEqual(new Set([...ids(one), ...ids(cleaned)]));
   });
-  it('hides unassigned reservations without a selected status', () => {
+  it('hides unassigned reservations while a status is checked (they have no H block)', () => {
     const base = all();
     expect(base.unassigned.length).toBeGreaterThan(0);
-    const tagged = base.unassigned.map((b, i) => ({
-      ...b,
-      housekeeping: (i === 0 ? 'ready' : 'cleaned') as 'ready' | 'cleaned',
-    }));
-    const data = { ...base, unassigned: tagged };
-    expect(applyScheduleFilters(data, { housekeeping: ['ready'] }).unassigned).toEqual([tagged[0]]);
-    expect(applyScheduleFilters(data, {}).unassigned).toEqual(tagged);
-    expect(filterUnassigned(tagged, [])).toEqual(tagged);
-    expect(filterUnassigned([{ ...tagged[0], housekeeping: undefined }], ['ready'])).toEqual([]);
+    for (const status of SETTABLE_HOUSEKEEPING_STATUSES) {
+      const tagged = base.unassigned.map((b) => ({ ...b, housekeeping: status }));
+      expect(filterUnassigned(tagged, [status])).toEqual([]);
+    }
+    expect(applyScheduleFilters(base, { housekeeping: ['ready'] }).unassigned).toEqual([]);
+    expect(applyScheduleFilters(base, {}).unassigned).toEqual(base.unassigned);
+    expect(filterUnassigned(base.unassigned, [])).toEqual(base.unassigned);
   });
   it('ignores the housekeeping of a reservation outside the range', () => {
     const base = all();

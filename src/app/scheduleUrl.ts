@@ -1,8 +1,9 @@
 // The schedule's view state in the URL query string, so reload, Back and shared links work.
 // Parsing is tolerant: anything unknown or malformed falls back to the default for that field.
 import { isValidIsoDate, type IsoDate } from '../lib/dates';
+import { SETTABLE_HOUSEKEEPING_STATUSES } from '../api/types';
 import type { ScheduleAvailability, ScheduleDays, SettableHousekeepingStatus } from '../api/types';
-import { DEFAULT_SCHEDULE_DAYS, HOUSEKEEPING_FILTER_OPTIONS, parseScheduleDays } from './schedule';
+import { DEFAULT_SCHEDULE_DAYS, parseScheduleDays } from './schedule';
 
 export interface ScheduleViewState {
   /** First column's date; null means "today" (so a bookmark of the plain page keeps following it). */
@@ -70,7 +71,7 @@ export function parseScheduleView(source: string | URLSearchParams): ScheduleVie
     locationIds: parseList(params.get(PARAMS.locations)),
     roomTypeIds: parseList(params.get(PARAMS.types)),
     availability: AVAILABILITY.find((a) => a === rooms) ?? 'all',
-    housekeeping: HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.id).filter((id) =>
+    housekeeping: SETTABLE_HOUSEKEEPING_STATUSES.filter((id) =>
       parseOptIn(params.get(PARAMS.housekeeping)).includes(id),
     ),
     featureIds: parseOptIn(params.get(PARAMS.features)),

@@ -3,6 +3,7 @@
 // through src/lib/dates.ts so DST never shifts a day.
 import { addDays, daysBetween, nightsOverlap, parseIsoDate, type IsoDate } from '../lib/dates';
 import { SCHEDULE_DAYS } from '../api/types';
+import { HOUSEKEEPING_OPTIONS, housekeepingStatusOf } from './housekeepingBlocks';
 import type {
   HousekeepingStatus,
   ScheduleAvailability,
@@ -154,17 +155,14 @@ export const isScheduleEmpty = (data: Pick<ScheduleData, 'rooms'>): boolean =>
 // The product fetches every room and filters here: the drag rules need the sibling rooms of a
 // multi-room reservation, which a server-side filter would leave out.
 
-/** The five statuses of the Housekeeping filter group, in the legacy menu's order and wording. */
+/**
+ * The Housekeeping filter group: the settable statuses, with the chip's ids, order and labels
+ * (`housekeepingBlocks.ts`). NYCI is not filterable: its chip is drawn invisible and staff cannot set it.
+ */
 export const HOUSEKEEPING_FILTER_OPTIONS: readonly {
   id: SettableHousekeepingStatus;
   name: string;
-}[] = [
-  { id: 'not-checked-out', name: 'Not Checked Out' },
-  { id: 'needs-cleaning', name: 'Needs Cleaning' },
-  { id: 'cleaned', name: 'Cleaned' },
-  { id: 'needs-maintenance', name: 'Maintenance Required' },
-  { id: 'ready', name: 'Inspected / Ready' },
-];
+}[] = HOUSEKEEPING_OPTIONS.map((o) => ({ id: o.value, name: o.label }));
 
 /** Whether the Locations group is offered: only when the club has two or more locations. */
 export const showLocationFilter = (locations: readonly unknown[]): boolean => locations.length >= 2;
@@ -176,7 +174,8 @@ export interface ScheduleFilters {
   availability?: ScheduleAvailability;
   /**
    * Housekeeping statuses, as the legacy menu: absent or empty is no filter. Otherwise a room stays
-   * when one of its reservations in the range carries one of the statuses, and an unassigned
+   * when one of its reservations in the range shows one of the statuses (`housekeepingStatusOf`, so a
+   * stay with no stored status counts as Not Checked Out, as its chip does), and an unassigned
    * reservation stays on the same test. The blocks of a kept room all stay.
    */
   housekeeping?: readonly HousekeepingStatus[];
@@ -185,15 +184,19 @@ export interface ScheduleFilters {
 }
 
 /**
- * Unassigned reservations under the Housekeeping filter: with no status checked all stay,
- * otherwise only those whose status is checked.
+ * Unassigned reservations under the Housekeeping filter: with no status checked all stay. With one
+ * checked they go, because a reservation without a room has no "H" block (`housekeepingStatusOf`),
+ * as in the legacy system, where it has no housekeeping event.
  */
 export function filterUnassigned(
   unassigned: readonly ScheduleBlock[],
   housekeeping: readonly HousekeepingStatus[],
 ): ScheduleBlock[] {
   if (housekeeping.length === 0) return [...unassigned];
-  return unassigned.filter((b) => b.housekeeping && housekeeping.includes(b.housekeeping));
+  return unassigned.filter((b) => {
+    const status = housekeepingStatusOf(b);
+    return status !== undefined && housekeeping.includes(status);
+  });
 }
 
 /** The selected ids that still exist in `options` (a stale URL id must neither hide rooms nor count). */
@@ -239,7 +242,10 @@ export function applyScheduleFilters(data: ScheduleData, filters: ScheduleFilter
   for (const b of data.blocks) {
     if (!nightsOverlap(b.startDate, b.endDate, startDate, end)) continue;
     booked.add(b.roomId);
-    if (statuses && b.housekeeping && statuses.has(b.housekeeping)) withStatus.add(b.roomId);
+    if (statuses) {
+      const status = housekeepingStatusOf(b);
+      if (status && statuses.has(status)) withStatus.add(b.roomId);
+    }
     if (availability === 'available')
       occupied.set(b.roomId, [...(occupied.get(b.roomId) ?? []), b]);
   }
