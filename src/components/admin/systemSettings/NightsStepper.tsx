@@ -12,6 +12,8 @@ export interface NightsStepperProps {
   onChange: (value: number) => void;
   disabled?: boolean;
   id?: string;
+  /** Unit read after the value by screen readers; default "nights". */
+  unit?: string;
 }
 
 // "— 07 +" stepper beside "or more nights" (Figma 11895:16081). The limit buttons use aria-disabled
@@ -24,6 +26,7 @@ export default function NightsStepper({
   onChange,
   disabled,
   id,
+  unit = 'nights',
 }: NightsStepperProps) {
   const atMin = value <= min;
   const atMax = value >= max;
@@ -59,7 +62,7 @@ export default function NightsStepper({
         })}
       >
         <span aria-hidden>{String(value).padStart(2, '0')}</span>
-        <Box component="span" sx={visuallyHidden}>{`${value} nights`}</Box>
+        <Box component="span" sx={visuallyHidden}>{`${value} ${unit}`}</Box>
       </Box>
       <Button
         aria-label={`Increase ${label}`}
