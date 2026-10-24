@@ -46,10 +46,33 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
 - **Deviations:** the availability control is a 3-item menu (Figma: split button, D-052); the chevron
   steps and default view are the agent's defaults (D-051); the due-out block color is a placeholder
   (Q-18-7).
-- **Not built:** housekeeping "H" blocks and the linked-room block style (ticket 2.4); the early/late
+- **Housekeeping "H" chip (built on branch for ticket 2.4):** a 16 / 8 / 4px chip (7 / 14 / 30 day view) after a block's departure edge, filled by `ScheduleBlock.housekeeping` (not checked out, needs cleaning, cleaned, ready, needs maintenance; NYCI is invisible), the "H" letter in the 7 and 14 day views, none when the stay continues past the range; a "+" beside the "H" when `housekeepingNotes` exist, in the 7 and 14 day views only (functional doc 15.13.3). The chip is a button (name like "Housekeeping: needs cleaning. Change status"; pointer and key events on it never drag, pick up or open the block) that opens a small pop-up (doc 15.13.4): a Status select with Not Checked Out, Needs Cleaning, Cleaned, Ready and Needs Maintenance (NYCI is not settable) that saves as soon as a status is picked, Add Notes / Remove Notes with a notes field saved by Save, and an X to close; focus returns to the chip. Needs `reservation.edit`; without it the chip is only drawn. Saved through `schedule.setHousekeeping({ reservationRoomId, status, notes?, requestId, version? })` (`notes` omitted keeps the note, empty removes it; `Idempotency-Key`; 409 `stale` on another `version`); the grid shows the change at once and puts it back with a message if the save fails. **No Figma design for the pop-up** (plain themed MUI placeholder, deviation 54). The status is read out in the block's label. The mock derives the statuses until the backend supplies them. Figma "Housekeeping Block" 12125:14157.
+- **Unassigned section (owner, 2026-10-21; D-21-1):** reservation rooms booked without a room sit at the top
+  of the grid, above the room rows, on a light red tinted row (`palette.schedule.unassignedRow`). Counts
+  and rows follow the visible date range; the room filters (location, room type, availability) do not
+  apply to them. Four states: (1) none in the range: no row; (2) exactly one: a single row, no
+  expand/collapse control; (3) two or more: expanded by default, one row per reservation room (not
+  packed), each with its block across its dates, "Unassigned" on the first row only, and a red "-" circle
+  button (`aria-expanded="true"`, name "Collapse N unassigned reservations"); (4) two or more, collapsed:
+  one row with "Unassigned" and "(N)" on a second line and a red "+" circle button, no blocks. The
+  collapsed state is local to the grid (not in the URL). Blocks use the normal block rendering, open the
+  reservation panel on click or Enter, are tab stops (outside the grid's arrow-key cursor), cannot be
+  dragged or picked up, are not drop targets and have no housekeeping chip. A room is assigned in the
+  reservation panel. API: `ScheduleData.unassigned` (blocks with `roomId` ""), windowed by date like
+  `blocks`. Built from the owner's spec and screenshots; the Figma node ids were not found
+  (deviation 55). Still open: red outline and white fill for a not-checked-in unassigned block (doc
+  15.11.3.2), the block moving to its room row on save (20.4.5.4), and the "Unassigned Only" toggle
+  (16.6).
+- **Linked-room blocks and early/late rules (ticket 2.4, branch `feat/21-schedule-blocks`):** `ScheduleBlock.linkedTo`
+  (`LinkedRoom`: room number, reserver name) draws the link icon; by drawn
+  width the icon only, plus the linked room number, plus the reserver name (`linkedTier`, D-21-2); tooltip
+  "Linked to [Room Number]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
+  Indicators follow D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
+  "canceled" block: canceling removes the event from the schedule (Q-21-3 answered). Entry: `entries/21-schedule-blocks.md`.
+- **Not built:** the early/late
   markers are the minimal ones added by PR #119 (the PR #118 body said they were not built, because they
   needed backend fields: `earlyCheckIn` / `lateCheckOut` on `ScheduleBlock` now exist). Touch users cannot
-  drag; no edge auto-scroll. Reservations with an Unassigned room have no lane on the grid (D-079).
+  drag; no edge auto-scroll. Reservations with an Unassigned room are in the grid's Unassigned section (D-21-1).
 - **Notes:** mock schedule data follows the real current date. `?mock=empty|error|loading` also drive
   the permissions call, so they redirect before the Schedule shows; a `?schedule=empty|error` dev
   toggle would fix that (not done). `routes.ts` gained `RESERVATIONS_PATH` and
@@ -112,9 +135,9 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
     (D-064). **Lead Occupant** (optional, "TBD") appears when the Reserver option is selected; it has its
     own "+" and a red clear X outside the field (D-065). TBD is a valid saved guest (D-080). Both fields
     reserve the same space beside them so they are the same size.
-  - **Unassigned room:** a reservation can be created with an Unassigned room. The details panel then
-    shows "Not shown on the schedule until a room is assigned." because the grid has no lane for it
-    (D-079, Q-19-8).
+  - **Unassigned room:** a reservation can be created with an Unassigned room (D-079). The grid shows it
+    in the Unassigned section (D-21-1); the details panel says "Shown in the Unassigned section of the
+    schedule until a room is assigned."
   - **Tabs:** "New Reservation" and "New Room Closure" are both selectable; the closure tab shows
     "Room closures arrive with Room Blocks." and the hold timer pauses there (D-069, D-081). The close X
     is green (D-068).
@@ -297,20 +320,21 @@ Schedule Block Exploration 12843:35986; States and Variations 12423:59315.
   unassigned, closure, linked states; treatment icon and name color per ticket 3.11. Linked room
   block tiers by size: link icon only (30-day view, single night); icon plus linked room number (14-day
   view, single night, may wrap to two lines); reserver name on the second line when the icon and room
-  number fit on one line. Linked rooms also show early/late indicators from the room they are linked
-  to. Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
+  number fit on one line. Linked rooms show no early/late indicators (owner, 2026-10-24; legacy draws none). Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
   indicators: Not Yet Checked In shows only early check in; Checked In and Checked Out show only late
-  check out, even if both are selected. Truncation with an ellipsis and the full text in the tooltip.
+  check out, even if both are selected (linked blocks excepted). Truncation with an ellipsis and the full text in the tooltip.
   Owner icon: the svgrepo hand/key icon (D-018).
 - **Implemented:** a base block renderer exists from 2.1 (`ScheduleItemView`: confirmed/NYCI,
   checked-in, checked-out, due-out, closure, guest type colors); minimal early/late edge markers in
   PR #119 (an early check-in sliver on any block with the flag, a late check-out marker only at a
-  real departure edge, D-084). Canceled, unassigned and linked states, the owner icon and the tooltips
-  are not built. **Source conflict:** this ticket says Not Yet Checked In shows only early and Checked In
+  real departure edge, D-084). Canceled blocks do not exist by decision (canceling removes the event, Q-21-3); the owner icon is not built. **Source conflict:** this ticket says Not Yet Checked In shows only early and Checked In
   / Checked Out only late; the markers built in PR #119 follow the flags on the block (the mock sets
   them on a few reservations) and do not filter by status. Ticket 2.4 decides.
-- **Open questions:** Q-21-1.
-- **Status:** not started (partial groundwork in 2.1 and 2.2).
+- **Built on branch `feat/21-schedule-blocks` (no PR yet):** housekeeping chip, Unassigned section, linked-room
+  blocks with three width tiers and tooltip, status-based early/late rules (D-21-3 settles the source conflict
+  above for all non-linked blocks; linked blocks show none). There is no `canceled` state (event removed on cancel); the owner icon is not built. Entry: `entries/21-schedule-blocks.md`.
+- **Open questions:** Q-21-1 (block colors). Q-21-3 answered (event removed); Q-21-4 moot (linked blocks show no indicators).
+- **Status:** in progress (branch `feat/21-schedule-blocks`, not pushed, 2026-10-24).
 
 ## 2.5 Reservation menus and multi-room selector
 

@@ -16,17 +16,19 @@ import {
   validateSystemSettings,
   type SystemSettingsField,
 } from '../app/systemSettings';
+import { isOnlineBookingField } from '../app/onlineBookingSettings';
 import { useLeaveGuard } from '../app/useLeaveGuard';
 import { useSystemSettings } from '../app/useSystemSettings';
 import AdminShell from '../components/admin/AdminShell';
 import FolioDetailsTab from '../components/admin/systemSettings/FolioDetailsTab';
 import { fieldId } from '../components/admin/systemSettings/fieldParts';
 import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
+import OnlineBookingTab from '../components/admin/systemSettings/OnlineBookingTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
 
-type TabId = 'settings' | 'folio' | 'registration';
+type TabId = 'settings' | 'folio' | 'registration' | 'online';
 const tabId = (id: string) => `system-settings-tab-${id}`;
 const panelId = (id: string) => `system-settings-panel-${id}`;
 
@@ -78,7 +80,9 @@ export default function SystemSettings() {
         ? 'folio'
         : isRegistrationCardField(first)
           ? 'registration'
-          : 'settings';
+          : isOnlineBookingField(first)
+            ? 'online'
+            : 'settings';
       focusAfterTab.current = first;
       if (target !== tab) setTab(target);
       else {
@@ -174,6 +178,12 @@ export default function SystemSettings() {
             id={tabId('registration')}
             aria-controls={panelId('registration')}
           />
+          <Tab
+            value="online"
+            label="Online Booking"
+            id={tabId('online')}
+            aria-controls={panelId('online')}
+          />
         </Tabs>
         {saveError ? (
           <Alert severity="error" sx={{ mb: 3 }}>
@@ -194,6 +204,12 @@ export default function SystemSettings() {
               value={draft.registrationCard}
               onChange={(registrationCard) => setDraft({ ...draft, registrationCard })}
               folio={draft.folio}
+              errors={errors}
+            />
+          ) : tab === 'online' ? (
+            <OnlineBookingTab
+              value={draft.onlineBooking}
+              onChange={(onlineBooking) => setDraft({ ...draft, onlineBooking })}
               errors={errors}
             />
           ) : (

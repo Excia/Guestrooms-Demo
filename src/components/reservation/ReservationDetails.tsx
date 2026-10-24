@@ -672,7 +672,7 @@ function Loaded({
         ) : null}
         {detail.rooms.some((r) => r.roomId === null) ? (
           <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 1 }}>
-            Not shown on the schedule until a room is assigned.
+            Shown in the Unassigned section of the schedule until a room is assigned.
           </Typography>
         ) : null}
         <Box sx={{ mt: 2.5, pb: 2.5 }}>

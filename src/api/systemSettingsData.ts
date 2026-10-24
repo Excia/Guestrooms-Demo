@@ -1,5 +1,5 @@
 import { defaultRegistrationCard } from '../app/registrationCard';
-import type { SystemSettings, SystemSettingsOptions } from './types';
+import type { OnlineBookingSettings, SystemSettings, SystemSettingsOptions } from './types';
 
 // PLACEHOLDER sample data until the backend exists (see docs/requirements/placeholders.md).
 export const MOCK_SYSTEM_SETTINGS_OPTIONS: SystemSettingsOptions = {
@@ -29,6 +29,17 @@ export const MOCK_SYSTEM_SETTINGS_OPTIONS: SystemSettingsOptions = {
     { id: 'member-3', label: 'Sam Ortega (Member)' },
   ],
 };
+
+/** Values from Figma 15957:84617. */
+export const mockOnlineBookingSettings = (): OnlineBookingSettings => ({
+  globalMessage: 'To book more than 3 rooms, please contact group sales at ###-###-####.',
+  cancellationAgreement:
+    'Reservations may be cancelled without charge until the cancellation period begins. After that the first night is charged.',
+  includePolicyLink: true,
+  policyUrl: 'https://www.clubname.com/guestroomspolicy',
+  chargeCancellationFee: false,
+  showAddOnsPopup: false,
+});
 
 /** Values from Figma 11895:16081 and 11964:11725. */
 export const mockSystemSettings = (): SystemSettings => ({
@@ -68,4 +79,5 @@ export const mockSystemSettings = (): SystemSettings => ({
     customText:
       'By signing, the guest agrees to the club policies, including the cancellation policy and charges for damages.',
   },
+  onlineBooking: mockOnlineBookingSettings(),
 });

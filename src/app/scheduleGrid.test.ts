@@ -2,6 +2,7 @@ import type { ScheduleBlock } from '../api/types';
 import { blockLayout } from './schedule';
 import { canDrop, toMoveDatesRequest } from './scheduleDrag';
 import {
+  applyHousekeeping,
   applyMoves,
   blockAriaLabel,
   blockMarkers,
@@ -9,6 +10,9 @@ import {
   clampShift,
   columnAtX,
   emptyCellAction,
+  HOUSEKEEPING_OPTIONS,
+  housekeepingChip,
+  housekeepingFailure,
   itemAtColumn,
   mergeChangedBlocks,
   moveCursor,
@@ -17,6 +21,8 @@ import {
   refusalMessage,
   revertMoves,
   rowIndexAt,
+  roomRowAt,
+  roomRowScrollTop,
   shiftFromDistance,
   yearLabel,
 } from './scheduleGrid';
@@ -79,6 +85,20 @@ describe('pointer geometry', () => {
     expect(rowIndexAt(125, 60, 3)).toBe(2);
     expect(rowIndexAt(180, 60, 3)).toBeNull();
     expect(rowIndexAt(-1, 60, 3)).toBeNull();
+  });
+  it('offsets room rows by the header and the Unassigned rows', () => {
+    // no Unassigned section: the first room starts below the 60px header
+    expect(roomRowAt(60, 60, 0, 3)).toBe(0);
+    expect(roomRowAt(30, 60, 0, 3)).toBeNull();
+    // two Unassigned rows push the first room down to 180
+    expect(roomRowAt(120, 60, 2, 3)).toBeNull(); // over an Unassigned row: not a drop target
+    expect(roomRowAt(179, 60, 2, 3)).toBeNull();
+    expect(roomRowAt(180, 60, 2, 3)).toBe(0);
+    expect(roomRowAt(300, 60, 2, 3)).toBe(2);
+    expect(roomRowAt(360, 60, 2, 3)).toBeNull();
+    // keyboard scrolling lands past the Unassigned rows
+    expect(roomRowScrollTop(0, 60, 0)).toBe(0);
+    expect(roomRowScrollTop(4, 60, 3)).toBe(420);
   });
   it('keeps the arrival column inside the range', () => {
     expect(clampShift(2, -5, 7)).toBe(-2);
@@ -197,6 +217,11 @@ describe('copy', () => {
       'checked in',
     );
   });
+  it('names an unassigned block by the missing room', () => {
+    expect(blockAriaLabel(block({ roomId: '' }), undefined)).toBe(
+      'Ada Lovelace, GR-1, confirmed, Unassigned room, 10/20/2026 to 10/22/2026',
+    );
+  });
   it('labels the corner with the year or both years', () => {
     expect(yearLabel(['2026-10-20', '2026-10-21'])).toBe('2026');
     expect(yearLabel(['2026-12-30', '2027-01-02'])).toBe('2026/2027');
@@ -313,6 +338,93 @@ describe('blockMarkers', () => {
       7,
     )!;
     expect(blockMarkers({ earlyCheckIn: true }, layout).left).toBe(true);
+  });
+});
+
+describe('housekeepingChip', () => {
+  const edge = { continuesAfter: false };
+  it('is 16, 8 and 4px wide by view, with the H letter in the 7 and 14 day views', () => {
+    expect(housekeepingChip('ready', edge, 7)).toMatchObject({ width: 16, letter: true });
+    expect(housekeepingChip('ready', edge, 14)).toMatchObject({ width: 8, letter: true });
+    expect(housekeepingChip('ready', edge, 30)).toMatchObject({ width: 4, letter: false });
+  });
+  it('is not drawn without a status, for NYCI, or when the stay goes on past the range', () => {
+    expect(housekeepingChip(undefined, edge, 7)).toBeNull();
+    expect(housekeepingChip('nyci', edge, 7)).toBeNull();
+    expect(housekeepingChip('cleaned', { continuesAfter: true }, 7)).toBeNull();
+  });
+});
+
+describe('housekeepingChip notes marker and name', () => {
+  const edge = { continuesAfter: false };
+  it('shows the "+" with notes in the 7 and 14 day views only', () => {
+    expect(housekeepingChip('ready', edge, 7, true)?.plus).toBe(true);
+    expect(housekeepingChip('ready', edge, 14, true)?.plus).toBe(true);
+    expect(housekeepingChip('ready', edge, 30, true)?.plus).toBe(false);
+    expect(housekeepingChip('ready', edge, 7, false)?.plus).toBe(false);
+  });
+  it('names the button with the status, notes and the action', () => {
+    expect(housekeepingChip('needs-cleaning', edge, 7)?.name).toBe(
+      'Housekeeping: needs cleaning. Change status',
+    );
+    expect(housekeepingChip('cleaned', edge, 30, true)?.name).toBe(
+      'Housekeeping: cleaned, with notes. Change status',
+    );
+  });
+});
+
+describe('HOUSEKEEPING_OPTIONS', () => {
+  it('lists the five settable statuses and never NYCI', () => {
+    expect(HOUSEKEEPING_OPTIONS).toEqual([
+      { value: 'not-checked-out', label: 'Not Checked Out' },
+      { value: 'needs-cleaning', label: 'Needs Cleaning' },
+      { value: 'cleaned', label: 'Cleaned' },
+      { value: 'ready', label: 'Ready' },
+      { value: 'needs-maintenance', label: 'Needs Maintenance' },
+    ]);
+  });
+});
+
+describe('applyHousekeeping', () => {
+  const a = block({ id: 'a', housekeeping: 'ready', housekeepingNotes: 'old' });
+  const b = block({ id: 'b' });
+  it('changes the status and keeps the note when none is sent', () => {
+    const [x, y] = applyHousekeeping([a, b], 'a', { status: 'cleaned' });
+    expect(x).toMatchObject({ housekeeping: 'cleaned', housekeepingNotes: 'old' });
+    expect(y).toBe(b);
+  });
+  it('sets the note, and removes it when empty', () => {
+    expect(
+      applyHousekeeping([a], 'a', { status: 'ready', notes: 'new' })[0].housekeepingNotes,
+    ).toBe('new');
+    expect(
+      'housekeepingNotes' in applyHousekeeping([a], 'a', { status: 'ready', notes: '' })[0],
+    ).toBe(false);
+  });
+  it('does not change its input', () => {
+    applyHousekeeping([a], 'a', { status: 'cleaned', notes: '' });
+    expect(a).toMatchObject({ housekeeping: 'ready', housekeepingNotes: 'old' });
+  });
+});
+
+describe('housekeepingFailure', () => {
+  it('reloads on stale and not found', () => {
+    expect(housekeepingFailure({ status: 409, code: 'stale' }).refetch).toBe(true);
+    expect(housekeepingFailure({ status: 404 }).refetch).toBe(true);
+  });
+  it('says the outcome is unknown for no answer or a server error, and reloads', () => {
+    for (const e of [{ status: 0 }, { status: 500 }, { status: 408 }, new Error('x')]) {
+      expect(housekeepingFailure(e)).toMatchObject({
+        refetch: true,
+        message: 'Housekeeping could not be confirmed. Showing the latest schedule.',
+      });
+    }
+  });
+  it('is a plain failure for another 4xx', () => {
+    expect(housekeepingFailure({ status: 400, code: 'invalid-query' })).toEqual({
+      message: 'Housekeeping could not be saved.',
+      refetch: false,
+    });
   });
 });
 
