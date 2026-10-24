@@ -62,7 +62,12 @@ function buildFolio(state: ScheduleState, reservationId: string): Folio {
         date: line.date,
         description: `${room.roomNumber ?? 'Unassigned'} - ${line.roomType}`,
         amountCents: line.amountCents,
-        status: line.date < state.today || checkInStatus === 'checked-out' ? 'posted' : 'unposted',
+        // A night is charged once the room is in house (ticket 163): a room still waiting for check in
+        // keeps its past nights unposted until it checks in.
+        status:
+          (line.date < state.today && room.status !== 'nyci') || checkInStatus === 'checked-out'
+            ? 'posted'
+            : 'unposted',
         references: [],
         roomId: room.id,
         occupantId: null,

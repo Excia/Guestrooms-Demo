@@ -89,6 +89,8 @@ interface Seed {
 // PLACEHOLDER: the schedule state models no cancellations and no unassigned stays on the grid, so
 // these list-only reservations (day offsets from today) exercise the Canceled and Unassigned
 // treatments. They are not on the schedule, and the details panel does not know them.
+// GR-50402 and GR-50403 arrive today: bulk check in only takes today's arrivals (ticket 163), and
+// they are the rows that show its "No room assigned" failure.
 const EXTRA_SEEDS: Seed[] = [
   {
     id: 'rs-X1',
@@ -103,8 +105,8 @@ const EXTRA_SEEDS: Seed[] = [
     id: 'rs-X2',
     conf: 'GR-50402',
     guest: 'Oscar Delacroix',
-    from: 4,
-    to: 6,
+    from: 0,
+    to: 2,
     roomIds: [null],
     status: 'not-checked-in',
   },
@@ -112,8 +114,8 @@ const EXTRA_SEEDS: Seed[] = [
     id: 'rs-X3',
     conf: 'GR-50403',
     guest: 'Wen Zhao',
-    from: 2,
-    to: 4,
+    from: 0,
+    to: 2,
     roomIds: [null, 'rm-C1'],
     status: 'not-checked-in',
   },

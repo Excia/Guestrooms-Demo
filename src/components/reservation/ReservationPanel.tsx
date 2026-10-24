@@ -33,6 +33,8 @@ export interface ReservationPanelProps {
   detailRefresh?: number;
   /** The reservation was cancelled or a check in undone (ticket 2.5): the page reloads the schedule. */
   onReservationChanged?: () => void;
+  /** Opens another reservation (a room was split into it); the page puts it in the URL. */
+  onOpenReservation?: (reservationId: string) => void;
   /** Called when the panel has finished closing (the page puts focus back on what opened it). */
   onExited?: () => void;
   /** The reservation just created: its heading takes focus once loaded (the form that had it is gone). */
@@ -63,6 +65,7 @@ export default function ReservationPanel({
   reopenChange,
   detailRefresh,
   onReservationChanged,
+  onOpenReservation,
   onExited,
   focusTitleFor,
   side = RESERVATION_PANEL_SIDE,
@@ -117,6 +120,8 @@ export default function ReservationPanel({
             reopenChange={reopenChange}
             refreshToken={detailRefresh}
             onReservationChanged={onReservationChanged}
+            onOpenReservation={onOpenReservation}
+            now={now}
           />
         ) : shown?.kind === 'new' ? (
           <NewReservationPanel
