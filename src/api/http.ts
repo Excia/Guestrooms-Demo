@@ -42,6 +42,7 @@ import type {
   SystemSettingsOptions,
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
+import { isStoredEncoderKey } from '../app/keycards';
 import { expectedLeadOccupantName } from './createRules';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { changeLogParams, parseChangeEventTypes, parseChangeLogPage } from './httpChangeLog';
@@ -591,6 +592,13 @@ const parseAddOnOptions = (body: unknown, status: number): AddOnOptions => {
   return body as unknown as AddOnOptions;
 };
 
+const parseKeys = (body: unknown, status: number): string[] => {
+  if (!Array.isArray(body) || !body.every((k) => isString(k) && isStoredEncoderKey(k))) {
+    throw invalid(status, 'encoder keys');
+  }
+  return body;
+};
+
 const STAT_COUNTS = [
   'arrivalsToday',
   'departuresToday',
@@ -752,10 +760,10 @@ const parseSchedule =
     if (
       !unique(data.rooms.map((r) => r.id)) ||
       !unique([
-          ...data.blocks.map((b) => b.id),
-          ...data.unassigned.map((b) => b.id),
-          ...data.closures.map((c) => c.id),
-        ]) ||
+        ...data.blocks.map((b) => b.id),
+        ...data.unassigned.map((b) => b.id),
+        ...data.closures.map((c) => c.id),
+      ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {
@@ -1261,6 +1269,13 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           : request('/add-ons', {}, o, parseAddOn, { method: 'POST', body: input }),
       delete: (id, o) =>
         request(`/add-ons/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
+    keycards: {
+      listEncoders: (o) => request('/keycards/encoders', {}, o, parseKeys),
+      saveEncoders: (keys, o) =>
+        request('/keycards/encoders', {}, o, parseKeys, { method: 'PUT', body: keys }),
+      retrieveEncoders: (o) =>
+        request('/keycards/encoders/retrieve', {}, o, parseKeys, { method: 'POST' }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },

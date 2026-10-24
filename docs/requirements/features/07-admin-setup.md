@@ -215,6 +215,18 @@ Excia/Guestrooms-Demo#75. Figma: Keycard Integration 2829:6860.
   encoders retrieved. Try doing something to troubleshoot and try again." (Cancel / Try Again); success
   toast "1 Encoder Successfully Retrieved". Retrieve goes through an integration interface with a mock;
   input validation (format and length, no duplicates); saved encoders feed the keycard flows (3.6).
+- **Implemented (Excia/Guestrooms-Demo#75, in review):** `src/pages/KeycardIntegration.tsx` at
+  `/admin/keycard-integration` inside the Admin Setup shell (navigation item enabled; not a menu link). Encoder Key
+  rows with a delete icon, **Retrieve Encoder**, **Add Encoder**, **Remove All** (confirmation dialog), **Save Changes**,
+  the retrieve error dialog (Cancel / Try Again) and the success toast, Confirm Leaving on unsaved edits. Pure rules in
+  `src/app/keycards.ts` (key format and length, duplicates, blank rows dropped on save, merge of retrieved keys),
+  unit-tested. API `keycards` (`listEncoders`, `saveEncoders`, `retrieveEncoders`) on the typed client with a mock whose
+  Visionline retrieve always succeeds with one key; see [api-contract.md](../api-contract.md). The saved list is read
+  with `api.keycards.listEncoders()`; ticket 3.6 uses it.
+  - **Built defaults (open questions):** a key is 14 digits, hyphens and spaces ignored (Q-75-1); the error dialog
+    keeps the Figma placeholder sentence (Q-75-2); no Visionline connection or authentication (Q-75-3).
+  - **Not built:** a real Visionline connection, the keycard flows that consume the list (3.6).
+  - **Status:** in review, 2026-10-24.
 - **Open questions:** Q-75-1 to Q-75-3.
 
 ## 7.7 Migration Tool
