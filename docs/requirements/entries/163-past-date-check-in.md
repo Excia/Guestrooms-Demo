@@ -50,3 +50,10 @@ ticket carries no link, the frame comes from ticket #28).
 - **Permissions:** `reservation.check-in.any-time`, `reservation.check-in.arrival-date` (see `permissions.md`).
 - **Hooks for later tickets:** Reservation Hub (3.12) calls `decideCheckIn` and reuses `CheckInPanel` / `useCheckInFlow`; Payment Methods (3.9) replaces `PaymentMethodsDialog`; the edit panel (3.12) replaces the "Adjust reservation dates" / "Assign now" notices; ticket 127 replaces `OverrideCodeDialog`'s mock validation.
 - **Not verified in a real browser:** the Browser pane did not respond in this session; the flow is covered by component tests only (`Schedule.checkIn.test.tsx`).
+- **Review round (PR 167):** rooms are classified one by one: a room arriving after today is listed as "not yet" (not selectable) and the check in
+  is disabled for the future only when no room can start; the automatic check out is judged per room in the UI and the server (the notice and the
+  dialog name the rooms when only some qualify); the split is offered only for the one chosen room (the mock server does not enforce its
+  precondition); the Reservation List's bulk selection stays off until the club's date is known (System Settings loaded; a failed load keeps it off).
+- **Deferred to ticket 3.12 (not unmet silently):** "Assign now" opening and chaining back from an assign-room edit panel, "Adjust reservation
+  dates" opening the edit panel, and the Reservation Hub path. The hooks exist: `onEdit` of `useCheckInFlow` (today a notice), `decideCheckIn`,
+  `CheckInPanel` and `useCheckInFlow` for the hub; clicking Check In again after assigning restarts the flow.

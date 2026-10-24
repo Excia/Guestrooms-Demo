@@ -172,7 +172,8 @@ export function useCheckInFlow({
 
   /** Validates the code (a mock until ticket 127); true when the flow moved on. */
   const submitOverride = async (code: string): Promise<boolean> => {
-    if (step?.name !== 'override' || busy) return false;
+    if (step?.name !== 'override' || inflight.current) return false;
+    inflight.current = true;
     setBusy(true);
     setCodeError(false);
     try {
@@ -191,6 +192,7 @@ export function useCheckInFlow({
       if (mounted.current) setCodeError(true);
       return false;
     } finally {
+      inflight.current = false;
       if (mounted.current) setBusy(false);
     }
   };
@@ -330,19 +332,25 @@ export function useCheckInFlow({
   };
 
   const addPaymentMethod = async () => {
-    if (!payment || busy) return;
+    if (!payment || inflight.current) return;
+    inflight.current = true;
     setBusy(true);
     try {
       const next = await api.reservations.addPaymentMethod({
         requestId: newRequestId(),
         reservationId: detail.id,
       });
-      if (!mounted.current) return;
+      if (!mounted.current) {
+        inflight.current = false;
+        return;
+      }
       onReloaded(next);
       setPayment(null);
       setBusy(false);
+      inflight.current = false;
       await send(payment.ids, next);
     } catch {
+      inflight.current = false;
       if (mounted.current) {
         setBusy(false);
         setPayment({ ids: payment.ids, error: true });

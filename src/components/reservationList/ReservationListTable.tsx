@@ -72,7 +72,7 @@ export interface ReservationListTableProps {
   onToggleAll: () => void;
   onOpen: (row: ReservationListRow) => void;
   /** The club's today: only reservations arriving today can be selected for bulk check in (ticket 163). */
-  today?: IsoDate;
+  today?: IsoDate | null;
   /** The Location column is hidden when the property has only one location (requirements doc 16.10.7). */
   showLocation: boolean;
   /** Replaces the rows (empty or error); the header stays so a filter can be changed or cleared. */

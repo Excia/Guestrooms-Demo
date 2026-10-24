@@ -225,7 +225,8 @@ describe('permission levels', () => {
     await user.click(await screen.findByRole('button', { name: 'Check In' }));
     await user.click(await screen.findByRole('button', { name: 'Override and check in' }));
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
-    expect(await dialog(/has passed/)).toBeInTheDocument();
+    const prompt = await dialog(/has passed/);
+    expect(within(prompt).getByRole('button', { name: 'Adjust reservation dates' })).toHaveFocus();
   });
 });
 

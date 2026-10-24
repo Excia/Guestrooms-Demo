@@ -115,3 +115,8 @@ Unrestricted users (`'all'`) hold the highest level. Mock users: Administrator =
 code is a mock until ticket 127 builds the PIN prompt. Whether the automatic check out needs its own permission is an open question
 (Q-163-1): until then it follows these levels.
 
+**Override codes (what the backend must do):** the code is a manager's PIN; the permission whose holder's PIN is accepted is
+`reservation.check-in.any-time`. Rate limit and lock out wrong codes, audit every override (who, whose code, when, what), never log or store
+the code (hash only), treat "verify" as advisory and re-validate on check in. Details in
+[api-contract.md](api-contract.md) ("Override codes"). The mock accepts one fixed code and only for a user holding a check-in grant.
+

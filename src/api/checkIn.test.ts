@@ -64,7 +64,9 @@ describe('mock reservations.checkIn on a past date', () => {
     });
     const folio = await c.folios.get('rs-31');
     expect(folio.checkInStatus).toBe('checked-in');
-    expect(folio.charges.filter((x) => x.type === 'room-rate').every((x) => x.status === 'posted')).toBe(true);
+    expect(
+      folio.charges.filter((x) => x.type === 'room-rate').every((x) => x.status === 'posted'),
+    ).toBe(true);
   });
 
   it('checks the room out right after when the departure has passed', async () => {
@@ -103,7 +105,11 @@ describe('mock reservations.checkIn on a past date', () => {
     ] as const) {
       const c = mk({ now: () => at, lastAuditedDate: '2026-10-10' });
       const d = await c.reservations.getDetail('rs-4');
-      await c.reservations.undoCheckIn({ requestId: rid(), reservationId: 'rs-4', version: d.version });
+      await c.reservations.undoCheckIn({
+        requestId: rid(),
+        reservationId: 'rs-4',
+        version: d.version,
+      });
       const result = await c.reservations.checkIn(
         await request(c, 'rs-4', ['rr-4'], { checkOutAfter: true }),
       );
@@ -137,9 +143,11 @@ describe('mock reservations.checkIn on a past date', () => {
 
   it('refuses a room that is not on the reservation', async () => {
     const c = mk();
-    await expect(c.reservations.checkIn(await request(c, 'rs-31', ['rr-1']))).rejects.toMatchObject({
-      status: 404,
-    });
+    await expect(c.reservations.checkIn(await request(c, 'rs-31', ['rr-1']))).rejects.toMatchObject(
+      {
+        status: 404,
+      },
+    );
   });
 });
 
@@ -162,7 +170,9 @@ describe('mock reservations.checkIn permission levels', () => {
 
   it('"arrival date only" needs a valid override code for a past date', async () => {
     const c = mk({ grant: ARRIVAL });
-    await expect(c.reservations.checkIn(await request(c, 'rs-31', ['rr-28']))).rejects.toMatchObject({
+    await expect(
+      c.reservations.checkIn(await request(c, 'rs-31', ['rr-28'])),
+    ).rejects.toMatchObject({
       status: 403,
       code: 'override-required',
     });
@@ -197,7 +207,10 @@ describe('mock reservations.checkIn per-room failures', () => {
 
   it('continues once a payment method is added', async () => {
     const c = mk();
-    const added = await c.reservations.addPaymentMethod({ requestId: rid(), reservationId: 'rs-6' });
+    const added = await c.reservations.addPaymentMethod({
+      requestId: rid(),
+      reservationId: 'rs-6',
+    });
     expect(added.paymentOnFile).toBe(true);
     const result = await c.reservations.checkIn(await request(c, 'rs-6', ['rr-6']));
     expect(result.rooms[0].checkedIn).toBe(true);
@@ -243,9 +256,7 @@ describe('mock reservations.checkIn per-room failures', () => {
     const c = mk();
     const d = await c.reservations.getDetail('rs-32');
     expect(d.rooms.map((r) => r.status)).toEqual(['checked-in', 'nyci']);
-    const result = await c.reservations.checkIn(
-      await request(c, 'rs-32', ['rr-31', 'rr-32']),
-    );
+    const result = await c.reservations.checkIn(await request(c, 'rs-32', ['rr-31', 'rr-32']));
     expect(result.rooms).toEqual([
       { reservationRoomId: 'rr-31', checkedIn: false, failure: 'not-checkable' },
       expect.objectContaining({ reservationRoomId: 'rr-32', checkedIn: true }),
@@ -305,6 +316,25 @@ describe('mock reservations.verifyOverrideCode', () => {
   });
 });
 
+describe('override code handling in the mock', () => {
+  it('verify needs a user with a check-in grant', async () => {
+    const ask = (c: ApiClient) =>
+      c.reservations.verifyOverrideCode({ permission: 'reservation.check-in.any-time', code: '1' });
+    await expect(ask(mk({ grant: NEVER }))).rejects.toMatchObject({ status: 403 });
+    await expect(ask(mk({ grant: ARRIVAL }))).resolves.toEqual({ valid: false });
+  });
+
+  it('a replay with another code under the same request id is a conflict; the same code replays', async () => {
+    const c = mk({ grant: ARRIVAL });
+    const req = await request(c, 'rs-31', ['rr-28'], { overrideCode: MOCK_OVERRIDE_CODE });
+    const first = await c.reservations.checkIn(req);
+    expect(await c.reservations.checkIn(req)).toEqual(first);
+    await expect(c.reservations.checkIn({ ...req, overrideCode: '0000' })).rejects.toMatchObject({
+      code: 'idempotency-conflict',
+    });
+  });
+});
+
 describe('request guards', () => {
   const c = mk();
   const base = (): CheckInReservationRequest => ({
@@ -336,7 +366,10 @@ describe('http client', () => {
   const respond = (body: unknown) =>
     vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
-      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     });
   afterEach(() => {
     calls.length = 0;
@@ -353,7 +386,9 @@ describe('http client', () => {
     expect(got.rooms[0].reservationRoomId).toBe('rr-28');
     expect(String(calls[0].url)).toBe('https://api.example.test/reservations/rs-31/check-in');
     expect(calls[0].init?.method).toBe('POST');
-    expect((calls[0].init?.headers as Record<string, string>)['Idempotency-Key']).toBe(req.requestId);
+    expect((calls[0].init?.headers as Record<string, string>)['Idempotency-Key']).toBe(
+      req.requestId,
+    );
   });
 
   it('rejects an answer for another reservation or with a missing room outcome', async () => {
@@ -362,36 +397,64 @@ describe('http client', () => {
     const answer = await mock.reservations.checkIn(req);
     const http = createHttpClient('https://api.example.test');
     vi.stubGlobal('fetch', respond({ ...answer, rooms: [] }));
-    await expect(http.reservations.checkIn(req)).rejects.toMatchObject({ code: 'invalid-response' });
+    await expect(http.reservations.checkIn(req)).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
     vi.stubGlobal(
       'fetch',
       respond({ ...answer, reservation: { ...answer.reservation, id: 'rs-other' } }),
     );
-    await expect(http.reservations.checkIn(req)).rejects.toMatchObject({ code: 'invalid-response' });
+    await expect(http.reservations.checkIn(req)).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
+  });
+
+  it('rejects an answer that repeats a room outcome', async () => {
+    const mock = mk();
+    const req = await request(mock, 'rs-32', ['rr-31', 'rr-32']);
+    const answer = await mock.reservations.checkIn(req);
+    const http = createHttpClient('https://api.example.test');
+    vi.stubGlobal('fetch', respond({ ...answer, rooms: [answer.rooms[0], answer.rooms[0]] }));
+    await expect(http.reservations.checkIn(req)).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
   });
 
   it('a split answers a new reservation, never the old one', async () => {
     const mock = mk();
     const before = await mock.reservations.getDetail('rs-32');
-    const split = { requestId: rid(), reservationId: 'rs-32', reservationRoomId: 'rr-32', version: before.version };
+    const split = {
+      requestId: rid(),
+      reservationId: 'rs-32',
+      reservationRoomId: 'rr-32',
+      version: before.version,
+    };
     const created = await mock.reservations.splitRoom(split);
     const http = createHttpClient('https://api.example.test');
     vi.stubGlobal('fetch', respond(created));
     expect((await http.reservations.splitRoom(split)).id).toBe(created.id);
     vi.stubGlobal('fetch', respond(before));
-    await expect(http.reservations.splitRoom(split)).rejects.toMatchObject({ code: 'invalid-response' });
+    await expect(http.reservations.splitRoom(split)).rejects.toMatchObject({
+      code: 'invalid-response',
+    });
   });
 
   it('asks the backend to verify an override code', async () => {
     vi.stubGlobal('fetch', respond({ valid: true }));
     const http = createHttpClient('https://api.example.test');
     await expect(
-      http.reservations.verifyOverrideCode({ permission: 'reservation.check-in.any-time', code: '1' }),
+      http.reservations.verifyOverrideCode({
+        permission: 'reservation.check-in.any-time',
+        code: '1',
+      }),
     ).resolves.toEqual({ valid: true });
     expect(String(calls[0].url)).toBe('https://api.example.test/override-codes/verify');
     vi.stubGlobal('fetch', respond({ valid: 'yes' }));
     await expect(
-      http.reservations.verifyOverrideCode({ permission: 'reservation.check-in.any-time', code: '1' }),
+      http.reservations.verifyOverrideCode({
+        permission: 'reservation.check-in.any-time',
+        code: '1',
+      }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
 });

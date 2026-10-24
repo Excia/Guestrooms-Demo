@@ -341,6 +341,12 @@ describe('ReservationList', () => {
       expect(within(await rowFor('GR-50321')).queryByRole('checkbox')).toBeNull();
     });
 
+    it('offers no checkbox while the club date is unknown (System Settings not loaded)', async () => {
+      // No `today` prop and no System Settings provider: the club's date cannot be known.
+      setup('/reservations?from=&to=&rows=100', undefined, { today: undefined });
+      expect(within(await rowFor('GR-50310')).queryByRole('checkbox')).toBeNull();
+    });
+
     it('select-all skips past-dated reservations', async () => {
       const user = userEvent.setup();
       const onSelectionChange = vi.fn();

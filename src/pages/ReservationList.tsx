@@ -61,10 +61,11 @@ export default function ReservationList({
 }: ReservationListProps) {
   const today = useMemo(() => todayProp ?? todayIso(), [todayProp]);
   // Bulk check in: "today" is the club's date (its time zone), not the browser's (ticket 163).
+  // Until System Settings have loaded the date is unknown and nothing can be selected.
   const { settings: clubSettings } = useSystemSettings();
   const selectionToday = useMemo(
-    () => todayProp ?? clubClock(clubSettings?.timeZone).date,
-    [todayProp, clubSettings?.timeZone],
+    () => todayProp ?? (clubSettings ? clubClock(clubSettings.timeZone).date : null),
+    [todayProp, clubSettings],
   );
   const [params, setParams] = useSearchParams();
   const view = useMemo(() => parseReservationListView(params, today), [params, today]);

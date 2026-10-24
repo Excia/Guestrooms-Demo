@@ -108,6 +108,13 @@ export interface MockOptions {
   now?: () => Date;
 }
 
+/** Small non-cryptographic hash for the mock (the real backend uses a keyed hash or does not store the code). */
+const hashCode = (text: string) => {
+  let h = 2166136261;
+  for (const ch of text) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return h.toString(16);
+};
+
 export const MOCK_PAGE_SIZE = 4;
 /** Reservation List default page size, as the backend would apply it. */
 const LIST_PAGE_SIZE = 25;
@@ -348,7 +355,13 @@ export function createMockClient({
         respond(
           () => {
             assertCheckInReservationRequest(request);
-            return replayable(request, () => {
+            // The override code is never kept: the replay fingerprint holds only a hash of it.
+            const { overrideCode, ...rest } = request;
+            const fingerprint = {
+              ...rest,
+              overrideCodeHash: overrideCode && hashCode(overrideCode),
+            };
+            return replayable(fingerprint, () => {
               const applied = checkInReservation(schedule, folioStore, checkInEnv(), request);
               return { ...applied, reservation: detailFor(request.reservationId) };
             });
@@ -363,6 +376,10 @@ export function createMockClient({
         respond(
           () => {
             assertVerifyOverrideCodeRequest(request);
+            // Only a signed-in user holding a check-in grant may probe codes.
+            if (checkInEnv().level === 'never') {
+              throw new ApiError(403, 'You may not check in', { code: 'forbidden' });
+            }
             return { valid: isMockOverrideCode(request.code) };
           },
           () => {

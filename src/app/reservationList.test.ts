@@ -154,6 +154,10 @@ describe('bulk check in only takes today (ticket 163)', () => {
     expect(isSelectable(on('2026-10-16', 'checked-in', 'not-checked-in'), '2026-10-16')).toBe(true);
     expect(isSelectable(on('2026-10-16', 'checked-in'), '2026-10-16')).toBe(false);
   });
+  it('with an unknown club date (null) nothing is selectable', () => {
+    expect(isSelectable(on('2026-10-16', 'not-checked-in'), null)).toBe(false);
+    expect(selectableRows([on('2026-10-16', 'not-checked-in')], null)).toEqual([]);
+  });
   it('without a date the date is not considered', () => {
     expect(isSelectable(on('2026-10-01', 'not-checked-in'))).toBe(true);
   });

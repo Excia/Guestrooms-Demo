@@ -401,11 +401,15 @@ const parseCheckInReservation =
           isString(r.reservationRoomId) &&
           request.reservationRoomIds.includes(r.reservationRoomId) &&
           isFlag(r.checkedIn) &&
-          (r.checkedIn ? r.failure === undefined : isString(r.failure) && CHECK_IN_FAILURES.includes(r.failure)) &&
+          (r.checkedIn
+            ? r.failure === undefined
+            : isString(r.failure) && CHECK_IN_FAILURES.includes(r.failure)) &&
           (r.checkedInAt === undefined || isString(r.checkedInAt)) &&
           (r.checkedOutAt === undefined || isString(r.checkedOutAt)),
       ) ||
       (body.rooms as unknown[]).length !== request.reservationRoomIds.length ||
+      new Set((body.rooms as { reservationRoomId: string }[]).map((r) => r.reservationRoomId))
+        .size !== request.reservationRoomIds.length ||
       !listOf(
         body.integrationErrors,
         (e) => isObject(e) && (e.kind === 'key-card' || e.kind === 'tms') && isString(e.message),
@@ -413,7 +417,10 @@ const parseCheckInReservation =
     ) {
       throw invalid(status, 'check in');
     }
-    return { ...(body as unknown as CheckInReservationResult), reservation: withKnownAudit(body.reservation) };
+    return {
+      ...(body as unknown as CheckInReservationResult),
+      reservation: withKnownAudit(body.reservation),
+    };
   };
 
 // A split answers the new reservation, never the one it left.

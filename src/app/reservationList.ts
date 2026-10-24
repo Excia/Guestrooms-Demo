@@ -56,19 +56,21 @@ export const isCanceled = (row: Pick<ReservationListRow, 'status'>) => row.statu
  * With `today` (the club's date, ticket 163) only today's arrivals are selectable: a reservation
  * that arrived on an earlier date is never checked in in bulk (it goes through the past-date prompts
  * of the reservation panel), and one that arrives later cannot be checked in yet. Without `today`
- * the date is not considered.
+ * the date is not considered; with `null` (the club's date is not known yet) nothing is selectable.
  */
 export function isSelectable(
   row: Pick<ReservationListRow, 'rooms'> & { arrival?: IsoDate },
-  today?: IsoDate,
+  today?: IsoDate | null,
 ): boolean {
+  // `null`: the club's date is not known yet (System Settings still loading): nothing is selectable.
+  if (today === null) return false;
   if (today !== undefined && row.arrival !== today) return false;
   return row.rooms.some((r) => r.status === 'not-checked-in');
 }
 
 export const selectableRows = <T extends Pick<ReservationListRow, 'rooms' | 'arrival'>>(
   rows: readonly T[],
-  today?: IsoDate,
+  today?: IsoDate | null,
 ): T[] => rows.filter((r) => isSelectable(r, today));
 
 export type HeaderCheckState = 'none' | 'some' | 'all';
@@ -77,7 +79,7 @@ export type HeaderCheckState = 'none' | 'some' | 'all';
 export function headerCheckState(
   rows: readonly ReservationListRow[],
   selected: ReadonlySet<string>,
-  today?: IsoDate,
+  today?: IsoDate | null,
 ): HeaderCheckState {
   const selectable = selectableRows(rows, today);
   const count = selectable.filter((r) => selected.has(r.id)).length;
@@ -94,7 +96,7 @@ export function toggleRow(selected: ReadonlySet<string>, id: string): Set<string
 export function toggleAllRows(
   rows: readonly ReservationListRow[],
   selected: ReadonlySet<string>,
-  today?: IsoDate,
+  today?: IsoDate | null,
 ): Set<string> {
   return headerCheckState(rows, selected, today) === 'all'
     ? new Set()
@@ -105,7 +107,7 @@ export function toggleAllRows(
 export function selectedRows(
   rows: readonly ReservationListRow[],
   selected: ReadonlySet<string>,
-  today?: IsoDate,
+  today?: IsoDate | null,
 ): ReservationListRow[] {
   return rows.filter((r) => selected.has(r.id) && isSelectable(r, today));
 }
