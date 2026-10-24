@@ -99,3 +99,19 @@ These need names once the Permissions page design arrives. None is in the regist
 
 Unknown: whether permissions are per role, per user, or both (the Permissions page will say); how new
 permissions are versioned between frontend and backend.
+
+## Check-in levels (ticket 163, built on the mock)
+
+Check in has three levels. Two grants express them (`checkInLevel(can)` in `src/app/permissions.ts` picks the strongest):
+
+| Permission                        | Level                | Meaning                                                                                                                                      |
+| --------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `reservation.check-in.any-time`   | any time             | Check in on the arrival date or after it. A past date still asks for confirmation first                                                      |
+| `reservation.check-in.arrival-date` | arrival date only  | Check in on the arrival date. A past date needs an **override code** (the prompt reads "Override and check in"); validated by the backend      |
+| neither                           | never                | Check in is disabled with a reason (also the automatic check out that follows a check in)                                                    |
+
+Unrestricted users (`'all'`) hold the highest level. Mock users: Administrator = any time; Non-admin = arrival date only
+(shows the override code); Partial = any time. The names are provisional until the Permissions page design (Q-G-1). The override
+code is a mock until ticket 127 builds the PIN prompt. Whether the automatic check out needs its own permission is an open question
+(Q-163-1): until then it follows these levels.
+

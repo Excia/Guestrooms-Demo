@@ -445,3 +445,32 @@ rejects anything else with 422 (a hyphenated key is refused; the UI normalizes b
 and no duplicates (`src/app/keycards.ts`; the backend enforces the same). The UI treats an empty answer and any
 error from retrieve the same way (the "No encoders retrieved" dialog). Authentication with Visionline is the
 backend's concern (Q-75-3).
+
+## Check in on past dates (ticket 163, built on the mock)
+
+| Method and path                           | Body / response                                                                                                                                    | Errors                                                                                                                                           |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /reservations/{id}/check-in`        | `CheckInReservationRequest { requestId, reservationId, version, reservationRoomIds[], pastDateConfirmed, overrideCode?, checkOutAfter }` returns `CheckInReservationResult { reservation, rooms[], autoCheckedOut, nightsPosted, integrationErrors[] }` | 400 `invalid-id`/`invalid-query`; 403 `forbidden`, `override-required`, `override-invalid`; 404; 409 `stale`, `future-arrival`, `past-date-unconfirmed`, `idempotency-conflict` |
+| `POST /override-codes/verify`             | `{ permission: 'reservation.check-in.any-time', code }` returns `{ valid }` (a wrong code is a normal answer)                                       | 400                                                                                                                                              |
+| `POST /reservation-rooms/{id}/split`      | `SplitRoomRequest { requestId, reservationId, reservationRoomId, version }` returns the **new** `ReservationDetail`                                 | 400; 403 `forbidden`; 404; 409 `stale`, `not-splittable` (one room), `idempotency-conflict`                                                      |
+| `POST /reservations/{id}/payment-methods` | PLACEHOLDER (ticket 3.9): puts a mock card on file; returns the `ReservationDetail`                                                                | 400; 404                                                                                                                                         |
+
+Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI decides the same in `src/app/checkInDecision.ts`):
+
+- "Past" means the club's today (its time zone) is after the room's arrival date; the business date and the last night audit are not used.
+  A past arrival needs `pastDateConfirmed: true` (409 `past-date-unconfirmed`). A future arrival is 409 `future-arrival` at every level.
+- The caller's check-in level is `any-time`, `arrival-date-only` or `never` (permissions below). `never` is 403 `forbidden`.
+  `arrival-date-only` plus a past arrival needs a valid `overrideCode` (403 `override-required` / `override-invalid`).
+  Ticket 127 builds the real PIN prompt and validation; the mock accepts one fixed placeholder code.
+- A room that cannot be checked in does not fail the request. It comes back in `rooms[]` with `checkedIn: false` and a `failure`:
+  `unassigned`, `room-not-ready` (dirty), `occupied` (another reservation is still checked in to the assigned room),
+  `no-payment-method` (required also for a past date, D-008), `not-checkable` (not waiting for check in). The other rooms are still checked in.
+- Check-in and check-out date and time are recorded per room (`ReservationRoomDetail.checkedInAt` / `checkedOutAt`, ISO-8601 instants).
+- A past-date check in charges the nights before today to the folio (`nightsPosted`).
+- `checkOutAfter: true` asks for an automatic check out of each room just checked in whose departure date and the club's
+  check-out time have passed (owner decision). The server decides again and ignores the flag for a room whose departure has not passed.
+  It posts the remaining nights, leaves the room needing cleaning and sets `autoCheckedOut`.
+- `ReservationDetail` gains optional `paymentOnFile`, and each room optional `housekeeping` (`clean` | `dirty`), `checkedInAt`, `checkedOutAt`.
+  Absent means the backend does not say; the UI then lets the attempt run and the backend answers.
+- The Reservation List's bulk check in only selects reservations arriving **today** (the club's date): past-dated and future ones are never bulk checked in.
+
