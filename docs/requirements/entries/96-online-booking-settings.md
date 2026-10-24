@@ -1,6 +1,6 @@
 # 7.9 Online Booking settings tab
 
-Ticket Excia/Guestrooms-Demo#96; PR not opened yet. Figma: Online Booking tab 15957:84617.
+Ticket Excia/Guestrooms-Demo#96; PR #156. Figma: Online Booking tab 15957:84617.
 **Status:** in review (branch `feat/96-online-booking-settings`), 2026-10-24.
 
 ## Figma deviations
@@ -23,14 +23,19 @@ Ticket Excia/Guestrooms-Demo#96; PR not opened yet. Figma: Online Booking tab 15
 | ID     | Date       | Decision                                                                                                                                                                         | Why                                         | Source        | Status      |
 | ------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------- | ----------- |
 | D-96-1 | 2026-10-24 | The Online Booking values are `SystemSettings.onlineBooking`, saved by the one System Settings Save button and read through `useSystemSettings()`                                | Ticket: "saving with the rest of System Settings" | ticket 7.9 | provisional |
-| D-96-2 | 2026-10-24 | The policy link must be an absolute `http` or `https` address with a dotted host; it is checked only while "Include Link to Full Policy" is on, and the link is shown to guests only then | Prevents `javascript:` links                | agent         | provisional |
+| D-96-2 | 2026-10-24 | The policy link must be an absolute address with a dotted host and no username or password, trimmed before it is checked and saved; plain `http` links are allowed (a club may host its policy on an old site), `javascript:` and other schemes are not; it is checked only while "Include Link to Full Policy" is on, and the link is shown to guests only then | Prevents `javascript:` links and credentials in a link                | agent         | provisional |
 | D-96-3 | 2026-10-24 | Consumers call `globalBookingMessage()`, `cancellationNotice()` and `showAddOnsPopup()`; the online booking flow (Epic 5) is not built yet, so nothing renders them                | Pure rules ready for 5.x                    | ticket 7.9    | provisional |
 
 ## Placeholders and invented values
 
+- **P-96-2:** the Cancellation Fee helper text "Helper text about cancellation fees." is shown as drawn in Figma, which is itself a placeholder; the owner supplies the real wording (Q-96-2).
 - **P-96-1:** the default message, agreement text and policy URL in `src/api/systemSettingsData.ts` (`mockOnlineBookingSettings`). The message and URL come from Figma; the agreement text is invented (Figma shows lorem ipsum).
+
+## Deferred
+
+- The criterion that the values feed online booking (Epic 5) is deferred: the flow is not built, so this ticket only stores the values and ships the pure rules (D-96-3). Epic 5 tickets must call them.
 
 ## API, permissions, notes
 
-- **API:** `GET` and `PUT /settings/system` carry a new `onlineBooking` object `{globalMessage (max 150), cancellationAgreement (max 300), includePolicyLink, policyUrl, chargeCancellationFee, showAddOnsPopup}`; the backend re-checks the limits and the URL (422 `validation`). Added to the row of `api-contract.md` by this note, not edited there.
+- **API:** `GET` and `PUT /settings/system` carry a new `onlineBooking` object `{globalMessage (max 150), cancellationAgreement (max 300), includePolicyLink, policyUrl, chargeCancellationFee, showAddOnsPopup}`; the backend re-checks the limits and the URL (422 `validation`). `api-contract.md` is updated in this PR (row 15 and the "Online Booking settings" section). Breaking contract change: the client rejects a `GET /settings/system` response without `onlineBooking`.
 - **Permissions:** none new (admin routes only, ticket 0.8).
