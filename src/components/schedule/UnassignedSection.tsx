@@ -148,7 +148,7 @@ export default function UnassignedSection({
                 layout={layout}
                 days={days}
                 today={today}
-                label={blockAriaLabel(block, undefined)}
+                label={blockAriaLabel(block, undefined, undefined, days)}
                 tip={`${block.guestName}, ${block.confirmationNumber}`}
                 onActivate={() => (isLinkedBlock(block) ? onLinked() : onOpen(block))}
               />

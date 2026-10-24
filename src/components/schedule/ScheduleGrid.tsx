@@ -258,7 +258,7 @@ const ScheduleRow = memo(function ScheduleRow({
             dragging={draggingId === item.id}
             label={
               item.kind === 'reservation'
-                ? blockAriaLabel(item, room, link)
+                ? blockAriaLabel(item, room, link, days)
                 : closureAriaLabel(item, room)
             }
             onPointerDown={(e) => onItemPointerDown(e, item)}
@@ -738,7 +738,7 @@ export default function ScheduleGrid({
     const result = evaluate(item, row, 0);
     setDrag({ item, row, shift: 0, dx: 0, dy: 0, result, mode: 'keyboard' });
     setAnnouncement(
-      `Picked up ${blockAriaLabel(item, rooms[row])}. Use the arrow keys to choose a room or date, Enter to drop, Escape to cancel.`,
+      `Picked up ${blockAriaLabel(item, rooms[row], undefined, days)}. Use the arrow keys to choose a room or date, Enter to drop, Escape to cancel.`,
     );
   };
 

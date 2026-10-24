@@ -18,6 +18,7 @@ import {
   housekeepingStatusLabel,
   housekeepingStatusOf,
 } from './housekeepingBlocks';
+import { blockContent, blockFacts, leadName } from './scheduleBlockContent';
 import { blockIndicators, linkedTooltipLines } from './scheduleLinked';
 import { blockLayout, dayHeader, type BlockLayout } from './schedule';
 import type { DropRefusal, DropResult, ScheduleMove } from './scheduleDrag';
@@ -524,18 +525,31 @@ export function blockTipText(
   ].join(', ');
 }
 
-/** Name of a block for assistive technology: guest, confirmation number, status, room, dates. */
+/**
+ * Name of a block for assistive technology. It starts with the block's visible first line (initials
+ * and "+N" included, WCAG 2.5.3 Label in Name), then the guest type, confirmation number, status,
+ * room and dates, and every fact the tooltip and the second line state: the full lead name when the
+ * block shows initials, the reserver, all occupants, the room type, the block name and an open
+ * balance. `days` is the view length; without it the block is not compact.
+ */
 export function blockAriaLabel(
   block: ScheduleBlock,
   room: Pick<ScheduleRoom, 'number'> | undefined,
   /** The place of this part in a stay that changed room (ticket 2.3). */
   link?: SegmentLink,
+  days = 0,
 ): string {
   const status = block.status === 'nyci' ? 'not yet checked in' : block.status.replace('-', ' ');
   const { early, late } = blockIndicators(block);
   const hk = housekeepingStatusOf(block);
+  const linked = Boolean(block.linkedTo);
+  const content = linked ? null : blockContent(block, days);
+  const facts = linked ? null : blockFacts(block);
+  const lead = leadName(block);
   return [
-    block.guestName,
+    content?.title || block.guestName,
+    ...(content?.compact && lead ? [lead] : []),
+    ...(facts?.type ? [facts.type] : []),
     block.confirmationNumber,
     status,
     room ? `Room ${room.number}` : 'Unassigned room',
@@ -545,6 +559,7 @@ export function blockAriaLabel(
     ...(late ? ['late check out'] : []),
     ...(hk && hk !== 'nyci' ? [`housekeeping ${HOUSEKEEPING_LABELS[hk]}`] : []),
     ...(link ? [segmentText(link)] : []),
+    ...(facts?.details ?? []),
   ].join(', ');
 }
 

@@ -58,6 +58,44 @@ describe('http schedule.get', () => {
       ).rejects.toMatchObject({ code: 'invalid-response' });
     }
   });
+  it('validates the block content fields', async () => {
+    const d = good();
+    const withField = (field: string, value: unknown) => ({
+      ...d,
+      blocks: [{ ...d.blocks[0], [field]: value }],
+    });
+    const okFields = {
+      occupantCount: 3,
+      occupants: ['Ann Lee', ''],
+      reserverName: 'Ann Lee',
+      blockName: 'Retreat',
+      roomTypeName: 'Suite',
+      balanceCents: -50,
+    };
+    for (const [field, value] of Object.entries(okFields)) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(withField(field, value)))).schedule.get(query),
+      ).resolves.toBeDefined();
+    }
+    const bad: [string, unknown][] = [
+      ['occupantCount', -1],
+      ['occupantCount', 1.5],
+      ['occupantCount', '2'],
+      ['occupants', 'Ann Lee'],
+      ['occupants', ['Ann', 3]],
+      ['reserverName', 42],
+      ['blockName', {}],
+      ['roomTypeName', 7],
+      ['balanceCents', '100'],
+      ['balanceCents', null],
+    ];
+    for (const [field, value] of bad) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(withField(field, value)))).schedule.get(query),
+        `${field}=${JSON.stringify(value)}`,
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
   it('rejects an answer for another period or view', async () => {
     for (const other of [
       { ...good(), startDate: '2026-10-17' },
