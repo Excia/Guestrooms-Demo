@@ -9,10 +9,19 @@ export interface LookupFieldProps {
   options: readonly LookupRef[];
   onChange: (value: LookupRef | null) => void;
   id: string;
+  /** Validation message; shown under the input and tied to it. */
+  error?: string;
 }
 
 // Lookup with a search icon (Figma "Item | SKU", "Area", "Guest Member").
-export default function LookupField({ label, value, options, onChange, id }: LookupFieldProps) {
+export default function LookupField({
+  label,
+  value,
+  options,
+  onChange,
+  id,
+  error,
+}: LookupFieldProps) {
   return (
     <Autocomplete<LookupRef>
       id={id}
@@ -28,6 +37,8 @@ export default function LookupField({ label, value, options, onChange, id }: Loo
         <TextField
           {...params}
           label={label}
+          error={Boolean(error)}
+          helperText={error}
           // Keep the slots Autocomplete wires up (the input ref, ARIA attributes), only add `shrink`.
           slotProps={{
             ...params.slotProps,

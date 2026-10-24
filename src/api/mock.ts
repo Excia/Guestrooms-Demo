@@ -15,6 +15,7 @@ import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData
 import { mockCustomReports } from './reportsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
+import { mockAddOnOptions, mockAddOns } from './addOnData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
@@ -31,6 +32,7 @@ import { queryReservations } from './reservationQuery';
 import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
+import { normalizeAddOn, validateAddOn } from '../app/addOns';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { validateSystemSettings } from '../app/systemSettings';
 import {
@@ -107,6 +109,7 @@ export function createMockClient({
   let roomTypes = mockRoomTypes();
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
+  let addOns = mockAddOns();
   let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
   const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
@@ -586,6 +589,59 @@ export function createMockClient({
               throw new ApiError(404, 'Room not found', { code: 'not-found' });
             }
             rooms = withoutRoom(rooms, id);
+          },
+          () => undefined,
+          o,
+        ),
+    },
+    addOns: {
+      getOptions: (o) =>
+        respond(
+          () => mockAddOnOptions(roomTypes.map((t) => ({ id: t.id, label: t.name }))),
+          () => mockAddOnOptions([]),
+          o,
+        ),
+      list: (o) =>
+        respond(
+          () => structuredClone(addOns),
+          () => [],
+          o,
+        ),
+      save: (input, o) =>
+        respond(
+          () => {
+            if (Object.keys(validateAddOn(input)).length > 0) {
+              throw new ApiError(422, 'Add-on is not valid', { code: 'validation' });
+            }
+            // Like the backend: the SKU and every association must exist in the options.
+            const known = mockAddOnOptions(roomTypes.map((t) => ({ id: t.id, label: t.name })));
+            if (
+              (input.sku && !known.skus.some((k) => k.id === input.sku?.id)) ||
+              input.locationIds.some((id) => !known.locations.some((k) => k.id === id)) ||
+              input.roomTypeIds.some((id) => !known.roomTypes.some((k) => k.id === id))
+            ) {
+              throw new ApiError(422, 'Add-on refers to an unknown SKU, location or room type', {
+                code: 'validation',
+              });
+            }
+            if (input.id && !addOns.some((a) => a.id === input.id)) {
+              throw new ApiError(404, 'Add-on not found', { code: 'not-found' });
+            }
+            const id = input.id ?? `addon-new-${nextSetupId++}`;
+            const saved = { ...structuredClone(normalizeAddOn(input)), id };
+            addOns = input.id ? addOns.map((a) => (a.id === id ? saved : a)) : [...addOns, saved];
+            return structuredClone(saved);
+          },
+          () => ({ ...structuredClone(normalizeAddOn(input)), id: input.id ?? 'addon-new' }),
+          o,
+        ),
+      delete: (id, o) =>
+        respond(
+          () => {
+            if (!addOns.some((a) => a.id === id)) {
+              throw new ApiError(404, 'Add-on not found', { code: 'not-found' });
+            }
+            addOns = addOns.filter((a) => a.id !== id);
           },
           () => undefined,
           o,
