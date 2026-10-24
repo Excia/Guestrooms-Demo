@@ -4,6 +4,7 @@ import {
   cancellationNotice,
   globalBookingMessage,
   isValidPolicyUrl,
+  normalizeOnlineBooking,
   showAddOnsPopup,
   validateOnlineBooking,
 } from './onlineBookingSettings';
@@ -27,6 +28,8 @@ describe('policy url', () => {
       'ftp://a.com/x',
       'https://a b.com',
       'https://localhost',
+      'https://user:pass@club.com/p',
+      'https://user@club.com/p',
     ]) {
       expect(isValidPolicyUrl(bad)).toBe(false);
     }
@@ -78,5 +81,16 @@ describe('what online booking reads', () => {
     expect(showAddOnsPopup(on, true)).toBe(true);
     expect(showAddOnsPopup(on, false)).toBe(false);
     expect(showAddOnsPopup({ ...on, showAddOnsPopup: false }, true)).toBe(false);
+  });
+});
+
+describe('trimmed policy url', () => {
+  it('validates the trimmed length and saves the trimmed value', () => {
+    const padded = `  https://club.com/${'a'.repeat(1980)}  `;
+    expect(padded.length).toBeGreaterThan(2000);
+    expect(validateOnlineBooking(base({ includePolicyLink: true, policyUrl: padded }))).toEqual({});
+    expect(normalizeOnlineBooking(base({ policyUrl: '  https://club.com/p ' })).policyUrl).toBe(
+      'https://club.com/p',
+    );
   });
 });

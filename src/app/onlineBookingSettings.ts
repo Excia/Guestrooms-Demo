@@ -20,13 +20,18 @@ export const ONLINE_BOOKING_FIELD_ORDER: readonly OnlineBookingField[] = [
 export const isOnlineBookingField = (field: string): field is OnlineBookingField =>
   field.startsWith('onlineBooking.');
 
-/** Every policy link must be an absolute http or https address with a host. */
+/** Every policy link must be an absolute http or https address with a host and no embedded credentials. */
 export function isValidPolicyUrl(value: string): boolean {
   const text = value.trim();
   if (text === '' || /\s/.test(text)) return false;
   try {
     const url = new URL(text);
-    return (url.protocol === 'https:' || url.protocol === 'http:') && url.hostname.includes('.');
+    return (
+      (url.protocol === 'https:' || url.protocol === 'http:') &&
+      url.hostname.includes('.') &&
+      url.username === '' &&
+      url.password === ''
+    );
   } catch {
     return false;
   }
@@ -46,18 +51,25 @@ export function validateOnlineBooking(
       `Use ${ONLINE_BOOKING_LIMITS.cancellationAgreement} characters or fewer.`;
   }
   if (s.includePolicyLink) {
-    if (s.policyUrl.trim() === '') {
+    const url = s.policyUrl.trim();
+    if (url === '') {
       errors['onlineBooking.policyUrl'] = 'Enter the address of the full policy.';
-    } else if (s.policyUrl.length > ONLINE_BOOKING_LIMITS.policyUrl) {
+    } else if (url.length > ONLINE_BOOKING_LIMITS.policyUrl) {
       errors['onlineBooking.policyUrl'] =
         `Use ${ONLINE_BOOKING_LIMITS.policyUrl} characters or fewer.`;
-    } else if (!isValidPolicyUrl(s.policyUrl)) {
+    } else if (!isValidPolicyUrl(url)) {
       errors['onlineBooking.policyUrl'] =
         'Enter a full web address, such as https://www.example.com/policy.';
     }
   }
   return errors;
 }
+
+/** The settings as stored: the policy link is saved without surrounding spaces. */
+export const normalizeOnlineBooking = (s: OnlineBookingSettings): OnlineBookingSettings => ({
+  ...s,
+  policyUrl: s.policyUrl.trim(),
+});
 
 /** What online booking shows with the search fields; null when the message is empty. */
 export function globalBookingMessage(s: OnlineBookingSettings): string | null {
