@@ -98,6 +98,10 @@ export interface ReservationExtras {
   privateNotes: string;
   /** Set when it differs from the booking guest (a created reservation with a reserver). */
   leadOccupant?: { name: string; memberNumber: string | null };
+  /** When each reservation room was checked in / out (ISO instants), keyed by reservation-room id (ticket 163). */
+  stamps?: Record<string, { checkedInAt?: string; checkedOutAt?: string }>;
+  /** A mock card was put on file through the placeholder Payment Methods dialog (ticket 163). */
+  paymentAdded?: boolean;
 }
 
 const room = (
@@ -454,6 +458,44 @@ const BLOCK_SEEDS: BlockSeed[] = [
     from: -3,
     to: 1,
     status: 'checked-out',
+  },
+  // PLACEHOLDERS (P-163-2): late arrivals that exercise check in on past dates. GR-50395 never
+  // arrived and its departure has passed (check in, then check out automatically); GR-50396 has two
+  // rooms, one already in house (the partial case: split the other room off).
+  {
+    id: 'rr-28',
+    res: 'rs-31',
+    conf: 'GR-50395',
+    guest: 'Dominic Whitlock',
+    type: 'guest',
+    room: 'rm-110',
+    from: -4,
+    to: -1,
+    status: 'nyci',
+  },
+  {
+    id: 'rr-31',
+    res: 'rs-32',
+    conf: 'GR-50396',
+    guest: 'Priya Venkataraman',
+    type: 'member',
+    room: 'rm-106',
+    from: -2,
+    to: 2,
+    status: 'checked-in',
+    rooms: 2,
+  },
+  {
+    id: 'rr-32',
+    res: 'rs-32',
+    conf: 'GR-50396',
+    guest: 'Priya Venkataraman',
+    type: 'member',
+    room: 'rm-C8',
+    from: -2,
+    to: 2,
+    status: 'nyci',
+    rooms: 2,
   },
   // PLACEHOLDER (P-LM-2): checked in and arriving today, so no night audit has posted its room
   // charges yet and Add Another Room is offered in its menu.

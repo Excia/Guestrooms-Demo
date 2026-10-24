@@ -206,6 +206,15 @@ export interface ReservationRoomDetail {
   /** Departure, exclusive. */
   departure: IsoDate;
   /**
+   * Housekeeping state of the assigned room (ticket 163): a `dirty` room cannot be checked in.
+   * Absent when the backend does not track it (PLACEHOLDER until ticket 6.4); the UI then lets the
+   * check in try and the backend decides.
+   */
+  housekeeping?: RoomHousekeepingStatus;
+  /** When the room was checked in / out: ISO-8601 instants, recorded by the backend (ticket 163). */
+  checkedInAt?: string;
+  checkedOutAt?: string;
+  /**
    * When the stay has several parts (ticket 2.3) `roomId` / `roomNumber` are the room of the first
    * night not yet stayed, `arrival` is where that run of nights starts and `departure` is the
    * departure of the whole stay (also when later nights are in other rooms). The two lists below are
@@ -284,6 +293,11 @@ export interface ReservationDetail {
    * reads them). Absent when the backend does not say: Add Another Room then stays offered.
    */
   folioCharges?: Pick<FolioCharge, 'type' | 'status'>[];
+  /**
+   * A payment method is on file (check in requires one, decision D-008). Absent when the backend
+   * does not say: the check in then goes ahead and the backend answers 409 `no-payment-method`.
+   */
+  paymentOnFile?: boolean;
 }
 
 /**
@@ -432,6 +446,91 @@ export interface UndoCheckInRequest {
   reservationRoomId?: string;
 }
 
+/** Why one room could not be checked in (ticket 163, #28). Carried per room, not as an HTTP error. */
+export type CheckInFailureCode =
+  | 'unassigned'
+  | 'room-not-ready'
+  | 'occupied'
+  | 'no-payment-method'
+  | 'not-checkable';
+
+/**
+ * Check in some rooms of one reservation, also when the arrival date has passed (ticket 163).
+ * `requestId` is the idempotency key (body and `Idempotency-Key` header); `version` is the
+ * `ReservationDetail.version` the user saw.
+ * - `pastDateConfirmed`: the user confirmed the "check in for a prior date" prompt. Required (409
+ *   `past-date-unconfirmed`) when any room's arrival is before the club's today.
+ * - `overrideCode`: needed (403 `override-required`; 403 `override-invalid` when wrong) when the user's
+ *   level is "arrival date only" and a room's arrival is before today. Validated by the backend
+ *   (ticket 127 builds the real PIN prompt; the mock accepts one fixed code).
+ * - `checkOutAfter`: also check out every checked-in room whose departure date and the club's
+ *   check-out time have passed (owner decision); ignored for a room whose departure has not passed.
+ * Check-in and check-out date and time are recorded. The nights before today are charged to the folio
+ * (`nightsPosted`); an automatic check out posts the remaining nights.
+ * Errors: 400 `invalid-id` / `invalid-query`; 403 `forbidden` (level "never"), `override-required`,
+ * `override-invalid`; 404 (reservation or room); 409 `stale`, `future-arrival`,
+ * `past-date-unconfirmed`, `idempotency-conflict`. A room that cannot be checked in does not fail
+ * the request: it comes back in `rooms` with its `failure`.
+ */
+export interface CheckInReservationRequest {
+  requestId: string;
+  reservationId: string;
+  version: string;
+  reservationRoomIds: string[];
+  pastDateConfirmed: boolean;
+  overrideCode?: string;
+  checkOutAfter: boolean;
+}
+
+export interface CheckInRoomOutcome {
+  reservationRoomId: string;
+  checkedIn: boolean;
+  failure?: CheckInFailureCode;
+  checkedInAt?: string;
+  /** Set when the room was checked out automatically. */
+  checkedOutAt?: string;
+}
+
+/** An integration (key card encoder, TMS) that could not complete; the check in itself stands. */
+export interface IntegrationError {
+  kind: 'key-card' | 'tms';
+  message: string;
+}
+
+export interface CheckInReservationResult {
+  /** The reservation as it is after the check in. */
+  reservation: ReservationDetail;
+  rooms: CheckInRoomOutcome[];
+  /** At least one room was checked out right after check in. */
+  autoCheckedOut: boolean;
+  /** Nights charged to the folio by this request (nights before today, plus the rest on an automatic check out). */
+  nightsPosted: number;
+  integrationErrors: IntegrationError[];
+}
+
+/** Which permission an override code is for (ticket 127 builds the real PIN prompt). */
+export interface VerifyOverrideCodeRequest {
+  permission: 'reservation.check-in.any-time';
+  code: string;
+}
+
+/** Split one room off a multi-room reservation into a reservation of its own; answers the new reservation. */
+export interface SplitRoomRequest {
+  requestId: string;
+  reservationId: string;
+  reservationRoomId: string;
+  version: string;
+}
+
+/**
+ * PLACEHOLDER until the Payment Methods dialog (ticket 3.9) and the gateway exist: puts a mock card
+ * on file for the reservation so the check in can continue.
+ */
+export interface AddPaymentMethodRequest {
+  requestId: string;
+  reservationId: string;
+}
+
 export interface ReservationsApi {
   list(query?: ReservationQuery, options?: RequestOptions): Promise<Page<Reservation>>;
   /** Rejects with an ApiError of status 404 when the id is unknown. */
@@ -452,6 +551,23 @@ export interface ReservationsApi {
   ): Promise<ReservationDetail>;
   /** Undo a check in (ticket 2.5). Idempotent on `requestId`. */
   undoCheckIn(request: UndoCheckInRequest, options?: RequestOptions): Promise<ReservationDetail>;
+  /** Check in rooms, also after the arrival date (ticket 163). Idempotent on `requestId`. */
+  checkIn(
+    request: CheckInReservationRequest,
+    options?: RequestOptions,
+  ): Promise<CheckInReservationResult>;
+  /** `{ valid }`; a wrong code is a normal answer, not an error. Ticket 127 replaces the mock rule. */
+  verifyOverrideCode(
+    request: VerifyOverrideCodeRequest,
+    options?: RequestOptions,
+  ): Promise<{ valid: boolean }>;
+  /** Split a room off its reservation (ticket 163). Idempotent on `requestId`. */
+  splitRoom(request: SplitRoomRequest, options?: RequestOptions): Promise<ReservationDetail>;
+  /** PLACEHOLDER (ticket 3.9). Idempotent on `requestId`. */
+  addPaymentMethod(
+    request: AddPaymentMethodRequest,
+    options?: RequestOptions,
+  ): Promise<ReservationDetail>;
 }
 
 // ---- folios (ticket 4.1; read and post only, settle/split/transfer arrive with their tickets) ----

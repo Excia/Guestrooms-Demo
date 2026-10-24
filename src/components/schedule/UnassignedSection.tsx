@@ -15,7 +15,6 @@ import {
   type UnassignedSection as Section,
 } from '../../app/unassignedRows';
 import { isActiveEvent, type ActiveEvent } from '../../app/scheduleBlockState';
-import { blockTooltipLines } from '../../app/scheduleBlockContent';
 import { isLinkedBlock } from '../../app/scheduleLinked';
 import ScheduleItemView from './ScheduleItemView';
 import { LABEL_VAR, LABEL_WIDTH, ROW_HEIGHT, ROW_VAR, rowTop } from './scheduleLayout';
@@ -154,8 +153,8 @@ export default function UnassignedSection({
                 days={days}
                 today={today}
                 highlighted={isActiveEvent(block, activeEvent)}
-                label={blockAriaLabel(block, undefined)}
-                tip={blockTooltipLines(block, `${block.guestName}, ${block.confirmationNumber}`)}
+                label={blockAriaLabel(block, undefined, undefined, days)}
+                tip={`${block.guestName}, ${block.confirmationNumber}`}
                 onActivate={() => (isLinkedBlock(block) ? onLinked() : onOpen(block))}
               />
             );

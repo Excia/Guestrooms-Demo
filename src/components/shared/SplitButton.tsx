@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
 import Menu from '@mui/material/Menu';
+import Tooltip from '@mui/material/Tooltip';
 import MenuItem from '@mui/material/MenuItem';
 import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
@@ -54,15 +55,19 @@ export default function SplitButton({
           }),
         }}
       >
-        <Button
-          onClick={onPrimary}
-          aria-disabled={primary.blocked ? true : undefined}
-          aria-describedby={primary.blocked ? `${id}-blocked` : undefined}
-          className={primary.blocked ? 'Mui-disabled' : undefined}
-          sx={{ flexGrow: 1, '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'default' } }}
-        >
-          {primary.label}
-        </Button>
+        {/* A blocked primary explains itself in a tooltip as well as the hidden description below
+            (`describeChild`: the tooltip describes the button, it does not rename it). */}
+        <Tooltip title={primary.blocked ?? ''} describeChild disableInteractive>
+          <Button
+            onClick={onPrimary}
+            aria-disabled={primary.blocked ? true : undefined}
+            aria-describedby={primary.blocked ? `${id}-blocked` : undefined}
+            className={primary.blocked ? 'Mui-disabled' : undefined}
+            sx={{ flexGrow: 1, '&.Mui-disabled': { pointerEvents: 'auto', cursor: 'default' } }}
+          >
+            {primary.label}
+          </Button>
+        </Tooltip>
         <Button
           size="small"
           aria-label={menuLabel}

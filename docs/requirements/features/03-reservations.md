@@ -153,7 +153,10 @@ Excia/Guestrooms-Demo#28. Figma: NEW FLOW check in after date 11653:10365; Check
   without a manual refresh. **Decision D-008:** with no payment method, open the Payment Methods
   dialog (3.9), add one, then continue check in. "Check in after date" follows the new-flow frame,
   which has no annotations.
-- **Open questions:** Q-28-1.
+- **Open questions:** Q-28-1 (answered 2026-10-24: legacy allows check in after the arrival date).
+- **Status (ticket 163, branch `feat/163-past-date-check-in`):** check in from the reservation panel (opened from the schedule), including past dates,
+  is built on the mock; the Reservation Hub (3.12) will reuse the same rule `decideCheckIn`. See
+  [entries/163-past-date-check-in.md](../entries/163-past-date-check-in.md).
 
 ## 3.6 Keycards
 

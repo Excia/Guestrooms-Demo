@@ -669,6 +669,7 @@ export default function Schedule({
         roomChangeBusy={roomChanging}
         detailRefresh={detailRefresh}
         onReservationChanged={retry}
+        onOpenReservation={(reservationId) => openPanel({ kind: 'details', reservationId })}
         onExited={restoreFocus}
         focusTitleFor={justCreated}
         side={panelSide}

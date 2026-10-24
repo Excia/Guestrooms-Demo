@@ -23,6 +23,14 @@ describe('initials', () => {
     expect(initials('  mary ann  van der berg ')).toBe('M.B.');
     expect(initials('Madonna')).toBe('M.');
     expect(initials('  ')).toBe('');
+    expect(initials('')).toBe('');
+  });
+  it('skips leading punctuation and keeps astral characters whole', () => {
+    expect(initials('(TBD) Guest')).toBe('T.G.');
+    expect(initials('"O\'Neil" Jones')).toBe('O.J.');
+    expect(initials('\u{1F600} Smith')).toBe('S.');
+    expect(initials('\u{1D4D0}na Lee')).toBe('\u{1D4D0}.L.');
+    expect(initials('--- ...')).toBe('');
   });
 });
 
@@ -54,7 +62,8 @@ describe('blockContent title', () => {
       'Ann Lee +1',
     );
     expect(blockContent({ ...none, blockName: 'Spring Retreat' }, 14).title).toBe('Spring Retreat');
-    expect(blockContent({ ...none, occupantCount: 2 }, 14).title).toBe('2');
+    expect(blockContent({ ...none, occupantCount: 2 }, 14).title).toBe('2 guests');
+    expect(blockContent({ ...none, occupantCount: 1 }, 14).title).toBe('1 guest');
     expect(blockContent(none, 14).title).toBe('');
   });
   it('is initials, with +N, in the month view for a stay under 2 nights, and hides the icon', () => {
@@ -99,9 +108,15 @@ describe('blockContent detail', () => {
     };
     expect(blockContent(open, 14).detail).toBe('Balance due: $123.45');
     expect(blockContent({ ...open, balanceCents: 0 }, 14).detail).toBe('Ann Lee');
-    expect(blockContent({ ...open, balanceCents: 0, occupantCount: 3 }, 14).detail).toBe(
-      'Ann Lee +2',
-    );
+    expect(blockContent({ ...open, balanceCents: -500 }, 14).detail).toBe('Ann Lee');
+    // The reserver carries no "+N" (that belongs to the lead) and is not repeated when it is the lead.
+    expect(blockContent({ ...open, balanceCents: 0, occupantCount: 3 }, 14).detail).toBe('Ann Lee');
+    expect(
+      blockContent(
+        { ...open, balanceCents: 0, occupantCount: 4, reserverName: 'Daniel Whitfield' },
+        14,
+      ).detail,
+    ).toBe('');
     expect(blockContent({ ...open, balanceCents: 0, reserverName: undefined }, 14).detail).toBe('');
   });
   it('does not show the balance before check in', () => {
@@ -160,5 +175,20 @@ describe('blockTooltipLines', () => {
     expect(
       blockTooltipLines({ ...base, roomId: '', roomTypeName: 'Suite', guestType: 'guest' }, 's'),
     ).toEqual(['s', 'Non-member guest', 'Room type: Suite']);
+  });
+});
+
+describe('placeholder and blank names', () => {
+  it('uses the first named occupant when the lead is blank or TBD', () => {
+    const src = { ...base, guestName: 'TBD', occupants: [' ', 'Eve Whitfield'], occupantCount: 2 };
+    expect(blockContent(src, 14).title).toBe('Eve Whitfield +1');
+    expect(blockContent({ ...src, guestName: '' }, 14).title).toBe('Eve Whitfield +1');
+  });
+  it('lists named occupants without blanks, the rest as TBD', () => {
+    const lines = blockTooltipLines(
+      { ...base, occupants: ['Daniel Whitfield', '  ', ''], occupantCount: 3 },
+      's',
+    );
+    expect(lines).toContain('Occupants: Daniel Whitfield, TBD, TBD');
   });
 });

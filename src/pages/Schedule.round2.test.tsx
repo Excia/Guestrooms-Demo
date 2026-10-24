@@ -427,7 +427,9 @@ describe('creating with TBD, Unassigned and a reserver', () => {
     const created = await panel(/Reservation #GR-7000\d/);
     expect(await within(created).findByText('Unassigned')).toBeInTheDocument();
     expect(
-      within(created).getByText(/Shown in the Unassigned section of the schedule until a room is assigned/),
+      within(created).getByText(
+        /Shown in the Unassigned section of the schedule until a room is assigned/,
+      ),
     ).toBeInTheDocument();
     expect(within(created).getAllByText('TBD').length).toBeGreaterThan(0);
     expect(await screen.findAllByText(/created without a room/)).not.toHaveLength(0);
@@ -673,20 +675,23 @@ describe('guest fields', () => {
 });
 
 describe('Check In for an unassigned reservation', () => {
-  it('is aria-disabled with the reason; a click announces it', async () => {
+  it('opens the check in panel, which says to assign the room first and offers Assign now', async () => {
     const user = await loaded();
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
     await user.click(within(dialog).getByRole('button', { name: 'Create New Reservation' }));
     const created = await panel(/Reservation #GR-7000\d/);
-    const checkIn = await within(created).findByRole('button', { name: 'Check In' });
-    expect(checkIn).toHaveAttribute('aria-disabled', 'true');
-    expect(checkIn).toHaveAccessibleDescription('Assign a room before checking in.');
-    await user.click(checkIn);
+    await user.click(await within(created).findByRole('button', { name: 'Check In' }));
+    const checkIn = await panel('Check in');
     expect(
-      await within(created).findByText('Assign a room before checking in.', {
-        selector: '.MuiAlert-message',
-      }),
+      within(checkIn).getByText('You must assign this room before check in.'),
+    ).toBeInTheDocument();
+    expect(within(checkIn).getByRole('button', { name: 'Complete check in' })).toBeDisabled();
+    await user.click(within(checkIn).getByRole('button', { name: 'Assign now' }));
+    expect(
+      await within(await panel(/Reservation #GR-7000\d/)).findByText(
+        /Assigning a room arrives with the Reservation Hub/,
+      ),
     ).toBeInTheDocument();
   });
 
