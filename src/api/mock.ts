@@ -45,6 +45,9 @@ import {
   changeRoomDuringStay,
   createScheduleState,
   moveDates,
+  createClosure,
+  updateClosure,
+  deleteClosure,
   moveRoom,
   setHousekeeping,
 } from './scheduleData';
@@ -76,6 +79,9 @@ import {
   assertMemberQuery,
   assertEarlyLateRequest,
   assertMoveDatesRequest,
+  assertSaveClosureRequest,
+  assertUpdateClosureRequest,
+  assertDeleteClosureRequest,
   assertMoveRoomRequest,
   assertSetHousekeepingRequest,
   assertPostChargeRequest,
@@ -526,6 +532,51 @@ export function createMockClient({
               unassigned: [],
               holds: [],
             };
+          },
+          o,
+        ),
+      createClosure: (request, o) =>
+        respond(
+          () => {
+            assertSaveClosureRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change closures', { code: 'forbidden' });
+            }
+            return replayable(request, () => createClosure(schedule, request));
+          },
+          () => {
+            assertSaveClosureRequest(request);
+            throw new ApiError(404, 'Room not found');
+          },
+          o,
+        ),
+      updateClosure: (request, o) =>
+        respond(
+          () => {
+            assertUpdateClosureRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change closures', { code: 'forbidden' });
+            }
+            return replayable(request, () => updateClosure(schedule, request));
+          },
+          () => {
+            assertUpdateClosureRequest(request);
+            throw new ApiError(404, 'Closure not found');
+          },
+          o,
+        ),
+      deleteClosure: (request, o) =>
+        respond(
+          () => {
+            assertDeleteClosureRequest(request);
+            if (!canEditReservations()) {
+              throw new ApiError(403, 'You may not change closures', { code: 'forbidden' });
+            }
+            return replayable(request, () => deleteClosure(schedule, request));
+          },
+          () => {
+            assertDeleteClosureRequest(request);
+            throw new ApiError(404, 'Closure not found');
           },
           o,
         ),

@@ -13,6 +13,9 @@ export interface RoomAutocompleteProps {
   unavailable?: boolean;
   inputRef?: React.Ref<HTMLInputElement>;
   disabled?: boolean;
+  /** False for the closure form: a closure needs a room (no Unassigned entry). Default true. */
+  allowUnassigned?: boolean;
+  required?: boolean;
 }
 
 /** The first entry of the list: puts the room back to Unassigned (also available as the Clear button). */
@@ -41,9 +44,11 @@ export default function RoomAutocomplete({
   unavailable,
   inputRef,
   disabled,
+  allowUnassigned = true,
+  required,
 }: RoomAutocompleteProps) {
   const selected = options.find((o) => o.id === value) ?? null;
-  const withUnassigned = [UNASSIGNED_OPTION, ...options];
+  const withUnassigned = allowUnassigned ? [UNASSIGNED_OPTION, ...options] : [...options];
   return (
     <Autocomplete<RoomOption>
       options={withUnassigned}
@@ -69,7 +74,9 @@ export default function RoomAutocomplete({
           inputValue,
         );
         const words = inputValue.trim().toLowerCase();
-        return words === '' || 'unassigned'.includes(words) ? [UNASSIGNED_OPTION, ...rooms] : rooms;
+        return allowUnassigned && (words === '' || 'unassigned'.includes(words))
+          ? [UNASSIGNED_OPTION, ...rooms]
+          : rooms;
       }}
       loading={loading}
       loadingText="Loading rooms…"
@@ -85,6 +92,7 @@ export default function RoomAutocomplete({
         <TextField
           {...params}
           label="Room"
+          required={required}
           error={Boolean(error)}
           helperText={unavailable ? 'Rooms could not be loaded.' : error}
           slotProps={{
@@ -92,7 +100,7 @@ export default function RoomAutocomplete({
             inputLabel: { ...params.slotProps?.inputLabel, shrink: true },
           }}
           inputRef={inputRef}
-          placeholder="Unassigned"
+          placeholder={allowUnassigned ? 'Unassigned' : 'Choose a room'}
         />
       )}
     />

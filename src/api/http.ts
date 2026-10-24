@@ -31,6 +31,10 @@ import type {
   RequestOptions,
   RoomChangeRule,
   MoveDatesRequest,
+  SaveClosureRequest,
+  UpdateClosureRequest,
+  DeleteClosureRequest,
+  ScheduleClosure,
   MoveRoomRequest,
   ScheduleBlock,
   ScheduleHold,
@@ -73,6 +77,9 @@ import {
   assertHoldId,
   assertHoldSlotRequest,
   assertMoveDatesRequest,
+  assertSaveClosureRequest,
+  assertUpdateClosureRequest,
+  assertDeleteClosureRequest,
   assertMoveRoomRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
@@ -916,6 +923,29 @@ const parseHold =
     return body;
   };
 
+// A saved closure comes back as the closure the request described.
+const sameClosure = (c: ScheduleClosure, r: SaveClosureRequest) =>
+  c.roomId === r.roomId &&
+  c.startDate === r.startDate &&
+  c.endDate === r.endDate &&
+  c.reason === r.description;
+
+const parseClosure =
+  (expect: (closure: ScheduleClosure) => boolean) =>
+  (body: unknown, status: number): ScheduleClosure => {
+    const ok =
+      isObject(body) &&
+      body.kind === 'closure' &&
+      isString(body.id) &&
+      body.id !== '' &&
+      isString(body.roomId) &&
+      isDated(body) &&
+      isString(body.reason) &&
+      typeof body.endMarker === 'boolean';
+    if (!ok || !expect(body as unknown as ScheduleClosure)) throw invalid(status, 'closure');
+    return body as unknown as ScheduleClosure;
+  };
+
 // A move answers with the changed blocks. The moved block must be where the request put it. For
 // 'all-rooms' the answer must carry every room of the reservation, consistently counted; for a
 // split ('this-room' with new dates) the moved room must have left the reservation (roomCount 1).
@@ -1313,6 +1343,39 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             { startDate: q.startDate, days: String(q.days) },
             o,
             parseSchedule(q),
+          );
+        }),
+      createClosure: (r: SaveClosureRequest, o) =>
+        Promise.resolve().then(() => {
+          assertSaveClosureRequest(r);
+          return request(
+            '/schedule/closures',
+            {},
+            o,
+            parseClosure((c) => sameClosure(c, r)),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      updateClosure: (r: UpdateClosureRequest, o) =>
+        Promise.resolve().then(() => {
+          assertUpdateClosureRequest(r);
+          return request(
+            `/schedule/closures/${encodeURIComponent(r.closureId)}`,
+            {},
+            o,
+            parseClosure((c) => c.id === r.closureId && sameClosure(c, r)),
+            { method: 'PUT', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      deleteClosure: (r: DeleteClosureRequest, o) =>
+        Promise.resolve().then(() => {
+          assertDeleteClosureRequest(r);
+          return request(
+            `/schedule/closures/${encodeURIComponent(r.closureId)}`,
+            {},
+            o,
+            () => undefined,
+            { method: 'DELETE', headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
       moveRoom: (r: MoveRoomRequest, o) =>

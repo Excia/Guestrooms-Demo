@@ -138,14 +138,14 @@ describe('clicking an empty date on the schedule', () => {
     expect(within(dialog).queryByText(/has passed/)).not.toBeInTheDocument();
   });
 
-  it('a closure cell says the room is closed and opens nothing', async () => {
+  it('a closure block opens the Closure details panel', async () => {
     const user = await loaded();
     mockGeometry();
     await user.click(
       screen.getByRole('gridcell', { name: /Closure, Reserved: Fixed Loss, Room 208/ }),
     );
-    expect(liveText()).toMatch(/Room closed/);
-    expect(url()).toBe('/schedule');
+    expect(url()).toBe('/schedule?closure=cl-1');
+    await panel('Room 208 Closure');
   });
 
   it('the column of an existing reservation and the room header open nothing', async () => {
@@ -467,7 +467,7 @@ describe('creating with TBD, Unassigned and a reserver', () => {
 });
 
 describe('New Room Closure tab, close button and panel side', () => {
-  it('the closure tab is selectable by mouse and keyboard, shows a placeholder, keeps the form', async () => {
+  it('the closure tab is selectable by mouse and keyboard, shows the closure form, keeps the form', async () => {
     const user = await loaded();
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
     const dialog = await panel('New Reservation');
@@ -477,7 +477,8 @@ describe('New Room Closure tab, close button and panel side', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Increase adults' }));
     await user.click(closureTab);
     expect(closureTab).toHaveAttribute('aria-selected', 'true');
-    expect(within(dialog).getByText('Room closures arrive with Room Blocks.')).toBeVisible();
+    expect(within(dialog).getByRole('textbox', { name: 'Description' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Save Closure' })).toBeVisible();
     expect(within(dialog).getByRole('heading', { name: 'New Room Closure' })).toBeInTheDocument();
     expect(
       within(dialog).queryByRole('button', { name: 'Create New Reservation' }),

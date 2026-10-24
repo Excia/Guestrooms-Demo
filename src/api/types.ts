@@ -1384,8 +1384,38 @@ export interface SetHousekeepingRequest {
   version?: string;
 }
 
+/**
+ * Create a room closure. Dates are half-open like reservations (`endDate` is the day the room is
+ * free again). `description` may be empty (at most 50 characters). `requestId` is the idempotency
+ * key (body and `Idempotency-Key` header). Answers with the new closure. Errors: 400
+ * `invalid-id` / `invalid-query`; 404 (unknown room); 422 `closure-conflict` (a reservation or
+ * another closure is on the room on those nights; `details.roomId` names the room);
+ * 409 `idempotency-conflict`.
+ */
+export interface SaveClosureRequest {
+  roomId: string;
+  startDate: IsoDate;
+  endDate: IsoDate;
+  description: string;
+  requestId: string;
+}
+
+/** Change a closure (room, dates, description); the same rules and errors as create, and 404 for an unknown closure. */
+export interface UpdateClosureRequest extends SaveClosureRequest {
+  closureId: string;
+}
+
+/** Remove a closure; the room is open again. Errors: 400 `invalid-id`; 404 (unknown closure). */
+export interface DeleteClosureRequest {
+  closureId: string;
+  requestId: string;
+}
+
 export interface ScheduleApi {
   get(query: ScheduleQuery, options?: RequestOptions): Promise<ScheduleData>;
+  createClosure(request: SaveClosureRequest, options?: RequestOptions): Promise<ScheduleClosure>;
+  updateClosure(request: UpdateClosureRequest, options?: RequestOptions): Promise<ScheduleClosure>;
+  deleteClosure(request: DeleteClosureRequest, options?: RequestOptions): Promise<void>;
   setHousekeeping(
     request: SetHousekeepingRequest,
     options?: RequestOptions,
