@@ -39,7 +39,7 @@ import { formatPanelDate } from '../../app/newReservation';
 import { folioPath } from '../../app/routes';
 import {
   cancelConfirmation,
-  canUndoCheckIn,
+  canUndoRoomCheckIn,
   registrationCardUrl,
   reservationMenu,
   type MenuActionId,
@@ -180,7 +180,7 @@ function RoomSelector({
   const unassigned = room.roomNumber === null && room.status === 'nyci';
   // "Remove after NA run": once the night audit has run for the check-in date, Undo Check In gives
   // way to Check Out Room (Figma "CheckedIn-NArun").
-  const undoable = canUndoCheckIn(room, lastAuditedDate);
+  const undoable = canUndoRoomCheckIn(rooms, room, lastAuditedDate);
   return (
     <Box sx={{ bgcolor: 'background.default', px: 2.5, py: 1.5, mx: -2.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -389,6 +389,7 @@ export default function ReservationDetails({
       focusTitle={focusTitle}
       closeButton={closeButton}
       onReloaded={state.replace}
+      onPatched={state.patch}
       onEarlyLateSaved={onEarlyLateSaved}
       today={today}
       onChangeRoom={onChangeRoom}
@@ -406,6 +407,7 @@ function Loaded({
   focusTitle,
   closeButton,
   onReloaded,
+  onPatched,
   onEarlyLateSaved,
   today,
   onChangeRoom,
@@ -419,6 +421,8 @@ function Loaded({
   focusTitle?: boolean;
   closeButton: React.ReactNode;
   onReloaded: (d: ReservationDetail) => void;
+  /** Fields saved without a reload (Early/Late and the new version) join the loaded detail. */
+  onPatched: (changes: Partial<ReservationDetail>) => void;
   onEarlyLateSaved: ReservationDetailsProps['onEarlyLateSaved'];
   today?: IsoDate;
   onChangeRoom?: ReservationDetailsProps['onChangeRoom'];
@@ -432,7 +436,11 @@ function Loaded({
   const editable = isEditable(detail.status);
   const early = useEarlyLate({
     detail,
-    onSaved: (values) => onEarlyLateSaved(detail.id, values),
+    onSaved: (values, version) => {
+      onEarlyLateSaved(detail.id, values);
+      // Keep the version on screen current, so Cancel and Undo send the revision the user sees.
+      if (version) onPatched({ ...values, version });
+    },
     onReloaded,
   });
   // The room shown is chosen by its reservation-room id, not its position: after a reload (a room

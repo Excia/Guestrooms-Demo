@@ -8,6 +8,8 @@ export interface MenuFailure {
   message: string;
   /** The reservation may have changed (or the outcome is unknown): load it again. */
   refetch: boolean;
+  /** The request may have been applied (no answer, 408 or 5xx): a retry reuses its idempotency key. */
+  outcomeUnknown?: boolean;
 }
 
 export const menuSuccessMessage = (kind: MenuMutation, confirmationNumber: string) =>
@@ -48,7 +50,8 @@ export function menuFailure(kind: MenuMutation, error: unknown): MenuFailure {
     return { message: `Could not ${what}.`, refetch: false };
   }
   return {
-    message: `Could not confirm whether the reservation was changed. It was reloaded.`,
+    message: 'Could not confirm whether the reservation was changed. It was reloaded.',
     refetch: true,
+    outcomeUnknown: true,
   };
 }

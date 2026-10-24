@@ -24,6 +24,17 @@ describe('menuFailure', () => {
     expect(menuFailure('cancel', new Error('offline')).refetch).toBe(true);
     expect(menuFailure('cancel', err(408)).refetch).toBe(true);
   });
+  it('audit-closed, not-cancellable and not-checked-in reload the reservation', () => {
+    expect(menuFailure('undo-check-in', err(409, 'audit-closed')).refetch).toBe(true);
+    expect(menuFailure('cancel', err(409, 'not-cancellable')).refetch).toBe(true);
+    expect(menuFailure('undo-check-in', err(409, 'not-checked-in')).refetch).toBe(true);
+  });
+  it('marks only an unknown outcome (408, 5xx, no answer)', () => {
+    expect(menuFailure('cancel', err(408)).outcomeUnknown).toBe(true);
+    expect(menuFailure('cancel', err(503)).outcomeUnknown).toBe(true);
+    expect(menuFailure('cancel', new Error('offline')).outcomeUnknown).toBe(true);
+    expect(menuFailure('cancel', err(409, 'stale')).outcomeUnknown).toBeUndefined();
+  });
   it('success copy', () => {
     expect(menuSuccessMessage('cancel', 'GR-1')).toBe('Reservation #GR-1 cancelled.');
   });

@@ -79,6 +79,7 @@ describe('reservation menu by state', () => {
     const { user, dialog } = await open('/schedule?res=rs-2', after(), /Reservation #GR-50240/);
     expect(await menuItems(user, dialog)).toEqual([
       'Edit Reservation',
+      'Add Another Room',
       'Print Registration Card(s)',
       'Jump to Folio',
     ]);
@@ -137,6 +138,24 @@ describe('Undo Check In', () => {
     expect(
       await within(first.dialog).findByRole('button', { name: 'Undo Check In' }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('room selector Undo Check In', () => {
+  it('is hidden for a checked-in room once another room has checked out', async () => {
+    const client = before();
+    const real = client.reservations.getDetail.bind(client.reservations);
+    vi.spyOn(client.reservations, 'getDetail').mockImplementation(async (id, o) => {
+      const d = await real(id, o);
+      return id === 'rs-8'
+        ? { ...d, rooms: d.rooms.map((r, i) => (i === 1 ? { ...r, status: 'checked-out' } : r)) }
+        : d;
+    });
+    const { dialog } = await open('/schedule?res=rs-8&rr=rr-10', client, /Reservation #GR-50290/);
+    expect(
+      await within(dialog).findByRole('button', { name: 'Check Out Room' }),
+    ).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Undo Check In' })).not.toBeInTheDocument();
   });
 });
 
