@@ -24,11 +24,12 @@ import type {
   ScheduleData,
   ScheduleMoveResult,
   ScheduleQuery,
+  SetHousekeepingRequest,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
 import { expectedLeadOccupantName } from './createRules';
-import { ApiError } from './types';
+import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
   assertCreateMemberRequest,
   assertCreateReservationRequest,
@@ -40,6 +41,7 @@ import {
   assertQuickStatsQuery,
   assertResourceId,
   assertScheduleQuery,
+  assertSetHousekeepingRequest,
 } from './validation';
 
 export interface HttpClientOptions {
@@ -455,6 +457,7 @@ const parseQuickStats =
 
 const BLOCK_STATUSES: readonly string[] = ['confirmed', 'nyci', 'checked-in', 'checked-out'];
 const GUEST_TYPES: readonly string[] = ['guest', 'member', 'owner', 'none'];
+const HOUSEKEEPING_STATUSES: readonly string[] = [...SETTABLE_HOUSEKEEPING_STATUSES, 'nyci'];
 const isDated = (v: Record<string, unknown>) =>
   isString(v.startDate) && isString(v.endDate) && v.startDate < v.endDate;
 
@@ -476,12 +479,15 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     v.roomCount >= 1 &&
     typeof v.roomTypeLocked === 'boolean' &&
     isString(v.version) &&
-    v.version !== ''
+    v.version !== '' &&
+    (v.housekeeping === undefined ||
+      (isString(v.housekeeping) && HOUSEKEEPING_STATUSES.includes(v.housekeeping))) &&
+    (v.housekeepingNotes === undefined || isString(v.housekeepingNotes))
   );
 }
 
 // The answer must be for the query that was sent, and every block and closure must sit in a listed
-// room (the grid indexes by room id).
+// room (the grid indexes by room id). Unassigned blocks have no room, so they skip that check.
 const parseSchedule =
   (query: ScheduleQuery) =>
   (body: unknown, status: number): ScheduleData => {
@@ -502,6 +508,7 @@ const parseSchedule =
           isString(r.roomTypeId),
       ) &&
       listOf(body.blocks, isScheduleBlock) &&
+      listOf(body.unassigned, isScheduleBlock) &&
       listOf(
         body.closures,
         (c) =>
@@ -520,7 +527,11 @@ const parseSchedule =
     const unique = (ids: string[]) => new Set(ids).size === ids.length;
     if (
       !unique(data.rooms.map((r) => r.id)) ||
-      !unique([...data.blocks.map((b) => b.id), ...data.closures.map((c) => c.id)]) ||
+      !unique([
+          ...data.blocks.map((b) => b.id),
+          ...data.unassigned.map((b) => b.id),
+          ...data.closures.map((c) => c.id),
+        ]) ||
       !data.blocks.every((b) => roomIds.has(b.roomId)) ||
       !data.closures.every((c) => roomIds.has(c.roomId))
     ) {
@@ -762,6 +773,22 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             {},
             o,
             parseMove(r.reservationRoomId, (b) => b.roomId === r.toRoomId),
+            { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
+          );
+        }),
+      setHousekeeping: (r: SetHousekeepingRequest, o) =>
+        Promise.resolve().then(() => {
+          assertSetHousekeepingRequest(r);
+          return request(
+            '/schedule/housekeeping',
+            {},
+            o,
+            parseMove(
+              r.reservationRoomId,
+              (b) =>
+                b.housekeeping === r.status &&
+                (r.notes === undefined || (b.housekeepingNotes ?? '') === r.notes),
+            ),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),

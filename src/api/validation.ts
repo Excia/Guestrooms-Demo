@@ -9,8 +9,9 @@ import type {
   PostChargeRequest,
   QuickStatsQuery,
   ScheduleQuery,
+  SetHousekeepingRequest,
 } from './types';
-import { SCHEDULE_DAYS } from './types';
+import { SCHEDULE_DAYS, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import { ApiError } from './types';
 
 /** Ids go into URL paths; "." and ".." would escape the resource path even after encoding. */
@@ -79,6 +80,22 @@ export function assertMoveDatesRequest(request: MoveDatesRequest): void {
     (request.scope !== 'all-rooms' && request.scope !== 'this-room')
   ) {
     throw invalidQuery('move dates request');
+  }
+}
+
+export function assertSetHousekeepingRequest(request: SetHousekeepingRequest): void {
+  assertRequestId(request.requestId);
+  assertResourceId(request.reservationRoomId, 'reservation room');
+  if (
+    !SETTABLE_HOUSEKEEPING_STATUSES.includes(request.status) ||
+    (request.notes !== undefined &&
+      (typeof request.notes !== 'string' || request.notes.length > MAX_NOTES_LENGTH)) ||
+    (request.version !== undefined &&
+      (typeof request.version !== 'string' ||
+        request.version === '' ||
+        request.version.length > 128))
+  ) {
+    throw invalidQuery('housekeeping request');
   }
 }
 

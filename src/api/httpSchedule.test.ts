@@ -64,6 +64,22 @@ describe('http schedule.get', () => {
       });
     }
   });
+  it('accepts unassigned blocks without a listed room, and requires a valid list', async () => {
+    const d = good();
+    expect(d.unassigned.length).toBeGreaterThan(0);
+    expect(d.unassigned.every((b) => b.roomId === '')).toBe(true);
+    const ok = await make(vi.fn().mockResolvedValue(json(d))).schedule.get(query);
+    expect(ok.unassigned).toHaveLength(d.unassigned.length);
+    const without: Record<string, unknown> = { ...d };
+    delete without.unassigned;
+    const dupe = { ...d, unassigned: [...d.unassigned, d.unassigned[0]] };
+    const bad = { ...d, unassigned: [{ ...d.unassigned[0], status: 'pending' }] };
+    for (const body of [without, { ...d, unassigned: 'x' }, dupe, bad]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).schedule.get(query),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
   it('passes server errors through', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ message: 'boom' }, 500));
     await expect(make(fetchMock).schedule.get(query)).rejects.toMatchObject({
@@ -250,5 +266,85 @@ describe('http schedule.get rejects duplicate ids', () => {
         make(vi.fn().mockResolvedValue(json(body))).schedule.get(query),
       ).rejects.toMatchObject({ code: 'invalid-response' });
     }
+  });
+});
+
+describe('http schedule.setHousekeeping', () => {
+  const block = good().blocks[0];
+  const req = {
+    reservationRoomId: block.id,
+    status: 'cleaned' as const,
+    notes: 'Spotless',
+    version: block.version,
+    requestId: 'req-hk-12345',
+  };
+  const answer = { blocks: [{ ...block, housekeeping: 'cleaned', housekeepingNotes: 'Spotless' }] };
+
+  it('POSTs JSON with the idempotency key and returns the changed block', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json(answer));
+    const res = await make(fetchMock).schedule.setHousekeeping(req);
+    expect(res.blocks[0]).toMatchObject({ housekeeping: 'cleaned', housekeepingNotes: 'Spotless' });
+    const [url, init] = fetchMock.mock.calls[0] as [URL, RequestInit];
+    expect(url.pathname).toBe('/v1/schedule/housekeeping');
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual(req);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBe('application/json');
+    expect(headers['Idempotency-Key']).toBe('req-hk-12345');
+  });
+  it('accepts a status-only request whatever note the block has', async () => {
+    const { notes: _notes, ...statusOnly } = req;
+    void _notes;
+    const res = await make(vi.fn().mockResolvedValue(json(answer))).schedule.setHousekeeping(
+      statusOnly,
+    );
+    expect(res.blocks).toHaveLength(1);
+  });
+  it('rejects an answer that does not carry the requested status or note', async () => {
+    for (const blocks of [
+      [{ ...block, housekeeping: 'ready', housekeepingNotes: 'Spotless' }],
+      [{ ...block, housekeeping: 'cleaned', housekeepingNotes: 'Other' }],
+      [{ ...block, id: 'someone-else', housekeeping: 'cleaned', housekeepingNotes: 'Spotless' }],
+      [],
+    ]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json({ blocks }))).schedule.setHousekeeping(req),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
+  it('rejects an answer with an unknown housekeeping status', async () => {
+    const bad = { blocks: [{ ...block, housekeeping: 'dusty' }] };
+    await expect(
+      make(vi.fn().mockResolvedValue(json(bad))).schedule.setHousekeeping({
+        ...req,
+        notes: undefined,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+  it('validates the request before fetching, and never sends nyci', async () => {
+    const fetchMock = vi.fn();
+    const c = make(fetchMock);
+    await expect(
+      c.schedule.setHousekeeping({ ...req, reservationRoomId: '..' }),
+    ).rejects.toMatchObject({ code: 'invalid-id' });
+    for (const bad of [
+      { status: 'nyci' },
+      { status: 'dusty' },
+      { requestId: 'short' },
+      { version: '' },
+      { notes: 'x'.repeat(2001) },
+    ]) {
+      await expect(c.schedule.setHousekeeping({ ...req, ...bad } as never)).rejects.toMatchObject({
+        code: 'invalid-query',
+      });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it('surfaces a 409 stale with its code', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ message: 'changed', code: 'stale' }, 409));
+    await expect(make(fetchMock).schedule.setHousekeeping(req)).rejects.toMatchObject({
+      status: 409,
+      code: 'stale',
+    });
   });
 });

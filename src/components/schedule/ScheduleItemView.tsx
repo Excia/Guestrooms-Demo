@@ -5,9 +5,10 @@ import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { memo, type PointerEventHandler } from 'react';
-import type { ScheduleBlock, ScheduleClosure } from '../../api';
+import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
 import type { IsoDate } from '../../lib/dates';
-import { blockMarkers, blockSpan } from '../../app/scheduleGrid';
+import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
+import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
 import {
@@ -33,6 +34,13 @@ export interface ScheduleItemViewProps {
   /** The keyboard cursor is on this block. */
   active?: boolean;
   onPointerDown?: PointerEventHandler<HTMLElement>;
+  /**
+   * A block that cannot be dragged (Unassigned section): it is a tab stop and Enter or Space call
+   * this, as a click does. The grid's cursor model only covers room rows.
+   */
+  onActivate?: () => void;
+  /** Saves a housekeeping change from the "H" chip; absent when the user may not change it. */
+  onSetHousekeeping?: SetHousekeeping;
 }
 
 function fill(item: ScheduleItem, today: IsoDate, t: Theme): string {
@@ -45,6 +53,22 @@ function fill(item: ScheduleItem, today: IsoDate, t: Theme): string {
       return c.checkedOut;
     default:
       return c.nyci;
+  }
+}
+
+function housekeepingFill(status: HousekeepingStatus, t: Theme): string {
+  const c = t.palette.schedule;
+  switch (status) {
+    case 'needs-cleaning':
+      return c.hkNeedsCleaning;
+    case 'cleaned':
+      return c.hkCleaned;
+    case 'ready':
+      return c.hkReady;
+    case 'needs-maintenance':
+      return c.hkNeedsMaintenance;
+    default:
+      return c.hkNotCheckedOut;
   }
 }
 
@@ -78,6 +102,8 @@ export default memo(function ScheduleItemView({
   dragging = false,
   active,
   onPointerDown,
+  onActivate,
+  onSetHousekeeping,
 }: ScheduleItemViewProps) {
   const theme = useTheme();
   const span = blockSpan(layout, days);
@@ -103,6 +129,10 @@ export default memo(function ScheduleItemView({
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
   const settled = !isClosure && (block.status === 'checked-in' || block.status === 'checked-out');
+  const hk =
+    isClosure || ghost
+      ? null
+      : housekeepingChip(block.housekeeping, layout, days, Boolean(block.housekeepingNotes));
   const markers = isClosure ? { left: false, right: false } : blockMarkers(block, layout);
   return (
     <Box
@@ -114,6 +144,18 @@ export default memo(function ScheduleItemView({
       data-item-id={item.id}
       data-kind={item.kind}
       data-active={active || undefined}
+      data-unassigned={onActivate ? 'true' : undefined}
+      tabIndex={onActivate ? 0 : undefined}
+      onKeyDown={
+        onActivate
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onActivate();
+              }
+            }
+          : undefined
+      }
       // Geometry is inline (not sx): it differs for every block and would mint a CSS class each.
       style={{
         left: dateAreaX(span.start),
@@ -126,12 +168,13 @@ export default memo(function ScheduleItemView({
         height: t.spacing(BLOCK_HEIGHT),
         marginLeft: t.spacing(0.125),
         boxSizing: 'border-box',
-        cursor: ghost ? 'grabbing' : 'grab',
+        cursor: ghost ? 'grabbing' : onActivate ? 'pointer' : 'grab',
         touchAction: 'auto',
         opacity: dragging ? 0.4 : ghost ? 0.9 : 1,
         zIndex: ghost ? 20 : 2,
         pointerEvents: ghost ? 'none' : 'auto',
         '&:hover > [data-body]': ghost ? {} : { filter: 'brightness(0.97)' },
+        '&:focus-visible': { outline: `2px solid ${t.palette.primary.main}`, outlineOffset: 2 },
       })}
     >
       <Box
@@ -201,6 +244,14 @@ export default memo(function ScheduleItemView({
         {markers.left ? marker('left') : null}
         {markers.right ? marker('right') : null}
       </Box>
+      {hk && block.housekeeping ? (
+        <HousekeepingChip
+          block={block}
+          chip={hk}
+          fill={housekeepingFill(block.housekeeping, theme)}
+          onSave={onSetHousekeeping}
+        />
+      ) : null}
     </Box>
   );
 });

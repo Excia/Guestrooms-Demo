@@ -20,7 +20,16 @@ import {
 } from '../app/schedule';
 import { applyPanel, closePanel, parsePanel } from '../app/panelUrl';
 import type { EarlyLateValues } from '../app/earlyLate';
-import { applyMoves, mergeChangedBlocks, moveFailure, revertMoves } from '../app/scheduleGrid';
+import {
+  applyHousekeeping,
+  applyMoves,
+  housekeepingFailure,
+  mergeChangedBlocks,
+  moveFailure,
+  revertMoves,
+  type HousekeepingPatch,
+} from '../app/scheduleGrid';
+import { RESERVATION_EDIT_PERMISSION, usePermissions } from '../app/permissions';
 import { toMoveDatesRequest, toMoveRoomRequest, type DropResult } from '../app/scheduleDrag';
 import {
   activeFilterCount,
@@ -219,6 +228,42 @@ export default function Schedule({
     [setBlocks],
   );
 
+  // Housekeeping status and notes from the schedule's "H" chip: shown at once, put back (with a
+  // message) if the save fails. Needs the same permission as editing a reservation.
+  const canEditHousekeeping = usePermissions().can(RESERVATION_EDIT_PERMISSION);
+  const setHousekeeping = useCallback(
+    async (block: ScheduleBlock, patch: HousekeepingPatch): Promise<boolean> => {
+      const range = { ...currentRange.current };
+      const before = { status: block.housekeeping, notes: block.housekeepingNotes ?? '' };
+      setBlocks(range, (blocks) => applyHousekeeping(blocks, block.id, patch));
+      try {
+        const answer = await api.schedule.setHousekeeping({
+          reservationRoomId: block.id,
+          status: patch.status,
+          notes: patch.notes,
+          version: block.version,
+          requestId: newRequestId(),
+        });
+        const same =
+          currentRange.current.startDate === range.startDate &&
+          currentRange.current.days === range.days;
+        const merged =
+          same &&
+          setBlocks(range, (blocks) => mergeChangedBlocks({ ...range, blocks }, answer.blocks));
+        if (!merged) retry();
+        return true;
+      } catch (error) {
+        const failure = housekeepingFailure(error);
+        // Only the two housekeeping fields go back, so a move made meanwhile is left alone.
+        setBlocks(range, (blocks) => applyHousekeeping(blocks, block.id, before));
+        if (failure.refetch) retry();
+        notify(failure.message);
+        return false;
+      }
+    },
+    [api, setBlocks, retry, notify],
+  );
+
   const data = schedule.status === 'success' ? schedule.data : null;
   const liveRooms = useMemo(
     () =>
@@ -348,6 +393,7 @@ export default function Schedule({
         }}
         onRefuse={notify}
         onOpen={openDetails}
+        onSetHousekeeping={canEditHousekeeping ? setHousekeeping : undefined}
         onOpenCell={(room, date) => openPanel({ kind: 'new', roomId: room.id, arrival: date })}
       />
     );

@@ -459,6 +459,8 @@ describe('New Reservation panel', () => {
     expect(
       within(grid())
         .getAllByRole('rowheader')
+        // the Unassigned section ignores the filters
+        .filter((h) => !h.closest('[data-unassigned-section]'))
         .every((h) => /Lakeside/.test(h.textContent ?? '')),
     ).toBe(true);
     await user.click(screen.getByRole('button', { name: 'New Reservation' }));
