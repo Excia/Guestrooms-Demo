@@ -96,6 +96,6 @@ repo defines them.
 ## Process in one paragraph
 
 One branch per ticket, one PR per ticket, `Closes #N` in the body, a Conventional Commit title,
-a human merges (never an agent), agents never push to `main` or edit repo settings or Figma. The
+only the CEO session merges (workers and managers never do, and only into the owner's repo), nobody pushes to `main` or edits repo settings or Figma. The
 Manager agent (`docs/MANAGER.md`, `/run-manager`) coordinates specialist agents. If a ticket needs
 an answer that is not in its body the work is marked blocked instead of guessed.
