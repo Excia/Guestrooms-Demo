@@ -42,4 +42,18 @@ describe('mock add-on API', () => {
     ).rejects.toBeInstanceOf(ApiError);
     await expect(api.delete('nope')).rejects.toMatchObject({ status: 404 });
   });
+
+  it('rejects a SKU, location or room type that is not in the options with 422', async () => {
+    const api = createMockClient().addOns;
+    const base = { ...blankAddOn('2026-10-20'), name: 'Fan', sku };
+    await expect(api.save({ ...base, sku: { id: 'nope', label: 'Nope' } })).rejects.toMatchObject({
+      status: 422,
+    });
+    await expect(api.save({ ...base, locationIds: ['nope'] })).rejects.toMatchObject({
+      status: 422,
+    });
+    await expect(api.save({ ...base, roomTypeIds: ['nope'] })).rejects.toMatchObject({
+      status: 422,
+    });
+  });
 });

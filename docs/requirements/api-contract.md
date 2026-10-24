@@ -394,4 +394,6 @@ carry the `ReservationDetail.version` the user saw.
 `sku` (`{ id, label }`, required; the reservation shows its price), `onlineBooking`, `trackNightly`, `nightlyQty`
 (1 to 99, meaningful only while `trackNightly`; the backend stores 1 otherwise), `description` (at most 400),
 `photos` (at most 50, `{ id, name, url }`), `locationIds`, `roomTypeIds`. The rules are in `src/app/addOns.ts` and
-must be enforced again by the backend. Photo upload and storage are open (Q-72-1).
+must be enforced again by the backend, which also answers 422 `validation` when `sku`, a `locationIds` entry or a
+`roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it
+saves. Photo upload and storage are open (Q-72-1).

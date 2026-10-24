@@ -613,6 +613,17 @@ export function createMockClient({
             if (Object.keys(validateAddOn(input)).length > 0) {
               throw new ApiError(422, 'Add-on is not valid', { code: 'validation' });
             }
+            // Like the backend: the SKU and every association must exist in the options.
+            const known = mockAddOnOptions(roomTypes.map((t) => ({ id: t.id, label: t.name })));
+            if (
+              (input.sku && !known.skus.some((k) => k.id === input.sku?.id)) ||
+              input.locationIds.some((id) => !known.locations.some((k) => k.id === id)) ||
+              input.roomTypeIds.some((id) => !known.roomTypes.some((k) => k.id === id))
+            ) {
+              throw new ApiError(422, 'Add-on refers to an unknown SKU, location or room type', {
+                code: 'validation',
+              });
+            }
             if (input.id && !addOns.some((a) => a.id === input.id)) {
               throw new ApiError(404, 'Add-on not found', { code: 'not-found' });
             }
