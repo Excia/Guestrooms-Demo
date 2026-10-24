@@ -38,6 +38,26 @@ describe('http schedule.get', () => {
       });
     }
   });
+  it('validates linkedTo on a block', async () => {
+    const d = good();
+    const withLink = (linkedTo: unknown) => ({ ...d, blocks: [{ ...d.blocks[0], linkedTo }] });
+    const ok = { roomNumber: '101', reserverName: 'Ann Lee', earlyCheckIn: true };
+    await expect(
+      make(vi.fn().mockResolvedValue(json(withLink(ok)))).schedule.get(query),
+    ).resolves.toBeDefined();
+    for (const bad of [
+      'x',
+      {},
+      { roomNumber: 101, reserverName: 'Ann Lee' },
+      { roomNumber: '101' },
+      { ...ok, earlyCheckIn: 'yes' },
+      { ...ok, lateCheckOut: 1 },
+    ]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(withLink(bad)))).schedule.get(query),
+      ).rejects.toMatchObject({ code: 'invalid-response' });
+    }
+  });
   it('rejects an answer for another period or view', async () => {
     for (const other of [
       { ...good(), startDate: '2026-10-17' },

@@ -644,6 +644,12 @@ function isScheduleBlock(v: unknown): v is ScheduleBlock {
     (v.housekeeping === undefined ||
       (isString(v.housekeeping) && HOUSEKEEPING_STATUSES.includes(v.housekeeping))) &&
     (v.housekeepingNotes === undefined || isString(v.housekeepingNotes)) &&
+    (v.linkedTo === undefined ||
+      (isObject(v.linkedTo) &&
+        isString(v.linkedTo.roomNumber) &&
+        isString(v.linkedTo.reserverName) &&
+        (v.linkedTo.earlyCheckIn === undefined || typeof v.linkedTo.earlyCheckIn === 'boolean') &&
+        (v.linkedTo.lateCheckOut === undefined || typeof v.linkedTo.lateCheckOut === 'boolean'))) &&
     (v.roomChange === undefined ||
       (isObject(v.roomChange) &&
         (v.roomChange.part === 'previous' ||
