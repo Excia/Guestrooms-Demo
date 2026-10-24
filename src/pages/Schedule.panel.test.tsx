@@ -883,19 +883,14 @@ describe('small review items', () => {
 });
 
 describe('early and late markers on the grid', () => {
-  it('GR-50240 (arrived before today, early check in) draws the sliver the same way as an in-view block: inside its card', async () => {
+  it('a checked-in stay shows no early indicator, even with the flag set (ticket 2.4)', async () => {
     await loaded('/schedule');
     const daniel = block('Daniel Whitfield');
-    expect(daniel.getAttribute('aria-label')).toMatch(/early check in/);
-    const body = daniel.querySelector('[data-body]') as HTMLElement;
-    // inside the card, as the in-view marker is; no detached piece, no inset body
-    expect(body.querySelector(':scope > [data-marker="left"]')).not.toBeNull();
-    expect(daniel.querySelector(':scope > [data-marker]')).toBeNull();
-    expect(body).toHaveStyle({ left: '0px' });
-    // (the rounded left corner is checked in the browser: jsdom does not parse the mixed radius)
+    expect(daniel.getAttribute('aria-label')).not.toMatch(/early check in/);
+    expect(daniel.querySelector('[data-marker="left"]')).toBeNull();
   });
 
-  it('a stay arriving in view keeps its early sliver at the arrival edge, inside the block; late at the departure edge', async () => {
+  it('a not yet checked in stay shows only the early sliver, even when late is ticked too', async () => {
     const user = await loaded('/schedule');
     await user.click(block('Henry Lowell'));
     const dialog = await panel(/Reservation #GR-50312/);
@@ -903,13 +898,13 @@ describe('early and late markers on the grid', () => {
     await within(dialog).findByText('Saved');
     await user.click(within(dialog).getByRole('checkbox', { name: 'Late Check Out' }));
     await waitFor(() =>
-      expect(block('Henry Lowell').querySelector('[data-marker="right"]')).not.toBeNull(),
+      expect(within(dialog).getByRole('checkbox', { name: 'Late Check Out' })).toBeChecked(),
     );
     await user.keyboard('{Escape}');
     await panelGone();
     const henry = block('Henry Lowell');
     expect(henry.querySelector('[data-body] > [data-marker="left"]')).not.toBeNull();
-    expect(henry.querySelector('[data-body] > [data-marker="right"]')).not.toBeNull();
+    expect(henry.querySelector('[data-body] > [data-marker="right"]')).toBeNull();
   });
 });
 

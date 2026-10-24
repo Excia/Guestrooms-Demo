@@ -8,6 +8,7 @@ import type {
   ChangeRoomResult,
   IsoDate,
   HousekeepingStatus,
+  LinkedRoom,
   MoveDatesRequest,
   MoveRoomRequest,
   RoomChangeRule,
@@ -121,6 +122,8 @@ interface BlockSeed {
   status: ScheduleBlockStatus;
   rooms?: number;
   locked?: boolean;
+  /** PLACEHOLDER (P-21-3): makes the block a linked-room block. */
+  linked?: LinkedRoom;
 }
 
 // Day offsets are relative to `today`. Covers every status, same-day turnovers (rm-201, rm-105), a
@@ -307,6 +310,12 @@ const BLOCK_SEEDS: BlockSeed[] = [
     from: 0,
     to: 2,
     status: 'nyci',
+    linked: {
+      roomNumber: '102',
+      reserverName: 'Beatrice Quinn',
+      earlyCheckIn: true,
+      lateCheckOut: true,
+    },
   },
   {
     id: 'rr-17',
@@ -547,6 +556,7 @@ function defaultState(today: IsoDate): ScheduleState {
       roomCount: s.rooms ?? 1,
       roomTypeLocked: s.locked ?? false,
       version: 'v1',
+      ...(s.linked ? { linkedTo: s.linked } : {}),
     })),
     closures: CLOSURE_SEEDS.map((c) => ({
       kind: 'closure',

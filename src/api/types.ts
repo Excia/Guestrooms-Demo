@@ -998,7 +998,7 @@ export interface ScheduleBlock {
   lateCheckOut?: boolean;
   /** Present when this is a linked-room block (link icon, tooltip, flags of the linked room). */
   linkedTo?: LinkedRoom;
-  // Canceled blocks (docs gap item 18, Q-21-1) are undecided: no `canceled` status exists yet.
+  // Canceled blocks (docs gap item 18, Q-21-3) are undecided: no `canceled` status exists yet.
   /** Housekeeping chip drawn after the departure edge ("H"); absent when none is shown. */
   housekeeping?: HousekeepingStatus;
   /** Free-text housekeeping note (functional doc 15.13.3 / 15.13.4); absent when there is none. */

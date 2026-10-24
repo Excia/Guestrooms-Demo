@@ -1,15 +1,17 @@
 import Badge from '@mui/icons-material/Badge';
 import HistoryEdu from '@mui/icons-material/HistoryEdu';
+import LinkIcon from '@mui/icons-material/Link';
 import PersonSearch from '@mui/icons-material/PersonSearch';
 import Box from '@mui/material/Box';
 import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { memo, useRef, useState, type PointerEventHandler } from 'react';
-import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
+import { memo, useEffect, useRef, useState, type PointerEventHandler } from 'react';
+import type { HousekeepingStatus, LinkedRoom, ScheduleBlock, ScheduleClosure } from '../../api';
 import type { IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
+import { linkedTier, linkedTooltipLines, type LinkedTier } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
@@ -100,6 +102,62 @@ function TypeIcon({ type }: { type: ScheduleBlock['guestType'] }) {
 }
 
 /**
+ * Content of a linked-room block (Figma "Linked Room Block"): the link icon; from the `room` tier the
+ * linked room number (it may wrap under the icon); in the `reserver` tier the reserver's name on a
+ * second line. Text is cut with an ellipsis; the tooltip has the full text.
+ */
+function LinkedContent({
+  linked,
+  tier,
+  settled,
+}: {
+  linked: LinkedRoom;
+  tier: LinkedTier;
+  settled: boolean;
+}) {
+  return (
+    <>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: tier === 'room' ? 'wrap' : 'nowrap',
+          columnGap: 0.5,
+          minWidth: 0,
+          justifyContent: tier === 'icon' ? 'center' : 'flex-start',
+        }}
+      >
+        <LinkIcon
+          aria-hidden
+          data-testid="linked-icon"
+          sx={{ fontSize: (t) => t.spacing(BLOCK_ICON_SPACING), flexShrink: 0 }}
+        />
+        {tier === 'icon' ? null : (
+          <Typography
+            variant="subtitle2"
+            component="span"
+            noWrap={tier === 'reserver'}
+            sx={{ fontWeight: 500, minWidth: 0 }}
+          >
+            {linked.roomNumber}
+          </Typography>
+        )}
+      </Box>
+      {tier === 'reserver' ? (
+        <Typography
+          variant="caption"
+          component="span"
+          noWrap
+          sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
+        >
+          {linked.reserverName}
+        </Typography>
+      ) : null}
+    </>
+  );
+}
+
+/**
  * One reservation or closure block, absolutely positioned across the date columns of its row
  * (Figma "Reservation Schedule Block"). Colors come from `palette.schedule`.
  */
@@ -125,7 +183,23 @@ export default memo(function ScheduleItemView({
   const [armed, setArmed] = useState(false);
   const [hover, setHover] = useState(false);
   const [cutOff, setCutOff] = useState(false);
+  // A tab stop (Unassigned section) has DOM focus; room-row blocks use the grid's cursor (tipFocused).
+  const [focusIn, setFocusIn] = useState(false);
+  const [width, setWidth] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const linked = item.kind === 'reservation' ? item.linkedTo : undefined;
+  // A linked block's content follows its drawn width (three tiers); measured, since the width is CSS.
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!linked || !el) return;
+    const measure = () => setWidth(el.getBoundingClientRect().width);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [linked]);
+  const tier = linkedTier(width);
   const span = blockSpan(layout, days);
   const marker = (side: 'left' | 'right') => (
     <Box
@@ -146,8 +220,20 @@ export default memo(function ScheduleItemView({
     />
   );
   // Keyboard focus (the grid's cursor) shows the full text like hover does; hover only when cut off.
-  const tipArmed = armed || Boolean(tipFocused);
-  const tipOpen = Boolean(tipFocused) || (hover && cutOff);
+  // A linked block's tooltip ("Linked to ...") opens on every hover and focus, not only when cut off.
+  const tipArmed = armed || Boolean(tipFocused) || focusIn;
+  const tipOpen = Boolean(tipFocused) || focusIn || (hover && (cutOff || Boolean(linked)));
+  const tipContent = linked ? (
+    <span>
+      {linkedTooltipLines(linked).map((line, i) => (
+        <Box key={i} component="span" sx={{ display: 'block' }}>
+          {line}
+        </Box>
+      ))}
+    </span>
+  ) : tip ? (
+    <span>{tip}</span>
+  ) : null;
   const isClosure = item.kind === 'closure';
   const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
@@ -191,31 +277,37 @@ export default memo(function ScheduleItemView({
         };
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
-        {isClosure ? null : <TypeIcon type={block.guestType} />}
-        <Typography
-          variant="subtitle2"
-          component="span"
-          noWrap
-          sx={(t) => ({
-            fontWeight: 500,
-            color: isClosure ? t.palette.grey[900] : NAME_COLOR(t, block),
-            minWidth: 0,
-          })}
-        >
-          {isClosure ? closure.reason : block.guestName}
-        </Typography>
-      </Box>
-      {isClosure ? null : (
-        <Typography
-          variant="caption"
-          component="span"
-          noWrap
-          sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
-        >
-          {block.confirmationNumber}
-          {linkText ? ` · ${linkText}` : ''}
-        </Typography>
+      {linked ? (
+        <LinkedContent linked={linked} tier={tier} settled={settled} />
+      ) : (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+            {isClosure ? null : <TypeIcon type={block.guestType} />}
+            <Typography
+              variant="subtitle2"
+              component="span"
+              noWrap
+              sx={(t) => ({
+                fontWeight: 500,
+                color: isClosure ? t.palette.grey[900] : NAME_COLOR(t, block),
+                minWidth: 0,
+              })}
+            >
+              {isClosure ? closure.reason : block.guestName}
+            </Typography>
+          </Box>
+          {isClosure ? null : (
+            <Typography
+              variant="caption"
+              component="span"
+              noWrap
+              sx={(t) => ({ color: settled ? t.palette.grey[800] : t.palette.text.secondary })}
+            >
+              {block.confirmationNumber}
+              {linkText ? ` · ${linkText}` : ''}
+            </Typography>
+          )}
+        </>
       )}
       {isClosure && closure.endMarker ? (
         <>
@@ -255,6 +347,8 @@ export default memo(function ScheduleItemView({
         left: dateAreaX(span.start),
         width: dateAreaWidth(span.end - span.start, theme.spacing(0.25)),
       }}
+      onFocus={onActivate ? () => setFocusIn(true) : undefined}
+      onBlur={onActivate ? () => setFocusIn(false) : undefined}
       onPointerDown={
         onPointerDown
           ? (e) => {
@@ -265,7 +359,7 @@ export default memo(function ScheduleItemView({
           : undefined
       }
       onPointerEnter={
-        ghost || !tip
+        ghost || !tipContent
           ? undefined
           : () => {
               setCutOff(anyTruncated(bodyRef.current?.querySelectorAll('span') ?? []));
@@ -273,7 +367,7 @@ export default memo(function ScheduleItemView({
               setHover(true);
             }
       }
-      onPointerLeave={ghost || !tip ? undefined : () => setHover(false)}
+      onPointerLeave={ghost || !tipContent ? undefined : () => setHover(false)}
       sx={(t) => ({
         position: 'absolute',
         top: t.spacing(BLOCK_TOP),
@@ -289,12 +383,12 @@ export default memo(function ScheduleItemView({
         '&:focus-visible': { outline: `2px solid ${t.palette.primary.main}`, outlineOffset: 2 },
       })}
     >
-      {tipArmed && tip ? (
+      {tipArmed && tipContent ? (
         // The title is an element, not a string: MUI then adds neither a native `title` (the browser's
         // own tooltip) nor an aria-label to the body, and the popper is hidden from assistive
         // technology (the cell's aria-label already says it all).
         <Tooltip
-          title={<span>{tip}</span>}
+          title={tipContent}
           open={tipOpen}
           disableInteractive
           slotProps={{ popper: { 'aria-hidden': true } }}
