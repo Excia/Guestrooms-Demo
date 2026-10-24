@@ -43,6 +43,8 @@ import type {
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { expectedLeadOccupantName } from './createRules';
+import { assertChangeLogQuery } from './changeLogValidation';
+import { changeLogParams, parseChangeEventTypes, parseChangeLogPage } from './httpChangeLog';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
@@ -1262,5 +1264,13 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
+    changeLog: {
+      list: (query, o) =>
+        Promise.resolve().then(() => {
+          assertChangeLogQuery(query);
+          return request('/change-log', changeLogParams(query), o, parseChangeLogPage);
+        }),
+      listEventTypes: (o) => request('/change-log/event-types', {}, o, parseChangeEventTypes),
+    },
   };
 }

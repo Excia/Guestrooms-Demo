@@ -213,7 +213,12 @@ export default function SystemSettings() {
   }
 
   return (
-    <AdminShell active="System Settings" title="System Settings" actions={saveButton}>
+    <AdminShell
+      active="System Settings"
+      title="System Settings"
+      actions={saveButton}
+      changeLog="system-settings"
+    >
       {body}
       <ConfirmDialog
         open={guard.pending}
