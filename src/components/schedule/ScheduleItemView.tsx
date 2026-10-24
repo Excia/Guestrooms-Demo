@@ -135,7 +135,7 @@ function LinkedContent({ text }: { text: { title: string; subtitle: string } }) 
           variant="caption"
           component="span"
           noWrap
-          sx={(t) => ({ color: t.palette.text.secondary })}
+          sx={(t) => ({ color: t.palette.text.primary })}
         >
           {text.subtitle}
         </Typography>
@@ -315,9 +315,10 @@ export default memo(function ScheduleItemView({
       data-linked={linked ? 'true' : undefined}
       data-unassigned={onActivate ? 'true' : undefined}
       tabIndex={onActivate ? 0 : undefined}
-      // A linked block stays a tab stop (its tooltip opens on focus) but activates nothing.
+      // A linked block stays a tab stop (its tooltip opens on focus); its owner only announces why
+      // nothing opens.
       onKeyDown={
-        onActivate && !linked
+        onActivate
           ? (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();

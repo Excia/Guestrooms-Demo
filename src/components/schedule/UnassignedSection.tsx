@@ -12,6 +12,7 @@ import {
   unassignedToggleName,
   type UnassignedSection as Section,
 } from '../../app/unassignedRows';
+import { isLinkedBlock } from '../../app/scheduleLinked';
 import ScheduleItemView from './ScheduleItemView';
 import { LABEL_VAR, LABEL_WIDTH, ROW_HEIGHT, ROW_VAR, rowTop } from './scheduleLayout';
 
@@ -24,6 +25,8 @@ export interface UnassignedSectionProps {
   onToggle: () => void;
   /** A block was activated by keyboard; clicks are handled by the grid. */
   onOpen: (block: ScheduleBlock) => void;
+  /** Enter or Space on a linked-room block, which opens nothing: say why. */
+  onLinked: () => void;
 }
 
 /**
@@ -39,6 +42,7 @@ export default function UnassignedSection({
   idPrefix,
   onToggle,
   onOpen,
+  onLinked,
 }: UnassignedSectionProps) {
   if (section.state === 'none') return null;
   const label = unassignedLabel(section);
@@ -135,7 +139,7 @@ export default function UnassignedSection({
                 today={today}
                 label={blockAriaLabel(block, undefined)}
                 tip={`${block.guestName}, ${block.confirmationNumber}`}
-                onActivate={() => onOpen(block)}
+                onActivate={() => (isLinkedBlock(block) ? onLinked() : onOpen(block))}
               />
             );
           })}

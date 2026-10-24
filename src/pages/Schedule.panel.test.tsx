@@ -75,6 +75,14 @@ beforeAll(() => {
   });
 });
 
+// Moves the grid cursor down to the seeded linked-room block (GR-50351, rr-16).
+async function cursorOnLinked(user: Awaited<ReturnType<typeof loaded>>) {
+  for (let i = 0; i < 40 && !grid().getAttribute('aria-activedescendant')?.endsWith('rr-16'); i++) {
+    await user.keyboard('{ArrowDown}');
+  }
+  expect(grid().getAttribute('aria-activedescendant')).toMatch(/rr-16$/);
+}
+
 describe('opening the details panel', () => {
   it('a click on a block opens its details with the accordion sections, and records it in the URL', async () => {
     const user = await loaded();
@@ -117,7 +125,8 @@ describe('opening the details panel', () => {
     await user.click(linked);
     expect(url()).toBe('/schedule');
     grid().focus();
-    await user.keyboard('{Enter}'); // the cursor starts on room 101, where the linked block is
+    await cursorOnLinked(user);
+    await user.keyboard('{Enter}');
     await user.keyboard(' ');
     expect(url()).toBe('/schedule');
     expect(screen.queryByRole('dialog', { name: /Reservation/ })).not.toBeInTheDocument();
@@ -127,6 +136,21 @@ describe('opening the details panel', () => {
         .map((s) => s.textContent)
         .join(' '),
     ).not.toMatch(/Picked up/);
+    expect(
+      screen
+        .getAllByRole('status', { hidden: true })
+        .map((st) => st.textContent)
+        .join(' '),
+    ).toContain('Linked room. It cannot be opened or moved from here.');
+  });
+
+  it('the grid cursor on a linked-room block shows its tooltip', async () => {
+    const user = await loaded();
+    grid().focus();
+    await cursorOnLinked(user);
+    expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent(
+      'Linked to 102 +2 Room',
+    );
   });
 
   it('Enter on an empty cell or a closure does nothing', async () => {

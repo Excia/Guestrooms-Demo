@@ -76,18 +76,19 @@ describe('ScheduleItemView linked block', () => {
     expect(await screen.findByRole('tooltip', { hidden: true })).toHaveTextContent('Thomas Okafor');
   });
 
-  it('is dimmed, not-allowed, aria-disabled and does not start a drag or activate', async () => {
+  it('is dimmed, not-allowed, aria-disabled and does not start a drag', async () => {
     const onPointerDown = vi.fn();
     const onActivate = vi.fn();
     view(block, { onPointerDown, onActivate });
     const cell = screen.getByRole('gridcell');
     expect(cell).toHaveAttribute('aria-disabled', 'true');
     expect(cell).toHaveStyle({ opacity: '0.75', cursor: 'not-allowed' });
-    await userEvent.pointer({ keys: '[MouseLeft>]', target: cell });
     await userEvent.tab();
     await userEvent.keyboard('{Enter} ');
+    await userEvent.pointer({ keys: '[MouseLeft>]', target: cell });
     expect(onPointerDown).not.toHaveBeenCalled();
-    expect(onActivate).not.toHaveBeenCalled();
+    // The owner's callback only announces why nothing opens.
+    expect(onActivate).toHaveBeenCalledTimes(2);
   });
 
   it('writes the room and the reserver in the 7 day view', () => {

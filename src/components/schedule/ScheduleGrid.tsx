@@ -618,7 +618,10 @@ export default function ScheduleGrid({
     if (element.closest('[data-unassigned-section]')) {
       const id = element.closest<HTMLElement>('[data-item-id]')?.dataset.itemId;
       const unassigned = data.unassigned.find((b) => b.id === id);
-      if (unassigned && !isLinkedBlock(unassigned)) latest.current.onOpen(unassigned);
+      if (unassigned) {
+        if (isLinkedBlock(unassigned)) setAnnouncement(LINKED_ANNOUNCEMENT);
+        else latest.current.onOpen(unassigned);
+      }
       return;
     }
     const rowEl = element.closest<HTMLElement>('[role="row"]');
@@ -1029,6 +1032,7 @@ export default function ScheduleGrid({
             idPrefix={idPrefix}
             onToggle={() => setUnassignedCollapsed((c) => !c)}
             onOpen={(block) => latest.current.onOpen(block)}
+            onLinked={() => setAnnouncement(LINKED_ANNOUNCEMENT)}
           />
           <Box role="rowgroup" sx={{ position: 'relative', height: rowsHeight }}>
             {todayIndex >= 0 && todayIndex < days ? (
