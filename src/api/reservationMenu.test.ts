@@ -193,6 +193,25 @@ describe('http reservations cancel and undo', () => {
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
 
+  it('treats a malformed lastAuditedDate as unknown (absent)', async () => {
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ ...body('confirmed'), lastAuditedDate: 'yesterday' }), {
+          status: 200,
+        }),
+      ),
+    );
+    const client = createHttpClient('https://api.test', { fetch: fetchMock });
+    const detail = await client.reservations.undoCheckIn({
+      requestId: rid(),
+      reservationId: 'rs-3',
+      version: 'r1',
+    });
+    expect(detail.lastAuditedDate).toBeUndefined();
+    const read = await client.reservations.getDetail('rs-3');
+    expect(read.lastAuditedDate).toBeUndefined();
+  });
+
   it('undo check in posts to its path', async () => {
     const fetchMock = vi.fn<typeof fetch>(() =>
       Promise.resolve(new Response(JSON.stringify(body('confirmed')), { status: 200 })),

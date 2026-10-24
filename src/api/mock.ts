@@ -24,7 +24,6 @@ import {
   undoCheckIn,
   type CancelledStore,
 } from './reservationMenuData';
-import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
@@ -58,6 +57,7 @@ import {
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
+import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
 
 export interface MockOptions {
   scenario?: MockScenario;
@@ -103,13 +103,13 @@ export function createMockClient({
   const members = seedMembers();
   const listCheckedIn = new Set<string>();
   const cancelledReservations: CancelledStore = new Map();
-  const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
   let systemSettings = mockSystemSettings();
   let roomTypes = mockRoomTypes();
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
   let bookingRules = mockBookingRules();
   const folioStore: FolioStore = new Map();
+  const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {

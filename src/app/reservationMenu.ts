@@ -31,8 +31,8 @@ const LABELS: Record<MenuActionId, string> = {
 const action = (id: MenuActionId): MenuAction => ({ id, label: LABELS[id] });
 
 export type MenuInput = Pick<ReservationDetail, 'status' | 'rooms' | 'lastAuditedDate'> & {
-  /** Holds `reservation.edit`: without it only Print and Jump to Folio remain. */
-  canEdit?: boolean;
+  /** Holds `reservation.edit`: without it only Print and Jump to Folio remain. Required: no default. */
+  canEdit: boolean;
 };
 
 export type MenuState =
@@ -73,6 +73,18 @@ export function canUndoCheckIn(
   return room.status === 'checked-in' && nightAuditHasRun(room.arrival, lastAuditedDate) === false;
 }
 
+/**
+ * One room's Undo Check In (the room selector): the room rules above, and no room of the
+ * reservation has checked out (the backend answers 409 `not-checked-in` otherwise).
+ */
+export function canUndoRoomCheckIn(
+  rooms: readonly Pick<ReservationRoomDetail, 'status' | 'arrival'>[],
+  room: Pick<ReservationRoomDetail, 'status' | 'arrival'>,
+  lastAuditedDate: IsoDate | null | undefined,
+): boolean {
+  return !rooms.some((r) => r.status === 'checked-out') && canUndoCheckIn(room, lastAuditedDate);
+}
+
 /** Whole-reservation undo: every checked-in room can be undone (the backend undoes them together). */
 export function canUndoReservationCheckIn(
   input: Pick<MenuInput, 'status' | 'rooms' | 'lastAuditedDate'>,
@@ -92,12 +104,13 @@ export const hasUnassignedRoom = (rooms: readonly ReservationRoomDetail[]) =>
  * - Not yet checked in: Edit Reservation (Assign Room when a room is unassigned), Cancel
  *   Reservation, Add Another Room, Print Registration Card(s), Jump to Folio.
  * - Checked in: Undo Check In (until the night audit has run), Edit Reservation, Add Another Room
- *   (not once the audit has run, as Figma's "before NA"), Print, Jump to Folio.
+ *   Print, Jump to Folio. Add Another Room stays after the night audit (the ticket's list; Figma shows
+ *   it only "before NA": F-22-3, Q-22-3).
  * - Checked out or partly checked out: Print, Jump to Folio. Cancelled: Jump to Folio.
  */
 export function reservationMenu(input: MenuInput): MenuAction[] {
   const state = menuState(input);
-  const canEdit = input.canEdit ?? true;
+  const { canEdit } = input;
   const ids: MenuActionId[] = [];
   const edit = hasUnassignedRoom(input.rooms) ? 'assign-room' : 'edit-reservation';
   if (state === 'not-checked-in') {
@@ -107,11 +120,7 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
     if (canEdit) {
       if (canUndoReservationCheckIn(input)) ids.push('undo-check-in');
       ids.push(edit);
-      const auditRan = input.rooms.some(
-        (r) =>
-          r.status === 'checked-in' && nightAuditHasRun(r.arrival, input.lastAuditedDate) === true,
-      );
-      if (!auditRan) ids.push('add-room');
+      ids.push('add-room');
     }
     ids.push('print-registration-card');
   } else if (state !== 'cancelled') {

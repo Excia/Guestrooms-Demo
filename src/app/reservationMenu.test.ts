@@ -1,6 +1,7 @@
 import type { ReservationRoomDetail } from '../api/types';
 import {
   canUndoCheckIn,
+  canUndoRoomCheckIn,
   cancelConfirmation,
   menuState,
   nightAuditHasRun,
@@ -28,6 +29,7 @@ const input = (statuses: Status[], extra: Partial<MenuInput> = {}): MenuInput =>
   status: 'confirmed',
   rooms: statuses.map((s) => room(s)),
   lastAuditedDate: '2026-10-19',
+  canEdit: true,
   ...extra,
 });
 const labels = (i: MenuInput) => reservationMenu(i).map((a) => a.label);
@@ -69,10 +71,11 @@ describe('reservationMenu', () => {
     expect(labels(input(['checked-in', 'nyci']))).not.toContain('Cancel Reservation');
   });
 
-  it('checked in, night audit run for the business date: Undo Check In (and Add Another Room) go', () => {
+  it('checked in, night audit run for the business date: Undo Check In goes, Add Another Room stays', () => {
     const after = input(['checked-in'], { lastAuditedDate: '2026-10-20' });
     expect(labels(after)).toEqual([
       'Edit Reservation',
+      'Add Another Room',
       'Print Registration Card(s)',
       'Jump to Folio',
     ]);
@@ -125,6 +128,14 @@ describe('night audit rule', () => {
     expect(nightAuditHasRun('2026-10-20', '2026-10-25')).toBe(true);
     expect(nightAuditHasRun('2026-10-20', null)).toBe(false);
     expect(nightAuditHasRun('2026-10-20', undefined)).toBeNull();
+  });
+
+  it('a room cannot be undone once another room of the reservation has checked out', () => {
+    const rooms = [room('checked-in'), room('checked-out')];
+    expect(canUndoRoomCheckIn(rooms, rooms[0], '2026-10-19')).toBe(false);
+    const inHouse = [room('checked-in'), room('nyci')];
+    expect(canUndoRoomCheckIn(inHouse, inHouse[0], '2026-10-19')).toBe(true);
+    expect(canUndoRoomCheckIn(inHouse, inHouse[0], '2026-10-20')).toBe(false);
   });
 
   it('a room can be undone only while checked in and before the audit', () => {

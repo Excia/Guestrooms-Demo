@@ -43,7 +43,6 @@ import { expectedLeadOccupantName } from './createRules';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError } from './types';
-import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
 import {
   assertChangeRoomRequest,
   assertCheckInRoomRequest,
@@ -59,6 +58,8 @@ import {
   assertResourceId,
   assertScheduleQuery,
 } from './validation';
+import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
+import { parseIsoDate } from '../lib/dates';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -292,12 +293,23 @@ const parseFolio =
     return body;
   };
 
+// A malformed `lastAuditedDate` is treated as unknown (absent): Undo Check In stays hidden.
+function withKnownAudit(detail: ReservationDetail): ReservationDetail {
+  const date = detail.lastAuditedDate;
+  if (typeof date === 'string' && parseIsoDate(date) === null) {
+    const rest = { ...detail };
+    delete rest.lastAuditedDate;
+    return rest;
+  }
+  return detail;
+}
+
 // The answer must be for the reservation that was asked for.
 const parseDetail =
   (id: string) =>
   (body: unknown, status: number): ReservationDetail => {
     if (!isReservationDetail(body) || body.id !== id) throw invalid(status, 'reservation detail');
-    return body;
+    return withKnownAudit(body);
   };
 
 // The answer must carry the flags the request asked for (a changed flag that did not stick is a
@@ -330,7 +342,7 @@ const parseCancelled =
     ) {
       throw invalid(status, 'cancelled reservation');
     }
-    return body;
+    return withKnownAudit(body);
   };
 
 const parseCreated =
