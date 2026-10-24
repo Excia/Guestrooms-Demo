@@ -379,3 +379,10 @@ carry the `ReservationDetail.version` the user saw.
   Check In when a checked-in room's check-in business date (arrival, Q-22-5) is on or before it, and when the field is absent.
 - Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
 - New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).
+
+## Online Booking settings (ticket 7.9, branch `feat/96-online-booking-settings`)
+
+No new endpoint. `GET /settings/system` and `PUT /settings/system` (row 15 above) gain an `onlineBooking` object:
+`{globalMessage (max 150), cancellationAgreement (max 300), includePolicyLink, policyUrl (absolute http or https, checked only
+while includePolicyLink is true), chargeCancellationFee, showAddOnsPopup}`. The backend re-checks the limits and the URL and
+answers 422 `validation`; the UI checks the same rules (`src/app/onlineBookingSettings.ts`).

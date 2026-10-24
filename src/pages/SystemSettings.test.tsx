@@ -240,4 +240,46 @@ describe('SystemSettings page', () => {
     await user.click(screen.getByRole('combobox', { name: 'Close Settled Folios unit' }));
     expect(screen.getByRole('option', { name: 'Days' })).toBeInTheDocument();
   });
+  it('shows the Online Booking tab with counters, the link switch and the toggles', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('tab', { name: 'Online Booking' }));
+    expect(screen.getByRole('textbox', { name: 'Global Booking Message' })).toHaveValue(
+      'To book more than 3 rooms, please contact group sales at ###-###-####.',
+    );
+    expect(screen.getByText('70 / 150')).toBeInTheDocument();
+    expect(screen.getByText(/ \/ 300$/)).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Include Link to Full Policy' })).toBeChecked();
+    expect(screen.getByLabelText('URL')).toHaveValue('https://www.clubname.com/guestroomspolicy');
+    expect(screen.getByRole('switch', { name: 'Charge a Cancellation Fee' })).not.toBeChecked();
+    await user.click(screen.getByRole('switch', { name: 'Include Link to Full Policy' }));
+    expect(screen.queryByLabelText('URL')).not.toBeInTheDocument();
+  });
+
+  it('saves Online Booking edits with the rest and refuses an invalid url', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.systemSettings, 'save');
+    renderPage(client);
+    await loaded();
+    await user.click(screen.getByRole('tab', { name: 'Online Booking' }));
+    const url = screen.getByLabelText('URL');
+    await user.clear(url);
+    await user.type(url, 'not a url');
+    expect(screen.getByText(/Enter a full web address/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Settings' }));
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    expect(await screen.findByLabelText('URL')).toHaveFocus();
+    expect(save).not.toHaveBeenCalled();
+    await user.clear(screen.getByLabelText('URL'));
+    await user.type(screen.getByLabelText('URL'), 'https://club.example.com/policy');
+    await user.click(screen.getByRole('switch', { name: 'Display Add-Ons Popup' }));
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0].onlineBooking).toMatchObject({
+      policyUrl: 'https://club.example.com/policy',
+      showAddOnsPopup: true,
+    });
+  });
 });
