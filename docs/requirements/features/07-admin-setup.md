@@ -140,7 +140,21 @@ Excia/Guestrooms-Demo#73. Figma: Add-Ons 13533:74182; reservation side is ticket
   (price shown is the SKU price); with tracking on, remaining nightly quantity drives availability limits
   (3.10) and the Add-On Countdown screen (menu item, no design). Active dates limit when the add-on can
   be selected.
-- **Open questions:** Q-73-1 (Combo is also on the owner's list of answers still needed), Q-73-2.
+- **Implemented (Excia/Guestrooms-Demo#73, in review):** `src/pages/AddOnItems.tsx` at `/admin/add-on-items` inside the
+  Admin Setup shell, built from the Room Types parts (list with inactive add-ons last, active dates, Associations
+  tabs, photos, delete/duplicate/save, Confirm Leaving, save toast). Fields as in Figma 13533:74182: name, active
+  dates, **Item / Combo**, SKU lookup, Display in Online Booking, **Track Nightly Countdown** with the **Nightly Qty.**
+  stepper (disabled while tracking is off), description (400 characters), photos (optional, at most 50),
+  Associations **Locations** and **Room Types**. Pure rules in `src/app/addOns.ts` (validation, 1 to 99 stepper
+  range, normalization, `isSelectableOn` for ticket 3.10), unit-tested. API `addOns` (`getOptions`, `list`, `save`,
+  `delete`) on the typed client with a mock; see [api-contract.md](../api-contract.md).
+  - **Built defaults (open questions):** Combo is stored and flagged but behaves like an Item (one SKU, no bundle
+    contents) until Q-73-1 is answered; Nightly Qty maximum is 99 (Q-73-2); an add-on with no location or room
+    type selected is not offered anywhere, with a hint (Q-73-3). A SKU is required (the reservation shows its price).
+  - **Not built:** the Add-On Countdown screen (no design), the reservation add-on dropdown (3.10), the two-way
+    update of a room type's Add-Ons tab when an association changes here, and a delete check against reservations.
+  - **Status:** in review, 2026-10-24.
+- **Open questions:** Q-73-1 (Combo is also on the owner's list of answers still needed), Q-73-2, Q-73-3.
 
 ## 7.5 Booking Rules
 

@@ -33,6 +33,8 @@ export const PRIMARY_SETUP_PATH = '/admin/primary-setup';
 /** Room Types and Rooms (ticket 7.3). */
 export const ROOM_TYPES_PATH = '/admin/room-types';
 export const ROOMS_PATH = '/admin/rooms';
+/** Add-On Items (ticket 7.4). */
+export const ADD_ON_ITEMS_PATH = '/admin/add-on-items';
 
 /** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
 export const BOOKING_RULES_PATH = '/admin/booking-rules';
@@ -110,7 +112,7 @@ export const routes = [
   },
   { id: 'room-types', path: ROOM_TYPES_PATH, title: 'Room Types', section: 'admin' },
   { id: 'rooms', path: ROOMS_PATH, title: 'Rooms', section: 'admin' },
-  { id: 'add-on-items', path: '/admin/add-on-items', title: 'Add-On Items', section: 'admin' },
+  { id: 'add-on-items', path: ADD_ON_ITEMS_PATH, title: 'Add-On Items', section: 'admin' },
   {
     id: 'notifications',
     path: '/admin/notifications',
