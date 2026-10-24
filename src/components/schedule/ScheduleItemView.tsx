@@ -17,6 +17,7 @@ import { blockOpacityToken } from '../../app/scheduleBlockState';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
 import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
+import { closureBlockText, closureFullText } from '../../app/closures';
 import type { BlockLayout } from '../../app/schedule';
 import type { ScheduleItem } from '../../app/scheduleDrag';
 import {
@@ -169,6 +170,10 @@ export default memo(function ScheduleItemView({
     ? linkedBlockText(linked, days, daysBetween(item.startDate, item.endDate))
     : null;
   const span = blockSpan(layout, days);
+  // A short closure shows the first 20 characters of its description; the tooltip has all of it.
+  const closureText =
+    item.kind === 'closure' ? closureBlockText(item.reason, item.startDate, item.endDate) : '';
+  const closureCut = item.kind === 'closure' && closureText !== closureFullText(item.reason);
   const marker = (side: 'left' | 'right') => (
     <Box
       aria-hidden
@@ -289,7 +294,7 @@ export default memo(function ScheduleItemView({
                 minWidth: 0,
               })}
             >
-              {isClosure ? closure.reason : content?.title}
+              {isClosure ? closureText : content?.title}
             </Typography>
           </Box>
           {isClosure ? null : (
@@ -364,7 +369,9 @@ export default memo(function ScheduleItemView({
         ghost || !hasTip
           ? undefined
           : () => {
-              setCutOff(anyTruncated(bodyRef.current?.querySelectorAll('span') ?? []));
+              setCutOff(
+                closureCut || anyTruncated(bodyRef.current?.querySelectorAll('span') ?? []),
+              );
               setArmed(true);
               setHover(true);
             }
@@ -376,7 +383,13 @@ export default memo(function ScheduleItemView({
         height: t.spacing(BLOCK_HEIGHT),
         marginLeft: t.spacing(0.125),
         boxSizing: 'border-box',
-        cursor: linked ? 'not-allowed' : ghost ? 'grabbing' : onActivate ? 'pointer' : 'grab',
+        cursor: linked
+          ? 'not-allowed'
+          : ghost
+            ? 'grabbing'
+            : onActivate || isClosure
+              ? 'pointer'
+              : 'grab',
         touchAction: 'auto',
         opacity:
           t.palette.schedule.opacity[

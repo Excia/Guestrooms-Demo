@@ -58,6 +58,7 @@ import {
   type CursorKey,
   type GridCursor,
 } from '../../app/scheduleGrid';
+import { closureFullText } from '../../app/closures';
 import type { SetHousekeeping } from './HousekeepingChip';
 import { unassignedSection } from '../../app/unassignedRows';
 import { isLinkedBlock } from '../../app/scheduleLinked';
@@ -100,6 +101,8 @@ export interface ScheduleGridProps {
   onRefuse: (message: string) => void;
   /** A reservation block was clicked (not dragged) or Enter was pressed on it: open its details. */
   onOpen: (block: ScheduleBlock) => void;
+  /** A closure block was clicked or Enter was pressed on it: open the Closure details. */
+  onOpenClosure?: (closure: ScheduleClosure) => void;
   /** A free night in a room row was clicked (or Enter was pressed on it): start a reservation there. */
   onOpenCell: (room: ScheduleRoom, date: IsoDate) => void;
   /** Saves a change made in the housekeeping chip's pop-up; absent when the user may not change housekeeping. */
@@ -282,7 +285,7 @@ const ScheduleRow = memo(function ScheduleRow({
             tip={
               item.kind === 'reservation'
                 ? blockTipText(item, room, link)
-                : (item as ScheduleClosure).reason
+                : closureFullText((item as ScheduleClosure).reason)
             }
           />
         );
@@ -319,6 +322,7 @@ export default function ScheduleGrid({
   onRefuse,
   onOpen,
   onOpenCell,
+  onOpenClosure,
   onSetHousekeeping,
 }: ScheduleGridProps) {
   const theme = useTheme();
@@ -402,6 +406,7 @@ export default function ScheduleGrid({
     onRefuse,
     onOpen,
     onOpenCell,
+    onOpenClosure,
     locked,
     unassignedRows,
   });
@@ -416,6 +421,7 @@ export default function ScheduleGrid({
       onRefuse,
       onOpen,
       onOpenCell,
+      onOpenClosure,
       locked,
       unassignedRows,
     };
@@ -691,7 +697,8 @@ export default function ScheduleGrid({
       // A linked-room block opens nothing (legacy behavior).
       if (isLinkedBlock(item)) setAnnouncement(LINKED_ANNOUNCEMENT);
       else latest.current.onOpen(item);
-    } else setAnnouncement('Room closed.');
+    } else if (latest.current.onOpenClosure) latest.current.onOpenClosure(item);
+    else setAnnouncement('Room closed.');
   };
 
   // ---- keyboard ----------------------------------------------------------------------------
@@ -841,6 +848,7 @@ export default function ScheduleGrid({
           setAnnouncement(LINKED_ANNOUNCEMENT);
         } else if (key === 'Enter') {
           if (item.kind === 'reservation') latest.current.onOpen(item);
+          else if (latest.current.onOpenClosure) latest.current.onOpenClosure(item);
           else setAnnouncement('Room closed. Closures have no details.');
         } else pickUp(item, cursorRow);
       } else if (key === 'Enter' && rooms[cursorRow]) {
