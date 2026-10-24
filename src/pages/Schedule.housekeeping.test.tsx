@@ -18,14 +18,14 @@ function Probe() {
   return <output data-testid="url">{search}</output>;
 }
 
-function setup(client: ApiClient, url = '/schedule', allowed = true) {
+function setup(client: ApiClient, url = '/schedule', allowed = true, today = TODAY) {
   return render(
     <ThemeProvider theme={theme}>
       <PermissionsProvider value={createPermissions(allowed ? undefined : [])}>
         <ApiProvider client={client}>
           <MemoryRouter initialEntries={[url]}>
             <Routes>
-              <Route path="/schedule" element={<Schedule today={TODAY} />} />
+              <Route path="/schedule" element={<Schedule today={today} />} />
             </Routes>
             <Probe />
           </MemoryRouter>
@@ -35,9 +35,9 @@ function setup(client: ApiClient, url = '/schedule', allowed = true) {
   );
 }
 
-async function loaded(client: ApiClient, url?: string, allowed?: boolean) {
+async function loaded(client: ApiClient, url?: string, allowed?: boolean, today?: string) {
   const user = userEvent.setup();
-  setup(client, url, allowed);
+  setup(client, url, allowed, today);
   await screen.findByRole('grid', { name: 'Schedule' });
   return user;
 }
@@ -65,6 +65,14 @@ afterAll(() => {
 });
 
 describe('schedule housekeeping chip', () => {
+  it('is drawn at the end of stays in every status, also stays not yet checked in', async () => {
+    const { client } = spied();
+    await loaded(client);
+    const shown = new Set(chips().map((c) => c.getAttribute('data-housekeeping')));
+    for (const s of ['not-checked-out', 'needs-cleaning', 'cleaned', 'ready', 'needs-maintenance'])
+      expect(shown, s).toContain(s);
+  });
+
   it('is a button for users who may edit reservations, and only drawn for others', async () => {
     const { client } = spied();
     await loaded(client);
@@ -182,3 +190,34 @@ describe('schedule housekeeping chip', () => {
 });
 
 const grid = () => screen.getByRole('grid', { name: 'Schedule', hidden: true });
+
+describe('schedule housekeeping chip in the default view', () => {
+  const OTHER_TODAY = '2026-11-02';
+
+  it('shows a chip for every status, and a checked-out stay, from a date other than the test default', async () => {
+    const client = createMockClient({ today: OTHER_TODAY });
+    await loaded(client, '/schedule', true, OTHER_TODAY);
+    const shown = new Set(chips().map((c) => c.getAttribute('data-housekeeping')));
+    for (const s of [
+      'not-checked-out',
+      'needs-cleaning',
+      'cleaned',
+      'ready',
+      'needs-maintenance',
+    ]) {
+      expect(shown, s).toContain(s);
+    }
+    const cells = within(grid()).getAllByRole('gridcell');
+    expect(cells.some((c) => /checked out/.test(c.getAttribute('aria-label') ?? ''))).toBe(true);
+  });
+
+  it('names the chip for users who may not edit, with the status', async () => {
+    const client = createMockClient({ today: OTHER_TODAY });
+    await loaded(client, '/schedule', false, OTHER_TODAY);
+    const imgs = screen.getAllByRole('img', { name: /^Housekeeping: /, hidden: true });
+    expect(imgs.length).toBeGreaterThan(0);
+    expect(imgs.some((i) => i.getAttribute('aria-label') === 'Housekeeping: not checked out')).toBe(
+      true,
+    );
+  });
+});

@@ -13,6 +13,8 @@ export interface ScheduleColors {
   /** Checked in and leaving today. */
   dueOut: string;
   closure: string;
+  /** Linked-room block (Figma "Linked Room" state). */
+  linked: string;
   /** Housekeeping chip fills (Figma "Housekeeping Block"). */
   hkNotCheckedOut: string;
   hkNeedsCleaning: string;
@@ -138,9 +140,10 @@ const base = createTheme({
       nyciBorder: 'rgba(56, 142, 60, 0.8)',
       checkedIn: 'rgba(175, 210, 177, 0.8)',
       checkedOut: 'rgba(224, 224, 224, 0.8)',
-      // PLACEHOLDER: Figma shows the due-out block as a light orange; this is the housekeeping orange at 40%.
+      // Figma "DueOut" state 15214:8379: orange at 40%.
       dueOut: 'rgba(228, 113, 0, 0.4)',
       closure: 'rgba(189, 189, 189, 0.8)',
+      linked: 'rgba(189, 189, 189, 0.8)',
       hkNotCheckedOut: 'rgba(66, 66, 66, 0.3)',
       hkNeedsCleaning: 'rgba(228, 113, 0, 0.8)',
       hkCleaned: 'rgba(253, 216, 53, 0.8)',
