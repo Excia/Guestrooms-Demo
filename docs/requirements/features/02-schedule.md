@@ -356,3 +356,17 @@ Ticket Excia/Guestrooms-Demo#22. Figma: Reservation Menus 17239:17738; Hub-Multi
   the hub (3.12). Details in `entries/22-reservation-menus.md`.
 - **Open questions:** Q-22-1, Q-22-2, Q-22-3 to Q-22-6 (entry).
 - **Status:** in review (branch `feat/22-reservation-menus`).
+
+## 2.6 Hold shading on the grid (legacy port LP-S.6)
+
+Ticket Excia/Guestrooms-Demo#152 (epic #146); PR open. Figma: none (the held-slot look is a placeholder).
+
+- **Requirements:** while a booking is in progress the chosen slot (room and dates) is shaded on the grid for the hold duration (Booking Rules "Reservation Hold" minutes, per audience); it disappears when the panel closes, saves, cancels or expires; other users' holds also show shaded and cannot be chosen for a new booking; needs a server-side hold in the API contract (functional doc 15.10, 15.10.1; gap C7; Q-19-3).
+- **Implemented:** `ScheduleData.holds`, `schedule.holdSlot` / `schedule.releaseHold` on the typed client, the mock (`src/api/holdData.ts`: idempotent, expiry-based, 409 `conflict` / `held`) and the http client with guards; pure rules `src/app/slotHolds.ts`; `ScheduleHoldView` (tint, stripes, dashed outline, lock icon, "Held until HH:mm" text and tooltip, accessible name); the New Reservation panel holds its slot (`useSlotHold`) and shows other users' holds as a Room field error; `useLiveHolds` hides a hold at its expiry. Details in `entries/152-hold-shading.md`.
+- **Deviations from Figma or the ticket:** F-152-1, F-152-2 (entry).
+- **Assumptions and defaults chosen:** D-152-1 to D-152-5 (entry).
+- **Stubs and placeholders:** a seeded hold by another user in the mock (P-152-1); the look (P-152-2). Legacy has no hold shading.
+- **API:** "Slot holds (ticket 152)" in [api-contract.md](../api-contract.md).
+- **Permissions:** `reservation.edit` to hold a slot.
+- **Open questions:** Q-152-1 to Q-152-6 (entry); Q-19-3 and Q-19-10 progress in [open-questions.md](../open-questions.md).
+- **Status:** in review (mock hold; needs a backend hold and a design), 2026-10-24.
