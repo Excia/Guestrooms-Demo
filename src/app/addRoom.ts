@@ -113,12 +113,14 @@ export function addRoomEstimate(
   return estimateTotal(stayNights(reservation.arrival, reservation.departure), roomType);
 }
 
-/** Why the Add Another Room panel cannot be used, else null (the menu already hides the item). */
+/**
+ * Why the Add Another Room panel cannot be used, else null (the menu already hides the item). No
+ * permission check: legacy has none (D-LM-5, Q-LM-2), so a link to the panel works for anyone who
+ * can see the reservation.
+ */
 export function addRoomBlocker(
   detail: Pick<ReservationDetail, 'status' | 'rooms' | 'folioCharges'>,
-  canEdit: boolean,
 ): string | null {
-  if (!canEdit) return 'You do not have permission to change this reservation.';
   if (!addRoomVisible(detail)) {
     return 'A room can no longer be added to this reservation (it is cancelled, checked out, or the night audit has run).';
   }

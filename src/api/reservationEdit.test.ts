@@ -100,7 +100,7 @@ describe('mock reservations.addRoom', () => {
     expect(after.version).toBe(before.version);
   });
 
-  it('409 stale, 404, 400 and 403', async () => {
+  it('409 stale, 404 and 400', async () => {
     const c = mk();
     const { version } = await c.reservations.getDetail('rs-3');
     const base = { reservationId: 'rs-3', adults: 1, children: 0 };

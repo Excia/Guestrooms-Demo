@@ -104,11 +104,10 @@ describe('estimate and blocker', () => {
   });
   it('explains why the panel cannot be used', () => {
     const open = { status: 'confirmed' as const, rooms: [{ status: 'nyci' }] as never };
-    expect(addRoomBlocker(open, true)).toBeNull();
-    expect(addRoomBlocker(open, false)).toMatch(/permission/);
-    expect(addRoomBlocker({ ...open, status: 'cancelled' }, true)).toMatch(/no longer/);
+    expect(addRoomBlocker(open)).toBeNull();
+    expect(addRoomBlocker({ ...open, status: 'cancelled' })).toMatch(/no longer/);
     expect(
-      addRoomBlocker({ ...open, folioCharges: [{ type: 'room-rate', status: 'posted' }] }, true),
+      addRoomBlocker({ ...open, folioCharges: [{ type: 'room-rate', status: 'posted' }] }),
     ).toMatch(/night audit/);
   });
 });

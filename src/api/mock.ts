@@ -398,9 +398,7 @@ export function createMockClient({
         respond(
           () => {
             assertAddRoomRequest(request);
-            if (!canEditReservations()) {
-              throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
-            }
+            // No permission check, as in legacy (D-LM-5, Q-LM-2).
             return replayable(request, () => {
               const added = addRoom(
                 schedule,

@@ -7,6 +7,7 @@ import type { EarlyLateValues } from '../../app/earlyLate';
 import type { PanelState } from '../../app/panelUrl';
 import type { IsoDate } from '../../lib/dates';
 import type { RoomChangeSubmission } from './ChangeRoomDialog';
+import AddRoomPanel from './AddRoomPanel';
 import NewReservationPanel from './NewReservationPanel';
 import ReservationDetails from './ReservationDetails';
 
@@ -35,6 +36,12 @@ export interface ReservationPanelProps {
   onReservationChanged?: () => void;
   /** Opens another reservation (a room was split into it); the page puts it in the URL. */
   onOpenReservation?: (reservationId: string) => void;
+  /** Add Another Room was chosen in the menu (ticket 151); the page puts the panel in the URL. */
+  onAddRoom?: (reservationId: string) => void;
+  /** Add Another Room's "Back to reservation": the details of the same reservation. */
+  onBackToReservation?: (reservationId: string) => void;
+  /** A room was added: the page shows the reservation with the new room. */
+  onRoomAdded?: (detail: ReservationDetail) => void;
   /** Called when the panel has finished closing (the page puts focus back on what opened it). */
   onExited?: () => void;
   /** The reservation just created: its heading takes focus once loaded (the form that had it is gone). */
@@ -66,6 +73,9 @@ export default function ReservationPanel({
   detailRefresh,
   onReservationChanged,
   onOpenReservation,
+  onAddRoom,
+  onBackToReservation,
+  onRoomAdded,
   onExited,
   focusTitleFor,
   side = RESERVATION_PANEL_SIDE,
@@ -121,7 +131,18 @@ export default function ReservationPanel({
             refreshToken={detailRefresh}
             onReservationChanged={onReservationChanged}
             onOpenReservation={onOpenReservation}
+            onAddRoom={onAddRoom}
             now={now}
+          />
+        ) : shown?.kind === 'add-room' ? (
+          <AddRoomPanel
+            key={shown.reservationId}
+            titleId={titleId}
+            reservationId={shown.reservationId}
+            onBackToReservation={() => onBackToReservation?.(shown.reservationId)}
+            onClose={onClose}
+            onAdded={(detail) => onRoomAdded?.(detail)}
+            onChanged={onReservationChanged}
           />
         ) : shown?.kind === 'new' ? (
           <NewReservationPanel
