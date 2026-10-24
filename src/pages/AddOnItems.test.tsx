@@ -201,4 +201,65 @@ describe('Add-On Items page', () => {
     await loaded();
     expect(screen.getByRole('heading', { level: 1, name: 'New Add-On' })).toBeInTheDocument();
   });
+
+  it('keeps the saved add-on when the list refresh fails afterwards (no duplicate on retry)', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const listSpy = vi.spyOn(client.addOns, 'list');
+    renderPage(client);
+    const name = await loaded();
+    listSpy.mockRejectedValueOnce(new Error('offline'));
+    await user.clear(name);
+    await user.type(name, 'Baby crib');
+    await user.click(screen.getByRole('button', { name: 'Save Add-On' }));
+    expect((await screen.findAllByText('Add-On Saved')).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/could not be saved/)).not.toBeInTheDocument();
+    expect(within(list()).getByRole('button', { name: 'Baby crib' })).toBeInTheDocument();
+  });
+
+  it('removes the add-on locally when the list refresh fails after a delete', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const listSpy = vi.spyOn(client.addOns, 'list');
+    renderPage(client);
+    await loaded();
+    listSpy.mockRejectedValueOnce(new Error('offline'));
+    await user.click(screen.getByRole('button', { name: 'Delete add-on' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await waitFor(() =>
+      expect(within(list()).queryByRole('button', { name: 'Crib' })).not.toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/could not be deleted/)).not.toBeInTheDocument();
+  });
+
+  it('ignores locations and room types that no longer exist', async () => {
+    const client = createMockClient();
+    const real = await client.addOns.list();
+    vi.spyOn(client.addOns, 'list').mockResolvedValue(
+      real.map((a, i) =>
+        i === 0
+          ? {
+              ...a,
+              locationIds: [...a.locationIds, 'gone'],
+              roomTypeIds: [...a.roomTypeIds, 'gone'],
+            }
+          : a,
+      ),
+    );
+    renderPage(client);
+    await loaded();
+    expect(screen.getByRole('tab', { name: 'Locations (3)' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Room Types (2)' })).toBeInTheDocument();
+  });
+
+  it('ties the SKU error to the input', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'New Add-On' }));
+    await user.click(screen.getByRole('button', { name: 'Save Add-On' }));
+    const sku = await screen.findByRole('combobox', { name: 'SKU' });
+    expect(sku).toBeInvalid();
+    expect(sku).toHaveAccessibleDescription('Select a SKU.');
+  });
 });

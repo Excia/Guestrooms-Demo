@@ -10,6 +10,8 @@ export interface AddOnData {
   reload: () => void;
   /** Re-reads the list after a save or delete. */
   refresh: () => Promise<void>;
+  /** Updates the list locally (when a refresh fails after the change was stored). */
+  patch: (change: (list: AddOnSetup[]) => AddOnSetup[]) => void;
 }
 
 // Options (SKUs, locations, room types) and the add-on list load together.
@@ -43,5 +45,9 @@ export function useAddOnData(): AddOnData {
     setState((s) => ({ ...s, addOns }));
   }, [api]);
 
-  return { ...state, reload, refresh };
+  const patch = useCallback((change: (list: AddOnSetup[]) => AddOnSetup[]) => {
+    setState((s) => ({ ...s, addOns: change(s.addOns) }));
+  }, []);
+
+  return { ...state, reload, refresh, patch };
 }

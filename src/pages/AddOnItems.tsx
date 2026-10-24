@@ -10,7 +10,7 @@ import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { AddOnInput, AddOnKind, AddOnSetup } from '../api/types';
 import {
@@ -19,9 +19,11 @@ import {
   checkDeleteAddOn,
   NAME_MAX,
   normalizeAddOn,
+  pruneAssociations,
   validateAddOn,
   type AddOnField,
 } from '../app/addOns';
+import { newRequestId } from '../lib/requestId';
 import { todayIso } from '../app/dateSelection';
 import { duplicateName, isActiveOn, sortSetupItems, type DeleteCheck } from '../app/roomSetup';
 import AdminShell from '../components/admin/AdminShell';
@@ -50,7 +52,6 @@ const FIELD_ORDER: AddOnField[] = [
   'photos',
 ];
 const fieldDomId = (f: AddOnField) => `add-on-${f}`;
-const toDraft = (a: AddOnSetup): AddOnInput => a;
 
 // Add-On Items (Admin Setup, ticket 7.4; Figma 13533:74182): the list on the left, the form on
 // the right, associations beside it and description and photos below.
@@ -86,6 +87,11 @@ function AddOnEditor({ data }: { data: AddOnData }) {
   const options = data.options as NonNullable<AddOnData['options']>;
   const today = useMemo(() => todayIso(), []);
   const sorted = useMemo(() => sortSetupItems(data.addOns, today), [data.addOns, today]);
+  // A deleted location or room type drops out of the draft, so counts and hints match what exists.
+  const toDraft = useCallback(
+    (a: AddOnSetup): AddOnInput => ({ ...a, ...pruneAssociations(a, options) }),
+    [options],
+  );
   const editor = useSetupEditor<AddOnSetup, AddOnInput>({
     items: sorted,
     toDraft,
@@ -111,8 +117,20 @@ function AddOnEditor({ data }: { data: AddOnData }) {
     setSaving(true);
     setSaveError(null);
     try {
-      const stored = await api.addOns.save(normalizeAddOn(draft));
-      await data.refresh();
+      const stored = await api.addOns.save({
+        ...normalizeAddOn(draft),
+        ...pruneAssociations(draft, options),
+      });
+      // The add-on is stored; a failed list refresh must not read as a failed save.
+      await data
+        .refresh()
+        .catch(() =>
+          data.patch((list) =>
+            list.some((a) => a.id === stored.id)
+              ? list.map((a) => (a.id === stored.id ? stored : a))
+              : [...list, stored],
+          ),
+        );
       editor.afterSave(stored.id);
       setToast((t) => ({ open: true, id: t.id + 1 }));
       return true;
@@ -134,14 +152,17 @@ function AddOnEditor({ data }: { data: AddOnData }) {
     setDeleteError(null);
     try {
       await api.addOns.delete(editor.selected.id);
-      await data.refresh();
-      setDeleteCheck(null);
-      editor.afterDelete();
     } catch {
       setDeleteError('The add-on could not be deleted. Try again.');
-    } finally {
       setDeleting(false);
+      return;
     }
+    // Deleted; a failed list refresh falls back to the local list so no second delete is offered.
+    const id = editor.selected.id;
+    await data.refresh().catch(() => data.patch((list) => list.filter((a) => a.id !== id)));
+    setDeleteCheck(null);
+    editor.afterDelete();
+    setDeleting(false);
   };
 
   const title = editor.selected?.name ?? 'New Add-On';
@@ -181,6 +202,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
               ...structuredClone(saved),
               id: undefined,
               name: duplicateName(saved.name),
+              photos: saved.photos.map((p) => ({ ...p, id: newRequestId() })),
             }))
           }
           onCancel={editor.cancelNew}
@@ -243,12 +265,8 @@ function AddOnEditor({ data }: { data: AddOnData }) {
                 value={draft.sku}
                 options={options.skus}
                 onChange={(sku) => setDraft({ ...draft, sku })}
+                error={errors.sku}
               />
-              {errors.sku ? (
-                <Typography variant="caption" color="error" role="alert">
-                  {errors.sku}
-                </Typography>
-              ) : null}
             </Box>
           </Box>
           <ToggleRow
@@ -292,8 +310,8 @@ function AddOnEditor({ data }: { data: AddOnData }) {
           {draft.locationIds.length === 0 || draft.roomTypeIds.length === 0 ? (
             <Box sx={{ mt: 1 }}>
               <Hint>
-                Select at least one location and one room type, or this add-on is not offered on
-                any reservation.
+                Select at least one location and one room type, or this add-on is not offered on any
+                reservation.
               </Hint>
             </Box>
           ) : null}

@@ -39,9 +39,7 @@ export default function NightlyCountdownRow({
           onChange={(trackNightly) => onChange({ trackNightly, nightlyQty: qty })}
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography id={`${id}-label`} variant="body2">
-            Nightly Qty.
-          </Typography>
+          <Typography variant="body2">Nightly Qty.</Typography>
           <NightsStepper
             id={id}
             label="Nightly Qty."

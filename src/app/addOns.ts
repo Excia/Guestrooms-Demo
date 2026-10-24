@@ -15,7 +15,7 @@ export { NAME_MAX, MAX_PHOTOS };
 export const ADD_ON_DESCRIPTION_MAX = 400;
 /** Nightly Qty stepper range (ticket 7.4). The maximum is provisional (Q-73-2). */
 export const NIGHTLY_QTY = { min: 1, max: 99 } as const;
-/** Quantity of one add-on on one reservation line (ticket 3.10 reads it). */
+/** Quantity of one add-on on one reservation line. Not used on this page; ticket 3.10 reads it. */
 export const LINE_QTY = { min: 1, max: 99 } as const;
 
 export type AddOnField =
