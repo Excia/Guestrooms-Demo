@@ -16,6 +16,7 @@ export function queryScheduleData(
     roomTypes: all.roomTypes,
     rooms: all.rooms,
     blocks: all.blocks.filter((b) => nightsOverlap(b.startDate, b.endDate, startDate, end)),
+    unassigned: all.unassigned.filter((b) => nightsOverlap(b.startDate, b.endDate, startDate, end)),
     closures: all.closures.filter((c) => nightsOverlap(c.startDate, c.endDate, startDate, end)),
   };
 }

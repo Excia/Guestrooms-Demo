@@ -427,7 +427,7 @@ describe('creating with TBD, Unassigned and a reserver', () => {
     const created = await panel(/Reservation #GR-7000\d/);
     expect(await within(created).findByText('Unassigned')).toBeInTheDocument();
     expect(
-      within(created).getByText(/Not shown on the schedule until a room is assigned/),
+      within(created).getByText(/Shown in the Unassigned section of the schedule until a room is assigned/),
     ).toBeInTheDocument();
     expect(within(created).getAllByText('TBD').length).toBeGreaterThan(0);
     expect(await screen.findAllByText(/created without a room/)).not.toHaveLength(0);

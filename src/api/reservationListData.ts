@@ -11,7 +11,7 @@ import type {
   ReservationListRoom,
   ReservationListRow,
 } from './reservationListTypes';
-import { bump, type ScheduleState } from './scheduleData';
+import { bump, isSeededUnassigned, type ScheduleState } from './scheduleData';
 import type { ScheduleBlock, ScheduleBlockStatus } from './types';
 import { ApiError } from './types';
 
@@ -38,7 +38,10 @@ export function buildListRows(
   checkedInExtras: ReadonlySet<string> = new Set(),
 ): ReservationListRow[] {
   const groups = new Map<string, ScheduleBlock[]>();
-  for (const block of [...state.blocks, ...state.unassigned]) {
+  for (const block of [
+    ...state.blocks,
+    ...state.unassigned.filter((b) => !isSeededUnassigned(b.id)),
+  ]) {
     const group = groups.get(block.reservationId);
     if (group) group.push(block);
     else groups.set(block.reservationId, [block]);

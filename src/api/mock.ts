@@ -30,12 +30,19 @@ import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
 import { queryReservations } from './reservationQuery';
-import { changeRoomDuringStay, createScheduleState, moveDates, moveRoom } from './scheduleData';
+import {
+  changeRoomDuringStay,
+  createScheduleState,
+  moveDates,
+  moveRoom,
+  setHousekeeping,
+} from './scheduleData';
 import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
 import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
+import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
 import {
   effectiveDetails,
@@ -55,6 +62,7 @@ import {
   assertEarlyLateRequest,
   assertMoveDatesRequest,
   assertMoveRoomRequest,
+  assertSetHousekeepingRequest,
   assertPostChargeRequest,
   assertQuickStatsQuery,
   assertReservationListQuery,
@@ -369,6 +377,7 @@ export function createMockClient({
               rooms: [],
               blocks: [],
               closures: [],
+              unassigned: [],
             };
           },
           o,
@@ -381,6 +390,18 @@ export function createMockClient({
           },
           () => {
             assertMoveRoomRequest(request);
+            throw new ApiError(404, 'Reservation room not found');
+          },
+          o,
+        ),
+      setHousekeeping: (request, o) =>
+        respond(
+          () => {
+            assertSetHousekeepingRequest(request);
+            return { blocks: replayable(request, () => setHousekeeping(schedule, request)) };
+          },
+          () => {
+            assertSetHousekeepingRequest(request);
             throw new ApiError(404, 'Reservation room not found');
           },
           o,
@@ -477,7 +498,10 @@ export function createMockClient({
             if (Object.keys(errors).length > 0) {
               throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
             }
-            systemSettings = structuredClone(settings);
+            systemSettings = structuredClone({
+              ...settings,
+              onlineBooking: normalizeOnlineBooking(settings.onlineBooking),
+            });
             return structuredClone(systemSettings);
           },
           () => structuredClone(settings),
