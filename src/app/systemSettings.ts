@@ -1,6 +1,11 @@
 // Business rules of System Settings (ticket 7.1): times, hour ranges and cross-field validation.
 // Pure functions; the page and the settings context only call them.
 import type { Duration, FolioDetails, SystemSettings } from '../api/types';
+import {
+  ONLINE_BOOKING_FIELD_ORDER,
+  validateOnlineBooking,
+  type OnlineBookingField,
+} from './onlineBookingSettings';
 
 export const TIME_STEP_MINUTES = 5;
 const MINUTES_PER_DAY = 24 * 60;
@@ -92,7 +97,8 @@ export type SystemSettingsField =
   | 'folio.zip'
   | 'folio.email'
   | 'folio.phone'
-  | 'folio.customText';
+  | 'folio.customText'
+  | OnlineBookingField;
 
 /** Messages per field; Close Settled Folios can break two rules at once, as Figma shows. */
 export type SystemSettingsErrors = Partial<Record<SystemSettingsField, string[]>>;
@@ -188,6 +194,9 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
   for (const [field, message] of Object.entries(validateFolioDetails(s.folio))) {
     add(field as SystemSettingsField, message[0]);
   }
+  for (const [field, message] of Object.entries(validateOnlineBooking(s.onlineBooking))) {
+    add(field as SystemSettingsField, message);
+  }
   return errors;
 }
 
@@ -230,6 +239,7 @@ export const FIELD_ORDER: readonly SystemSettingsField[] = [
   'folio.email',
   'folio.phone',
   'folio.customText',
+  ...ONLINE_BOOKING_FIELD_ORDER,
 ];
 
 export const isFolioField = (field: SystemSettingsField) => field.startsWith('folio.');

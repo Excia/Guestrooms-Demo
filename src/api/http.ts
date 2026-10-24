@@ -436,6 +436,15 @@ function parseCustomReports(body: unknown, status: number): CustomReportSummary[
 
 const isLookup = (v: unknown) => isObject(v) && isString(v.id) && isString(v.label);
 
+const isOnlineBooking = (v: unknown) =>
+  isObject(v) &&
+  isString(v.globalMessage) &&
+  isString(v.cancellationAgreement) &&
+  isString(v.policyUrl) &&
+  typeof v.includePolicyLink === 'boolean' &&
+  typeof v.chargeCancellationFee === 'boolean' &&
+  typeof v.showAddOnsPopup === 'boolean';
+
 // Checks the shape the form relies on; the rules themselves are the backend's to enforce.
 function parseSystemSettings(body: unknown, status: number): SystemSettings {
   if (
@@ -454,6 +463,7 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !isObject(body.alternativeBaseRate2) ||
     !isString(body.serviceChargeLabel) ||
     !isObject(body.folio) ||
+    !isOnlineBooking(body.onlineBooking) ||
     !(body.transferItem === null || isLookup(body.transferItem)) ||
     !(body.guestRoomsArea === null || isLookup(body.guestRoomsArea)) ||
     !(body.guestMember === null || isLookup(body.guestMember))
