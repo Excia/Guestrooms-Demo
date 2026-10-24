@@ -153,13 +153,13 @@ describe('opening the details panel', () => {
     );
   });
 
-  it('Enter on an empty cell or a closure does nothing', async () => {
+  it('Enter on a closure opens its details', async () => {
     const user = await loaded();
     grid().focus();
     await user.keyboard(
       '{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowRight}{Enter}',
     ); // closure in 208
-    expect(url()).toBe('/schedule');
+    expect(url()).toBe('/schedule?closure=cl-1');
   });
 
   it('a drag does not open the panel (the click that ends it is swallowed)', async () => {
@@ -177,12 +177,12 @@ describe('opening the details panel', () => {
     expect(url()).toContain('res=rs-5');
   });
 
-  it('clicking a closure does not open a panel', async () => {
+  it('clicking a closure opens the Closure details panel', async () => {
     const user = await loaded();
     await user.click(
       screen.getByRole('gridcell', { name: /Closure, Reserved: Fixed Loss, Room 208/ }),
     );
-    expect(url()).toBe('/schedule');
+    expect(url()).toBe('/schedule?closure=cl-1');
   });
 
   it('opens from a link or reload: the URL alone shows the panel, and Back closes it', async () => {
@@ -868,17 +868,12 @@ describe('early/late when the reload after an unknown outcome also fails', () =>
 });
 
 describe('small review items', () => {
-  it('Enter on a closure says there are no details; it does not open anything', async () => {
+  it('Enter on a closure opens its details', async () => {
     const user = await loaded();
     grid().focus();
     await user.keyboard('{ArrowDown}'.repeat(9) + '{ArrowRight}{Enter}');
-    expect(
-      screen
-        .getAllByRole('status', { hidden: true })
-        .map((s) => s.textContent)
-        .join(' '),
-    ).toMatch(/Closures have no details/);
-    expect(url()).toBe('/schedule');
+    expect(url()).toBe('/schedule?closure=cl-1');
+    await panel('Room 208 Closure');
   });
 
   it('every aria-controls in the panel points at an element that exists', async () => {

@@ -4,6 +4,7 @@ import {
   cleanDescription,
   closureBlockText,
   closureConflict,
+  closureFailure,
   conflictMessage,
   defaultClosureDates,
   moveClosureStart,
@@ -65,12 +66,12 @@ describe('closureConflict', () => {
     });
   });
   it('treats dates as half-open: a same-day turnover is free', () => {
-    expect(closureConflict(window, { ...room, startDate: '2026-10-12', endDate: '2026-10-14' })).toBe(
-      null,
-    );
-    expect(closureConflict(window, { ...room, startDate: '2026-10-08', endDate: '2026-10-10' })).toBe(
-      null,
-    );
+    expect(
+      closureConflict(window, { ...room, startDate: '2026-10-12', endDate: '2026-10-14' }),
+    ).toBe(null);
+    expect(
+      closureConflict(window, { ...room, startDate: '2026-10-08', endDate: '2026-10-10' }),
+    ).toBe(null);
   });
   it('ignores other rooms and the closure being edited', () => {
     expect(closureConflict(window, { ...room, roomId: 'rm-2' })).toBe(null);
@@ -120,5 +121,20 @@ describe('default and moved dates', () => {
     });
     expect(moveClosureStart(wide, '2026-10-11').endDate).toBe('2026-10-13');
     expect(moveClosureStart(wide, '').startDate).toBe('');
+  });
+});
+
+describe('closureFailure', () => {
+  it('puts a 422 conflict on the room', () => {
+    expect(closureFailure(422, 'closure-conflict')).toMatchObject({ onRoom: true, unknown: false });
+  });
+  it('reloads for a missing closure, a timeout or a server error', () => {
+    for (const status of [404, 408, 0, 500, 503]) {
+      expect(closureFailure(status).unknown).toBe(true);
+    }
+  });
+  it('keeps the form for other refusals', () => {
+    expect(closureFailure(400, 'invalid-query')).toMatchObject({ onRoom: false, unknown: false });
+    expect(closureFailure(422)).toMatchObject({ onRoom: false, unknown: false });
   });
 });

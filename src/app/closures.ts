@@ -55,8 +55,7 @@ export function defaultClosureDates(
 }
 
 export type ClosureConflict =
-  | { kind: 'reservation'; confirmationNumber: string }
-  | { kind: 'closure' };
+  { kind: 'reservation'; confirmationNumber: string } | { kind: 'closure' };
 
 /**
  * What stops a closure of `roomId` over [startDate, endDate): a reservation or another closure on
@@ -114,4 +113,38 @@ export function moveClosureStart(form: ClosureForm, startDate: IsoDate | ''): Cl
       ? addDays(startDate, kept)
       : form.endDate;
   return { ...form, startDate, endDate };
+}
+
+export interface ClosureFailure {
+  message: string;
+  /** Shown on the Room field as well (the conflict). */
+  onRoom: boolean;
+  /** The answer is unknown (timeout, network, 5xx): reload the schedule to show the truth. */
+  unknown: boolean;
+}
+
+/** What a failed save or removal says, from the API status and code. */
+export function closureFailure(status: number, code?: string): ClosureFailure {
+  if (status === 422 && code === 'closure-conflict') {
+    return {
+      message: 'The room has a reservation or a closure on those dates.',
+      onRoom: true,
+      unknown: false,
+    };
+  }
+  if (status === 404) {
+    return { message: 'This closure or room no longer exists.', onRoom: false, unknown: true };
+  }
+  if (status >= 400 && status < 500 && status !== 408) {
+    return {
+      message: 'The closure could not be saved. Check the details and try again.',
+      onRoom: false,
+      unknown: false,
+    };
+  }
+  return {
+    message: 'The result could not be confirmed. Check the schedule before trying again.',
+    onRoom: false,
+    unknown: true,
+  };
 }

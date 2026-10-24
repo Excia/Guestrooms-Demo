@@ -24,7 +24,7 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useApi } from '../../api';
-import type { ReservationDetail, ScheduleData } from '../../api';
+import type { ReservationDetail, ScheduleClosure, ScheduleData } from '../../api';
 import { ApiError } from '../../api';
 import { stayLimits } from '../../app/dateRange';
 import { ADMIN_HOLD_AUDIENCE, describeHold, formatHold, holdMinutes } from '../../app/holdTimer';
@@ -60,6 +60,7 @@ import { focusOnMount } from '../shared/focusOnMount';
 import { DETAILS_SECTIONS } from './DetailsAccordion';
 import CountStepper from './CountStepper';
 import RoomAutocomplete from './RoomAutocomplete';
+import NewClosureTab from './NewClosureTab';
 import { useBookingHold } from './useBookingHold';
 import { useHoldTimer } from './useHoldTimer';
 
@@ -78,7 +79,18 @@ export interface NewReservationPanelProps {
   /** A dialog of the panel is open (the hold expired): Escape and outside clicks must not close the panel. */
   onGuardChange: (guarded: boolean) => void;
   /** Opened from an empty grid cell: the room and Check In to start with. */
-  prefill?: { roomId?: string; arrival?: IsoDate };
+  prefill?: {
+    roomId?: string;
+    arrival?: IsoDate;
+    /** Open on the New Room Closure tab; `end` and `description` come from a duplicated closure. */
+    tab?: 'closure';
+    end?: IsoDate;
+    description?: string;
+  };
+  /** The tab changed (the URL follows). */
+  onTabChange?: (tab: 'reservation' | 'closure') => void;
+  /** A closure was saved: the page reloads the schedule and closes the panel. */
+  onClosureSaved?: (closure: ScheduleClosure) => void;
   /** False while the drawer is closing: the hold stops and its expiry dialog never shows. */
   active?: boolean;
   /** Injectable clock (epoch ms) for the hold timer; Date.now by default. */
@@ -96,6 +108,8 @@ export default function NewReservationPanel({
   onUnknownOutcome,
   onGuardChange,
   prefill,
+  onTabChange,
+  onClosureSaved,
   active = true,
   now,
 }: NewReservationPanelProps) {
@@ -107,7 +121,8 @@ export default function NewReservationPanel({
   const [form, setForm] = useState<NewReservationForm>(initial.form);
   // Opened from a past day: Check In was set to today, and the panel says so until it is edited.
   const [pastNote, setPastNote] = useState(initial.pastDate);
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(prefill?.tab === 'closure' ? 1 : 0);
+  const [footerEl, setFooterEl] = useState<HTMLElement | null>(null);
   const [addFor, setAddFor] = useState<'booking' | 'lead' | null>(null);
   // The room of a clicked cell is applied once the rooms have loaded (a reload opens the panel first).
   const [roomApplied, setRoomApplied] = useState(!prefill?.roomId);
@@ -265,7 +280,10 @@ export default function NewReservationPanel({
         <Box sx={{ display: 'flex', alignItems: 'center' }}>
           <Tabs
             value={tab}
-            onChange={(_, v: number) => setTab(v)}
+            onChange={(_, v: number) => {
+              setTab(v);
+              onTabChange?.(v === 1 ? 'closure' : 'reservation');
+            }}
             aria-label="Create"
             variant="scrollable"
             scrollButtons={false}
@@ -303,12 +321,12 @@ export default function NewReservationPanel({
           {tab === 0 ? 'New Reservation' : 'New Room Closure'}
         </Typography>
 
-        {!canCreate ? (
+        {!canCreate && tab === 0 ? (
           <Alert severity="info" sx={{ mt: 1 }}>
             You do not have permission to create reservations.
           </Alert>
         ) : null}
-        {holdState.status === 'error' ? (
+        {holdState.status === 'error' && tab === 0 ? (
           <Alert
             severity="warning"
             sx={{ mt: 1 }}
@@ -356,8 +374,17 @@ export default function NewReservationPanel({
           hidden={tab !== 1}
           sx={{ mt: 2 }}
         >
-          {/* Room closures arrive with Room Blocks (not built yet): a placeholder, no form. */}
-          <Alert severity="info">Room closures arrive with Room Blocks.</Alert>
+          <NewClosureTab
+            today={today}
+            data={data}
+            dataFailed={dataFailed}
+            onRetryData={onRetryData}
+            footerEl={tab === 1 ? footerEl : null}
+            prefill={prefill}
+            onCancel={onBack}
+            onSaved={(closure) => onClosureSaved?.(closure)}
+            onUnknownOutcome={onUnknownOutcome}
+          />
         </Box>
         <Box
           component="form"
@@ -608,6 +635,9 @@ export default function NewReservationPanel({
         </Box>
       </Box>
 
+      {tab === 1 ? (
+        <Box ref={setFooterEl} sx={{ bgcolor: 'primary.tint', px: 3.75, py: 2, flex: 'none' }} />
+      ) : null}
       {tab === 0 ? (
         <Box sx={{ bgcolor: 'primary.tint', px: 3.75, py: 2, flex: 'none' }}>
           {failure ? (
