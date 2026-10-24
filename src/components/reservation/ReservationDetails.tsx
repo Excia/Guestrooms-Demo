@@ -46,6 +46,7 @@ import {
 } from '../../app/reservationMenu';
 import { splitCta, STUB_TICKETS, type CtaActionId } from '../../app/splitCta';
 import { useAccess } from '../../app/useAccess';
+import { useSystemSettings } from '../../app/useSystemSettings';
 import { todayIso, type IsoDate } from '../../lib/dates';
 import ConfirmDialog from '../shared/ConfirmDialog';
 import { focusOnMount } from '../shared/focusOnMount';
@@ -459,7 +460,12 @@ function Loaded({
   const [changing, setChanging] = useState<{ edits?: Record<string, string> } | null>(null);
   const [seenReopen, setSeenReopen] = useState(reopenChange?.nonce ?? 0);
   const cta = splitCta(detail);
-  const menu = reservationMenu({ ...detail, canEdit });
+  const { settings: systemSettings } = useSystemSettings();
+  const menu = reservationMenu({
+    ...detail,
+    canEdit,
+    registrationCardEnabled: systemSettings?.registrationCard.enabled,
+  });
   const [cancelOpen, setCancelOpen] = useState(false);
   const actions = useReservationMenuActions({
     detail,

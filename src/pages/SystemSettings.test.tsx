@@ -240,4 +240,124 @@ describe('SystemSettings page', () => {
     await user.click(screen.getByRole('combobox', { name: 'Close Settled Folios unit' }));
     expect(screen.getByRole('option', { name: 'Days' })).toBeInTheDocument();
   });
+  describe('Registration Card tab', () => {
+    const openTab = async (client?: ApiClient) => {
+      const user = userEvent.setup();
+      renderPage(client);
+      await loaded();
+      await user.click(screen.getByRole('tab', { name: 'Registration Card' }));
+      return user;
+    };
+
+    it('shows the switch and the items as Figma draws them', async () => {
+      await openTab();
+      expect(screen.getByRole('switch', { name: 'Enable Registration Card' })).toBeChecked();
+      expect(
+        screen.getByText('When enabled, a registration card will be printed upon check-in.'),
+      ).toBeInTheDocument();
+      const group = screen.getByRole('group', { name: 'Registration Card Items' });
+      expect(within(group).getAllByRole('checkbox')).toHaveLength(19);
+      for (const name of [
+        'Include Folio Header',
+        'Confirmation Number',
+        'Lead Occupant Name',
+        'Custom Text',
+      ]) {
+        expect(within(group).getByRole('checkbox', { name })).toBeChecked();
+      }
+      for (const name of [
+        'Early Check In Flag',
+        'Room Type',
+        'Average Room Rate',
+        'Staff Signature Area',
+      ]) {
+        expect(within(group).getByRole('checkbox', { name })).not.toBeChecked();
+      }
+      expect(screen.getByRole('button', { name: 'Generate Preview' })).toBeEnabled();
+    });
+
+    it('disables the reserver phone until the reserver name is checked', async () => {
+      const user = await openTab();
+      const phone = screen.getByRole('checkbox', { name: 'Reserver Phone Number (if unique)' });
+      expect(phone).toBeDisabled();
+      await user.click(screen.getByRole('checkbox', { name: 'Reserver Name (if unique)' }));
+      expect(phone).toBeEnabled();
+    });
+
+    it('unchecking Lead Occupant Name disables and clears its phone and address', async () => {
+      const user = await openTab();
+      await user.click(screen.getByRole('checkbox', { name: 'Lead Occupant Phone Number' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Lead Occupant Address' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Lead Occupant Name' }));
+      for (const name of ['Lead Occupant Phone Number', 'Lead Occupant Address']) {
+        const box = screen.getByRole('checkbox', { name });
+        expect(box).toBeDisabled();
+        expect(box).not.toBeChecked();
+      }
+    });
+
+    it('turns every item and the preview off with the switch', async () => {
+      const user = await openTab();
+      await user.click(screen.getByRole('switch', { name: 'Enable Registration Card' }));
+      expect(screen.getByRole('checkbox', { name: 'Room Number' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Generate Preview' })).toBeDisabled();
+    });
+
+    it('counts the custom text up to 500 and hides the box while Custom Text is unchecked', async () => {
+      const user = await openTab();
+      const text = screen.getByRole('textbox', { name: 'Custom Text' });
+      expect(text).toHaveAttribute('maxlength', '500');
+      await user.clear(text);
+      await user.type(text, 'Hello');
+      expect(screen.getByText('5 / 500')).toBeInTheDocument();
+      await user.click(screen.getByRole('checkbox', { name: 'Custom Text' }));
+      expect(screen.queryByRole('textbox', { name: 'Custom Text' })).not.toBeInTheDocument();
+    });
+
+    it('saves the card with the rest of System Settings', async () => {
+      const client = createMockClient();
+      const save = vi.spyOn(client.systemSettings, 'save');
+      const user = await openTab(client);
+      await user.click(screen.getByRole('checkbox', { name: 'Room Type' }));
+      await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+      await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+      expect(save.mock.calls[0][0].registrationCard.items.roomType).toBe(true);
+    });
+
+    it('Generate Preview asks for the file with the unsaved draft and opens it in a new tab', async () => {
+      const client = createMockClient();
+      const request = vi
+        .spyOn(client.registrationCard, 'requestPreview')
+        .mockResolvedValue({ url: 'blob:preview' });
+      const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
+      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      const user = await openTab(client);
+      await user.click(screen.getByRole('checkbox', { name: 'Room Type' }));
+      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      await waitFor(() => expect(tab.location.href).toBe('blob:preview'));
+      expect(open).toHaveBeenCalledWith('', '_blank');
+      expect(request.mock.calls[0][0].settings.items.roomType).toBe(true);
+      expect(request.mock.calls[0][0].folio.city).toBe('Cincinnati');
+      open.mockRestore();
+    });
+
+    it('closes the tab and says so when the preview fails or the address is not safe', async () => {
+      const client = createMockClient();
+      const request = vi.spyOn(client.registrationCard, 'requestPreview');
+      const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
+      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+      const user = await openTab(client);
+      request.mockRejectedValueOnce(new Error('down'));
+      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The preview could not be generated',
+      );
+      expect(tab.close).toHaveBeenCalledTimes(1);
+      request.mockResolvedValueOnce({ url: 'javascript:alert(1)' });
+      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      await waitFor(() => expect(tab.close).toHaveBeenCalledTimes(2));
+      expect(tab.location.href).toBe('');
+      open.mockRestore();
+    });
+  });
 });

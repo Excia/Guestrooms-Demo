@@ -379,3 +379,13 @@ carry the `ReservationDetail.version` the user saw.
   Check In when a checked-in room's check-in business date (arrival, Q-22-5) is on or before it, and when the field is absent.
 - Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
 - New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).
+
+## Registration Card (ticket 7.8, branch `feat/95-registration-card`)
+
+| #   | Method and path                      | Request                                                                                              | Response                                                      | Errors                |
+| --- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | --------------------- |
+| 1   | `POST /registration-card/preview`    | `{settings: RegistrationCardSettings, folio: FolioDetails}` (the unsaved draft; the folio header for Include Folio Header) | `{url}` of a PDF of a sample card; the UI opens it in a new tab | 400, 422, 5xx         |
+
+- `GET` and `PUT /settings/system` (row 15 above) gain `registrationCard: {enabled, items: {<id>: boolean}, customText (max 500)}`. Item ids: `folioHeader`, `confirmationNumber`, `checkInDate`, `checkOutDate`, `earlyCheckInFlag`, `lateCheckOutFlag`, `roomNumber`, `roomType`, `guestCount`, `averageRoomRate`, `leadOccupantName`, `leadOccupantAddress`, `leadOccupantPhone`, `reserverName`, `reserverPhone`, `publicNotes`, `customText`, `guestSignature`, `staffSignature`. The backend re-checks the 500-character limit (422 `validation`).
+- The backend's PDF generator follows `buildRegistrationCard` (`src/app/registrationCard.ts`): only checked items print; a phone or address needs its name; Reserved By prints only for a reserver who is not the lead occupant; Average Room Rate is revenue over nights without taxes or service charges; custom text prints above the signatures.
+- The card of a reservation (menu action) is served at `/files/registration-cards/<reservationId>.pdf` (stub path from ticket 2.5).

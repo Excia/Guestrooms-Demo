@@ -35,6 +35,18 @@ const input = (statuses: Status[], extra: Partial<MenuInput> = {}): MenuInput =>
 const labels = (i: MenuInput) => reservationMenu(i).map((a) => a.label);
 
 describe('reservationMenu', () => {
+  it('hides Print Registration Card(s) in every state when the setting is off, keeps it when unknown', () => {
+    for (const statuses of [['nyci'], ['checked-in'], ['checked-out']] as const) {
+      const off = labels(input([...statuses], { registrationCardEnabled: false }));
+      expect(off).not.toContain('Print Registration Card(s)');
+      expect(off).toContain('Jump to Folio');
+      expect(labels(input([...statuses], { registrationCardEnabled: true }))).toContain(
+        'Print Registration Card(s)',
+      );
+      expect(labels(input([...statuses]))).toContain('Print Registration Card(s)');
+    }
+  });
+
   it('not yet checked in', () => {
     expect(labels(input(['nyci']))).toEqual([
       'Edit Reservation',

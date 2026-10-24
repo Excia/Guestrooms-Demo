@@ -33,6 +33,11 @@ const action = (id: MenuActionId): MenuAction => ({ id, label: LABELS[id] });
 export type MenuInput = Pick<ReservationDetail, 'status' | 'rooms' | 'lastAuditedDate'> & {
   /** Holds `reservation.edit`: without it only Print and Jump to Folio remain. Required: no default. */
   canEdit: boolean;
+  /**
+   * The Registration Card switch of System Settings (ticket 7.8). False hides Print Registration
+   * Card(s); undefined (settings not loaded yet, or no provider) leaves it in the menu.
+   */
+  registrationCardEnabled?: boolean;
 };
 
 export type MenuState =
@@ -112,19 +117,20 @@ export function reservationMenu(input: MenuInput): MenuAction[] {
   const state = menuState(input);
   const { canEdit } = input;
   const ids: MenuActionId[] = [];
+  const print = input.registrationCardEnabled !== false;
   const edit = hasUnassignedRoom(input.rooms) ? 'assign-room' : 'edit-reservation';
   if (state === 'not-checked-in') {
     if (canEdit) ids.push(edit, 'cancel-reservation', 'add-room');
-    ids.push('print-registration-card');
+    if (print) ids.push('print-registration-card');
   } else if (state === 'checked-in') {
     if (canEdit) {
       if (canUndoReservationCheckIn(input)) ids.push('undo-check-in');
       ids.push(edit);
       ids.push('add-room');
     }
-    ids.push('print-registration-card');
+    if (print) ids.push('print-registration-card');
   } else if (state !== 'cancelled') {
-    ids.push('print-registration-card');
+    if (print) ids.push('print-registration-card');
   }
   ids.push('jump-to-folio');
   return ids.map(action);

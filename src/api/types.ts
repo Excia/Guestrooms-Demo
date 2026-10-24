@@ -1,3 +1,4 @@
+import type { RegistrationCardApi, RegistrationCardSettings } from './registrationCardTypes';
 import type { ReservationListApi } from './reservationListTypes';
 
 /** ISO calendar date, `YYYY-MM-DD`. */
@@ -680,6 +681,8 @@ export interface SystemSettings {
   guestRoomsArea: LookupRef | null;
   guestMember: LookupRef | null;
   folio: FolioDetails;
+  /** The Registration Card tab (ticket 7.8); also decides whether Print Registration Card is offered. */
+  registrationCard: RegistrationCardSettings;
 }
 
 /** Choices for the System Settings selects and lookups. */
@@ -1103,6 +1106,7 @@ export interface ApiClient {
   members: MembersApi;
   folios: FoliosApi;
   reports: ReportsApi;
+  registrationCard: RegistrationCardApi;
 }
 
 export interface ApiErrorInit {

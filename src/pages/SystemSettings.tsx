@@ -12,6 +12,7 @@ import {
   firstErrorField,
   isDirty,
   isFolioField,
+  isRegistrationCardField,
   validateSystemSettings,
   type SystemSettingsField,
 } from '../app/systemSettings';
@@ -20,11 +21,12 @@ import { useSystemSettings } from '../app/useSystemSettings';
 import AdminShell from '../components/admin/AdminShell';
 import FolioDetailsTab from '../components/admin/systemSettings/FolioDetailsTab';
 import { fieldId } from '../components/admin/systemSettings/fieldParts';
+import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
 
-type TabId = 'settings' | 'folio';
+type TabId = 'settings' | 'folio' | 'registration';
 const tabId = (id: string) => `system-settings-tab-${id}`;
 const panelId = (id: string) => `system-settings-panel-${id}`;
 
@@ -72,7 +74,11 @@ export default function SystemSettings() {
     const found = validateSystemSettings(draft);
     const first = firstErrorField(found);
     if (first) {
-      const target: TabId = isFolioField(first) ? 'folio' : 'settings';
+      const target: TabId = isFolioField(first)
+        ? 'folio'
+        : isRegistrationCardField(first)
+          ? 'registration'
+          : 'settings';
       focusAfterTab.current = first;
       if (target !== tab) setTab(target);
       else {
@@ -162,6 +168,12 @@ export default function SystemSettings() {
             id={tabId('folio')}
             aria-controls={panelId('folio')}
           />
+          <Tab
+            value="registration"
+            label="Registration Card"
+            id={tabId('registration')}
+            aria-controls={panelId('registration')}
+          />
         </Tabs>
         {saveError ? (
           <Alert severity="error" sx={{ mb: 3 }}>
@@ -177,6 +189,13 @@ export default function SystemSettings() {
         >
           {tab === 'settings' ? (
             <SettingsTab value={draft} onChange={setDraft} errors={errors} options={options} />
+          ) : tab === 'registration' ? (
+            <RegistrationCardTab
+              value={draft.registrationCard}
+              onChange={(registrationCard) => setDraft({ ...draft, registrationCard })}
+              folio={draft.folio}
+              errors={errors}
+            />
           ) : (
             <>
               <Typography sx={{ mb: 3 }}>
