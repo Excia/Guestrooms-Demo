@@ -44,6 +44,8 @@ import type {
 import { normalizeRuns } from '../lib/stayPlan';
 import { expectedLeadOccupantName } from './createRules';
 import { REGISTRATION_CARD_ITEM_IDS } from './registrationCardTypes';
+import { assertChangeLogQuery } from './changeLogValidation';
+import { changeLogParams, parseChangeEventTypes, parseChangeLogPage } from './httpChangeLog';
 import { listParams, parseCheckIn, parseListOptions, parseListPage } from './httpReservationList';
 import type { CheckInRoomRequest } from './reservationListTypes';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
@@ -1282,6 +1284,14 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     registrationCard: {
       requestPreview: (body, o) =>
         request('/registration-card/preview', {}, o, parsePreviewUrl, { method: 'POST', body }),
+    },
+    changeLog: {
+      list: (query, o) =>
+        Promise.resolve().then(() => {
+          assertChangeLogQuery(query);
+          return request('/change-log', changeLogParams(query), o, parseChangeLogPage);
+        }),
+      listEventTypes: (o) => request('/change-log/event-types', {}, o, parseChangeEventTypes),
     },
   };
 }

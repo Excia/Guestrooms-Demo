@@ -1,4 +1,5 @@
 import type { RegistrationCardApi, RegistrationCardSettings } from './registrationCardTypes';
+import type { ChangeLogApi } from './changeLogTypes';
 import type { ReservationListApi } from './reservationListTypes';
 
 /** ISO calendar date, `YYYY-MM-DD`. */
@@ -1229,6 +1230,7 @@ export interface ApiClient {
   folios: FoliosApi;
   reports: ReportsApi;
   registrationCard: RegistrationCardApi;
+  changeLog: ChangeLogApi;
 }
 
 export interface ApiErrorInit {
