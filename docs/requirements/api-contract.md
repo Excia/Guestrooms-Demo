@@ -379,3 +379,19 @@ carry the `ReservationDetail.version` the user saw.
   Check In when a checked-in room's check-in business date (arrival, Q-22-5) is on or before it, and when the field is absent.
 - Cancel is refused (`not-cancellable`) once any room is checked in or out, and for an already cancelled reservation. Fees are out of scope (D-007). A cancelled reservation leaves the schedule; its detail stays readable.
 - New error codes: `not-cancellable`, `not-checked-in`, `audit-closed` (all 409).
+
+## Add-on items (ticket 7.4, built on the mock)
+
+| Method and path                  | Body / response                                                                                                | Errors                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `GET /add-ons/options`           | `AddOnOptions { skus, locations, roomTypes }`, each a list of `{ id, label }`                                 | 5xx                                      |
+| `GET /add-ons`                   | `AddOnSetup[]`                                                                                                 | 5xx                                      |
+| `POST /add-ons`                  | `AddOnInput` (no `id`) returns the stored `AddOnSetup`                                                         | 422 `validation`                         |
+| `PUT /add-ons/{id}`              | `AddOnInput` returns the stored `AddOnSetup`                                                                   | 422 `validation`, 404 `not-found`        |
+| `DELETE /add-ons/{id}`           | 204                                                                                                            | 404 `not-found`                          |
+
+`AddOnSetup`: `id`, `name` (1 to 50), `startDate`, `endDate | null` (after the start), `kind` (`item` or `combo`),
+`sku` (`{ id, label }`, required; the reservation shows its price), `onlineBooking`, `trackNightly`, `nightlyQty`
+(1 to 99, meaningful only while `trackNightly`; the backend stores 1 otherwise), `description` (at most 400),
+`photos` (at most 50, `{ id, name, url }`), `locationIds`, `roomTypeIds`. The rules are in `src/app/addOns.ts` and
+must be enforced again by the backend. Photo upload and storage are open (Q-72-1).

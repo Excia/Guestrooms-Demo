@@ -781,6 +781,48 @@ export interface RoomSetupApi {
   deleteRoom(id: string, options?: RequestOptions): Promise<void>;
 }
 
+// ---- add-on items (Admin Setup, ticket 7.4) ---------------------------------------------------
+
+/** "item" sells one SKU. "combo" is open (Q-73-1): it is stored and flagged but behaves like an item. */
+export type AddOnKind = 'item' | 'combo';
+
+export interface AddOnSetup {
+  id: string;
+  name: string;
+  /** yyyy-mm-dd; the add-on can be selected on reservations from this day. */
+  startDate: string;
+  /** null: no end date configured. */
+  endDate: string | null;
+  kind: AddOnKind;
+  /** The SKU whose price a reservation shows; required. */
+  sku: LookupRef | null;
+  onlineBooking: boolean;
+  /** Track Nightly Countdown: `nightlyQty` is then the pool available per night. */
+  trackNightly: boolean;
+  nightlyQty: number;
+  description: string;
+  photos: RoomPhoto[];
+  locationIds: string[];
+  roomTypeIds: string[];
+}
+
+/** A form's value: `id` is missing until the first save. */
+export type AddOnInput = Omit<AddOnSetup, 'id'> & { id?: string };
+
+export interface AddOnOptions {
+  skus: LookupRef[];
+  locations: LookupRef[];
+  roomTypes: LookupRef[];
+}
+
+/** Errors: 422 `validation` (the rules in `src/app/addOns.ts`), 404 `not-found`. */
+export interface AddOnApi {
+  getOptions(options?: RequestOptions): Promise<AddOnOptions>;
+  list(options?: RequestOptions): Promise<AddOnSetup[]>;
+  save(input: AddOnInput, options?: RequestOptions): Promise<AddOnSetup>;
+  delete(id: string, options?: RequestOptions): Promise<void>;
+}
+
 // ---- booking rules (Admin Setup, ticket 7.5) --------------------------------------------------
 
 export type TimeUnit = 'days' | 'weeks' | 'months';
@@ -1099,6 +1141,7 @@ export interface ApiClient {
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
   roomSetup: RoomSetupApi;
+  addOns: AddOnApi;
   bookingRules: BookingRulesApi;
   members: MembersApi;
   folios: FoliosApi;
