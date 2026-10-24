@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Board helper for the Guestrooms project (GitHub Projects v2, Excia/projects/1).
 
-Used by the Manager agent. Every mutation validates first, then changes the board, and
+Used by the Manager agent. Set BOARD=2 to work on the Legacy Port project (default BOARD=1). Every mutation validates first, then changes the board, and
 retries on GitHub rate limits. `--dry-run` may appear anywhere and prints what would change.
 
   scripts/board.py ready                      list Ready tickets in pick order; skipped ones show why
@@ -14,9 +14,12 @@ retries on GitHub rate limits. `--dry-run` may appear anywhere and prints what w
   scripts/board.py comment N "text"           comment on a ticket
   scripts/board.py done N                     move to Done, drop agent:working and blocked
 """
-import json, re, subprocess, sys, time
+import json, os, re, subprocess, sys, time
 
-REPO, PROJECT_ID = 'Excia/Guestrooms-Demo', 'PVT_kwHOAVwAss4BmfKH'
+REPO = 'Excia/Guestrooms-Demo'
+# BOARD=2 selects the Legacy Port project (Excia/projects/2); default is the main board.
+PROJECTS = {'1': 'PVT_kwHOAVwAss4BmfKH', '2': 'PVT_kwHOAVwAss4BokiR'}
+PROJECT_ID = PROJECTS.get(os.environ.get('BOARD', '1')) or sys.exit('board.py: BOARD must be 1 or 2')
 STATUSES = ['Backlog', 'Ready', 'In Progress', 'In Review', 'Done']
 # Pick order by epic number (see CONTRIBUTING.md and docs/MANAGER.md).
 EPIC_ORDER = [0, 1, 3, 4, 2, 8, 7, 6, 5, 9, 10, 11]
