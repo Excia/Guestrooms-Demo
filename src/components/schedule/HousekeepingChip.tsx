@@ -23,6 +23,8 @@ export interface HousekeepingChipProps {
   block: ScheduleBlock;
   chip: ChipSpec;
   fill: string;
+  /** The status shown (the stored one, or the default of a stay with none); defaults to `block.housekeeping`. */
+  status?: HousekeepingStatus;
   /** Absent when the user may not change housekeeping: the chip is then only drawn. */
   onSave?: SetHousekeeping;
 }
@@ -45,14 +47,21 @@ function isSettable(status: HousekeepingStatus | undefined): status is SettableH
  * design exists, so this is plain themed MUI). Picking a status saves at once; the note is saved
  * with Save; the X closes.
  */
-export default function HousekeepingChip({ block, chip, fill, onSave }: HousekeepingChipProps) {
+export default function HousekeepingChip({
+  block,
+  chip,
+  fill,
+  status: shown,
+  onSave,
+}: HousekeepingChipProps) {
   const id = useId();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
   const saved = block.housekeepingNotes ?? '';
-  const status = isSettable(block.housekeeping) ? block.housekeeping : undefined;
+  const current = shown ?? block.housekeeping;
+  const status = isSettable(current) ? current : undefined;
 
   const look = (t: Theme) => ({
     position: 'absolute' as const,
@@ -88,7 +97,7 @@ export default function HousekeepingChip({ block, chip, fill, onSave }: Housekee
     return (
       <Box
         aria-hidden
-        data-housekeeping={block.housekeeping}
+        data-housekeeping={current}
         style={{ width: chip.width }}
         sx={(t) => ({ ...look(t), overflow: 'hidden' })}
       >
@@ -131,7 +140,7 @@ export default function HousekeepingChip({ block, chip, fill, onSave }: Housekee
         aria-label={chip.name}
         aria-haspopup="dialog"
         aria-expanded={anchor ? true : undefined}
-        data-housekeeping={block.housekeeping}
+        data-housekeeping={current}
         style={{ width: chip.width }}
         onPointerDown={stop}
         onClick={open}

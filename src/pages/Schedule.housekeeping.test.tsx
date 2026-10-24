@@ -65,6 +65,14 @@ afterAll(() => {
 });
 
 describe('schedule housekeeping chip', () => {
+  it('is drawn at the end of stays in every status, also stays not yet checked in', async () => {
+    const { client } = spied();
+    await loaded(client);
+    const shown = new Set(chips().map((c) => c.getAttribute('data-housekeeping')));
+    for (const s of ['not-checked-out', 'needs-cleaning', 'cleaned', 'ready', 'needs-maintenance'])
+      expect(shown, s).toContain(s);
+  });
+
   it('is a button for users who may edit reservations, and only drawn for others', async () => {
     const { client } = spied();
     await loaded(client);

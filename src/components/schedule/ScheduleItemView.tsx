@@ -10,6 +10,8 @@ import { memo, useRef, useState, type PointerEventHandler } from 'react';
 import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
+import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
+import { blockFillToken, housekeepingFillToken } from '../../app/scheduleColors';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
 import { linkedBlockText, linkedTooltipLines } from '../../app/scheduleLinked';
 import HousekeepingChip, { type SetHousekeeping } from './HousekeepingChip';
@@ -61,33 +63,12 @@ export interface ScheduleItemViewProps {
 }
 
 function fill(item: ScheduleItem, today: IsoDate, t: Theme): string {
-  const c = t.palette.schedule;
-  if (item.kind === 'closure') return c.closure;
-  if (item.linkedTo) return t.palette.grey[300];
-  switch (item.status) {
-    case 'checked-in':
-      return item.endDate === today ? c.dueOut : c.checkedIn;
-    case 'checked-out':
-      return c.checkedOut;
-    default:
-      return c.nyci;
-  }
+  return t.palette.schedule[blockFillToken(item, today)];
 }
 
 function housekeepingFill(status: HousekeepingStatus, t: Theme): string {
-  const c = t.palette.schedule;
-  switch (status) {
-    case 'needs-cleaning':
-      return c.hkNeedsCleaning;
-    case 'cleaned':
-      return c.hkCleaned;
-    case 'ready':
-      return c.hkReady;
-    case 'needs-maintenance':
-      return c.hkNeedsMaintenance;
-    default:
-      return c.hkNotCheckedOut;
-  }
+  const token = housekeepingFillToken(status);
+  return token ? t.palette.schedule[token] : 'transparent';
 }
 
 const NAME_COLOR = (t: Theme, item: ScheduleBlock) =>
@@ -216,10 +197,8 @@ export default memo(function ScheduleItemView({
   const block = item as ScheduleBlock;
   const settled =
     !isClosure && !linked && (block.status === 'checked-in' || block.status === 'checked-out');
-  const hk =
-    isClosure || ghost
-      ? null
-      : housekeepingChip(block.housekeeping, layout, days, Boolean(block.housekeepingNotes));
+  const hkStatus = isClosure || ghost ? undefined : housekeepingStatusOf(block);
+  const hk = housekeepingChip(hkStatus, layout, days, Boolean(block.housekeepingNotes));
   const markers = isClosure ? { left: false, right: false } : blockMarkers(block, layout);
   const bodyBox = (
     <Box
@@ -383,11 +362,12 @@ export default memo(function ScheduleItemView({
       ) : (
         bodyBox
       )}
-      {hk && block.housekeeping ? (
+      {hk && hkStatus ? (
         <HousekeepingChip
           block={block}
+          status={hkStatus}
           chip={hk}
-          fill={housekeepingFill(block.housekeeping, theme)}
+          fill={housekeepingFill(hkStatus, theme)}
           onSave={onSetHousekeeping}
         />
       ) : null}
