@@ -7,7 +7,7 @@ import { useTheme, type Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
 import { memo, useMemo, useRef, useState, type PointerEventHandler } from 'react';
-import type { HousekeepingStatus, ScheduleBlock, ScheduleClosure } from '../../api';
+import type { HousekeepingStatus, ScheduleBlock } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
@@ -229,7 +229,6 @@ export default memo(function ScheduleItemView({
     </span>
   ) : null;
   const isClosure = item.kind === 'closure';
-  const closure = item as ScheduleClosure;
   const block = item as ScheduleBlock;
   const settled =
     !isClosure && !linked && (block.status === 'checked-in' || block.status === 'checked-out');
@@ -310,12 +309,6 @@ export default memo(function ScheduleItemView({
           )}
         </>
       )}
-      {isClosure && closure.endMarker ? (
-        <>
-          {layout.continuesBefore ? null : marker('left')}
-          {layout.continuesAfter ? null : marker('right')}
-        </>
-      ) : null}
       {/* Early Check In / Late Check Out edge markers at a real arrival / departure edge. */}
       {markers.left ? marker('left') : null}
       {markers.right ? marker('right') : null}

@@ -376,6 +376,24 @@ describe('early check in and late check out auto-save', () => {
     );
   });
 
+  it('Late Check Out on a not yet checked in reservation draws the right tab at once (legacy)', async () => {
+    const user = await loaded('/schedule?res=rs-5&rr=rr-5');
+    const dialog = await panel(/Reservation #GR-50310/);
+    await within(dialog).findByText('Check In: 10/16/2026');
+    expect(block('Thomas Okafor').getAttribute('aria-label')).toMatch(/not yet checked in/);
+    expect(block('Thomas Okafor').querySelector('[data-marker="right"]')).toBeNull();
+    await user.click(boxes(dialog).late);
+    await waitFor(() => {
+      expect(block('Thomas Okafor').getAttribute('aria-label')).toMatch(/late check out/);
+      expect(block('Thomas Okafor').querySelector('[data-marker="right"]')).not.toBeNull();
+    });
+    expect(block('Thomas Okafor').querySelector('[data-marker="left"]')).toBeNull();
+    await user.click(boxes(dialog).late);
+    await waitFor(() =>
+      expect(block('Thomas Okafor').querySelector('[data-marker="right"]')).toBeNull(),
+    );
+  });
+
   it('shows the saved values the next time the panel opens', async () => {
     const user = await loaded('/schedule?res=rs-5&rr=rr-5');
     let dialog = await panel(/Reservation #GR-50310/);
@@ -925,14 +943,14 @@ describe('small review items', () => {
 });
 
 describe('early and late markers on the grid', () => {
-  it('a checked-in stay shows no early indicator, even with the flag set (ticket 2.4)', async () => {
+  it('a checked-in stay with the early flag still draws the early tab (legacy, D-EM-1)', async () => {
     await loaded('/schedule');
     const daniel = block('Daniel Whitfield');
-    expect(daniel.getAttribute('aria-label')).not.toMatch(/early check in/);
-    expect(daniel.querySelector('[data-marker="left"]')).toBeNull();
+    expect(daniel.getAttribute('aria-label')).toMatch(/early check in/);
+    expect(daniel.querySelector('[data-marker="left"]')).not.toBeNull();
   });
 
-  it('a not yet checked in stay shows only the early sliver, even when late is ticked too', async () => {
+  it('a not yet checked in stay draws both tabs when both are ticked (legacy, D-EM-1)', async () => {
     const user = await loaded('/schedule');
     await user.click(block('Henry Lowell'));
     const dialog = await panel(/Reservation #GR-50312/);
@@ -946,7 +964,7 @@ describe('early and late markers on the grid', () => {
     await panelGone();
     const henry = block('Henry Lowell');
     expect(henry.querySelector('[data-body] > [data-marker="left"]')).not.toBeNull();
-    expect(henry.querySelector('[data-body] > [data-marker="right"]')).toBeNull();
+    expect(henry.querySelector('[data-body] > [data-marker="right"]')).not.toBeNull();
   });
 });
 

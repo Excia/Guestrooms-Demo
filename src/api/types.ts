@@ -1360,7 +1360,10 @@ export interface ScheduleClosure {
   startDate: IsoDate;
   endDate: IsoDate;
   reason: string;
-  /** Show the orange "block ends" marker. */
+  /**
+   * Unused by the UI: the Figma orange "block ends" marker is not drawn (legacy closures have none,
+   * owner decision 2026-10-25, D-EM-2). Kept so the API shape and seeds stay unchanged.
+   */
   endMarker: boolean;
 }
 

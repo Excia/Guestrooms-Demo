@@ -197,6 +197,11 @@ describe('ScheduleItemView closure tooltip', () => {
     endMarker: false,
   };
 
+  it('draws no end markers, even when the seed says endMarker (legacy closures have none)', () => {
+    const { container } = view({ ...closure, endMarker: true });
+    expect(container.querySelector('[data-marker]')).toBeNull();
+  });
+
   it('has no tooltip on hover while its text fits', async () => {
     view(closure, { tip: closure.reason });
     await userEvent.hover(screen.getByRole('gridcell'));

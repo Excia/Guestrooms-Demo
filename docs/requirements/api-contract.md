@@ -81,7 +81,7 @@ totalNights, averageRate}`; rows are one per rate category in the data (not a fi
   optional `roomChange {part: 'previous'|'current'|'next', index, count, stayId}` when the stay changed room
   during the stay (ticket 2.3);
   `ScheduleRoom.housekeeping` (`clean|dirty`) is optional and a placeholder.
-- `ScheduleClosure`: `kind: 'closure'`, `id`, `roomId`, `startDate`, `endDate`, `reason`, `endMarker`.
+- `ScheduleClosure`: `kind: 'closure'`, `id`, `roomId`, `startDate`, `endDate`, `reason`, `endMarker` (unused by the UI since D-EM-2; closures draw no end markers).
 - Every block and closure must sit in a listed room; **ids must be unique across blocks and closures**
   (the grid looks items up by id); rooms unique. "Empty" means no rooms.
 - The client's drag rules only see the loaded window; the server's 409 stays authoritative (a long stay
@@ -494,7 +494,7 @@ backend's concern (Q-75-3).
 - **403 `forbidden`** without the `reservation.edit` permission (as for cancel and undo check-in). **429** is retryable with the same `requestId`.
 - `requestId` is the `Idempotency-Key` (same rules as moves). Delete answers 204. The grid reloads the
   schedule after every save or removal (the endpoint has no list of changed blocks).
-- A new closure has `endMarker: false` (the orange "block ends" marker is seed data only).
+- A new closure has `endMarker: false` (`endMarker` is seed data only and the UI does not draw it, D-EM-2).
 
 ## Check in on past dates (ticket 163, built on the mock)
 

@@ -268,13 +268,12 @@ Excia/Guestrooms-Demo#35. Figma: Late Checkout System Setting 12369:20668, Hub L
   must be later than the MPOS "Folio is no longer visible" value and also validated against the late
   checkout difference; inline errors. **Hub checkboxes:** all rooms NYCI: both enabled; once any room
   is checked in: Early disabled, Late enabled; checked in past standard checkout time: both disabled;
-  checked out: both disabled (pure function, one test per state). Early selected: indicator on blocks
-  of reservations not yet checked in. Late selected: indicator on checked-in or checked-out blocks; at
+  checked out: both disabled (pure function, one test per state). Early selected and Late selected: each draws its tab on the block whatever the status
+  (owner 2026-10-25, D-EM-1, replaces the original status gating); at
   the system checkout time the flag is checked and the reservation **stays checked in** (not auto
   checked out); the admin may check out manually before the late checkout time, and at the Late
   Checkout Time the reservation is **auto checked out** (documented API contract plus a mock).
-  Schedule: Not Yet Checked In shows only early; Checked In and Checked Out show only late, even when
-  both are selected. The details panel checkboxes auto-save.
+  Schedule: no status gating, each selected flag draws its tab (D-EM-1). The details panel checkboxes auto-save.
 - **Existing groundwork:** the details panel checkboxes and the `POST /reservations/:id/early-late`
   contract are on `main` (PR Excia/Guestrooms-Demo#119, D-058); the system setting, hub checkboxes, validation
   and the auto-checkout job are not built. Annotations reference another Figma file key; ignore (D-012).

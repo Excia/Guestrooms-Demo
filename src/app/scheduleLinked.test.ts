@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   blockIndicators,
-  indicatorsForStatus,
   isLinkedBlock,
   linkedBlockText,
   linkedTooltipLines,
@@ -56,29 +55,6 @@ describe('isLinkedBlock', () => {
   });
 });
 
-describe('indicatorsForStatus', () => {
-  const both = { earlyCheckIn: true, lateCheckOut: true };
-  it('Not Yet Checked In shows only early check in', () => {
-    expect(indicatorsForStatus('nyci', both)).toEqual({ early: true, late: false });
-    expect(indicatorsForStatus('confirmed', both)).toEqual({ early: true, late: false });
-    expect(indicatorsForStatus('nyci', { lateCheckOut: true })).toEqual({
-      early: false,
-      late: false,
-    });
-  });
-  it('Checked In and Checked Out show only late check out, even if both are set', () => {
-    expect(indicatorsForStatus('checked-in', both)).toEqual({ early: false, late: true });
-    expect(indicatorsForStatus('checked-out', both)).toEqual({ early: false, late: true });
-    expect(indicatorsForStatus('checked-in', { earlyCheckIn: true })).toEqual({
-      early: false,
-      late: false,
-    });
-  });
-  it('keeps both flags when the status is unknown', () => {
-    expect(indicatorsForStatus(undefined, both)).toEqual({ early: true, late: true });
-  });
-});
-
 describe('blockIndicators', () => {
   it('a linked block draws no indicators, whatever its flags and status', () => {
     const linkedTo = { roomNumber: '1', reserverName: 'A B' };
@@ -88,24 +64,31 @@ describe('blockIndicators', () => {
       );
     }
   });
-  it('an unlinked block uses its own flags', () => {
-    expect(blockIndicators({ status: 'checked-out', lateCheckOut: true })).toEqual({
+  it('an unlinked block draws each set flag whatever its status (legacy)', () => {
+    const both = { earlyCheckIn: true, lateCheckOut: true };
+    for (const status of ['nyci', 'confirmed', 'checked-in', 'checked-out'] as const) {
+      expect(blockIndicators({ status, ...both })).toEqual({ early: true, late: true });
+    }
+    expect(blockIndicators({ status: 'nyci', lateCheckOut: true })).toEqual({
       early: false,
       late: true,
     });
+    expect(blockIndicators({ status: 'checked-in', earlyCheckIn: true })).toEqual({
+      early: true,
+      late: false,
+    });
+    expect(blockIndicators({ status: 'checked-out' })).toEqual({ early: false, late: false });
   });
 });
 
 describe('blockMarkers with a status', () => {
   const edge = { continuesBefore: false, continuesAfter: false };
   const both = { earlyCheckIn: true, lateCheckOut: true };
-  it('draws the left sliver for not yet checked in and the right one after check in', () => {
-    expect(blockMarkers({ ...both, status: 'nyci' }, edge)).toEqual({ left: true, right: false });
-    expect(blockMarkers({ ...both, status: 'checked-in' }, edge)).toEqual({
-      left: false,
-      right: true,
-    });
-    expect(blockMarkers({ ...both, status: 'checked-out' }, edge)).toEqual({
+  it('draws each set flag at its edge whatever the status', () => {
+    for (const status of ['nyci', 'checked-in', 'checked-out'] as const) {
+      expect(blockMarkers({ ...both, status }, edge)).toEqual({ left: true, right: true });
+    }
+    expect(blockMarkers({ status: 'nyci', lateCheckOut: true }, edge)).toEqual({
       left: false,
       right: true,
     });
