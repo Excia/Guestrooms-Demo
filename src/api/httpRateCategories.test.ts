@@ -102,4 +102,28 @@ describe('http rate category money guard', () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ skus: [sku], roomTypes: [sku] }));
     await expect(make(fetchMock).rateCategories.getOptions()).rejects.toBeInstanceOf(ApiError);
   });
+
+  it('accepts a season SKU (and its absence) and refuses a malformed one', async () => {
+    const saved = mockRateCategories().find((c) => c.id === 'rc-member')!;
+    const withSku = structuredClone(saved);
+    withSku.seasons[1] = { ...withSku.seasons[1], sku: sku, skuKind: 'combo' };
+    const ok = vi.fn().mockResolvedValue(json([withSku]));
+    expect((await make(ok).rateCategories.list())[0].seasons[1].skuKind).toBe('combo');
+    const onDefault = structuredClone(saved);
+    onDefault.seasons[0] = { ...onDefault.seasons[0], sku, skuKind: 'item' };
+    await expect(
+      make(vi.fn().mockResolvedValue(json([onDefault]))).rateCategories.list(),
+    ).rejects.toBeInstanceOf(ApiError);
+    for (const bad of [
+      { sku: 'x' },
+      { skuKind: 'both' },
+      { sku: { id: 1 } },
+      { skuKind: 'combo' },
+    ]) {
+      const broken = structuredClone(saved);
+      broken.seasons[1] = { ...broken.seasons[1], ...bad } as never;
+      const fetchMock = vi.fn().mockResolvedValue(json([broken]));
+      await expect(make(fetchMock).rateCategories.list()).rejects.toBeInstanceOf(ApiError);
+    }
+  });
 });

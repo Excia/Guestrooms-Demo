@@ -1158,6 +1158,14 @@ export interface RateSeason {
   /** yyyy-mm-dd, '' for the default season. */
   startDate: string;
   endDate: string;
+  /**
+   * Optional SKU of this season (not the default season): the item or combo SKU used to post this
+   * season's rate; null or missing means the category's SKU. Legacy has one SKU per category only, so
+   * this is an owner-requested extension (entries/rate-categories-polish.md, D-RCP-4).
+   */
+  sku?: LookupRef | null;
+  /** "item" or "combo": which kind `sku` is (the lookup lists SKUs of this kind). Missing reads as item. */
+  skuKind?: AddOnKind;
   rates: Record<string, RateAmounts>;
 }
 

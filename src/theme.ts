@@ -92,14 +92,33 @@ export interface FolioColors {
   slateButton: string;
 }
 
+/**
+ * One season colour of the Rate Categories table (entries/rate-categories-polish.md, D-RCP-3).
+ * `row` tints the rate rows, `band` the season title row (both light, so the default text colour
+ * reaches WCAG AA on them), `accent` is the thick edge of the card (a graphic, at least 3:1 on white).
+ */
+export interface SeasonTone {
+  row: string;
+  band: string;
+  accent: string;
+}
+
+/** Season colours: six tones assigned to seasons by index, and a neutral one for the default season. */
+export interface SeasonColors {
+  neutral: SeasonTone;
+  tones: SeasonTone[];
+}
+
 declare module '@mui/material/styles' {
   interface Palette {
     schedule: ScheduleColors;
     folio: FolioColors;
+    season: SeasonColors;
   }
   interface PaletteOptions {
     schedule?: ScheduleColors;
     folio?: FolioColors;
+    season?: SeasonColors;
   }
   // tint and outlinedBorder are set on palette.primary only (the Figma tokens exist for primary).
   interface PaletteColor {
@@ -193,6 +212,19 @@ const base = createTheme({
       notCheckedIn: '#fff9c4',
       actionBar: '#e8f3e8',
       slateButton: '#47566b',
+    },
+    // Rate Categories seasons: our own palette (legacy tints weekday columns, not seasons). Blue,
+    // amber, purple, rose, teal, orange; grey for the default season.
+    season: {
+      neutral: { row: '#f6f6f6', band: '#e6e6e6', accent: '#757575' },
+      tones: [
+        { row: '#eef4fb', band: '#d3e4f6', accent: '#1f6fb5' },
+        { row: '#fdf6e7', band: '#f7e4b5', accent: '#a86a00' },
+        { row: '#f4effa', band: '#e1d3f2', accent: '#6b46a8' },
+        { row: '#fceff3', band: '#f4d0dc', accent: '#b83a64' },
+        { row: '#ebf7f6', band: '#c9e9e6', accent: '#1a7f78' },
+        { row: '#fdf0e7', band: '#f8d6bb', accent: '#c0560d' },
+      ],
     },
     schedule: {
       nyci: 'rgba(250, 250, 250, 0.8)',

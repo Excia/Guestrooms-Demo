@@ -78,6 +78,7 @@ import {
   hasErrors,
   isNameTaken,
   normalizeRateCategory,
+  seasonSkuShapesValid,
   validateRateCategory,
 } from '../app/rateCategories';
 import { validateEncoderKeys } from '../app/keycards';
@@ -1249,6 +1250,7 @@ export function createMockClient({
               }
               if (
                 hasErrors(validateRateCategory(input, [], known.skus)) ||
+                !seasonSkuShapesValid(input.seasons) ||
                 input.roomTypeIds.some((id) => !known.roomTypes.some((k) => k.id === id))
               ) {
                 throw new ApiError(422, 'Rate category is not valid', { code: 'validation' });

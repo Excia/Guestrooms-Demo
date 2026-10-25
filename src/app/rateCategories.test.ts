@@ -16,6 +16,12 @@ import {
   parseDollars,
   removeSeason,
   seasonFor,
+  seasonSkuKind,
+  isSeasonSkuShapeValid,
+  seasonSkuShapesValid,
+  seasonToneIndex,
+  SEASON_TONE_COUNT,
+  updateSeason,
   setAmount,
   validateRateCategory,
   visibleRateColumns,
@@ -272,5 +278,95 @@ describe('checkDeleteRateCategory', () => {
     expect(checkDeleteRateCategory({ name: 'A', reservationCount: 0, settingNames: [] }).kind).toBe(
       'ok',
     );
+  });
+});
+
+describe('season SKU (owner request: legacy has one SKU per category)', () => {
+  const skus = [
+    { id: 'sku-a', label: 'A', kind: 'item' as const },
+    { id: 'sku-c', label: 'C', kind: 'combo' as const },
+  ];
+  const withSeason = (patch: Partial<RateSeason>) => {
+    const base = valid();
+    return {
+      ...base,
+      seasons: [
+        ...base.seasons,
+        { ...season('s1', 'Summer', '2026-06-01', '2026-08-31'), ...patch },
+      ],
+    };
+  };
+  it('is optional: a season without a SKU is valid and uses the category SKU', () => {
+    expect(hasErrors(validateRateCategory(withSeason({}), [], skus))).toBe(false);
+    expect(hasErrors(validateRateCategory(withSeason({ sku: null }), [], skus))).toBe(false);
+  });
+  it('must be of the season kind and known', () => {
+    const ok = withSeason({ sku: { id: 'sku-c', label: 'C' }, skuKind: 'combo' });
+    expect(hasErrors(validateRateCategory(ok, [], skus))).toBe(false);
+    const wrong = withSeason({ sku: { id: 'sku-c', label: 'C' }, skuKind: 'item' });
+    expect(validateRateCategory(wrong, [], skus).seasons.s1?.sku).toBe('Select an item SKU.');
+    const unknown = withSeason({ sku: { id: 'nope', label: 'N' } });
+    expect(validateRateCategory(unknown, [], skus).seasons.s1?.sku).toBeDefined();
+    expect(hasErrors(validateRateCategory(unknown, [], skus))).toBe(true);
+  });
+  it('reads a missing kind as item', () => {
+    expect(seasonSkuKind({})).toBe('item');
+    expect(seasonSkuKind({ skuKind: 'combo' })).toBe('combo');
+  });
+  it('is stored with its kind on seasons, never on the default season', () => {
+    const input = withSeason({ sku: { id: 'sku-c', label: 'C' }, skuKind: 'combo' });
+    const [base, summer] = normalizeRateCategory(input).seasons;
+    expect(base).not.toHaveProperty('sku');
+    expect(summer).toMatchObject({ sku: { id: 'sku-c' }, skuKind: 'combo' });
+    const plain = normalizeRateCategory(withSeason({})).seasons[1];
+    expect(plain).toMatchObject({ sku: null });
+    expect(plain).not.toHaveProperty('skuKind');
+  });
+  it('starts empty on Add Season, is editable and is copied by Duplicate', () => {
+    const added = addSeason([blankDefaultSeason(['rt-a'])], 's1');
+    expect(added[1]).toMatchObject({ sku: null, skuKind: 'item' });
+    const edited = updateSeason(added, 's1', {
+      name: 'Summer',
+      sku: { id: 'sku-c', label: 'C' },
+      skuKind: 'combo',
+    });
+    const copy = duplicateSeason(edited, 's1', 's2')[2];
+    expect(copy).toMatchObject({ sku: { id: 'sku-c' }, skuKind: 'combo' });
+  });
+});
+
+describe('season SKU shape on the wire', () => {
+  const combo = { sku: { id: 'sku-c', label: 'C' }, skuKind: 'combo' as const };
+  it('refuses a SKU or kind on the default season', () => {
+    const d = blankDefaultSeason(['rt-a']);
+    expect(isSeasonSkuShapeValid(d)).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...d, sku: null })).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...d, ...combo })).toBe(false);
+    expect(isSeasonSkuShapeValid({ ...d, skuKind: 'item' })).toBe(false);
+  });
+  it('refuses a kind without a SKU on a dated season', () => {
+    const s = season('s1', 'Summer', '2026-06-01', '2026-08-31');
+    expect(isSeasonSkuShapeValid(s)).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...s, ...combo })).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...s, sku: null, skuKind: 'combo' })).toBe(false);
+    expect(seasonSkuShapesValid([s, { ...s, skuKind: 'item' }])).toBe(false);
+  });
+});
+
+describe('season colour index', () => {
+  const seasons = [
+    blankDefaultSeason(['rt-a']),
+    ...Array.from({ length: SEASON_TONE_COUNT + 1 }, (_, i) =>
+      season(`s${i}`, `S${i}`, '2026-01-01', '2026-01-02'),
+    ),
+  ];
+  it('leaves the default season neutral (no index)', () => {
+    expect(seasonToneIndex(seasons, seasons[0].id)).toBeNull();
+    expect(seasonToneIndex(seasons, 'unknown')).toBeNull();
+  });
+  it('numbers the other seasons in list order and wraps after six', () => {
+    expect(seasonToneIndex(seasons, 's0')).toBe(0);
+    expect(seasonToneIndex(seasons, 's5')).toBe(5);
+    expect(seasonToneIndex(seasons, 's6')).toBe(0);
   });
 });
