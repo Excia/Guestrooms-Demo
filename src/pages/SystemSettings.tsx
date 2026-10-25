@@ -219,7 +219,7 @@ export default function SystemSettings() {
             />
           ) : (
             <>
-              <Typography sx={{ mb: 3 }}>
+              <Typography variant="settings_body" sx={{ mb: 3 }}>
                 Folio Details will be displayed in the header of the printed Folio.
               </Typography>
               <FolioDetailsTab

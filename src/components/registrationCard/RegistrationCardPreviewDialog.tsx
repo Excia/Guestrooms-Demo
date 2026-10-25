@@ -6,6 +6,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
+import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 import type { RegistrationCardModel } from '../../app/registrationCard';
@@ -72,7 +73,24 @@ export default function RegistrationCardPreviewDialog({
         onClose={close}
         closeLabel="Close preview"
       />
-      <DialogContent dividers sx={{ bgcolor: 'grey.100', p: { xs: 1.5, sm: 3 } }}>
+      <DialogContent
+        dividers
+        // A scroll area must be reachable by keyboard.
+        tabIndex={0}
+        role="region"
+        aria-label="Registration card preview"
+        sx={(t) => ({
+          bgcolor: 'grey.100',
+          p: { xs: 1.5, sm: 3 },
+          '&:focus-visible': {
+            outline: `2px solid ${t.palette.primary.main}`,
+            outlineOffset: -2,
+          },
+        })}
+      >
+        <Typography variant="caption" component="p" sx={{ color: 'text.secondary', mt: 0, mb: 1 }}>
+          Sample reservation
+        </Typography>
         <RegistrationCardSheet card={card} />
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 1.5, gap: 1 }}>

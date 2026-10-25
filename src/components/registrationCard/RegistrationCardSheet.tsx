@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { RegistrationCardModel } from '../../app/registrationCard';
 
 export interface RegistrationCardSheetProps {
@@ -13,7 +13,10 @@ export interface RegistrationCardSheetProps {
 // black text (palette.common) whatever the theme, on whatever backdrop the caller gives it. Kept apart
 // from the dialog so a new mockup only touches this file.
 export default function RegistrationCardSheet({ card }: RegistrationCardSheetProps) {
-  const logo = card.header?.logo?.startsWith('data:image/') ? card.header.logo : null;
+  const [brokenLogo, setBrokenLogo] = useState<string | null>(null);
+  const candidate = card.header?.logo?.startsWith('data:image/') ? card.header.logo : null;
+  // A logo that fails to load falls back to the grey LOGO box.
+  const logo = candidate && candidate !== brokenLogo ? candidate : null;
   const labelled = (label: string, children: ReactNode) => (
     <Box>
       <Typography variant="body2" component="span" sx={{ mr: 0.75 }}>
@@ -32,8 +35,6 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
       {text}
     </Typography>
   );
-  // "[Room #] ([Room Type], [Room Rate])": the room is bold, the bracket italic.
-  const roomParts = card.room ? card.room.split(/ (?=\()/) : [];
 
   return (
     <Box
@@ -42,8 +43,10 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
         bgcolor: t.palette.common.white,
         color: t.palette.common.black,
         boxShadow: t.shadows[1],
-        px: 4.5,
-        py: 5,
+        px: { xs: 2, sm: 4.5 },
+        py: { xs: 3, sm: 5 },
+        overflowWrap: 'anywhere',
+        minWidth: 0,
         minHeight: t.spacing(100),
         display: 'flex',
         flexDirection: 'column',
@@ -53,15 +56,22 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
     >
       {card.header ? (
         <>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 3 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'space-between',
+              gap: 3,
+            }}
+          >
             <Typography variant="caption" component="div" sx={{ lineHeight: 1.5 }}>
-              {card.header.lines.map((line) => (
-                <Box key={line}>{line}</Box>
+              {card.header.lines.map((line, i) => (
+                <Box key={i}>{line}</Box>
               ))}
             </Typography>
             <Box
               sx={(t) => ({
-                width: '45%',
+                width: { xs: '100%', sm: '45%' },
                 minHeight: t.spacing(9.5),
                 maxHeight: t.spacing(12),
                 flexShrink: 0,
@@ -76,6 +86,7 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
                   component="img"
                   src={logo}
                   alt="Logo"
+                  onError={() => setBrokenLogo(candidate)}
                   sx={(t) => ({
                     maxWidth: '100%',
                     maxHeight: t.spacing(12),
@@ -108,7 +119,7 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
           columnGap: 3,
           rowGap: 2.5,
         }}
@@ -135,14 +146,14 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
           ? labelled(
               'Room:',
               <>
-                {bold(roomParts[0])}
-                {roomParts[1] ? (
+                {card.roomParts.number ? bold(card.roomParts.number) : null}
+                {card.roomParts.detail ? (
                   <Typography
                     variant="body2"
                     component="span"
                     sx={{ fontStyle: 'italic', ml: 0.5 }}
                   >
-                    {roomParts[1]}
+                    {card.roomParts.detail}
                   </Typography>
                 ) : null}
               </>,
@@ -154,8 +165,8 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
               'Guest:',
               <>
                 {bold(card.guest[0])}
-                {card.guest.slice(1).map((line) => (
-                  <Box key={line}>{italic(line)}</Box>
+                {card.guest.slice(1).map((line, i) => (
+                  <Box key={i}>{italic(line)}</Box>
                 ))}
               </>,
             )
@@ -165,8 +176,8 @@ export default function RegistrationCardSheet({ card }: RegistrationCardSheetPro
               'Reserved By:',
               <>
                 {bold(card.reservedBy[0])}
-                {card.reservedBy.slice(1).map((line) => (
-                  <Box key={line}>{italic(line)}</Box>
+                {card.reservedBy.slice(1).map((line, i) => (
+                  <Box key={i}>{italic(line)}</Box>
                 ))}
               </>,
             )

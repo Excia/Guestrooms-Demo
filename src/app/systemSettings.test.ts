@@ -284,4 +284,9 @@ describe('Training Mode', () => {
     expect(validateSystemSettings(base({ trainingMode: true }))).toEqual({});
     expect(isDirty(base(), base({ trainingMode: true }))).toBe(true);
   });
+
+  it('puts Training Mode first in the focus order (it is at the top of the tab)', () => {
+    const bad = base({ trainingMode: true, nightAudit: 'automatic', serviceChargeLabel: '' });
+    expect(firstErrorField(validateSystemSettings(bad))).toBe('trainingMode');
+  });
 });

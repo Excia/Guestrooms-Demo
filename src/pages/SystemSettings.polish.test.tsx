@@ -57,8 +57,12 @@ describe('Training Mode', () => {
   it('sits in the top right of the Settings tab with the legacy label and a description', async () => {
     renderPage();
     await loaded();
-    const toggle = screen.getByRole('switch', { name: 'Training Mode Disabled' });
+    const toggle = screen.getByRole('switch', { name: 'Training Mode' });
     expect(toggle).not.toBeChecked();
+    expect(screen.getByText('Disabled')).toBeVisible();
+    expect(
+      screen.getByText('Training Mode', { exact: false, selector: 'label span' }),
+    ).toBeVisible();
     expect(toggle).toHaveAccessibleDescription(/Night Audit can only be run manually/);
     const row = screen.getByTestId('training-mode-row');
     expect(row).toContainElement(toggle);
@@ -77,9 +81,10 @@ describe('Training Mode', () => {
     renderPage(client);
     await loaded();
     await user.click(screen.getByRole('radio', { name: 'Run Automatically' }));
-    await user.click(screen.getByRole('switch', { name: 'Training Mode Disabled' }));
-    const on = screen.getByRole('switch', { name: 'Training Mode Enabled' });
+    await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
+    const on = screen.getByRole('switch', { name: 'Training Mode' });
     expect(on).toBeChecked();
+    expect(screen.getByText('Enabled')).toBeVisible();
     expect(screen.getByRole('radio', { name: 'Run Manually' })).toBeChecked();
     const auto = screen.getByRole('radio', { name: 'Run Automatically' });
     expect(auto).toBeDisabled();
@@ -90,12 +95,23 @@ describe('Training Mode', () => {
     expect(save.mock.calls[0][0].nightAudit).toBe('manual');
   });
 
+  it('says so, once, after Training Mode is turned off again having forced Run Manually', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('radio', { name: 'Run Automatically' }));
+    await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
+    expect(screen.queryByText(/was set to Run Manually/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
+    expect(screen.getByText(/was set to Run Manually/)).toBeInTheDocument();
+  });
+
   it('counts as an unsaved change for Confirm Leaving (the Save button enables)', async () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
     expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
-    await user.click(screen.getByRole('switch', { name: 'Training Mode Disabled' }));
+    await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
     expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeEnabled();
   });
 });
@@ -187,6 +203,16 @@ describe('Registration Card preview dialog', () => {
     expect(card.getByText('Sam Ortega (M-20931)')).toBeInTheDocument();
     expect(card.getByText('Late arrival expected after 9 PM.')).toBeInTheDocument();
     expect(card.getByText('Staff Signature')).toBeInTheDocument();
+  });
+
+  it('has a keyboard-reachable scroll region and says the data is a sample', async () => {
+    const { dialog } = await open();
+    const region = within(dialog).getByRole('region', { name: 'Registration card preview' });
+    expect(region).toHaveAttribute('tabindex', '0');
+    region.focus();
+    expect(region).toHaveFocus();
+    expect(within(dialog).getByText('Sample reservation')).toBeInTheDocument();
+    expect(region).toContainElement(screen.getByTestId('registration-card-sheet'));
   });
 
   it('uses the Folio Details logo when one is saved', async () => {

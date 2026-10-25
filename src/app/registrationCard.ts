@@ -187,6 +187,8 @@ export interface RegistrationCardModel {
   checkOut: { date: string; flag: string | null } | null;
   /** "[Room #] ([Room Type], [Room Rate])" with only the checked parts. */
   room: string | null;
+  /** The parts of `room`: the room number, and the bracket "([Room Type], [Room Rate])" (either can be null). */
+  roomParts: { number: string | null; detail: string | null };
   guestCount: string | null;
   guest: string[] | null;
   /** Null when Reserver Name is off, there is no reserver, or the reserver is the lead occupant. */
@@ -258,6 +260,7 @@ export function buildRegistrationCard(
         }
       : null,
     room,
+    roomParts: { number: on.roomNumber ? r.roomNumber || null : null, detail: bracket || null },
     guestCount: on.guestCount ? formatGuestCount(r.adults, r.children) || null : null,
     guest,
     reservedBy,

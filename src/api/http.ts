@@ -653,7 +653,8 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !isString(body.checkOutTime) ||
     !isString(body.lateCheckOutTime) ||
     typeof body.earlyLateEnabled !== 'boolean' ||
-    typeof body.trainingMode !== 'boolean' ||
+    // Tolerated for one release: a backend that does not send it yet means "off".
+    (body.trainingMode !== undefined && typeof body.trainingMode !== 'boolean') ||
     !isObject(body.mposVisibleBefore) ||
     !isObject(body.mposVisibleAfter) ||
     !isObject(body.closeSettledFolios) ||
@@ -671,7 +672,7 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
   ) {
     throw invalid(status, 'system settings');
   }
-  return body as unknown as SystemSettings;
+  return { ...body, trainingMode: body.trainingMode ?? false } as unknown as SystemSettings;
 }
 
 const isAudience = (v: unknown) =>

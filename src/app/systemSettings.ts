@@ -244,13 +244,13 @@ export function withTrainingMode(s: SystemSettings, on: boolean): SystemSettings
 
 /** Fields in page order, so the first error can take focus. */
 export const FIELD_ORDER: readonly SystemSettingsField[] = [
+  'trainingMode',
   'checkInTime',
   'checkOutTime',
   'lateCheckOutTime',
   'mposVisibleBefore',
   'mposVisibleAfter',
   'closeSettledFolios',
-  'trainingMode',
   'nightAuditRunTime',
   'alternativeBaseRate1',
   'alternativeBaseRate2',

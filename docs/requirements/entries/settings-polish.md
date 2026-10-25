@@ -67,3 +67,9 @@ follow legacy (Roboto, bold headings, regular labels). Colors are unchanged (tex
 - **API:** `trainingMode` on `GET`/`PUT /settings/system` (see "System Settings polish" in `api-contract.md`); the preview request is now sent only when Print is pressed.
 - **Permissions:** none new.
 - **Notes:** the room-setup photo badge is the only other remove-photo control. The reservation menu's Print Registration Card(s) still opens the generated document in a new tab (Q-settings-polish-4). `window.print` is not used: the backend document is the printable file (D-003). Not verified in a real browser.
+
+## Review follow-ups (2026-10-25)
+
+- The card sheet breaks long unbroken text (`overflowWrap: anywhere`), stacks below `sm` (one column, tighter padding, logo under the address) and falls back to the LOGO box if the logo fails to load. The preview's scroll area is a labelled, focusable region ("Registration card preview") and a "Sample reservation" caption sits above the sheet.
+- Training Mode: the switch's name is "Training Mode" (the state is the switch's own; the visible text still reads "Training Mode Enabled/Disabled" as legacy); its description and error are wired to `aria-describedby`; it is first in the focus order; a note shows under the toggle when turning it off follows a forced Run Manually. A missing `trainingMode` in the response is read as off for one release (no such tolerance for other new fields).
+- The `settings_body` rule only touches switch/radio labels; paragraphs set the variant themselves, so a section added to the tab is not restyled by accident.

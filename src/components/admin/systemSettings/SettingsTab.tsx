@@ -342,7 +342,7 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
           >
             Rate Change Handling
           </FormLabel>
-          <Typography id="rate-change-intro">
+          <Typography id="rate-change-intro" variant="settings_body">
             When Rate Category rates are changed, existing reservations will:
           </Typography>
           <RadioGroup
