@@ -5,6 +5,7 @@ import type {
   RateCategoryOptions,
   RateCategorySetup,
   RateSeason,
+  RateSku,
 } from './types';
 import { blankAmounts } from '../app/rateCategories';
 
@@ -18,12 +19,12 @@ export const RATE_CATEGORY_IDS = {
   owner: 'rc-owner',
 } as const;
 
-export const MOCK_RATE_SKUS: LookupRef[] = [
-  { id: 'sku-room-comp', label: 'Room night, complimentary' },
-  { id: 'sku-room-member', label: 'Room night, member' },
-  { id: 'sku-room-guest', label: 'Room night, non-member' },
-  { id: 'sku-room-owner', label: 'Room night, owner' },
-  { id: 'sku-package', label: 'Stay and play package' },
+export const MOCK_RATE_SKUS: RateSku[] = [
+  { id: 'sku-room-comp', label: 'Room night, complimentary', kind: 'item' },
+  { id: 'sku-room-member', label: 'Room night, member', kind: 'item' },
+  { id: 'sku-room-guest', label: 'Room night, non-member', kind: 'item' },
+  { id: 'sku-room-owner', label: 'Room night, owner', kind: 'item' },
+  { id: 'sku-package', label: 'Stay and play package', kind: 'combo' },
 ];
 
 export function mockRateCategoryOptions(roomTypes: readonly LookupRef[]): RateCategoryOptions {
@@ -32,6 +33,9 @@ export function mockRateCategoryOptions(roomTypes: readonly LookupRef[]): RateCa
     roomTypes: roomTypes.map((t) => ({ id: t.id, label: t.label })),
   };
 }
+
+/** The reference stored on a category (no kind). */
+const plain = ({ id, label }: RateSku): LookupRef => ({ id, label });
 
 const ROOM_TYPE_IDS = ['rt-double-queen', 'rt-king', 'rt-cottage'] as const;
 
@@ -89,7 +93,7 @@ export function mockRateCategories(): RateCategorySetup[] {
       ...common,
       id: RATE_CATEGORY_IDS.comp,
       name: 'Comp Rate',
-      sku: MOCK_RATE_SKUS[0],
+      sku: plain(MOCK_RATE_SKUS[0]),
       seasons: [season('rc-comp-default', '', null, [0, 0, 0])],
       reservationCount: counts[RATE_CATEGORY_IDS.comp] ?? 0,
     },
@@ -97,7 +101,7 @@ export function mockRateCategories(): RateCategorySetup[] {
       ...common,
       id: RATE_CATEGORY_IDS.member,
       name: 'Member Rate',
-      sku: MOCK_RATE_SKUS[1],
+      sku: plain(MOCK_RATE_SKUS[1]),
       seasons: [
         season('rc-member-default', '', null, [150, 180, 220]),
         season('rc-member-summer', 'Summer', ['2026-06-01', '2026-08-31'], [175, 205, 250]),
@@ -111,7 +115,7 @@ export function mockRateCategories(): RateCategorySetup[] {
       ...common,
       id: RATE_CATEGORY_IDS.nonMember,
       name: 'Non-Member Rate',
-      sku: MOCK_RATE_SKUS[2],
+      sku: plain(MOCK_RATE_SKUS[2]),
       seasons: [
         season('rc-guest-default', '', null, [200, 240, 290]),
         season('rc-guest-summer', 'Summer', ['2026-06-01', '2026-08-31'], [230, 270, 330]),
@@ -122,7 +126,7 @@ export function mockRateCategories(): RateCategorySetup[] {
       ...common,
       id: RATE_CATEGORY_IDS.owner,
       name: 'Owner Rate',
-      sku: MOCK_RATE_SKUS[3],
+      sku: plain(MOCK_RATE_SKUS[3]),
       roomTypeIds: ['rt-double-queen', 'rt-king'],
       seasons: [
         {

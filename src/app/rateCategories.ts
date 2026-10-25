@@ -8,6 +8,7 @@ import type {
   RateCategorySetup,
   RateColumnKey,
   RateSeason,
+  RateSku,
   SystemSettings,
 } from '../api/types';
 import { isValidIsoDate } from './dateSelection';
@@ -236,6 +237,8 @@ export interface RateCategoryErrors {
   endDate?: string;
   sku?: string;
   roomTypes?: string;
+  /** Structure of the seasons: one default at most, no repeated id. */
+  seasonList?: string;
   seasons: Record<string, SeasonErrors>;
 }
 
@@ -243,7 +246,9 @@ export type RateCategoryField = 'name' | 'startDate' | 'endDate' | 'sku' | 'room
 
 export const hasErrors = (errors: RateCategoryErrors): boolean =>
   Object.values(errors.seasons).length > 0 ||
-  (['name', 'startDate', 'endDate', 'sku', 'roomTypes'] as const).some((k) => errors[k]);
+  (['name', 'startDate', 'endDate', 'sku', 'roomTypes', 'seasonList'] as const).some(
+    (k) => errors[k],
+  );
 
 /**
  * Legacy rules: a name, an item or combo SKU, every non-default season named and dated, seasons
@@ -253,6 +258,7 @@ export const hasErrors = (errors: RateCategoryErrors): boolean =>
 export function validateRateCategory(
   input: RateCategoryInput,
   existing: readonly Pick<RateCategorySetup, 'id' | 'name'>[] = [],
+  skus?: readonly RateSku[],
 ): RateCategoryErrors {
   const errors: RateCategoryErrors = { seasons: {} };
   if (input.name.trim() === '') errors.name = 'Enter a rate category name.';
@@ -272,6 +278,19 @@ export function validateRateCategory(
   }
 
   if (input.sku === null) errors.sku = 'Select an item or combo SKU.';
+  else if (skus) {
+    const chosen = input.sku;
+    const known = skus.find((s) => s.id === chosen.id);
+    if (!known || known.kind !== input.kind) {
+      errors.sku = `Select a ${input.kind === 'item' ? 'item' : 'combo'} SKU.`;
+    }
+  }
+  if (
+    input.seasons.filter((s) => s.isDefault).length > 1 ||
+    new Set(input.seasons.map((s) => s.id)).size !== input.seasons.length
+  ) {
+    errors.seasonList = 'Use one default season and distinct seasons.';
+  }
   if (input.roomTypeIds.length === 0) errors.roomTypes = 'Select at least one room type.';
 
   const overlaps = overlappingSeasonIds(input.seasons);
@@ -349,6 +368,10 @@ export function toRateCategoryInput(c: RateCategorySetup): RateCategoryInput {
   };
 }
 
+/** SKUs of one kind, for the SKU lookup. */
+export const skusOfKind = (skus: readonly RateSku[], kind: RateSku['kind']): RateSku[] =>
+  skus.filter((s) => s.kind === kind);
+
 /** Active on `date` (the same rule as the other setup lists). */
 export const isCategoryActiveOn = (
   c: Pick<RateCategorySetup, 'startDate' | 'endDate'>,
@@ -387,8 +410,10 @@ export function checkDeleteRateCategory(
 
 /** "125.5" or "$1,250.00" to cents; null when it is not a non-negative amount with at most two decimals. */
 export function parseDollars(text: string): Cents | null {
-  const cleaned = text.trim().replace(/^\$/, '').replace(/,/g, '');
-  if (!/^(\d+(\.\d{0,2})?|\.\d{1,2})$/.test(cleaned)) return null;
+  const trimmed = text.trim().replace(/^\$/, '');
+  // A comma is accepted only as a thousands separator (1,234.50), never 1,2,3 or 1,5.
+  if (!/^((\d{1,3}(,\d{3})+|\d+)(\.\d{0,2})?|\.\d{1,2})$/.test(trimmed)) return null;
+  const cleaned = trimmed.replace(/,/g, '');
   const [whole = '0', fraction = ''] = cleaned.split('.');
   return Number(whole || '0') * 100 + Number(fraction.padEnd(2, '0'));
 }

@@ -1036,8 +1036,7 @@ export function createMockClient({
                 });
               }
               if (
-                hasErrors(validateRateCategory(input)) ||
-                (input.sku && !known.skus.some((k) => k.id === input.sku?.id)) ||
+                hasErrors(validateRateCategory(input, [], known.skus)) ||
                 input.roomTypeIds.some((id) => !known.roomTypes.some((k) => k.id === id))
               ) {
                 throw new ApiError(422, 'Rate category is not valid', { code: 'validation' });

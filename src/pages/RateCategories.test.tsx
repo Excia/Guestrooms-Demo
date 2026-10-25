@@ -26,7 +26,7 @@ function renderPage(client: ApiClient = createMockClient(), withSettings = false
 
 const loaded = () => screen.findByRole('textbox', { name: /Rate Category Name/ });
 const list = () => screen.getByRole('navigation', { name: 'Rate Categories' });
-const sku = { id: 'sku-package', label: 'Stay and play package' };
+const sku = { id: 'sku-room-guest', label: 'Room night, non-member' };
 
 describe('Rate Categories page', () => {
   it('lists the four categories, inactive ones last, and opens the first', async () => {
@@ -355,7 +355,7 @@ describe('Rate Categories page', () => {
     await user.click(screen.getByRole('button', { name: 'New Rate Category' }));
     await user.type(screen.getByLabelText(/Rate Category Name/), 'Trade Rate');
     await user.click(screen.getByRole('combobox', { name: 'SKU' }));
-    await user.click(await screen.findByRole('option', { name: 'Stay and play package' }));
+    await user.click(await screen.findByRole('option', { name: 'Room night, non-member' }));
     save.mockRejectedValueOnce(new Error('offline'));
     await user.click(screen.getByRole('button', { name: 'Save Rate Category' }));
     expect(
@@ -366,5 +366,65 @@ describe('Rate Categories page', () => {
     const ids = save.mock.calls.map(([input]) => input.requestId);
     expect(ids[0]).toBeTruthy();
     expect(ids[1]).toBe(ids[0]);
+  });
+
+  it('keeps text that is not money, explains it, and holds the save until corrected', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
+    const cell = await screen.findByRole('textbox', { name: 'Default, King Room, Standard Base' });
+    await user.clear(cell);
+    await user.type(cell, 'abc');
+    await user.tab();
+    expect(cell).toHaveValue('abc');
+    expect(cell).toBeInvalid();
+    expect(cell).toHaveAccessibleDescription('Enter an amount from 0 to 9,999,999.99');
+    await user.click(screen.getByRole('button', { name: 'Save Rate Category' }));
+    expect(await screen.findByText(/Correct the rates marked in the table/)).toBeInTheDocument();
+    expect(
+      (await client.rateCategories.list()).find((c) => c.id === 'rc-member')?.seasons[0].rates[
+        'rt-king'
+      ].standardBase,
+    ).toBe(18000);
+    await user.clear(cell);
+    await user.type(cell, '1,234.50');
+    await user.tab();
+    expect(cell).toHaveValue('1,234.50');
+    expect(cell).toBeValid();
+    await user.click(screen.getByRole('button', { name: 'Save Rate Category' }));
+    expect((await screen.findAllByText('Rate Category Saved')).length).toBeGreaterThan(0);
+  });
+
+  it('offers only SKUs of the chosen kind and clears one that no longer matches', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    expect(screen.getByRole('combobox', { name: 'SKU' })).toHaveValue('Room night, complimentary');
+    await user.click(screen.getByRole('radio', { name: 'Combo' }));
+    expect(screen.getByRole('combobox', { name: 'SKU' })).toHaveValue('');
+    await user.click(screen.getByRole('combobox', { name: 'SKU' }));
+    expect(
+      await screen.findByRole('option', { name: 'Stay and play package' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Room night, member' })).not.toBeInTheDocument();
+  });
+
+  it('clears a duplicate-name error from the server when the name is edited', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Duplicate rate category' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Duplicate Rate Category' });
+    const { ApiError } = await import('../api/types');
+    vi.spyOn(client.rateCategories, 'duplicate').mockRejectedValue(
+      new ApiError(409, 'taken', { code: 'duplicate-name' }),
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Duplicate' }));
+    expect(await within(dialog).findByText(/already in use/)).toBeInTheDocument();
+    await user.type(within(dialog).getByRole('textbox'), '2');
+    expect(within(dialog).queryByText(/already in use/)).not.toBeInTheDocument();
   });
 });

@@ -18,9 +18,11 @@ describe('http rate category API', () => {
   });
 
   it('reads the options', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json({ skus: [sku], roomTypes: [sku] }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(json({ skus: [{ ...sku, kind: 'item' }], roomTypes: [sku] }));
     expect(await make(fetchMock).rateCategories.getOptions()).toEqual({
-      skus: [sku],
+      skus: [{ ...sku, kind: 'item' }],
       roomTypes: [sku],
     });
     expect(String(fetchMock.mock.calls[0][0])).toBe(
@@ -81,5 +83,23 @@ describe('http rate category API', () => {
       const fetchMock = vi.fn().mockResolvedValue(json([bad]));
       await expect(make(fetchMock).rateCategories.list()).rejects.toBeInstanceOf(ApiError);
     }
+  });
+});
+
+describe('http rate category money guard', () => {
+  it('rejects amounts that are negative, fractional or above the maximum', async () => {
+    const [good] = mockRateCategories();
+    for (const bad of [-1, 1.5, 1_000_000_000]) {
+      const rates = { 'rt-king': { ...good.seasons[0].rates['rt-king'], standardBase: bad } };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValue(json([{ ...good, seasons: [{ ...good.seasons[0], rates }] }]));
+      await expect(make(fetchMock).rateCategories.list()).rejects.toBeInstanceOf(ApiError);
+    }
+  });
+
+  it('rejects options whose SKU has no kind', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ skus: [sku], roomTypes: [sku] }));
+    await expect(make(fetchMock).rateCategories.getOptions()).rejects.toBeInstanceOf(ApiError);
   });
 });

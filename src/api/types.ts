@@ -1129,8 +1129,11 @@ export type RateCategoryInput = Omit<
   requestId?: string;
 };
 
+/** A SKU a rate category can post to; `kind` says whether it is an item or a combo. */
+export type RateSku = LookupRef & { kind: AddOnKind };
+
 export interface RateCategoryOptions {
-  skus: LookupRef[];
+  skus: RateSku[];
   roomTypes: LookupRef[];
 }
 

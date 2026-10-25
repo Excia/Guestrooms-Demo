@@ -47,6 +47,11 @@ describe('money text', () => {
     expect(parseDollars('-1')).toBeNull();
     expect(parseDollars('1.234')).toBeNull();
     expect(parseDollars('abc')).toBeNull();
+    expect(parseDollars('1,234.50')).toBe(123450);
+    expect(parseDollars('1,2,3')).toBeNull();
+    expect(parseDollars('1,5')).toBeNull();
+    expect(parseDollars('12,34')).toBeNull();
+    expect(parseDollars(',500')).toBeNull();
   });
   it('formats cents', () => {
     expect(formatDollars(0)).toBe('0.00');
@@ -160,6 +165,29 @@ describe('validateRateCategory', () => {
     const input = valid();
     input.seasons = setAmount(input.seasons, input.seasons[0].id, 'rt-a', 'monday', -5);
     expect(validateRateCategory(input).seasons[input.seasons[0].id]?.amount).toMatch(/Mon/);
+  });
+});
+
+describe('SKU kind and season list', () => {
+  const skus = [
+    { id: 'sku-a', label: 'A', kind: 'item' as const },
+    { id: 'sku-c', label: 'C', kind: 'combo' as const },
+  ];
+  it('requires the SKU to be of the chosen kind', () => {
+    expect(validateRateCategory(valid(), [], skus).sku).toBeUndefined();
+    expect(validateRateCategory(valid({ kind: 'combo' }), [], skus).sku).toMatch(/combo SKU/);
+    expect(validateRateCategory(valid({ sku: { id: 'zzz', label: 'Z' } }), [], skus).sku).toMatch(
+      /item SKU/,
+    );
+  });
+  it('rejects two default seasons and repeated ids', () => {
+    const base = valid();
+    const [d] = base.seasons;
+    expect(
+      validateRateCategory({ ...base, seasons: [d, { ...d, id: 'x' }] }).seasonList,
+    ).toBeDefined();
+    expect(validateRateCategory({ ...base, seasons: [d, d] }).seasonList).toBeDefined();
+    expect(hasErrors(validateRateCategory(base))).toBe(false);
   });
 });
 

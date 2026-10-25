@@ -63,4 +63,17 @@ describe('DuplicateDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onCancel).toHaveBeenCalled();
   });
+
+  it('clears the request error when the name is edited, and keeps live validation visible', async () => {
+    const user = userEvent.setup();
+    const onNameChange = vi.fn();
+    setup({ error: 'Stale 409', onNameChange });
+    await user.type(screen.getByRole('textbox'), 'x');
+    expect(onNameChange).toHaveBeenCalled();
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), 'Taken');
+    // The live check wins over a stale request error.
+    expect(screen.getByText('This name is already in use.')).toBeInTheDocument();
+    expect(screen.queryByText('Stale 409')).not.toBeInTheDocument();
+  });
 });

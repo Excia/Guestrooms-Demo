@@ -25,6 +25,7 @@ import {
   RATE_CATEGORY_NAME_MAX,
   removeSeason,
   setAmount,
+  skusOfKind,
   toRateCategoryInput,
   updateSeason,
   validateRateCategory,
@@ -108,13 +109,26 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
     blank: () => blankRateCategory(today, allRoomTypeIds),
   });
   const { draft, setDraft } = editor;
-  const errors = editor.attempted ? validateRateCategory(draft, data.categories) : null;
+  const errors = editor.attempted
+    ? validateRateCategory(draft, data.categories, options.skus)
+    : null;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [toast, setToast] = useState({ open: false, id: 0 });
   const [deleteCheck, setDeleteCheck] = useState<DeleteCheck | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // Rate cells holding text that is not money; Save waits until they are corrected.
+  const [badAmounts, setBadAmounts] = useState<ReadonlySet<string>>(new Set());
+  const onAmountInvalid = useCallback((cell: string, invalid: boolean) => {
+    setBadAmounts((prev) => {
+      if (prev.has(cell) === invalid) return prev;
+      const next = new Set(prev);
+      if (invalid) next.add(cell);
+      else next.delete(cell);
+      return next;
+    });
+  }, []);
   const [seasonToRemove, setSeasonToRemove] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState(false);
   const [duplicateBusy, setDuplicateBusy] = useState(false);
@@ -126,7 +140,12 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
   const associated = options.roomTypes.filter((t) => draft.roomTypeIds.includes(t.id));
 
   const save = async (): Promise<boolean> => {
-    const found = validateRateCategory(draft, data.categories);
+    const found = validateRateCategory(draft, data.categories, options.skus);
+    if (badAmounts.size > 0) {
+      editor.setAttempted(true);
+      setSaveError('Correct the rates marked in the table before saving.');
+      return false;
+    }
     if (hasErrors(found)) {
       editor.setAttempted(true);
       const firstField = (['name', 'startDate', 'endDate', 'sku'] as const).find((f) => found[f]);
@@ -320,7 +339,12 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
                 row
                 aria-labelledby="rate-category-kind-label"
                 value={draft.kind}
-                onChange={(e) => setDraft({ ...draft, kind: e.target.value as AddOnKind })}
+                onChange={(e) => {
+                  const kind = e.target.value as AddOnKind;
+                  // A SKU of the other kind no longer applies.
+                  const keep = options.skus.some((s) => s.id === draft.sku?.id && s.kind === kind);
+                  setDraft({ ...draft, kind, sku: keep ? draft.sku : null });
+                }}
               >
                 <FormControlLabel value="item" control={<Radio />} label="Item" />
                 <FormControlLabel value="combo" control={<Radio />} label="Combo" />
@@ -331,7 +355,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
                 id="rate-category-sku-input"
                 label="SKU"
                 value={draft.sku}
-                options={options.skus}
+                options={skusOfKind(options.skus, draft.kind)}
                 onChange={(sku) => setDraft({ ...draft, sku })}
                 error={errors?.sku}
               />
@@ -388,6 +412,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
             onDuplicateSeason={(id) =>
               setDraft({ ...draft, seasons: duplicateSeason(draft.seasons, id, newRequestId()) })
             }
+            onAmountInvalid={onAmountInvalid}
             onRemoveSeason={setSeasonToRemove}
           />
           <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
@@ -440,6 +465,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
         maxLength={RATE_CATEGORY_NAME_MAX}
         busy={duplicateBusy}
         error={duplicateError}
+        onNameChange={() => setDuplicateError(null)}
         onCancel={() => setDuplicating(false)}
         onDuplicate={(name) => void confirmDuplicate(name)}
       />

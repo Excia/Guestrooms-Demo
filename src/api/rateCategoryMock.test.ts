@@ -2,7 +2,7 @@ import { blankRateCategory } from '../app/rateCategories';
 import { createMockClient } from './mock';
 import { RATE_CATEGORY_IDS } from './rateCategoryData';
 
-const sku = { id: 'sku-package', label: 'Stay and play package' };
+const sku = { id: 'sku-room-guest', label: 'Room night, non-member' };
 const fresh = (name: string, roomTypeIds = ['rt-king']) => ({
   ...blankRateCategory('2026-10-20', roomTypeIds),
   name,
@@ -121,5 +121,32 @@ describe('mock rate category API', () => {
     const stats = await client.dashboard.getQuickStats({ view: 'day', date: '2026-10-20' });
     expect(stats.revenue.rows.map((r) => r.name)).toContain('Trade Rate');
     expect(stats.revenue.rows.find((r) => r.name === 'Comp Rate')?.revenue).toBe(0);
+  });
+});
+
+describe('mock rate category SKU kinds', () => {
+  it('rejects a SKU of the other kind with 422', async () => {
+    const api = createMockClient().rateCategories;
+    await expect(api.save({ ...fresh('Trade Rate'), kind: 'combo' })).rejects.toMatchObject({
+      status: 422,
+    });
+    const combo = { id: 'sku-package', label: 'Stay and play package' };
+    await expect(api.save({ ...fresh('Trade Rate'), sku: combo })).rejects.toMatchObject({
+      status: 422,
+    });
+    const saved = await api.save({ ...fresh('Trade Rate'), kind: 'combo', sku: combo });
+    expect(saved.kind).toBe('combo');
+  });
+
+  it('rejects two default seasons or a repeated season id with 422', async () => {
+    const api = createMockClient().rateCategories;
+    const input = fresh('Trade Rate');
+    const [only] = input.seasons;
+    await expect(
+      api.save({ ...input, seasons: [only, { ...only, id: 'other' }] }),
+    ).rejects.toMatchObject({ status: 422 });
+    await expect(api.save({ ...input, seasons: [only, only] })).rejects.toMatchObject({
+      status: 422,
+    });
   });
 });

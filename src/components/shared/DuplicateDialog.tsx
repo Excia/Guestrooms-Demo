@@ -20,6 +20,8 @@ export interface DuplicateDialogProps {
   busy?: boolean;
   /** A failure from the request, shown in place of the hint. */
   error?: string | null;
+  /** The name was edited: the page clears an earlier request error. */
+  onNameChange?: () => void;
   onCancel: () => void;
   onDuplicate: (name: string) => void;
 }
@@ -43,6 +45,7 @@ export default function DuplicateDialog({
   maxLength,
   busy,
   error,
+  onNameChange,
   onCancel,
   onDuplicate,
 }: DuplicateDialogProps) {
@@ -76,10 +79,13 @@ export default function DuplicateDialog({
           <TextField
             label={`${capitalize(noun)} Name`}
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              onNameChange?.();
+            }}
             error={Boolean(problem ?? error)}
             helperText={
-              error ?? problem ?? (maxLength ? `${name.length} / ${maxLength}` : undefined)
+              problem ?? error ?? (maxLength ? `${name.length} / ${maxLength}` : undefined)
             }
             slotProps={{ htmlInput: { maxLength } }}
             inputRef={selectOnMount}

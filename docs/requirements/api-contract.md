@@ -491,7 +491,7 @@ associated room type: `standardBase`, `altBase1`, `altBase2`, `monday` to `sunda
 interpreted). The rules are in `src/app/rateCategories.ts` and must be enforced again by the backend, which also
 answers 422 when `sku` or a `roomTypeIds` entry is not in the options and stores rates for exactly the associated
 room types. `POST` create and `duplicate` are idempotent by `Idempotency-Key` (the input carries it as
-`requestId`; the key is not stored). `DELETE` answers 409 `in-use` while `reservationCount` is above 0 or
+`requestId`; the key is not stored). `PUT` is last-write-wins (no version; two admins editing one category overwrite each other). `options.skus` carries each SKU's `kind` (`item` or `combo`); `kind` and `sku` must match (422). Two default seasons or a repeated season id answer 422. `DELETE` answers 409 `in-use` while `reservationCount` is above 0 or
 `settingNames` is not empty (Q-184-3). Duplicating copies the stored category (all seasons and rates, new ids,
 no usage) under the given name.
 

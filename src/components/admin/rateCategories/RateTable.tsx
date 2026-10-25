@@ -36,6 +36,8 @@ export interface RateTableProps {
     column: RateColumnKey,
     cents: number,
   ) => void;
+  /** A cell holds (or no longer holds) text that is not money. */
+  onAmountInvalid: (cellKey: string, invalid: boolean) => void;
   onDuplicateSeason: (seasonId: string) => void;
   onRemoveSeason: (seasonId: string) => void;
 }
@@ -56,6 +58,7 @@ export default function RateTable({
   errors,
   onSeasonChange,
   onAmountChange,
+  onAmountInvalid,
   onDuplicateSeason,
   onRemoveSeason,
 }: RateTableProps) {
@@ -182,6 +185,9 @@ export default function RateTable({
                           label={`${name}, ${roomType.label}, ${c.label}`}
                           cents={amounts[c.key]}
                           onChange={(cents) => onAmountChange(season.id, roomType.id, c.key, cents)}
+                          onInvalidChange={(bad) =>
+                            onAmountInvalid(`${season.id}|${roomType.id}|${c.key}`, bad)
+                          }
                         />
                       </TableCell>
                     ))}

@@ -59,6 +59,7 @@ import type {
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { isStoredEncoderKey } from '../app/keycards';
+import { MAX_RATE_CENTS } from '../app/rateCategories';
 import { expectedLeadOccupantName } from './createRules';
 import { REGISTRATION_CARD_ITEM_IDS } from './registrationCardTypes';
 import { assertChangeLogQuery } from './changeLogValidation';
@@ -802,7 +803,12 @@ const RATE_COLUMN_KEYS = [
   'guest4Plus',
   'child',
 ] as const;
-const isRateAmounts = (v: unknown) => isObject(v) && RATE_COLUMN_KEYS.every((k) => isCount(v[k]));
+const isRateCents = (v: unknown) =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= MAX_RATE_CENTS;
+const isRateAmounts = (v: unknown) =>
+  isObject(v) && RATE_COLUMN_KEYS.every((k) => isRateCents(v[k]));
+const isRateSku = (v: unknown) =>
+  isObject(v) && isLookup(v) && (v.kind === 'item' || v.kind === 'combo');
 const isRateSeason = (v: unknown) =>
   isObject(v) &&
   isString(v.id) &&
@@ -836,10 +842,7 @@ const parseRateCategoryList = (body: unknown, status: number): RateCategorySetup
   return body as unknown as RateCategorySetup[];
 };
 const parseRateCategoryOptions = (body: unknown, status: number): RateCategoryOptions => {
-  if (
-    !isObject(body) ||
-    !(['skus', 'roomTypes'] as const).every((k) => listOf(body[k], isLookup))
-  ) {
+  if (!isObject(body) || !listOf(body.skus, isRateSku) || !listOf(body.roomTypes, isLookup)) {
     throw invalid(status, 'rate category options');
   }
   return body as unknown as RateCategoryOptions;
