@@ -228,15 +228,15 @@ describe('ReservationList', () => {
     expect(screen.getByRole('button', { name: /^Check In/ })).toBeInTheDocument();
   });
 
-  it('renders Night Audit (blue outline, white fill) and New Reservation (filled) as 200px buttons', async () => {
+  it('renders the shared Night Audit button (blue, filled) and New Reservation as 200px buttons', async () => {
     setup();
     await bodyRows();
     const audit = screen.getByRole('link', { name: 'Night Audit' });
     const create = screen.getByRole('button', { name: 'New Reservation' });
-    expect(audit).toHaveClass('MuiButton-outlined', 'MuiButton-colorInfo');
-    expect(audit).toHaveStyle({ backgroundColor: theme.palette.background.paper });
+    expect(audit).toHaveClass('MuiButton-contained', 'MuiButton-colorInfo', 'MuiButton-sizeLarge');
     expect(create).toHaveClass('MuiButton-contained', 'MuiButton-colorPrimary');
-    for (const b of [audit, create]) expect(b).toHaveStyle({ width: '200px' });
+    expect(audit).toHaveStyle({ minWidth: '200px' });
+    expect(create).toHaveStyle({ width: '200px' });
   });
 
   it('tints rows a bulk action failed on, with a non-color cue, and leaves others alone', async () => {

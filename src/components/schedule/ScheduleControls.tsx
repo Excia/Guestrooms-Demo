@@ -6,7 +6,6 @@ import ChevronRight from '@mui/icons-material/ChevronRight';
 import FilterAlt from '@mui/icons-material/FilterAlt';
 import KeyboardDoubleArrowLeft from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import KeyboardDoubleArrowRight from '@mui/icons-material/KeyboardDoubleArrowRight';
-import ShieldMoon from '@mui/icons-material/ShieldMoon';
 import Badge from '@mui/material/Badge';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -15,13 +14,13 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Popover from '@mui/material/Popover';
 import { useRef, useState } from 'react';
-import { Link as RouterLink } from 'react-router';
 import type { ScheduleAvailability, ScheduleDays } from '../../api';
 import type { IsoDate } from '../../lib/dates';
 import { SCHEDULE_DAYS } from '../../api';
 import { SCHEDULE_VIEW_LABELS, type ScheduleStep } from '../../app/schedule';
-import { NIGHT_AUDIT_HISTORY_PATH } from '../../app/routes';
 import Calendar, { type CalendarHandle } from '../shared/Calendar';
+import { TOOLBAR_FIELD_SIZE, toolbarWidth } from '../shared/controlSizes';
+import NightAuditButton from '../shared/NightAuditButton';
 import Select from '../shared/Select';
 
 export const AVAILABILITY_LABELS: Record<ScheduleAvailability, string> = {
@@ -97,11 +96,11 @@ export default function ScheduleControls({
       >
         <Select<number>
           label="View"
-          size="small"
+          size={TOOLBAR_FIELD_SIZE}
           value={days}
           options={viewOptions}
           onChange={(v) => onDays(v as ScheduleDays)}
-          sx={{ width: (t) => t.spacing(14.25) }}
+          sx={{ width: toolbarWidth('select') }}
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
           <IconButton
@@ -157,17 +156,7 @@ export default function ScheduleControls({
         </Button>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-        <Button
-          variant="contained"
-          color="info"
-          size="large"
-          component={RouterLink}
-          to={NIGHT_AUDIT_HISTORY_PATH}
-          startIcon={<ShieldMoon />}
-          sx={{ minWidth: (t) => t.spacing(25), whiteSpace: 'nowrap' }}
-        >
-          Night Audit
-        </Button>
+        <NightAuditButton />
         <Button
           variant="contained"
           size="large"

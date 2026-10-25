@@ -23,7 +23,10 @@ import {
   type ReservationListView,
 } from '../app/reservationListUrl';
 import { reservationHubPath, SCHEDULE_PATH } from '../app/routes';
-import BulkCheckInButton from '../components/reservationList/BulkCheckInButton';
+import BulkCheckInButton, {
+  FLOATING_BAR_CLEARANCE,
+} from '../components/reservationList/BulkCheckInButton';
+import { roomsToCheckIn } from '../app/bulkCheckIn';
 import CheckInResultDialog from '../components/reservationList/CheckInResultDialog';
 import { useBulkCheckIn } from '../components/reservationList/useBulkCheckIn';
 import ReservationListTable from '../components/reservationList/ReservationListTable';
@@ -168,7 +171,15 @@ export default function ReservationList({
   const viewButton = { minWidth: (t: { spacing: (n: number) => string }) => t.spacing(5) };
 
   return (
-    <Box sx={{ px: 2.5, pt: 2, pb: 2.5, boxSizing: 'border-box' }}>
+    <Box
+      sx={(t) => ({
+        px: 2.5,
+        pt: 2,
+        // Room for the floating check-in bar so it never covers the last row or the pager.
+        pb: chosen.length > 0 ? t.spacing(FLOATING_BAR_CLEARANCE) : 2.5,
+        boxSizing: 'border-box',
+      })}
+    >
       <Typography variant="h1" sx={visuallyHidden}>
         Reservations
       </Typography>
@@ -266,7 +277,9 @@ export default function ReservationList({
           onClose={bulk.dismiss}
         />
         <Box role="status" sx={visuallyHidden}>
-          {chosen.length > 0 ? `${chosen.length} selected` : ''}
+          {chosen.length > 0
+            ? `${chosen.length} selected${roomsToCheckIn(chosen).length > 0 ? ', check in button available' : ''}`
+            : ''}
         </Box>
       </Box>
     </Box>
