@@ -35,7 +35,9 @@ describe('departurePassed', () => {
 
 describe('formatClubDateTime', () => {
   it('formats on the club clock', () => {
-    expect(formatClubDateTime('2026-10-24T18:05:00Z', 'America/New_York')).toBe('10/24/2026 2:05 PM');
+    expect(formatClubDateTime('2026-10-24T18:05:00Z', 'America/New_York')).toBe(
+      '10/24/2026 2:05 PM',
+    );
   });
   it('is empty for garbage', () => {
     expect(formatClubDateTime('nope', 'America/New_York')).toBe('');

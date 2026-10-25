@@ -55,6 +55,8 @@ export interface DateFieldProps {
   compact?: boolean;
   weekStartsOn?: WeekStartDay;
   fullWidth?: boolean;
+  /** `small` (40px) in toolbars, `medium` (56px, default) in forms; see controlSizes.ts. */
+  size?: 'small' | 'medium';
   inputRef?: Ref<HTMLInputElement>;
   onBlur?: FocusEventHandler<HTMLElement>;
   sx?: SxProps<Theme>;
@@ -85,6 +87,7 @@ export default function DateField({
   compact,
   weekStartsOn,
   fullWidth = true,
+  size = 'medium',
   inputRef,
   onBlur,
   sx,
@@ -176,6 +179,7 @@ export default function DateField({
         error={error}
         helperText={helperText}
         fullWidth={fullWidth}
+        size={size}
         inputRef={inputRefs}
         sx={[{ minWidth: 0 }, ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]}
         slotProps={{
