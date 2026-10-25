@@ -61,6 +61,7 @@ import type {
   SystemSettingsOptions,
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
+import { normalizeAudienceRules } from '../app/bookingRules';
 import { isStoredEncoderKey } from '../app/keycards';
 import { MAX_RATE_CENTS } from '../app/rateCategories';
 import { expectedLeadOccupantName } from './createRules';
@@ -672,7 +673,16 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
   return body as unknown as SystemSettings;
 }
 
-const isAudience = (v: unknown) => isObject(v) && isObject(v.opens) && isCount(v.holdMinutes);
+const PAYMENTS = ['optional', 'on-file', 'deposit', 'prepayment'];
+const isAudience = (v: unknown) =>
+  isObject(v) &&
+  isObject(v.opens) &&
+  isCount(v.holdMinutes) &&
+  PAYMENTS.includes(v.payment as string) &&
+  (v.depositType === undefined ||
+    v.depositType === null ||
+    v.depositType === 'amount' ||
+    v.depositType === 'percent');
 
 // Checks the shape the form relies on; the rules themselves are the backend's to enforce.
 function parseBookingRules(body: unknown, status: number): BookingRules {
@@ -686,7 +696,14 @@ function parseBookingRules(body: unknown, status: number): BookingRules {
   ) {
     throw invalid(status, 'booking rules');
   }
-  return body as unknown as BookingRules;
+  const rules = body as unknown as BookingRules;
+  // Older answers carry `depositCents`; they mean a dollar amount.
+  return {
+    ...rules,
+    employee: normalizeAudienceRules(rules.employee),
+    member: rules.member && normalizeAudienceRules(rules.member),
+    nonMember: rules.nonMember && normalizeAudienceRules(rules.nonMember),
+  };
 }
 
 function parseBookingRulesOptions(body: unknown, status: number): BookingRulesOptions {

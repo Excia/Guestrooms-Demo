@@ -1,14 +1,17 @@
 import { mockBookingRules } from '../api/bookingRulesData';
 import type { BookingRules } from '../api/types';
 import {
+  depositDueCents,
   effectiveRules,
   holdFromRules,
   newMemberTypeRule,
+  normalizeAudienceRules,
   periodDays,
   rulesDirty,
   setUniqueMemberTypeRules,
   toggleColumn,
   validateBookingRules,
+  withDepositType,
   withPayment,
 } from './bookingRules';
 
@@ -64,10 +67,32 @@ describe('column toggles', () => {
     expect(setUniqueMemberTypeRules(off, true)).toBe(off);
   });
 
-  it('keeps the deposit amount only for a deposit', () => {
-    const col = { ...rules().member!, payment: 'deposit' as const, depositCents: 5000 };
-    expect(withPayment(col, 'on-file').depositCents).toBeNull();
-    expect(withPayment(col, 'deposit').depositCents).toBe(5000);
+  it('keeps the deposit only for a deposit; a new deposit starts as dollars', () => {
+    const col = {
+      ...rules().member!,
+      payment: 'deposit' as const,
+      depositType: 'percent' as const,
+      depositValue: 20,
+    };
+    expect(withPayment(col, 'on-file')).toMatchObject({ depositType: null, depositValue: null });
+    expect(withPayment(col, 'optional')).toMatchObject({ payment: 'optional', depositValue: null });
+    expect(withPayment(col, 'deposit')).toMatchObject({ depositType: 'percent', depositValue: 20 });
+    const fresh = withPayment(rules().nonMember!, 'deposit');
+    expect(fresh).toMatchObject({ depositType: 'amount', depositValue: null });
+  });
+
+  it('clears the value when the deposit type changes', () => {
+    const col = {
+      ...rules().member!,
+      payment: 'deposit' as const,
+      depositType: 'amount' as const,
+      depositValue: 5000,
+    };
+    expect(withDepositType(col, 'percent')).toMatchObject({
+      depositType: 'percent',
+      depositValue: null,
+    });
+    expect(withDepositType(col, 'amount')).toBe(col);
   });
 });
 
@@ -129,20 +154,83 @@ describe('validateBookingRules', () => {
     expect(validateBookingRules({ ...r, member: { ...r.member!, closes: null } })).toEqual({});
   });
 
-  it('requires a deposit amount when a deposit is required', () => {
+  const withDeposit = (depositType: 'amount' | 'percent' | null, depositValue: number | null) => {
     const r = rules();
-    const noAmount = {
+    return {
       ...r,
-      member: { ...r.member!, payment: 'deposit' as const, depositCents: null },
+      member: { ...r.member!, payment: 'deposit' as const, depositType, depositValue },
     };
-    expect(validateBookingRules(noAmount)['member.depositCents']).toBeDefined();
-    const zero = { ...r, member: { ...r.member!, payment: 'deposit' as const, depositCents: 0 } };
-    expect(validateBookingRules(zero)['member.depositCents']).toBeDefined();
-    const prepay = {
-      ...r,
-      member: { ...r.member!, payment: 'prepayment' as const, depositCents: null },
-    };
-    expect(validateBookingRules(prepay)).toEqual({});
+  };
+
+  it('requires a deposit amount in cents above zero when a dollar deposit is required', () => {
+    expect(validateBookingRules(withDeposit('amount', null))['member.deposit']).toBeDefined();
+    expect(validateBookingRules(withDeposit('amount', 0))['member.deposit']).toBeDefined();
+    expect(validateBookingRules(withDeposit('amount', 12.5))['member.deposit']).toBeDefined();
+    expect(validateBookingRules(withDeposit('amount', 1))).toEqual({});
+    expect(validateBookingRules(withDeposit(null, 100))['member.deposit']).toBeDefined();
+  });
+
+  it('accepts a percentage from 0.01 to 100 with at most two decimals', () => {
+    for (const ok of [0.01, 12.5, 33.33, 100])
+      expect(validateBookingRules(withDeposit('percent', ok))).toEqual({});
+    for (const bad of [null, 0, 0.001, 100.01, 12.345, -5])
+      expect(validateBookingRules(withDeposit('percent', bad))['member.deposit']).toBeDefined();
+  });
+
+  it('ignores the deposit for other payment methods', () => {
+    const r = rules();
+    for (const payment of ['optional', 'on-file', 'prepayment'] as const) {
+      const next = {
+        ...r,
+        member: { ...r.member!, payment, depositType: null, depositValue: null },
+      };
+      expect(validateBookingRules(next)).toEqual({});
+    }
+  });
+
+  it('computes the deposit due for a stay total', () => {
+    const base = { payment: 'deposit' as const };
+    expect(depositDueCents({ ...base, depositType: 'amount', depositValue: 9900 }, 50000)).toBe(
+      9900,
+    );
+    expect(depositDueCents({ ...base, depositType: 'amount', depositValue: 9900 }, 5000)).toBe(
+      5000,
+    );
+    expect(depositDueCents({ ...base, depositType: 'percent', depositValue: 25 }, 40000)).toBe(
+      10000,
+    );
+    expect(depositDueCents({ ...base, depositType: 'percent', depositValue: 33.33 }, 10001)).toBe(
+      3333,
+    );
+    expect(depositDueCents({ ...base, depositType: 'percent', depositValue: 12.5 }, 10001)).toBe(
+      1250,
+    );
+    expect(depositDueCents({ ...base, depositType: 'percent', depositValue: 100 }, 777)).toBe(777);
+    expect(
+      depositDueCents({ payment: 'optional', depositType: null, depositValue: null }, 40000),
+    ).toBe(0);
+    expect(depositDueCents({ ...base, depositType: 'percent', depositValue: null }, 40000)).toBe(0);
+    expect(depositDueCents({ ...base, depositType: 'percent', depositValue: 10 }, 0)).toBe(0);
+  });
+
+  it('reads older stored columns that have depositCents as a dollar amount', () => {
+    const { depositType: _t, depositValue: _v, ...rest } = rules().member!;
+    void _t;
+    void _v;
+    const legacy = { ...rest, payment: 'deposit', depositCents: 9900 } as never;
+    expect(normalizeAudienceRules(legacy)).toMatchObject({
+      depositType: 'amount',
+      depositValue: 9900,
+    });
+    expect(normalizeAudienceRules(legacy)).not.toHaveProperty('depositCents');
+    expect(
+      normalizeAudienceRules({ ...rest, payment: 'on-file', depositCents: null } as never),
+    ).toMatchObject({
+      depositType: null,
+      depositValue: null,
+    });
+    const current = rules().member!;
+    expect(normalizeAudienceRules(current)).toEqual(current);
   });
 
   it('limits rooms per reservation', () => {

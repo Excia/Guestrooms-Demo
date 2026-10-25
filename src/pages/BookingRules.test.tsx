@@ -32,9 +32,7 @@ describe('BookingRules page', () => {
     expect(
       within(table).getByRole('rowheader', { name: /Cancellation Period/ }),
     ).toBeInTheDocument();
-    expect(
-      within(table).getByRole('columnheader', { name: /Employee Booking/ }),
-    ).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: /Admin Booking/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Booking Rules' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Booking Rules' })).toHaveAttribute(
       'aria-current',
@@ -53,9 +51,9 @@ describe('BookingRules page', () => {
   it('reads the hold minutes in each column', async () => {
     renderPage();
     await loaded();
-    expect(
-      screen.getByRole('spinbutton', { name: 'Reservation Hold, Employee Booking' }),
-    ).toHaveValue(15);
+    expect(screen.getByRole('spinbutton', { name: 'Reservation Hold, Admin Booking' })).toHaveValue(
+      15,
+    );
     expect(
       screen.getByRole('spinbutton', { name: 'Reservation Hold, Member Online Booking' }),
     ).toHaveValue(10);
@@ -83,7 +81,7 @@ describe('BookingRules page', () => {
     ).not.toBeInTheDocument();
     // The employee column is always on.
     expect(
-      screen.getByRole('spinbutton', { name: 'Reservation Hold, Employee Booking' }),
+      screen.getByRole('spinbutton', { name: 'Reservation Hold, Admin Booking' }),
     ).toBeEnabled();
   });
 
@@ -117,11 +115,66 @@ describe('BookingRules page', () => {
     expect(amount).toHaveFocus();
   });
 
+  it('offers Optional as a payment method and clears the deposit when chosen', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.bookingRules, 'save');
+    renderPage(client);
+    await loaded();
+    await user.click(
+      screen.getByRole('combobox', { name: 'Payment Method at Booking, Member Online Booking' }),
+    );
+    await user.click(screen.getByRole('option', { name: 'Optional' }));
+    expect(
+      screen.queryByRole('spinbutton', {
+        name: 'Payment Method at Booking, Member Online Booking deposit amount',
+      }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    const saved = save.mock.calls[0][0];
+    expect(saved.member).toMatchObject({
+      payment: 'optional',
+      depositType: null,
+      depositValue: null,
+    });
+  });
+
+  it('switches a deposit between dollars and a percentage and validates each', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.bookingRules, 'save');
+    renderPage(client);
+    await loaded();
+    const group = screen.getByRole('group', {
+      name: 'Payment Method at Booking, Member Online Booking deposit type',
+    });
+    expect(within(group).getByRole('button', { name: 'Dollar amount' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(within(group).getByRole('button', { name: 'Percentage of the total stay' }));
+    const percent = screen.getByRole('spinbutton', {
+      name: 'Payment Method at Booking, Member Online Booking deposit percentage',
+    });
+    expect(percent).toHaveValue(null);
+    await user.type(percent, '150');
+    expect(screen.getByText(/Enter a percentage from 0.01 to 100/)).toBeInTheDocument();
+    await user.clear(percent);
+    await user.type(percent, '12.5');
+    expect(screen.queryByText(/Enter a percentage/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    expect(save.mock.calls[0][0].member).toMatchObject({
+      payment: 'deposit',
+      depositType: 'percent',
+      depositValue: 12.5,
+    });
+  });
+
   it('refuses a hold outside 1 to 99', async () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    const hold = screen.getByRole('spinbutton', { name: 'Reservation Hold, Employee Booking' });
+    const hold = screen.getByRole('spinbutton', { name: 'Reservation Hold, Admin Booking' });
     await user.clear(hold);
     await user.type(hold, '150');
     expect(screen.getByText('Enter 1 to 99 minutes.')).toBeInTheDocument();

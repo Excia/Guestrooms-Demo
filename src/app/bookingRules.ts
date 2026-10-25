@@ -4,6 +4,8 @@ import type {
   AudienceRules,
   BookingHold,
   BookingRules,
+  Cents,
+  DepositType,
   MemberTypeRule,
   TimePeriod,
   TimeUnit,
@@ -31,7 +33,8 @@ export const DEFAULT_ONLINE_RULES: AudienceRules = {
   cancellation: { amount: 2, unit: 'days' },
   holdMinutes: 10,
   payment: 'on-file',
-  depositCents: null,
+  depositType: null,
+  depositValue: null,
   roomSelection: 'room-optional',
   excludedRoomTypeIds: [],
   maxRoomsPerReservation: 6,
@@ -80,16 +83,69 @@ export function setUniqueMemberTypeRules(rules: BookingRules, on: boolean): Book
   return { ...rules, uniqueMemberTypeRules: on, memberTypeRules: on ? rules.memberTypeRules : [] };
 }
 
-/** Payment method changes clear the deposit amount unless it is a deposit. */
+export const DEPOSIT_PERCENT = { min: 0.01, max: 100 } as const;
+
+/** Payment method changes clear the deposit unless it is a deposit (which starts as a dollar amount). */
 export function withPayment(
   column: AudienceRules,
   payment: AudienceRules['payment'],
 ): AudienceRules {
+  if (payment !== 'deposit') return { ...column, payment, depositType: null, depositValue: null };
   return {
     ...column,
     payment,
-    depositCents: payment === 'deposit' ? (column.depositCents ?? null) : null,
+    depositType: column.depositType ?? 'amount',
+    depositValue: column.depositValue ?? null,
   };
+}
+
+/** Switches a deposit between dollars and percent; the value is cleared because the units differ. */
+export const withDepositType = (column: AudienceRules, depositType: DepositType): AudienceRules =>
+  column.depositType === depositType ? column : { ...column, depositType, depositValue: null };
+
+const hasAtMostTwoDecimals = (n: number) => Math.abs(Math.round(n * 100) - n * 100) < 1e-6;
+
+/** Error message for a deposit, or null when it is valid (or not a deposit). */
+export function depositError(c: AudienceRules): string | null {
+  if (c.payment !== 'deposit') return null;
+  const v = c.depositValue;
+  if (c.depositType === 'percent') {
+    return v !== null &&
+      v >= DEPOSIT_PERCENT.min &&
+      v <= DEPOSIT_PERCENT.max &&
+      hasAtMostTwoDecimals(v)
+      ? null
+      : `Enter a percentage from ${DEPOSIT_PERCENT.min} to ${DEPOSIT_PERCENT.max}, up to 2 decimals.`;
+  }
+  return c.depositType === 'amount' && v !== null && Number.isInteger(v) && v > 0
+    ? null
+    : 'Enter the deposit amount.';
+}
+
+/**
+ * The deposit due at booking for a stay total, in cents. A dollar amount is capped at the total; a
+ * percentage is rounded to the nearest cent (halves up). No deposit rule means nothing is due.
+ */
+export function depositDueCents(
+  rule: Pick<AudienceRules, 'payment' | 'depositType' | 'depositValue'>,
+  totalCents: Cents,
+): Cents {
+  if (rule.payment !== 'deposit' || rule.depositValue === null || totalCents <= 0) return 0;
+  if (rule.depositType === 'percent')
+    return Math.round((totalCents * Math.round(rule.depositValue * 100)) / 10_000);
+  return rule.depositType === 'amount' ? Math.min(rule.depositValue, totalCents) : 0;
+}
+
+/**
+ * Brings a stored column up to date: older data has `depositCents` instead of the deposit type and
+ * value, and means a dollar amount.
+ */
+export function normalizeAudienceRules(raw: AudienceRules): AudienceRules {
+  const { depositCents, ...rest } = raw as AudienceRules & { depositCents?: Cents | null };
+  if (raw.depositType !== undefined) return rest;
+  if (depositCents === undefined || depositCents === null)
+    return { ...rest, depositType: null, depositValue: null };
+  return { ...rest, depositType: 'amount', depositValue: depositCents };
 }
 
 export const newMemberTypeRule = (id: string): MemberTypeRule => ({
@@ -102,7 +158,7 @@ export const newMemberTypeRule = (id: string): MemberTypeRule => ({
 });
 
 export type BookingRulesErrorKey =
-  | `${Audience}.${'opens' | 'closes' | 'holdMinutes' | 'depositCents' | 'maxRoomsPerReservation'}`
+  | `${Audience}.${'opens' | 'closes' | 'holdMinutes' | 'deposit' | 'maxRoomsPerReservation'}`
   | `memberType.${string}.${'memberTypeId' | 'opens' | 'closes'}`;
 
 /** Messages by field; the page shows them beside the cell. */
@@ -146,9 +202,8 @@ export function validateBookingRules(rules: BookingRules): BookingRulesErrors {
       errors[`${audience}.holdMinutes`] =
         `Enter ${HOLD_MINUTES.min} to ${HOLD_MINUTES.max} minutes.`;
     }
-    if (c.payment === 'deposit' && (c.depositCents === null || c.depositCents <= 0)) {
-      errors[`${audience}.depositCents`] = 'Enter the deposit amount.';
-    }
+    const deposit = depositError(c);
+    if (deposit) errors[`${audience}.deposit`] = deposit;
     if (
       !Number.isInteger(c.maxRoomsPerReservation) ||
       c.maxRoomsPerReservation < MAX_ROOMS.min ||
