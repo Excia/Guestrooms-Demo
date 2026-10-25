@@ -53,6 +53,15 @@ Legacy source: `src/components/SideBarControl.vue` (scoped styles) and `FormElem
 
 85vw wide and 80vh tall (legacy `ReservationHubChangeLogModal.vue`: `width: 85vw; height: 80vh`, search at the top right, close X in the toolbar). Focus is trapped by the MUI Dialog and returns to the Change Log button; Escape, the X and a backdrop click close it. The sort/filter popovers open above it. The legacy search toggle button is replaced by an always visible labelled field (debounced 300 ms, Enter applies at once).
 
+## D-AP-4 Change Log dialog polish (2026-10-25)
+
+The title reads "[Page]: Change Log" (colon) on every page. The search icon in "Search descriptions" is primary green. Hovered table rows use the theme tint (`MuiTableRow` override, `primary.tint`) instead of MUI's grey; header sort/filter icon buttons, popover options, buttons and pagination already use the tint through the theme.
+
+## D-AP-5 Dropdown selected option and prompt dialog alignment (2026-10-25)
+
+- **Selected option:** in every `MenuItem` (shared Select, filters, pagination, month select) the selected option has green text, bold weight and the left primary bar on the tint. Legacy (Quasar `q-select`) keeps the options in their original order, highlights the selected one in green and scrolls it into view; it does not move it to the top, and neither do we (MUI scrolls the selected item into view on open). The text uses `primary.dark` (#205723, 7.4:1 on the tint) because `primary.main` is 4.49:1 on `#eaf2ea`, just under AA.
+- **Prompt dialogs** (past-date check-in, automatic check-out, override code, bulk check-in result, split confirmation, non-actionable): the title and the close icon share one heading row, the text keeps the dialog's side padding, and the actions are full-width and stacked with that same padding (legacy `ReservationHubPastDateCheckInConfirmationModal.vue` centred the buttons at 20vw under a left-aligned text; the old tooltips repeated the button text and are not carried over). The shared piece is `DialogHeader`.
+
 ## Not verified
 
 Layout and spacing were not checked in a real browser (jsdom tests only).
