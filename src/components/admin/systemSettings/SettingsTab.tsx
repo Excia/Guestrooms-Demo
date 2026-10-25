@@ -19,16 +19,16 @@ import type {
 import {
   ALT_RATE_NIGHTS,
   DURATION_AMOUNT,
-  formatTime12,
+  formatTimeValue,
   lateCheckoutOptions,
   SERVICE_CHARGE_LABEL_MAX,
-  TIME_STEP_MINUTES,
   TRAINING_MODE_AUDIT_MESSAGE,
   withLateCheckoutInRange,
   type SystemSettingsErrors,
   type SystemSettingsField,
 } from '../../../app/systemSettings';
 import Select from '../../shared/Select';
+import TimeField from '../../shared/TimeField';
 import { ErrorLines, fieldId, Hint, Section } from './fieldParts';
 import LookupField from './LookupField';
 import NightsStepper from './NightsStepper';
@@ -146,24 +146,16 @@ export default function SettingsTab({
   // Times change the late checkout options, so the late time follows into range.
   const setTime = (key: 'checkInTime' | 'checkOutTime', v: string) =>
     onChange(withLateCheckoutInRange({ ...value, [key]: v }));
-  const lateOptions = lateCheckoutOptions(value.checkOutTime, value.checkInTime).map((t) => ({
-    value: t,
-    label: formatTime12(t),
-  }));
+  const lateOptions = new Set(lateCheckoutOptions(value.checkOutTime, value.checkInTime));
   const timeField = (field: 'checkInTime' | 'checkOutTime', label: string) => (
-    <TextField
+    <TimeField
       id={fieldId(field)}
-      type="time"
       label={label}
       value={value[field]}
-      onChange={(e) => setTime(field, e.target.value)}
+      onChange={(v) => setTime(field, v)}
       error={Boolean(errors[field])}
       helperText={errors[field]?.[0]}
       disabled={readOnly}
-      slotProps={{
-        inputLabel: { shrink: true },
-        htmlInput: { step: TIME_STEP_MINUTES * 60 },
-      }}
       sx={{ flex: 1, minWidth: (t) => t.spacing(20) }}
     />
   );
@@ -251,16 +243,12 @@ export default function SettingsTab({
             onChange={(v) => set('earlyLateEnabled', v)}
             description="If a reservation has Late Checkout selected, the room(s) will automatically be checked out at the Late Checkout Time instead of the standard Checkout Time."
           >
-            <Select
+            <TimeField
               disabled={readOnly}
               id={fieldId('lateCheckOutTime')}
               label="Late Checkout Time"
-              value={
-                lateOptions.some((o) => o.value === value.lateCheckOutTime)
-                  ? value.lateCheckOutTime
-                  : ''
-              }
-              options={lateOptions}
+              value={value.lateCheckOutTime}
+              isAllowed={(t) => lateOptions.has(formatTimeValue(t))}
               onChange={(v) => set('lateCheckOutTime', v)}
               error={Boolean(errors.lateCheckOutTime)}
               helperText={errors.lateCheckOutTime?.[0]}
@@ -350,19 +338,14 @@ export default function SettingsTab({
             <Hint id="training-mode-audit-note">{TRAINING_MODE_AUDIT_MESSAGE}</Hint>
           ) : null}
           {value.nightAudit === 'automatic' ? (
-            <TextField
+            <TimeField
               id={fieldId('nightAuditRunTime')}
-              type="time"
               label="Daily Run Time"
               value={value.nightAuditRunTime}
-              onChange={(e) => set('nightAuditRunTime', e.target.value)}
+              onChange={(v) => set('nightAuditRunTime', v)}
               disabled={readOnly}
               error={Boolean(errors.nightAuditRunTime)}
               helperText={errors.nightAuditRunTime?.[0]}
-              slotProps={{
-                inputLabel: { shrink: true },
-                htmlInput: { step: TIME_STEP_MINUTES * 60 },
-              }}
               sx={{ mt: 1, ml: 4, width: (t) => t.spacing(25) }}
             />
           ) : null}

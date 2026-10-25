@@ -26,7 +26,7 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
   action; Confirm Leaving on unsaved changes. Settings tab: **Time Zone** select; **Check In Time**
   (e.g. 4:00 PM) and **Checkout Time** (12:00 PM); **Enable Early Check In and Late Check Out** switch
   revealing **Late Checkout Time** (3:00 PM; options run from the standard checkout to the standard
-  check-in time; 5-minute increments); **Mobile POS Visibility** ("Folio becomes visible N hours before
+  check-in time; 5-minute increments; all time fields are typed hh:mm AM/PM with a green clock button opening a clock dial, D-clock-1 to D-clock-3 in `entries/pager-clock.md`); **Mobile POS Visibility** ("Folio becomes visible N hours before
   system check in time on the day of check in"; "Folio is no longer visible N hours after system checkout
   time on the day of checkout"); **Close Settled Folios** N hours after system checkout time; **Night
   Audit** Run Manually / Run Automatically; **Alternative Base Rates** 1 and 2, each "N or more nights"

@@ -137,10 +137,10 @@ describe('equal field heights', () => {
     });
   });
 
-  it('keeps the filled rows-per-page select of the pager (Figma 20:2576) out of the standard', () => {
+  it('draws the rows-per-page select of the pager as an outlined toolbar field', () => {
     wrap(<Pagination page={1} rowsPerPage={10} total={50} onChange={() => {}} />);
     const root = rootOf(screen.getByRole('combobox', { name: /rows per page/i }));
-    expect(root).toHaveClass('MuiFilledInput-root');
-    expect(root).not.toHaveStyle({ height: `${FIELD_HEIGHT_PX.small}px` });
+    expect(root).toHaveClass('MuiOutlinedInput-root');
+    expect(root).toHaveStyle({ height: `${FIELD_HEIGHT_PX.small}px` });
   });
 });

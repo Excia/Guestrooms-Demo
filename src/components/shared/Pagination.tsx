@@ -9,6 +9,7 @@ import {
   pageAfterRowsChange,
   pageCount,
 } from '../../app/pagination';
+import { TOOLBAR_FIELD_SIZE } from './controlSizes';
 import Select from './Select';
 
 export interface PaginationChange {
@@ -34,7 +35,8 @@ export interface PaginationProps {
   label?: string;
 }
 
-// Rows-per-page select, range text and page items (Figma 20:2576: 40px outlined items, filled select).
+// Rows-per-page select, range text and page items. One pager look for every list: the select is an
+// outlined 40px toolbar field (owner decision 2026-10-25; Figma 20:2576 drew it filled, see F-178-2).
 export default function Pagination({
   page,
   rowsPerPage,
@@ -68,18 +70,16 @@ export default function Pagination({
         gap: 3,
       }}
     >
-      <Box sx={{ width: (t) => t.spacing(18) }}>
-        <Select
-          variant="filled"
-          fullWidth
-          label="Rows per page"
-          value={rowsPerPage}
-          options={options}
-          onChange={(n) =>
-            onChange({ page: pageAfterRowsChange(current, rowsPerPage, n), rowsPerPage: n })
-          }
-        />
-      </Box>
+      <Select
+        inlineLabel
+        size={TOOLBAR_FIELD_SIZE}
+        label="Rows per page"
+        value={rowsPerPage}
+        options={options}
+        onChange={(n) =>
+          onChange({ page: pageAfterRowsChange(current, rowsPerPage, n), rowsPerPage: n })
+        }
+      />
       <Typography variant="body2" sx={{ color: 'text.secondary' }} aria-live="polite">
         {total === undefined ? '' : formatRange(current, total, rowsPerPage)}
       </Typography>
