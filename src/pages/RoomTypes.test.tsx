@@ -40,6 +40,18 @@ describe('Room Types page', () => {
     expect(screen.getByRole('group', { name: 'Queen' })).toHaveTextContent('2');
   });
 
+  it('reads Saved when nothing changed, Save Room Type after an edit, and Saved again after saving', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    const clean = screen.getByRole('button', { name: 'Saved, Room Type' });
+    expect(clean).toHaveTextContent('Saved');
+    expect(clean).toHaveAttribute('aria-disabled', 'true');
+    await user.type(screen.getByLabelText(/Room Type Name/), ' II');
+    await user.click(screen.getByRole('button', { name: 'Save Room Type' }));
+    expect(await screen.findByRole('button', { name: 'Saved, Room Type' })).toBeInTheDocument();
+  });
+
   it('shows the end date only when "Configure active end date?" is checked', async () => {
     const user = userEvent.setup();
     renderPage();

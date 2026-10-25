@@ -70,10 +70,10 @@ describe('SSO Admin field', () => {
     const save = vi.spyOn(client.systemSettings, 'save');
     renderPage(client);
     await loaded();
-    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).toHaveAttribute('aria-disabled', 'true');
     const label = screen.getByLabelText('Label');
     await user.type(label, 'x');
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(JSON.stringify(save.mock.calls[0][0])).not.toMatch(/sso|Admin User/i);
   });

@@ -23,7 +23,7 @@ function renderPage(client: ApiClient = createMockClient()) {
 const loaded = () => screen.findByRole('list', { name: 'Encoder Key' });
 const inputs = () => screen.getAllByRole('textbox', { name: /^Encoder Key \d+$/ });
 const values = () => inputs().map((i) => (i as HTMLInputElement).value);
-const save = () => screen.getByRole('button', { name: 'Save Changes' });
+const save = () => screen.getByRole('button', { name: /^(Save Encoder Keys|Saved, Encoder Keys)$/ });
 const withRetrieve = (retrieveEncoders: ApiClient['keycards']['retrieveEncoders']): ApiClient => {
   const client = createMockClient();
   return { ...client, keycards: { ...client.keycards, retrieveEncoders } };
@@ -39,7 +39,7 @@ describe('Keycard Integration page', () => {
       'aria-current',
       'page',
     );
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
     expect(inputs()[0]).toHaveAttribute(
       'placeholder',
       expect.stringContaining('digit Encoder Key'),
@@ -75,7 +75,7 @@ describe('Keycard Integration page', () => {
     expect(inputs()).toHaveLength(3);
     expect(inputs()[2]).toHaveFocus();
     // A blank row alone is not a change.
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('removes one row and moves focus to a neighbor', async () => {
@@ -85,7 +85,7 @@ describe('Keycard Integration page', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Encoder Key 1' }));
     expect(values()).toEqual(['48001937465202']);
     expect(inputs()[0]).toHaveFocus();
-    expect(save()).toBeEnabled();
+    expect(save()).not.toHaveAttribute('aria-disabled');
   });
 
   it('asks before removing all, and Cancel keeps the list', async () => {
@@ -110,7 +110,7 @@ describe('Keycard Integration page', () => {
     expect(screen.queryAllByRole('textbox')).toHaveLength(0);
     expect(screen.getByText(/No Encoder Keys yet/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Add Encoder' })).toHaveFocus());
-    expect(save()).toBeEnabled();
+    expect(save()).not.toHaveAttribute('aria-disabled');
   });
 
   it('retrieves an encoder from Visionline and shows the success toast', async () => {
@@ -120,7 +120,7 @@ describe('Keycard Integration page', () => {
     await user.click(screen.getByRole('button', { name: 'Retrieve Encoder' }));
     expect(await screen.findAllByText('1 Encoder Successfully Retrieved')).not.toHaveLength(0);
     expect(values()).toEqual(['48001937465201', '48001937465202', '48001937465203']);
-    expect(save()).toBeEnabled();
+    expect(save()).not.toHaveAttribute('aria-disabled');
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     await waitFor(() => expect(screen.queryByRole('group', { name: 'Notification' })).toBeNull());
   });
@@ -256,7 +256,7 @@ describe('Keycard Integration page', () => {
       '48001937465209',
     ]);
     expect(inputs()).toHaveLength(4);
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('shows a key typed with hyphens in its saved form after saving', async () => {
@@ -283,7 +283,7 @@ describe('Keycard Integration page', () => {
     await user.click(save());
     expect(await screen.findByText('Encoder Keys could not be saved. Try again.')).toBeVisible();
     expect(inputs()).toHaveLength(1);
-    expect(save()).toBeEnabled();
+    expect(save()).not.toHaveAttribute('aria-disabled');
   });
 
   it('asks before leaving with unsaved edits', async () => {

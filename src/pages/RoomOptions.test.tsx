@@ -27,7 +27,7 @@ function renderPage(client: ApiClient = createMockClient()) {
 
 const loaded = async () =>
   (await screen.findAllByRole('textbox', { name: /^Feature \d+$/ }, { timeout: 3000 }))[0];
-const saveButton = () => screen.getByRole('button', { name: 'Save Room Options' });
+const saveButton = () => screen.getByRole('button', { name: /^(Save Room Options|Saved, Room Options)$/ });
 const withLabel = (name: string) => screen.getByDisplayValue(name);
 
 describe('Room Options page', () => {
@@ -41,7 +41,7 @@ describe('Room Options page', () => {
       'aria-current',
       'page',
     );
-    expect(saveButton()).toBeDisabled();
+    expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Add Feature' })).toBeInTheDocument();
   });
 
@@ -91,11 +91,11 @@ describe('Room Options page', () => {
     await waitFor(() => expect(fields.at(-1)).toHaveFocus());
     await user.type(fields.at(-1) as HTMLElement, 'Fireplace');
     expect(screen.getByText('9/50')).toBeInTheDocument();
-    expect(saveButton()).toBeEnabled();
+    expect(saveButton()).not.toHaveAttribute('aria-disabled');
     await user.click(saveButton());
     expect((await screen.findAllByText('Room Options Saved')).length).toBeGreaterThan(0);
     expect((await client.roomOptions.get()).features.map((f) => f.label)).toContain('Fireplace');
-    expect(saveButton()).toBeDisabled();
+    expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('stops typing at 50 characters', async () => {

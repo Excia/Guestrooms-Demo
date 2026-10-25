@@ -89,7 +89,7 @@ describe('Training Mode', () => {
     const auto = screen.getByRole('radio', { name: 'Run Automatically' });
     expect(auto).toBeDisabled();
     expect(auto).toHaveAccessibleDescription(/not available in Training Mode/);
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(save.mock.calls[0][0].trainingMode).toBe(true);
     expect(save.mock.calls[0][0].nightAudit).toBe('manual');
@@ -110,9 +110,9 @@ describe('Training Mode', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).toHaveAttribute('aria-disabled', 'true');
     await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
-    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).not.toHaveAttribute('aria-disabled');
   });
 });
 

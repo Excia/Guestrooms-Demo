@@ -22,7 +22,7 @@ function renderPage(client: ApiClient = createMockClient(), granted?: readonly P
 }
 
 const loaded = () => screen.findByRole('list', { name: 'Locations' });
-const save = () => screen.getByRole('button', { name: 'Save Locations' });
+const save = () => screen.getByRole('button', { name: /^(Save Locations|Saved, Locations)$/ });
 
 describe('Locations page', () => {
   it('lists the saved locations in the shared shell with the nav item current', async () => {
@@ -38,7 +38,7 @@ describe('Locations page', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Locations' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Locations' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Change Log' })).toBeInTheDocument();
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('shows a loading indicator, then an error with Retry that reloads', async () => {
@@ -58,7 +58,7 @@ describe('Locations page', () => {
     renderPage(createMockClient({ scenario: 'empty' }));
     const list = await loaded();
     expect(within(list).getAllByRole('group')).toHaveLength(1);
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
     const remove = screen.getByRole('button', { name: 'Remove location 1' });
     expect(remove).toBeDisabled();
     expect(remove).toHaveAccessibleDescription('A club needs at least one location');
@@ -126,7 +126,7 @@ describe('Locations page', () => {
       'Main Clubhouse',
       'Lakeside Cottages',
     ]);
-    expect(save()).toBeDisabled();
+    expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('refuses to save an incomplete row, ties the errors to the inputs and focuses the first', async () => {
@@ -184,7 +184,7 @@ describe('Locations page', () => {
     await user.type(screen.getAllByRole('textbox', { name: /Location Name/ })[0], ' II');
     await user.click(save());
     expect(await screen.findByText('Locations could not be saved. Try again.')).toBeInTheDocument();
-    expect(save()).toBeEnabled();
+    expect(save()).not.toHaveAttribute('aria-disabled');
   });
 
   it('asks before leaving with unsaved changes', async () => {
@@ -213,6 +213,6 @@ describe('Locations page', () => {
     }
     expect(screen.queryByRole('button', { name: 'Add Location' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Save Locations' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Save Locations|Saved, Locations)$/ })).not.toBeInTheDocument();
   });
 });

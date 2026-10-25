@@ -3,13 +3,17 @@ import Delete from '@mui/icons-material/Delete';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
+import SaveButton from '../../shared/SaveButton';
 
 export interface SetupActionsProps {
   /** "room type" or "room". */
   noun: string;
-  saveLabel: string;
+  /** What Save saves, e.g. "Room Type": the button reads "Save Room Type" or "Saved". */
+  saveNoun: string;
   /** A new, unsaved item: delete and duplicate do not apply, Cancel does (PDF 8.5.5). */
   creating: boolean;
+  /** The draft differs from what is saved. A new item always offers Save (legacy). */
+  dirty: boolean;
   saving: boolean;
   onSave: () => void;
   onDelete: () => void;
@@ -20,8 +24,9 @@ export interface SetupActionsProps {
 // Header actions (Figma 11964:13723): delete (red), duplicate, then the primary save button.
 export default function SetupActions({
   noun,
-  saveLabel,
+  saveNoun,
   creating,
+  dirty,
   saving,
   onSave,
   onDelete,
@@ -44,9 +49,7 @@ export default function SetupActions({
           </IconButton>
         </>
       )}
-      <Button variant="contained" size="large" disabled={saving} onClick={onSave}>
-        {saveLabel}
-      </Button>
+      <SaveButton dirty={dirty || creating} saving={saving} noun={saveNoun} onClick={onSave} />
     </Box>
   );
 }

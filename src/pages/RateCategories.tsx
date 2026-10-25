@@ -277,8 +277,9 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       actions={
         <SetupActions
           noun="rate category"
-          saveLabel="Save Rate Category"
+          saveNoun="Rate Category"
           creating={editor.creating}
+          dirty={editor.dirty || badAmounts.size > 0}
           saving={saving}
           onSave={() => void save()}
           onDelete={() => {

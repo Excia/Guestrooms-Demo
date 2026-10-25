@@ -12,6 +12,7 @@ import MemberTypeRulesTable from '../components/admin/bookingRules/MemberTypeRul
 import RulesMatrix from '../components/admin/bookingRules/RulesMatrix';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
+import SaveButton from '../components/shared/SaveButton';
 
 interface Loaded {
   rules: BookingRulesValue;
@@ -83,14 +84,7 @@ export default function BookingRules() {
   }, [api, draft, loaded]);
 
   const saveButton = (
-    <Button
-      variant="contained"
-      size="large"
-      onClick={() => void save()}
-      disabled={!dirty || saving}
-    >
-      Save Booking Rules
-    </Button>
+    <SaveButton dirty={dirty} saving={saving} noun="Booking Rules" onClick={() => void save()} />
   );
 
   let body;

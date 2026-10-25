@@ -45,7 +45,7 @@ describe('SystemSettings page', () => {
     expect(screen.getByRole('radio', { name: 'Run Manually' })).toBeChecked();
     expect(screen.getByLabelText('Label')).toHaveValue('Service Charge');
     expect(screen.getByText('14 / 15')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('link', { name: 'System Settings' })).toHaveAttribute(
       'aria-current',
       'page',
@@ -88,7 +88,7 @@ describe('SystemSettings page', () => {
     expect(
       screen.getByText('Close Settled Folios value must extend past Late Checkout Time.'),
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     expect(save).not.toHaveBeenCalled();
     expect(screen.getByRole('combobox', { name: 'Close Settled Folios' })).toHaveFocus();
   });
@@ -118,14 +118,14 @@ describe('SystemSettings page', () => {
     const city = screen.getByLabelText('City');
     await user.clear(city);
     await user.type(city, 'Dayton');
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     const sent = save.mock.calls[0][0];
     expect(sent.earlyLateEnabled).toBe(false);
     expect(sent.folio.city).toBe('Dayton');
     expect((await screen.findAllByText('System Settings Saved')).length).toBeGreaterThan(0);
     expect(screen.getByLabelText('early late')).toHaveTextContent('false');
-    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).toHaveAttribute('aria-disabled', 'true');
   });
 
   it('jumps to the Folio Details tab when a folio field is invalid', async () => {
@@ -138,7 +138,7 @@ describe('SystemSettings page', () => {
     await user.type(email, 'not-an-email');
     expect(screen.getByText('Enter a valid email address.')).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Settings' }));
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     expect(await screen.findByLabelText('Email Address')).toHaveFocus();
   });
 
@@ -217,7 +217,7 @@ describe('SystemSettings page', () => {
     renderPage(client);
     await loaded();
     await user.click(screen.getByRole('radio', { name: 'Run Automatically' }));
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     expect(
       await screen.findByText('System Settings could not be saved. Try again.'),
     ).toBeInTheDocument();
@@ -374,7 +374,7 @@ describe('SystemSettings page', () => {
       const save = vi.spyOn(client.systemSettings, 'save');
       const user = await openTab(client);
       await user.click(screen.getByRole('checkbox', { name: 'Room Type' }));
-      await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+      await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
       await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
       expect(save.mock.calls[0][0].registrationCard.items.roomType).toBe(true);
     });
@@ -485,13 +485,13 @@ describe('SystemSettings page', () => {
     await user.type(url, 'not a url');
     expect(screen.getByText(/Enter a full web address/)).toBeInTheDocument();
     await user.click(screen.getByRole('tab', { name: 'Settings' }));
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     expect(await screen.findByLabelText('URL')).toHaveFocus();
     expect(save).not.toHaveBeenCalled();
     await user.clear(screen.getByLabelText('URL'));
     await user.type(screen.getByLabelText('URL'), 'https://club.example.com/policy');
     await user.click(screen.getByRole('switch', { name: 'Display Add-Ons Popup' }));
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0].onlineBooking).toMatchObject({
       policyUrl: 'https://club.example.com/policy',
@@ -554,13 +554,13 @@ describe('SystemSettings page', () => {
     await user.type(field, 'banq');
     await user.click(await screen.findByRole('option', { name: 'Banquet Comp Account' }));
     expect(screen.queryByRole('option')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     await waitFor(async () =>
       expect((await client.systemSettings.get()).houseAccount?.id).toBe('house-2'),
     );
     await user.click(screen.getByRole('combobox', { name: 'House Account' }));
     await user.click(screen.getByRole('button', { name: 'Clear' }));
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     await waitFor(async () => expect((await client.systemSettings.get()).houseAccount).toBeNull());
     expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveAttribute(
       'placeholder',
@@ -613,7 +613,7 @@ describe('SystemSettings page', () => {
     await user.clear(field);
     await user.type(field, 'banq');
     await user.click(await screen.findByRole('option', { name: 'Banquet Comp Account' }));
-    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
     expect(
       await screen.findByText('This house account no longer exists. Choose another.'),
     ).toBeInTheDocument();
@@ -650,6 +650,6 @@ describe('SystemSettings page', () => {
       expect(disabled, control.getAttribute('aria-label') ?? control.id).toBe(true);
     }
     expect(screen.getByRole('button', { name: 'Search House Account' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).toHaveAttribute('aria-disabled', 'true');
   });
 });
