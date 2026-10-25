@@ -27,6 +27,7 @@ import { useApi } from '../../api';
 import type { ReservationDetail, ScheduleClosure, ScheduleData, ScheduleHold } from '../../api';
 import { ApiError } from '../../api';
 import { stayLimits } from '../../app/dateRange';
+import { showLocations } from '../../app/locations';
 import { ADMIN_HOLD_AUDIENCE, describeHold, formatHold, holdMinutes } from '../../app/holdTimer';
 import {
   createFailure,
@@ -585,15 +586,17 @@ export default function NewReservationPanel({
             Room Details
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            <Select
-              label="Location"
-              placeholder="Unassigned"
-              size="small"
-              fullWidth
-              value={form.locationId}
-              options={locationOptions}
-              onChange={(v) => pick(selectLocation(allRooms, selection, v))}
-            />
+            {data && showLocations(data.locations) ? (
+              <Select
+                label="Location"
+                placeholder="Unassigned"
+                size="small"
+                fullWidth
+                value={form.locationId}
+                options={locationOptions}
+                onChange={(v) => pick(selectLocation(allRooms, selection, v))}
+              />
+            ) : null}
             <Select
               label="Room Type"
               placeholder="Unassigned"

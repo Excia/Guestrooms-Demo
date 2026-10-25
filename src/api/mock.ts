@@ -17,6 +17,7 @@ import { previewRegistrationCardUrl } from './registrationCardData';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
+import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
@@ -65,6 +66,7 @@ import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
+import { checkRemoveLocation, validateLocations } from '../app/locations';
 import {
   effectiveDetails,
   syncLinkedRooms,
@@ -169,6 +171,7 @@ export function createMockClient({
   let addOns = mockAddOns();
   let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
+  let locations = mockLocations();
   const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
   const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
@@ -780,6 +783,45 @@ export function createMockClient({
         respond(
           () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
           () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
+          o,
+        ),
+    },
+    locations: {
+      list: (o) =>
+        respond(
+          () => structuredClone(locations),
+          () => [],
+          o,
+        ),
+      listAreas: (o) =>
+        respond(
+          () => structuredClone(MOCK_LOCATION_AREAS),
+          () => [],
+          o,
+        ),
+      save: (rows, o) =>
+        respond(
+          () => {
+            if (rows.length === 0 || Object.keys(validateLocations(rows)).length > 0) {
+              throw new ApiError(422, 'Locations are not valid', { code: 'validation' });
+            }
+            const kept = new Set(rows.map((r) => r.id));
+            if (locations.some((l) => !kept.has(l.id) && !checkRemoveLocation(l.usage).allowed)) {
+              throw new ApiError(409, 'A location in use cannot be removed', {
+                code: 'location-in-use',
+              });
+            }
+            // A replace of the whole list: saving the same list again changes nothing.
+            const before = locations;
+            locations = rows.map((r) => ({
+              id: r.id,
+              name: r.name.trim(),
+              area: r.area,
+              usage: before.find((l) => l.id === r.id)?.usage ?? { roomTypes: [], roomCount: 0 },
+            }));
+            return structuredClone(locations);
+          },
+          () => rows.map((r) => ({ ...r, usage: { roomTypes: [], roomCount: 0 } })),
           o,
         ),
     },

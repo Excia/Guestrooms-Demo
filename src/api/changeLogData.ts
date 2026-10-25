@@ -73,6 +73,11 @@ const DESCRIPTIONS: Record<ChangeLogPageId, readonly [string, string][]> = {
     ['updated', 'Encoder Key list updated'],
     ['deleted', 'All encoder keys removed'],
   ],
+  locations: [
+    ['created', 'Location "Lakeside Cottages" created'],
+    ['updated', 'Location "Main Clubhouse" area changed to Guest Rooms'],
+    ['deleted', 'Location "Pool House" removed'],
+  ],
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');

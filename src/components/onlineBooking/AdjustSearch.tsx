@@ -7,6 +7,7 @@ import Collapse from '@mui/material/Collapse';
 import Typography from '@mui/material/Typography';
 import { useId, useState } from 'react';
 import { criteriaSummary, type SearchCriteria } from '../../app/bookingSearch';
+import { showLocations } from '../../app/locations';
 import { PLACEHOLDER_LOCATIONS } from '../../app/placeholderLocations';
 import { ReservationForm, type ReservationFormProps } from './ReservationWidget';
 
@@ -24,7 +25,7 @@ export default function AdjustSearch({ criteria, onSearch, ...form }: AdjustSear
   const summary = criteriaSummary(
     applied,
     (id) => locations.find((l) => l.id === id)?.name ?? id,
-    locations.length > 1,
+    showLocations(locations),
   );
 
   return (

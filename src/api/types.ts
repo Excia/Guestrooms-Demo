@@ -1163,6 +1163,43 @@ export interface BookingRulesApi {
   getOptions(options?: RequestOptions): Promise<BookingRulesOptions>;
 }
 
+// ---- locations (Admin Setup, tickets 182 and 123) ----------------------------------------------
+
+/** What uses a location; a location in use cannot be removed (rules in `src/app/locations.ts`). */
+export interface LocationUsage {
+  /** Names of the room types that belong to the location. */
+  roomTypes: string[];
+  /** Number of rooms in the location. */
+  roomCount: number;
+}
+
+/** A club location. `area` routes the location's revenue to the right GL; null only in a draft. */
+export interface LocationSetup {
+  id: string;
+  name: string;
+  area: LookupRef | null;
+  usage: LocationUsage;
+}
+
+/** What a form sends: `id` is made by the client, so a repeated save never creates a duplicate. */
+export interface LocationInput {
+  id: string;
+  name: string;
+  area: LookupRef | null;
+}
+
+/**
+ * Errors: 422 `validation` (the rules in `src/app/locations.ts`), 409 `location-in-use` when the
+ * list leaves out a location that still has room types or rooms. `save` replaces the whole list
+ * (a location missing from it is removed), so repeating a save changes nothing.
+ */
+export interface LocationsApi {
+  list(options?: RequestOptions): Promise<LocationSetup[]>;
+  /** Areas to associate a location with (type-ahead source); the mock returns all of them. */
+  listAreas(options?: RequestOptions): Promise<LookupRef[]>;
+  save(locations: LocationInput[], options?: RequestOptions): Promise<LocationSetup[]>;
+}
+
 // ---- permissions -----------------------------------------------------------------------------
 
 /**
@@ -1573,6 +1610,7 @@ export interface ApiClient {
   addOns: AddOnApi;
   keycards: KeycardApi;
   bookingRules: BookingRulesApi;
+  locations: LocationsApi;
   members: MembersApi;
   folios: FoliosApi;
   reports: ReportsApi;

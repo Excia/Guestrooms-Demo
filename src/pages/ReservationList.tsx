@@ -9,6 +9,7 @@ import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
 import type { ReservationListRow } from '../api';
+import { showLocations } from '../app/locations';
 import { applyPanel } from '../app/panelUrl';
 import { selectedRows, toggleAllRows, toggleRow } from '../app/reservationList';
 import { useSystemSettings } from '../app/useSystemSettings';
@@ -247,7 +248,7 @@ export default function ReservationList({
           onToggleRow={(id) => setSelected(toggleRow(selected, id))}
           onToggleAll={() => setSelected(toggleAllRows(rows, selected, selectionToday))}
           today={selectionToday}
-          showLocation={optionsState.status !== 'success' || options.locations.length > 1}
+          showLocation={optionsState.status !== 'success' || showLocations(options.locations)}
           onOpen={(row) => void navigate(reservationHubPath(row.id))}
           message={message}
         />

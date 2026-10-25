@@ -483,6 +483,20 @@ and no duplicates (`src/app/keycards.ts`; the backend enforces the same). The UI
 error from retrieve the same way (the "No encoders retrieved" dialog). Authentication with Visionline is the
 backend's concern (Q-75-3).
 
+## Locations (tickets 182 and 123, built on the mock)
+
+- `GET /locations` (`locations.list`): the club's locations, in display order. Each is `{ id, name, area: {id, label} | null,
+  usage: { roomTypes: string[], roomCount: number } }`; `usage` lists the names of the room types in the location and the number
+  of rooms, read-only. A club with one location hides every location selector in the UI (rule in `src/app/locations.ts`).
+- `GET /locations/areas` (`locations.listAreas`): the areas a location can be tied to, `[{ id, label }]`. The UI filters them
+  as the user types.
+- `PUT /locations` (`locations.save`) with `[{ id, name, area }]`: replaces the whole list and answers the stored list. A
+  location missing from the body is removed. Ids are chosen by the client (a UUID for a new location), so a repeated PUT of the
+  same body changes nothing. The backend re-checks: 1 to many locations; name required, at most 50 characters, unique
+  ignoring case and spaces; area required (422 `validation`). A location that still has room types or rooms cannot be removed
+  (409 `location-in-use`). Needs `locations.edit` (403 otherwise). The change is recorded in the Change Log page `locations`.
+- Revenue of a location goes to the GL account of its area.
+
 ## Room closures (ticket 149)
 
 - `SaveClosureRequest {roomId, startDate, endDate, description, requestId}`; dates are half-open like

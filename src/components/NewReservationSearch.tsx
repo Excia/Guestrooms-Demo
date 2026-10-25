@@ -10,6 +10,7 @@ import { stayLimits } from '../app/dateRange';
 import { addDays } from '../app/dateSelection';
 import { useClubToday } from '../app/useClubToday';
 import type { WeekStartDay } from '../lib/calendar';
+import { showLocations } from '../app/locations';
 import { PLACEHOLDER_LOCATIONS, type SearchLocation } from '../app/placeholderLocations';
 import {
   ALL_LOCATIONS_VALUE,
@@ -66,6 +67,7 @@ export default function NewReservationSearch({
   const [location, setLocation] = useState(ALL_LOCATIONS_VALUE);
   const [rooms, dispatch] = useReducer(roomsReducer, undefined, initialRooms);
 
+  const showLocation = showLocations(locations);
   const errors = validateDates(checkIn, checkOut, today);
   const valid = datesAreValid(checkIn, checkOut, today);
   const hint = dateHint(checkIn, checkOut, today);
@@ -118,7 +120,7 @@ export default function NewReservationSearch({
     const criteria: SearchCriteria = {
       checkIn,
       checkOut,
-      location,
+      location: showLocation ? location : ALL_LOCATIONS_VALUE,
       rooms: rooms.map(({ adults, children }) => ({ adults, children })),
     };
     if (onSearch) onSearch(criteria);
@@ -181,16 +183,18 @@ export default function NewReservationSearch({
           />
         </Box>
 
-        <Select
-          label="Location"
-          value={location}
-          options={[
-            { value: ALL_LOCATIONS_VALUE, label: 'All Locations' },
-            ...locations.map((l) => ({ value: l.id, label: l.name })),
-          ]}
-          onChange={setLocation}
-          fullWidth
-        />
+        {showLocation ? (
+          <Select
+            label="Location"
+            value={location}
+            options={[
+              { value: ALL_LOCATIONS_VALUE, label: 'All Locations' },
+              ...locations.map((l) => ({ value: l.id, label: l.name })),
+            ]}
+            onChange={setLocation}
+            fullWidth
+          />
+        ) : null}
 
         <Box
           component="fieldset"

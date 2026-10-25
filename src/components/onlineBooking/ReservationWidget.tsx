@@ -27,6 +27,7 @@ import {
   type SearchCriteria,
 } from '../../app/bookingSearch';
 import type { WeekStartDay } from '../../lib/calendar';
+import { showLocations } from '../../app/locations';
 import { PLACEHOLDER_LOCATIONS, type SearchLocation } from '../../app/placeholderLocations';
 import CountStepper from '../shared/CountStepper';
 import DateField, { type DateFieldRange } from '../shared/DateField';
@@ -91,7 +92,7 @@ export function ReservationForm({
   const errors = validateBookingDates(checkIn, checkOut, today, limits);
   const valid = bookingDatesValid(checkIn, checkOut, today, limits);
   const nights = nightsBetween(checkIn, checkOut);
-  const showLocation = locations.length > 1;
+  const showLocation = showLocations(locations);
   const current: SearchCriteria = {
     checkIn,
     checkOut,

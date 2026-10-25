@@ -18,6 +18,7 @@ import type {
   ScheduleRoom,
 } from '../api';
 import { HEADER_HEIGHT, RESERVATION_PANEL_SIDE, toastSideFor, type PanelSide } from '../app/layout';
+import { showLocations } from '../app/locations';
 import { RESERVATIONS_PATH } from '../app/routes';
 import {
   applyScheduleFilters,
@@ -25,7 +26,6 @@ import {
   isScheduleEmpty,
   knownIds,
   shiftScheduleStart,
-  showLocationFilter,
   type ScheduleStep,
 } from '../app/schedule';
 import { applyRoomPlan, changeRoomFailure, mergeRoomPlan, revertRoomPlan } from '../app/changeRoom';
@@ -437,7 +437,7 @@ export default function Schedule({
   const effectiveView = useMemo<ScheduleViewState>(
     () => ({
       ...view,
-      locationIds: data && showLocationFilter(data.locations) ? view.locationIds : null,
+      locationIds: data && showLocations(data.locations) ? view.locationIds : null,
       featureIds: knownIds(view.featureIds, data?.features ?? []),
     }),
     [view, data],

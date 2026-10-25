@@ -23,6 +23,7 @@ import {
   validateAddOn,
   type AddOnField,
 } from '../app/addOns';
+import { showLocations } from '../app/locations';
 import { newRequestId } from '../lib/requestId';
 import { todayIso } from '../app/dateSelection';
 import { duplicateName, isActiveOn, sortSetupItems, type DeleteCheck } from '../app/roomSetup';
@@ -86,6 +87,8 @@ function AddOnEditor({ data }: { data: AddOnData }) {
   const api = useApi();
   const options = data.options as NonNullable<AddOnData['options']>;
   const today = useMemo(() => todayIso(), []);
+  // One location: the Locations tab is hidden and the add-on belongs to that location.
+  const multiLocation = showLocations(options.locations);
   const sorted = useMemo(() => sortSetupItems(data.addOns, today), [data.addOns, today]);
   // A deleted location or room type drops out of the draft, so counts and hints match what exists.
   const toDraft = useCallback(
@@ -117,9 +120,11 @@ function AddOnEditor({ data }: { data: AddOnData }) {
     setSaving(true);
     setSaveError(null);
     try {
+      const associations = pruneAssociations(draft, options);
       const stored = await api.addOns.save({
         ...normalizeAddOn(draft),
-        ...pruneAssociations(draft, options),
+        ...associations,
+        locationIds: multiLocation ? associations.locationIds : options.locations.map((l) => l.id),
       });
       // The add-on is stored; a failed list refresh must not read as a failed save.
       await data
@@ -290,14 +295,18 @@ function AddOnEditor({ data }: { data: AddOnData }) {
           </Typography>
           <AssociationsPanel
             tabs={[
-              {
-                id: 'locations',
-                label: 'Locations',
-                heading: 'Locations',
-                items: options.locations,
-                selected: draft.locationIds,
-                onChange: (locationIds) => setDraft({ ...draft, locationIds }),
-              },
+              ...(multiLocation
+                ? [
+                    {
+                      id: 'locations',
+                      label: 'Locations',
+                      heading: 'Locations',
+                      items: options.locations,
+                      selected: draft.locationIds,
+                      onChange: (locationIds: string[]) => setDraft({ ...draft, locationIds }),
+                    },
+                  ]
+                : []),
               {
                 id: 'room-types',
                 label: 'Room Types',
@@ -308,11 +317,12 @@ function AddOnEditor({ data }: { data: AddOnData }) {
               },
             ]}
           />
-          {draft.locationIds.length === 0 || draft.roomTypeIds.length === 0 ? (
+          {(multiLocation && draft.locationIds.length === 0) || draft.roomTypeIds.length === 0 ? (
             <Box sx={{ mt: 1 }}>
               <Hint>
-                Select at least one location and one room type, or this add-on is not offered on any
-                reservation.
+                {multiLocation
+                  ? 'Select at least one location and one room type, or this add-on is not offered on any reservation.'
+                  : 'Select at least one room type, or this add-on is not offered on any reservation.'}
               </Hint>
             </Box>
           ) : null}

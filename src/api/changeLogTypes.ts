@@ -11,6 +11,7 @@ export const CHANGE_LOG_PAGES = [
   { id: 'rate-categories', label: 'Rate Categories' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'keycard-integration', label: 'Keycard Integration' },
+  { id: 'locations', label: 'Locations' },
 ] as const;
 
 export type ChangeLogPageId = (typeof CHANGE_LOG_PAGES)[number]['id'];
