@@ -18,6 +18,8 @@ interface BaseProps {
   error?: string;
   disabled?: boolean;
   required?: boolean;
+  /** Id of an element that describes the input (read after the label). */
+  describedBy?: string;
   /** Shown when nothing matches. */
   noOptionsText?: string;
 }
@@ -53,6 +55,7 @@ export default function LookupField({
   error,
   disabled,
   required,
+  describedBy,
   noOptionsText = 'No results',
   options,
   search,
@@ -164,6 +167,10 @@ export default function LookupField({
             slotProps={{
               ...params.slotProps,
               inputLabel: { ...params.slotProps?.inputLabel, shrink: true },
+              htmlInput: {
+                ...params.slotProps?.htmlInput,
+                ...(describedBy ? { 'aria-describedby': describedBy } : {}),
+              },
             }}
           />
         )}

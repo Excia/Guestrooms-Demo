@@ -6,11 +6,13 @@ import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { visuallyHidden } from '@mui/utils';
 import { useCallback } from 'react';
 import { useApi } from '../../../api';
 import type {
   Duration,
   DurationUnit,
+  LookupRef,
   SystemSettings,
   SystemSettingsOptions,
 } from '../../../api/types';
@@ -40,6 +42,13 @@ export interface SettingsTabProps {
   /** View mode: every control of the tab is disabled (View-only admin; the page passes it). */
   readOnly?: boolean;
 }
+
+// Display-only for now (owner request 2026-10-25): the SSO admin is not part of SystemSettings, so it is
+// never in the draft, the dirty check or the save payload. Replace with the real user once SSO lands.
+export const SSO_ADMIN: LookupRef = { id: 'sso-admin', label: 'Admin User' };
+export const SSO_ADMIN_NOTE = 'Managed by single sign-on. Not editable yet.';
+const NO_OPTIONS: readonly LookupRef[] = [];
+const noop = () => {};
 
 const range = ({ min, max }: { min: number; max: number }) =>
   Array.from({ length: max - min + 1 }, (_, i) => ({ value: min + i, label: String(min + i) }));
@@ -204,6 +213,21 @@ export default function SettingsTab({
       })}
     >
       <Box sx={column}>
+        <Section title="SSO Admin">
+          <LookupField
+            disabled
+            id="system-settings-ssoAdmin"
+            label="SSO Admin"
+            value={SSO_ADMIN}
+            options={NO_OPTIONS}
+            onChange={noop}
+            describedBy="system-settings-ssoAdmin-note"
+          />
+          <Box component="span" id="system-settings-ssoAdmin-note" sx={visuallyHidden}>
+            {SSO_ADMIN_NOTE}
+          </Box>
+        </Section>
+
         <Section title="Time Zone">
           <Select
             fullWidth
