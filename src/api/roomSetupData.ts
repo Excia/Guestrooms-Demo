@@ -1,3 +1,4 @@
+import { MOCK_ROOM_OPTIONS } from './roomOptionsData';
 import type { RoomDetails, RoomSetup, RoomSetupOptions, RoomTypeSetup } from './types';
 
 // PLACEHOLDER sample data until the backend exists (see docs/requirements/placeholders.md).
@@ -7,25 +8,14 @@ export const MOCK_ROOM_SETUP_OPTIONS: RoomSetupOptions = {
     { id: 'sku-queen', label: 'Location B' },
     { id: 'sku-suite', label: 'Location C' },
   ],
-  features: [
-    { id: 'feature-fridge', label: 'Mini fridge' },
-    { id: 'feature-coffee', label: 'Coffee maker' },
-    { id: 'feature-balcony', label: 'Balcony' },
-    { id: 'feature-view', label: 'Golf course view' },
-    { id: 'feature-tub', label: 'Soaking tub' },
-  ],
+  // Features and Bed Sizes have one source: Room Options (roomOptionsData.ts).
+  features: MOCK_ROOM_OPTIONS.features,
   addOns: [
     { id: 'addon-rollaway', label: 'Rollaway bed' },
     { id: 'addon-crib', label: 'Crib' },
     { id: 'addon-late', label: 'Late checkout' },
   ],
-  // Figma "Bed Types": King, Queen, Double, Twin.
-  bedSizes: [
-    { id: 'bed-king', label: 'King' },
-    { id: 'bed-queen', label: 'Queen' },
-    { id: 'bed-double', label: 'Double' },
-    { id: 'bed-twin', label: 'Twin' },
-  ],
+  bedSizes: MOCK_ROOM_OPTIONS.bedSizes,
   members: [
     { id: 'member-1', label: 'First Last (Member)' },
     { id: 'member-2', label: 'Jordan Rivers (Member)' },

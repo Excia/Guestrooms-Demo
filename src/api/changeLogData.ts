@@ -69,6 +69,11 @@ const DESCRIPTIONS: Record<ChangeLogPageId, readonly [string, string][]> = {
     ['created', 'Notification "Reservation Confirmation" created'],
     ['updated', 'Notification "Check In Reminder" content updated'],
   ],
+  'room-options': [
+    ['created', 'Feature "Fireplace" added'],
+    ['updated', 'Bed Size "Queen" renamed to "Queen Plus"'],
+    ['deleted', 'Feature "Rollaway Access" removed'],
+  ],
   'keycard-integration': [
     ['updated', 'Encoder Key list updated'],
     ['deleted', 'All encoder keys removed'],

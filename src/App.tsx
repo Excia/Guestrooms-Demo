@@ -10,6 +10,7 @@ import {
   RESERVATIONS_PATH,
   PRIMARY_SETUP_PATH,
   ADD_ON_ITEMS_PATH,
+  ROOM_OPTIONS_PATH,
   KEYCARD_INTEGRATION_PATH,
   LOCATIONS_PATH,
   ROOM_TYPES_PATH,
@@ -29,6 +30,7 @@ import Rooms from './pages/Rooms';
 import BookingRules from './pages/BookingRules';
 import Locations from './pages/Locations';
 import AddOnItems from './pages/AddOnItems';
+import RoomOptions from './pages/RoomOptions';
 import KeycardIntegration from './pages/KeycardIntegration';
 import SystemSettings from './pages/SystemSettings';
 import Reporting from './pages/Reporting';
@@ -74,6 +76,7 @@ const pages: Partial<Record<string, ReactElement>> = {
   [ROOM_TYPES_PATH]: <RoomTypes />,
   [ROOMS_PATH]: <Rooms />,
   [ADD_ON_ITEMS_PATH]: <AddOnItems />,
+  [ROOM_OPTIONS_PATH]: <RoomOptions />,
   [KEYCARD_INTEGRATION_PATH]: <KeycardIntegration />,
   [LOCATIONS_PATH]: <Locations />,
   [FOLIO_PATH]: (

@@ -24,6 +24,7 @@ import { mockCustomReports } from './reportsData';
 import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
+import { mockRoomOptions } from './roomOptionsData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
 import { MOCK_RETRIEVED_ENCODERS, mockEncoderKeys } from './keycardData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
@@ -71,6 +72,15 @@ import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
 import { checkRemoveLocation, validateLocations } from '../app/locations';
+import {
+  unknownOptionIds,
+  normalizeLabel,
+  optionUsage,
+  removedIds,
+  validateRoomOptions,
+  hasOptionErrors,
+  type RoomOptionKind,
+} from '../app/featureBedOptions';
 import {
   effectiveDetails,
   syncLinkedRooms,
@@ -172,6 +182,10 @@ export function createMockClient({
   let roomTypes = mockRoomTypes();
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
+  // The one source of Features and Bed Sizes: Room Types, Rooms and the Schedule filter read it.
+  let roomOptions = mockRoomOptions();
+  let nextOptionId = 1;
+  let optionsVersion = 1;
   let addOns = mockAddOns();
   let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
@@ -195,6 +209,17 @@ export function createMockClient({
     const result = apply();
     replays.set(request.requestId, { fingerprint, result: structuredClone(result) });
     return result;
+  }
+
+  // Room Types and Rooms may only use Features and Bed Sizes that exist in Room Options.
+  function assertKnownOptions(details: { featureIds: string[]; bedTypes: Record<string, number> }) {
+    const unknown = unknownOptionIds(details, roomOptions);
+    if (unknown.features.length > 0 || unknown.bedSizes.length > 0) {
+      throw new ApiError(422, 'A Feature or Bed Size is not in Room Options', {
+        code: 'validation',
+        details: { featureIds: unknown.features, bedTypes: unknown.bedSizes },
+      });
+    }
   }
 
   function respond<T>(normal: () => T, empty: () => T, options?: RequestOptions): Promise<T> {
@@ -587,8 +612,15 @@ export function createMockClient({
           () => {
             assertScheduleQuery(query);
             const data = queryScheduleData(schedule, query);
+            const featureIds = new Set(roomOptions.features.map((f) => f.id));
             return structuredClone({
               ...data,
+              features: roomOptions.features.map((f) => ({ id: f.id, name: f.label })),
+              rooms: data.rooms.map((r) =>
+                r.featureIds
+                  ? { ...r, featureIds: r.featureIds.filter((f) => featureIds.has(f)) }
+                  : r,
+              ),
               holds: holdsInWindow(
                 holdStore,
                 query.startDate,
@@ -604,6 +636,7 @@ export function createMockClient({
               days: query.days,
               locations: [],
               roomTypes: [],
+              features: [],
               rooms: [],
               blocks: [],
               closures: [],
@@ -911,8 +944,13 @@ export function createMockClient({
     roomSetup: {
       getOptions: (o) =>
         respond(
-          () => structuredClone(MOCK_ROOM_SETUP_OPTIONS),
-          () => structuredClone(MOCK_ROOM_SETUP_OPTIONS),
+          () =>
+            structuredClone({
+              ...MOCK_ROOM_SETUP_OPTIONS,
+              features: roomOptions.features,
+              bedSizes: roomOptions.bedSizes,
+            }),
+          () => structuredClone({ ...MOCK_ROOM_SETUP_OPTIONS, features: [], bedSizes: [] }),
           o,
         ),
       listRoomTypes: (o) =>
@@ -927,6 +965,7 @@ export function createMockClient({
             if (Object.keys(validateRoomType(input)).length > 0) {
               throw new ApiError(422, 'Room type is not valid', { code: 'validation' });
             }
+            assertKnownOptions(input.details);
             const id = input.id ?? `rt-new-${nextSetupId++}`;
             const saved = { ...structuredClone(input), id };
             if (input.id && !roomTypes.some((t) => t.id === input.id)) {
@@ -972,6 +1011,7 @@ export function createMockClient({
             if (Object.keys(validateRoom(input)).length > 0) {
               throw new ApiError(422, 'Room is not valid', { code: 'validation' });
             }
+            if (!input.inheritDetails) assertKnownOptions(input.details);
             const existing = input.id ? rooms.find((r) => r.id === input.id) : undefined;
             if (input.id && !existing) {
               throw new ApiError(404, 'Room not found', { code: 'not-found' });
@@ -1004,6 +1044,94 @@ export function createMockClient({
             rooms = withoutRoom(rooms, id);
           },
           () => undefined,
+          o,
+        ),
+    },
+    roomOptions: {
+      get: (o) =>
+        respond(
+          () => structuredClone(roomOptions),
+          () => ({ features: [], bedSizes: [], version: 'ro-0' }),
+          o,
+        ),
+      save: (request, o) =>
+        respond(
+          () =>
+            replayable(request, () => {
+              const errors = validateRoomOptions(request);
+              if (hasOptionErrors(errors)) {
+                throw new ApiError(422, 'Room options are not valid', {
+                  code: 'validation',
+                  details: {
+                    features: errors.features.filter((e): e is string => e !== undefined),
+                    bedSizes: errors.bedSizes.filter((e): e is string => e !== undefined),
+                  },
+                });
+              }
+              if (request.version !== roomOptions.version) {
+                throw new ApiError(409, 'The Room Options changed since they were loaded', {
+                  code: 'stale',
+                });
+              }
+              const kinds: RoomOptionKind[] = ['features', 'bedSizes'];
+              const inUse: Record<string, string[]> = {};
+              for (const kind of kinds) {
+                const known = new Set(roomOptions[kind].map((i) => i.id));
+                if (request[kind].some((i) => i.id !== undefined && !known.has(i.id))) {
+                  throw new ApiError(404, 'Room option not found', { code: 'not-found' });
+                }
+                const used = removedIds(roomOptions[kind], request[kind]).filter((id) => {
+                  const usage = optionUsage(kind, id, roomTypes, rooms);
+                  return usage.roomTypes.length + usage.rooms.length > 0;
+                });
+                if (used.length > 0) inUse[kind] = used;
+              }
+              if (Object.keys(inUse).length > 0) {
+                throw new ApiError(409, 'A removed Feature or Bed Size is still in use', {
+                  code: 'in-use',
+                  details: inUse,
+                });
+              }
+              const next = {} as Omit<typeof roomOptions, 'version'>;
+              for (const kind of kinds) {
+                const prefix = kind === 'features' ? 'feature-new' : 'bed-new';
+                next[kind] = request[kind].map((i) => ({
+                  id: i.id ?? `${prefix}-${nextOptionId++}`,
+                  label: normalizeLabel(i.label),
+                }));
+              }
+              // A removed Bed Size is no longer a key of any room's counts.
+              const goneBeds = removedIds(roomOptions.bedSizes, request.bedSizes);
+              if (goneBeds.length > 0) {
+                const prune = <T extends { details: { bedTypes: Record<string, number> } }>(
+                  x: T,
+                ): T => ({
+                  ...x,
+                  details: {
+                    ...x.details,
+                    bedTypes: Object.fromEntries(
+                      Object.entries(x.details.bedTypes).filter(([id]) => !goneBeds.includes(id)),
+                    ),
+                  },
+                });
+                roomTypes = roomTypes.map(prune);
+                rooms = rooms.map(prune);
+              }
+              optionsVersion += 1;
+              roomOptions = { ...next, version: `ro-${optionsVersion}` };
+              return structuredClone(roomOptions);
+            }),
+          () => ({
+            version: 'ro-0',
+            features: request.features.map((i, n) => ({
+              id: i.id ?? `feature-new-${n}`,
+              label: i.label,
+            })),
+            bedSizes: request.bedSizes.map((i, n) => ({
+              id: i.id ?? `bed-new-${n}`,
+              label: i.label,
+            })),
+          }),
           o,
         ),
     },

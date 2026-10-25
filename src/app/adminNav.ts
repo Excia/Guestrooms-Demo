@@ -14,7 +14,7 @@ const path = (id: string) => routes.find((r) => r.id === id)?.path;
 // the menu's Primary Setup page. The other entries gain a path as their tickets land.
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { label: 'Locations', path: path('locations'), id: 'locations' },
-  { label: 'Room Options' },
+  { label: 'Room Options', path: path('room-options'), id: 'room-options' },
   { label: 'Booking Rules', path: path('booking-rules'), id: 'booking-rules' },
   { label: 'System Settings', path: path('primary-setup'), id: 'primary-setup' },
   { label: 'Employees' },
