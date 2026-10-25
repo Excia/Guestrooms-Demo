@@ -180,6 +180,20 @@ describe('controls', () => {
     expect(get).toHaveBeenLastCalledWith({ startDate: '2026-10-16', days: 7 }, expect.anything());
   });
 
+  it('draws the date arrows and the calendar button in the primary green', async () => {
+    setup();
+    await screen.findByRole('grid');
+    for (const name of [
+      'Previous page',
+      'Previous day',
+      'Next day',
+      'Next page',
+      'Choose start date',
+    ]) {
+      expect(screen.getByRole('button', { name })).toHaveClass('MuiIconButton-colorPrimary');
+    }
+  });
+
   it('Today returns to the current date and clears the start from the URL', async () => {
     const user = await loaded('/schedule?start=2026-11-10');
     await screen.findByRole('columnheader', { name: 'Tuesday 11/10' });
