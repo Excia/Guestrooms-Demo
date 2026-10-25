@@ -1,4 +1,3 @@
-import InputAdornment from '@mui/material/InputAdornment';
 import TextField from '@mui/material/TextField';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Cents } from '../../../api/types';
@@ -66,13 +65,6 @@ export default function AmountField({ label, cents, onChange, onInvalidChange }:
           'aria-invalid': invalid,
           'aria-describedby': invalid ? `${hintId}-helper` : undefined,
         },
-        input: {
-          startAdornment: (
-            <InputAdornment position="start" sx={{ mr: 0.25, '& p': { fontSize: 'inherit' } }}>
-              $
-            </InputAdornment>
-          ),
-        },
         formHelperText: { id: `${hintId}-helper` },
       }}
       // Compact (rateTableSizes.ts): smaller text and height than the form fields, same hit size.
@@ -81,10 +73,16 @@ export default function AmountField({ label, cents, onChange, onInvalidChange }:
         '& .MuiOutlinedInput-root.MuiInputBase-sizeSmall': {
           height: tablePx(t, RATE_TABLE.amountHeightPx),
           fontSize: t.typography.pxToRem(RATE_TABLE.fontPx),
-          pl: 0.75,
-          pr: 0.25,
+          px: 0,
         },
-        '& .MuiOutlinedInput-input': { py: 0, pl: 0, pr: 0 },
+        // The input has its own font size (1rem), so it is set here too.
+        '& .MuiOutlinedInput-input': {
+          py: 0,
+          pl: tablePx(t, RATE_TABLE.inputPadLeftPx),
+          pr: tablePx(t, RATE_TABLE.inputPadRightPx),
+          fontSize: 'inherit',
+          textAlign: 'right',
+        },
         '& .MuiFormHelperText-root': { mx: 0, fontSize: t.typography.pxToRem(11) },
       })}
     />

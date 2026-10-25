@@ -175,8 +175,9 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       actions={
         <SetupActions
           noun="room"
-          saveLabel="Save Room"
+          saveNoun="Room"
           creating={editor.creating}
+          dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
           onDelete={() => {

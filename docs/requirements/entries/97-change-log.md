@@ -43,3 +43,4 @@ reference table next to it in the System Settings section was not read (an image
 - **Permissions:** none new (admin routes only, ticket 0.8).
 - **Notes:** since 2026-10-25 the log opens as a normal modal dialog (85vw by 80vh, D-AP-3 in `admin-polish.md`); the component keeps the name `ChangeLogOverlay`. The page ids are in `CHANGE_LOG_PAGES` (`src/api/changeLogTypes.ts`).
 - **Polish 2026-10-25 (D-AP-4):** the title is "[Page]: Change Log"; the search icon is green; hovered rows use the theme tint.
+- **Pager 2026-10-25 (D-pager-1):** the footer's rows-per-page control is the shared compact outlined select "Rows per page: 25", the same as the Reservation List (`pager-clock.md`).

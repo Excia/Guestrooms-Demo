@@ -30,6 +30,7 @@ import AdminShell from '../components/admin/AdminShell';
 import OptionList, { addButtonId, optionFieldId } from '../components/admin/roomOptions/OptionList';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
+import SaveButton from '../components/shared/SaveButton';
 
 const KINDS: RoomOptionKind[] = ['features', 'bedSizes'];
 const tabId = (kind: RoomOptionKind) => `room-options-tab-${kind}`;
@@ -237,14 +238,7 @@ export default function RoomOptions() {
   }, [api, draft, refreshUsage, saved, tab]);
 
   const saveButton = (
-    <Button
-      variant="contained"
-      size="large"
-      onClick={() => void save()}
-      disabled={!dirty || saving}
-    >
-      Save Room Options
-    </Button>
+    <SaveButton dirty={dirty} saving={saving} noun="Room Options" onClick={() => void save()} />
   );
 
   let body;

@@ -35,6 +35,24 @@ describe('Pagination', () => {
     expect(onChange).toHaveBeenCalledWith({ page: 1, rowsPerPage: 25 });
   });
 
+  it('shows the rows-per-page select as one compact outlined control: "Rows per page: 25"', async () => {
+    setup();
+    const select = screen.getByRole('combobox', { name: 'Rows per page' });
+    expect(select).toHaveTextContent('Rows per page: 25');
+    await userEvent.click(select);
+    const options = await screen.findAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['10', '25', '50', '100']);
+    expect(screen.getByRole('option', { name: '25' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('opens the rows-per-page menu from the keyboard', async () => {
+    const { onChange } = setup({ page: 1, rowsPerPage: 25 });
+    screen.getByRole('combobox', { name: 'Rows per page' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.click(await screen.findByRole('option', { name: '50' }));
+    expect(onChange).toHaveBeenCalledWith({ page: 1, rowsPerPage: 50 });
+  });
+
   it('corrects an out-of-range page once', () => {
     const { onChange } = setup({ page: 9 });
     expect(onChange).toHaveBeenCalledTimes(1);

@@ -30,6 +30,7 @@ import { useLocationsData } from '../components/admin/locations/useLocationsData
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import NonActionableDialog from '../components/shared/NonActionableDialog';
 import SaveToast from '../components/shared/SaveToast';
+import SaveButton from '../components/shared/SaveButton';
 
 const ADD_BUTTON_ID = 'locations-add';
 
@@ -147,14 +148,7 @@ function LocationsEditor({ data }: { data: ReturnType<typeof useLocationsData> }
   }, [api, data, draft]);
 
   const saveButton = readOnly ? undefined : (
-    <Button
-      variant="contained"
-      size="large"
-      onClick={() => void save()}
-      disabled={!dirty || saving}
-    >
-      Save Locations
-    </Button>
+    <SaveButton dirty={dirty} saving={saving} noun="Locations" onClick={() => void save()} />
   );
 
   return (

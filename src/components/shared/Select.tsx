@@ -29,6 +29,11 @@ export interface SelectProps<T extends string | number = string> {
   disabled?: boolean;
   required?: boolean;
   variant?: 'outlined' | 'filled';
+  /**
+   * Compact pager style: no label on the border; the value reads "Label: value" and the label is
+   * the accessible name. Use with `size="small"` (toolbar size).
+   */
+  inlineLabel?: boolean;
   size?: 'small' | 'medium';
   /** Fills its container; off by default so the select is as wide as its content. */
   fullWidth?: boolean;
@@ -57,6 +62,7 @@ export default function Select<T extends string | number = string>({
   disabled,
   required,
   variant = 'outlined',
+  inlineLabel = false,
   size = 'medium',
   fullWidth = false,
   name,
@@ -89,29 +95,35 @@ export default function Select<T extends string | number = string>({
       sx={sx}
       {...dataAttributes}
     >
-      <InputLabel id={labelId} shrink>
-        {label}
-      </InputLabel>
+      {inlineLabel ? null : (
+        <InputLabel id={labelId} shrink>
+          {label}
+        </InputLabel>
+      )}
       <MuiSelect<T | ''>
-        labelId={labelId}
+        labelId={inlineLabel ? undefined : labelId}
         id={id}
         name={name}
-        label={variant === 'outlined' ? label : undefined}
+        label={variant === 'outlined' && !inlineLabel ? label : undefined}
         value={value}
         onChange={handleChange}
         onBlur={onBlur}
         displayEmpty={Boolean(placeholder)}
         renderValue={
-          placeholder
-            ? (selected) => options.find((o) => o.value === selected)?.label ?? placeholder
-            : undefined
+          inlineLabel
+            ? (selected) => `${label}: ${options.find((o) => o.value === selected)?.label ?? ''}`
+            : placeholder
+              ? (selected) => options.find((o) => o.value === selected)?.label ?? placeholder
+              : undefined
         }
-        notched={variant === 'outlined' ? true : undefined}
+        notched={variant === 'outlined' && !inlineLabel ? true : undefined}
         inputProps={inputProps}
         SelectDisplayProps={{
           'aria-describedby':
             [helperText ? helperId : undefined, describedBy].filter(Boolean).join(' ') || undefined,
-          ...(ariaLabel ? { 'aria-label': ariaLabel, 'aria-labelledby': undefined } : {}),
+          ...(ariaLabel || inlineLabel
+            ? { 'aria-label': ariaLabel ?? label, 'aria-labelledby': undefined }
+            : {}),
         }}
       >
         {options.map((o) => (

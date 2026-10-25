@@ -17,9 +17,9 @@ describe('compact rate table sizes', () => {
       expect(tablePx(theme, px)).toBe(`${px}px`);
     }
   });
-  it('fits 13 amount columns plus the room type column in the 1400px content width (1086px)', () => {
-    const column = RATE_TABLE.amountWidthPx + 2 * RATE_TABLE.cellPaddingXPx;
-    // Measured room type column at 1400px: 131px (112 minimum plus the colour edge and padding).
-    expect(131 + 13 * column).toBeLessThanOrEqual(1086);
+  it('leaves room in the amount input for 12,500.00 at 13px (measured in Chrome)', () => {
+    const content =
+      RATE_TABLE.amountWidthPx - RATE_TABLE.inputPadLeftPx - RATE_TABLE.inputPadRightPx;
+    expect(content).toBeGreaterThanOrEqual(RATE_TABLE.widestAmountTextPx);
   });
 });

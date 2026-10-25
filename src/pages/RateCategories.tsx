@@ -120,6 +120,8 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Rate cells holding text that is not money; Save waits until they are corrected.
   const [badAmounts, setBadAmounts] = useState<ReadonlySet<string>>(new Set());
+  const { setExternalDirty } = editor;
+  useEffect(() => setExternalDirty(badAmounts.size > 0), [badAmounts, setExternalDirty]);
   const onAmountInvalid = useCallback((cell: string, invalid: boolean) => {
     setBadAmounts((prev) => {
       if (prev.has(cell) === invalid) return prev;
@@ -286,8 +288,9 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       actions={
         <SetupActions
           noun="rate category"
-          saveLabel="Save Rate Category"
+          saveNoun="Rate Category"
           creating={editor.creating}
+          dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
           onDelete={() => {
@@ -407,7 +410,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
             component="h3"
             sx={{ fontWeight: 'bold', color: 'text.secondary', mb: 1 }}
           >
-            Rates
+            Rates (US dollars per night)
           </Typography>
           <RateTable
             seasons={draft.seasons}

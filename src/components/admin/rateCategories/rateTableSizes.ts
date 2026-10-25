@@ -15,6 +15,14 @@ export const RATE_TABLE = {
   amountWidthPx: 66,
   /** Amount field height in px. */
   amountHeightPx: 28,
+  /** Padding inside the amount input in px (left, right). Amounts are right aligned, with no "$": the heading says dollars. */
+  inputPadLeftPx: 4,
+  inputPadRightPx: 2,
+  /**
+   * Widest amount text measured in Chrome 155 at 13px Roboto: "12,500.00" is 57.1px, "1,250.00" 49.8px
+   * (canvas measureText, 2026-10-25). The input content box (amountWidthPx minus the padding) must hold it.
+   */
+  widestAmountTextPx: 57.2,
   /** Cell padding in px: vertical, horizontal. */
   cellPaddingYPx: 3,
   cellPaddingXPx: 3,

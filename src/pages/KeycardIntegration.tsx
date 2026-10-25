@@ -30,6 +30,7 @@ import ConfirmDialog from '../components/shared/ConfirmDialog';
 import { focusOnMount } from '../components/shared/focusOnMount';
 import RemoveIconButton from '../components/shared/RemoveIconButton';
 import SaveToast from '../components/shared/SaveToast';
+import SaveButton from '../components/shared/SaveButton';
 
 type Status = 'loading' | 'error' | 'ready';
 interface Toast {
@@ -189,14 +190,7 @@ export default function KeycardIntegration() {
   }, [api, rows]);
 
   const saveButton = (
-    <Button
-      variant="contained"
-      size="large"
-      onClick={() => void save()}
-      disabled={!dirty || saving}
-    >
-      Save Changes
-    </Button>
+    <SaveButton dirty={dirty} saving={saving} noun="Encoder Keys" onClick={() => void save()} />
   );
 
   let body;
