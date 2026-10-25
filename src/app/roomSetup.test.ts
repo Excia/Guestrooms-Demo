@@ -16,6 +16,7 @@ import {
   selectAllIds,
   setInheritDetails,
   sortSetupItems,
+  toSetupListEntries,
   syncLinkedRooms,
   toggleId,
   validateRoom,
@@ -119,6 +120,37 @@ describe('active dates and ordering', () => {
   });
 });
 
+describe('toSetupListEntries', () => {
+  const mk = (id: string, name: string, endDate: string | null) => ({
+    id,
+    name,
+    startDate: '2020-01-01',
+    endDate,
+  });
+  it('flags inactive items; the first row is the item the editor selects by default', () => {
+    const today = '2026-10-20';
+    const entries = toSetupListEntries(
+      sortSetupItems(
+        [mk('1', 'Zed', '2021-01-01'), mk('2', 'Beta', null), mk('3', 'Alpha', null)],
+        today,
+      ),
+      today,
+    );
+    expect(entries).toEqual([
+      { id: '3', label: 'Alpha', inactive: false },
+      { id: '2', label: 'Beta', inactive: false },
+      { id: '1', label: 'Zed', inactive: true },
+    ]);
+  });
+  it('treats an item as active through its end date and inactive before its start', () => {
+    const today = '2026-10-20';
+    expect(toSetupListEntries([mk('1', 'A', today)], today)[0].inactive).toBe(false);
+    expect(
+      toSetupListEntries([{ ...mk('1', 'A', null), startDate: '2026-10-21' }], today)[0].inactive,
+    ).toBe(true);
+  });
+});
+
 describe('association lists', () => {
   it('toggles one id and selects all or none', () => {
     expect(toggleId(['a'], 'b', true)).toEqual(['a', 'b']);
@@ -178,7 +210,7 @@ describe('linked rooms', () => {
   });
   it('removes a deleted room from every link', () => {
     const left = withoutRoom(rooms(), 'room-100');
-    expect(left.map((r) => r.id)).toEqual(['room-101', 'room-200']);
+    expect(left.map((r) => r.id)).toEqual(['room-101', 'room-200', 'room-300']);
     expect(left.find((r) => r.id === 'room-101')?.linkedRoomIds).toEqual([]);
   });
 });
@@ -189,6 +221,9 @@ describe('deleting', () => {
     expect(check.kind).toBe('blocked');
     expect(check.message).toMatch(/2 rooms use it/);
     expect(checkDeleteRoomType(types()[2], rooms()).kind).toBe('ok');
+  });
+  it('counts a retired room too: King Room is used by rooms 200 and 300', () => {
+    expect(checkDeleteRoomType(types()[1], rooms()).message).toMatch(/2 rooms use it/);
   });
   it('warns about a room with upcoming reservations', () => {
     expect(checkDeleteRoom({ name: '100', upcomingReservations: 2 }).kind).toBe('warn');

@@ -1,9 +1,7 @@
 import AddPhotoAlternate from '@mui/icons-material/AddPhotoAlternate';
-import Close from '@mui/icons-material/Close';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import FormHelperText from '@mui/material/FormHelperText';
-import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useRef, useState, type ReactNode } from 'react';
@@ -15,6 +13,7 @@ import {
   type SystemSettingsField,
 } from '../../../app/systemSettings';
 import { US_STATES } from '../../../app/usStates';
+import PhotoRemoveBadge from '../../shared/PhotoRemoveBadge';
 import Select from '../../shared/Select';
 import { fieldId, Section } from './fieldParts';
 
@@ -178,27 +177,15 @@ export default function FolioDetailsTab({ value, onChange, errors }: FolioDetail
                 )}
               </Box>
               {value.logo ? (
-                <IconButton
-                  aria-label="Remove logo"
-                  size="small"
+                <PhotoRemoveBadge
+                  label="Remove logo"
+                  // The logo is a rounded square, so the badge sits just outside its corner.
+                  sx={(t) => ({ top: t.spacing(-0.75), right: t.spacing(-0.75) })}
                   onClick={() => {
                     setLogoProblem(null);
                     set('logo', null);
                   }}
-                  sx={(t) => ({
-                    position: 'absolute',
-                    top: t.spacing(-1),
-                    right: t.spacing(-1.5),
-                    // Red X (the theme's error colour); 24px minimum target.
-                    minWidth: t.spacing(3),
-                    minHeight: t.spacing(3),
-                    bgcolor: 'error.main',
-                    color: 'error.contrastText',
-                    '&:hover': { bgcolor: 'error.dark' },
-                  })}
-                >
-                  <Close fontSize="small" />
-                </IconButton>
+                />
               ) : null}
             </Box>
             <Button

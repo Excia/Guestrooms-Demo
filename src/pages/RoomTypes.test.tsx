@@ -30,7 +30,7 @@ describe('Room Types page', () => {
     expect(items.map((li) => li.textContent)).toEqual([
       'Double Queen Room',
       'King Room',
-      'Cottage (retired)(Inactive)',
+      'Cottage (retired), Inactive',
     ]);
     expect(
       screen.getByRole('heading', { level: 1, name: 'Double Queen Room' }),

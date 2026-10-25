@@ -7,7 +7,6 @@ import Typography from '@mui/material/Typography';
 import { useMemo, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { RoomInput, RoomSetup } from '../api/types';
-import { todayIso } from '../app/dateSelection';
 import {
   blankRoom,
   changeRoomType,
@@ -15,15 +14,16 @@ import {
   DESCRIPTION_MAX,
   duplicateName,
   effectiveDetails,
-  isActiveOn,
   NAME_MAX,
   setInheritDetails,
   sortSetupItems,
+  toSetupListEntries,
   validateRoom,
   type DeleteCheck,
   type RoomField,
 } from '../app/roomSetup';
 import { useSystemSettings } from '../app/useSystemSettings';
+import { useClubToday } from '../app/useClubToday';
 import AdminShell from '../components/admin/AdminShell';
 import ActiveDatesFields from '../components/admin/roomSetup/ActiveDatesFields';
 import AssociationsPanel from '../components/admin/roomSetup/AssociationsPanel';
@@ -79,8 +79,9 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const { settings } = useSystemSettings();
   const ownerEnabled = settings?.roomOwnerFieldEnabled === true;
   const options = data.options as NonNullable<RoomSetupData['options']>;
-  const today = useMemo(() => todayIso(), []);
+  const today = useClubToday();
   const sorted = useMemo(() => sortSetupItems(data.rooms, today), [data.rooms, today]);
+  const listEntries = useMemo(() => toSetupListEntries(sorted, today), [sorted, today]);
   const sortedTypes = useMemo(() => sortSetupItems(data.roomTypes, today), [data.roomTypes, today]);
   const typeOptions = useMemo(
     () => sortedTypes.map((t) => ({ id: t.id, label: t.name })),
@@ -162,11 +163,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       sidebarLabel="Rooms"
       sidebar={
         <SetupList
-          items={sorted.map((r) => ({
-            id: r.id,
-            label: r.name,
-            inactive: !isActiveOn(r, today),
-          }))}
+          items={listEntries}
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Room"

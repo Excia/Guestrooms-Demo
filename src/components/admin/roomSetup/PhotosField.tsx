@@ -1,14 +1,13 @@
 import AddPhotoAlternate from '@mui/icons-material/AddPhotoAlternateOutlined';
-import Cancel from '@mui/icons-material/Cancel';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import FormHelperText from '@mui/material/FormHelperText';
-import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import { useId, useRef, useState } from 'react';
 import type { RoomPhoto } from '../../../api/types';
 import { acceptPhotoFiles, MAX_PHOTOS, PHOTO_TYPES, removePhoto } from '../../../app/roomSetup';
 import { newRequestId } from '../../../lib/requestId';
+import PhotoRemoveBadge from '../../shared/PhotoRemoveBadge';
 import { ErrorLines } from '../systemSettings/fieldParts';
 
 export interface PhotosFieldProps {
@@ -109,24 +108,11 @@ export default function PhotosField({ photos, onChange, disabled, error, id }: P
               role="img"
               aria-label={photo.name}
             />
-            <IconButton
-              size="small"
-              aria-label={`Remove photo ${photo.name}`}
+            <PhotoRemoveBadge
+              label={`Remove photo ${photo.name}`}
               disabled={disabled}
               onClick={() => onChange(removePhoto(photos, photo.id))}
-              sx={{
-                position: 'absolute',
-                top: 0.25,
-                right: 0.25,
-                p: 0.25,
-                color: 'error.main',
-                // A halo, so the red X reads on any photo.
-                bgcolor: 'background.paper',
-                '&:hover': { bgcolor: 'background.paper' },
-              }}
-            >
-              <Cancel fontSize="small" />
-            </IconButton>
+            />
           </Box>
         ))}
       </Box>
