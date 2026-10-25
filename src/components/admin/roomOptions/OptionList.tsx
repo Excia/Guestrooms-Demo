@@ -9,6 +9,7 @@ import {
   type RoomOptionDraft,
   type RoomOptionKind,
 } from '../../../app/featureBedOptions';
+import RemoveIconButton from '../../shared/RemoveIconButton';
 
 export const optionFieldId = (kind: RoomOptionKind, key: string) => `room-option-${kind}-${key}`;
 export const addButtonId = (kind: RoomOptionKind) => `room-option-add-${kind}`;
@@ -69,15 +70,11 @@ export default function OptionList({
                   slotProps={{ htmlInput: { maxLength: ROOM_OPTION_MAX } }}
                   sx={(t) => ({ width: '100%', maxWidth: t.spacing(75) })}
                 />
-                <Button
-                  color="error"
-                  size="large"
+                <RemoveIconButton
+                  label={item.label.trim() || `new ${copy.singular.toLowerCase()}`}
                   onClick={() => onRemove(item)}
-                  aria-label={`Remove ${item.label.trim() || `new ${copy.singular.toLowerCase()}`}`}
-                  sx={(t) => ({ mt: 0.5, minHeight: t.spacing(5) })}
-                >
-                  Remove
-                </Button>
+                  sx={{ mt: 1 }}
+                />
               </Box>
             );
           })}

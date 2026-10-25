@@ -64,6 +64,15 @@ describe('Locations page', () => {
     expect(remove).toHaveAccessibleDescription('A club needs at least one location');
   });
 
+  it('removes a location with the red trash can, not a text button', async () => {
+    renderPage();
+    await loaded();
+    const remove = screen.getByRole('button', { name: 'Remove Main Clubhouse' });
+    expect(remove).toHaveTextContent('');
+    expect(remove.querySelector('[data-testid="DeleteIcon"]')).not.toBeNull();
+    expect(remove.className).toMatch(/colorError/);
+  });
+
   it('limits the name to 50 characters and counts them', async () => {
     renderPage();
     await loaded();

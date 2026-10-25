@@ -1,5 +1,4 @@
 import ContentCopy from '@mui/icons-material/ContentCopyOutlined';
-import Delete from '@mui/icons-material/Delete';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
 import Table from '@mui/material/Table';
@@ -18,6 +17,7 @@ import {
   type SeasonErrors,
 } from '../../../app/rateCategories';
 import DateField from '../../shared/DateField';
+import RemoveIconButton from '../../shared/RemoveIconButton';
 import AmountField from './AmountField';
 
 export interface RateTableProps {
@@ -163,14 +163,11 @@ export default function RateTable({
                               >
                                 <ContentCopy fontSize="small" />
                               </IconButton>
-                              <IconButton
+                              <RemoveIconButton
                                 size="small"
-                                color="error"
-                                aria-label={`Remove season ${name}`}
+                                label={`season ${name}`}
                                 onClick={() => onRemoveSeason(season.id)}
-                              >
-                                <Delete fontSize="small" />
-                              </IconButton>
+                              />
                             </Box>
                           </Box>
                         )}
