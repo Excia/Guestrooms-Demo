@@ -44,7 +44,7 @@ describe('createLazyClient', () => {
     });
     expect(dates.blocks[0].startDate).toBe('2026-10-30');
     const hk = await client.schedule.setHousekeeping({
-      reservationRoomId: 'rr-3',
+      reservationRoomId: 'rr-1',
       status: 'cleaned',
       requestId: 'req-lazy-0003',
     });

@@ -26,6 +26,8 @@ export interface HousekeepingChipProps {
   fill: string;
   /** The status shown (the stored one, or the default of a stay with none); defaults to `block.housekeeping`. */
   status?: HousekeepingStatus;
+  /** The statuses the pop-up offers for this stay's lifecycle (`housekeepingOptionsFor`); defaults to all. */
+  options?: readonly { value: SettableHousekeepingStatus; label: string }[];
   /** Absent when the user may not change housekeeping: the chip is then only drawn. */
   onSave?: SetHousekeeping;
 }
@@ -53,6 +55,7 @@ export default function HousekeepingChip({
   chip,
   fill,
   status: shown,
+  options = HOUSEKEEPING_OPTIONS,
   onSave,
 }: HousekeepingChipProps) {
   const id = useId();
@@ -199,7 +202,7 @@ export default function HousekeepingChip({
           onChange={(e) => pick(e.target.value as SettableHousekeepingStatus)}
           sx={{ mt: 1.5 }}
         >
-          {HOUSEKEEPING_OPTIONS.map((o) => (
+          {options.map((o) => (
             <MenuItem key={o.value} value={o.value}>
               {o.label}
             </MenuItem>

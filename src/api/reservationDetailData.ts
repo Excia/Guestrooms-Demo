@@ -1,6 +1,7 @@
 // Mock reservation details, early/late saves and reservation creation, on the schedule's
 // in-memory state. Replaced by the backend later.
 import { addDays, daysBetween } from '../lib/dates';
+import { housekeepingStatusOf } from '../app/housekeepingBlocks';
 import { expectedLeadOccupantName } from './createRules';
 import { stayOf } from '../lib/stayPlan';
 import { assertFree, bump, findRoom, nightRate } from './scheduleData';
@@ -91,7 +92,8 @@ export function roomNotReady(state: ScheduleState, block: ScheduleBlock): boolea
         o.endDate <= block.startDate,
     )
     .sort((x, y) => y.endDate.localeCompare(x.endDate))[0];
-  return before?.housekeeping === 'needs-cleaning' || before?.housekeeping === 'needs-maintenance';
+  const left = before && housekeepingStatusOf(before);
+  return left === 'needs-cleaning' || left === 'needs-maintenance';
 }
 
 /** The reservation's rooms: on the grid, or (created without a room) in the unassigned list. */

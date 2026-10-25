@@ -5,6 +5,7 @@ import { nightsOverlap, type IsoDate } from '../lib/dates';
 import { departurePassed, type ClubClock } from '../lib/clubTime';
 import { stayOf } from '../lib/stayPlan';
 import type { CheckInLevel } from '../app/permissions';
+import { housekeepingOnCheckIn, housekeepingOnCheckOut } from '../app/housekeepingBlocks';
 import { getFolio } from './folioData';
 import type { FolioStore } from './folioData';
 import { buildDetail, extrasFor, roomNotReady } from './reservationDetailData';
@@ -163,6 +164,7 @@ export function checkInReservation(
       continue;
     }
     block.status = 'checked-in';
+    block.housekeeping = housekeepingOnCheckIn();
     stamps[block.id] = { ...stamps[block.id], checkedInAt: stamp };
     nightsPosted += postNights(folio, block.id, env.clock.date);
     const outcome: CheckInRoomOutcome = {
@@ -173,7 +175,7 @@ export function checkInReservation(
     const departure = stayDeparture(state, block);
     if (request.checkOutAfter && departurePassed(departure, env.checkOutTime, env.clock)) {
       block.status = 'checked-out';
-      block.housekeeping = 'needs-cleaning';
+      block.housekeeping = housekeepingOnCheckOut();
       stamps[block.id] = { ...stamps[block.id], checkedOutAt: stamp };
       nightsPosted += postNights(folio, block.id, null);
       outcome.checkedOutAt = stamp;

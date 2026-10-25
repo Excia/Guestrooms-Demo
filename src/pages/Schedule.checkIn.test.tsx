@@ -332,15 +332,15 @@ describe('payment method and room readiness', () => {
   it('a dirty room cannot be checked in', async () => {
     const client = createMockClient({ today: TODAY });
     const block = (await client.schedule.get({ startDate: '2026-10-06', days: 30 })).blocks.find(
-      (b) => b.id === 'rr-4',
+      (b) => b.id === 'rr-35',
     )!;
     await client.schedule.setHousekeeping({
-      reservationRoomId: 'rr-4',
+      reservationRoomId: 'rr-35',
       requestId: 'req-dirty-0001',
       version: block.version,
       status: 'needs-cleaning',
     });
-    const { user } = await open('rs-5', { client, room: 'rr-5' });
+    const { user } = await open('rs-22', { client, room: 'rr-25' });
     const button = await screen.findByRole('button', { name: 'Check In' });
     expect(button).toHaveAttribute('aria-disabled', 'true');
     expect(button).toHaveAccessibleDescription(

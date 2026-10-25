@@ -8,9 +8,13 @@ import {
 import {
   HOUSEKEEPING_LABELS,
   HOUSEKEEPING_OPTIONS,
+  housekeepingOnCheckIn,
+  housekeepingOnCheckOut,
+  housekeepingOptionsFor,
   housekeepingStatusLabel,
   housekeepingStatusOf,
   needsHousekeepingBlock,
+  stayLifecycle,
 } from './housekeepingBlocks';
 
 const block = (over: Partial<ScheduleBlock> = {}): ScheduleBlock => ({
@@ -46,17 +50,113 @@ describe('needsHousekeepingBlock', () => {
   });
 });
 
+const STORED: (HousekeepingStatus | undefined)[] = [
+  undefined,
+  'nyci',
+  'not-checked-out',
+  'needs-cleaning',
+  'cleaned',
+  'ready',
+  'needs-maintenance',
+];
+
+// The derivation table (D-HK-4): lifecycle x stored status -> shown status.
 describe('housekeepingStatusOf', () => {
-  it('uses the stored status', () => {
-    expect(housekeepingStatusOf(block({ housekeeping: 'ready' }))).toBe('ready');
-    expect(housekeepingStatusOf(block({ housekeeping: 'nyci' }))).toBe('nyci');
-  });
-  it('defaults to not checked out when none is stored', () => {
-    expect(housekeepingStatusOf(block())).toBe('not-checked-out');
-    expect(housekeepingStatusOf(block({ status: 'checked-out' }))).toBe('not-checked-out');
-  });
+  const table: Record<ScheduleBlockStatus, Record<string, HousekeepingStatus>> = {
+    confirmed: {
+      none: 'nyci',
+      nyci: 'nyci',
+      'not-checked-out': 'nyci',
+      'needs-cleaning': 'nyci',
+      cleaned: 'nyci',
+      ready: 'nyci',
+      'needs-maintenance': 'needs-maintenance',
+    },
+    nyci: {
+      none: 'nyci',
+      nyci: 'nyci',
+      'not-checked-out': 'nyci',
+      'needs-cleaning': 'nyci',
+      cleaned: 'nyci',
+      ready: 'nyci',
+      'needs-maintenance': 'needs-maintenance',
+    },
+    'checked-in': {
+      none: 'not-checked-out',
+      nyci: 'not-checked-out',
+      'not-checked-out': 'not-checked-out',
+      'needs-cleaning': 'not-checked-out',
+      cleaned: 'not-checked-out',
+      ready: 'not-checked-out',
+      'needs-maintenance': 'not-checked-out',
+    },
+    'checked-out': {
+      none: 'needs-cleaning',
+      nyci: 'needs-cleaning',
+      'not-checked-out': 'needs-cleaning',
+      'needs-cleaning': 'needs-cleaning',
+      cleaned: 'cleaned',
+      ready: 'ready',
+      'needs-maintenance': 'needs-maintenance',
+    },
+  };
+  for (const [status, row] of Object.entries(table)) {
+    it.each(STORED)(`${status} with stored %s`, (stored) => {
+      const b = block({ status: status as ScheduleBlockStatus, housekeeping: stored });
+      expect(housekeepingStatusOf(b)).toBe(row[stored ?? 'none']);
+    });
+  }
   it('is undefined where there is no block', () => {
-    expect(housekeepingStatusOf(block({ roomId: '', housekeeping: 'ready' }))).toBeUndefined();
+    expect(
+      housekeepingStatusOf(block({ roomId: '', status: 'checked-out', housekeeping: 'ready' })),
+    ).toBeUndefined();
+  });
+});
+
+describe('stayLifecycle', () => {
+  it('groups the block statuses', () => {
+    expect(stayLifecycle('confirmed')).toBe('not-checked-in');
+    expect(stayLifecycle('nyci')).toBe('not-checked-in');
+    expect(stayLifecycle('checked-in')).toBe('in-house');
+    expect(stayLifecycle('checked-out')).toBe('checked-out');
+  });
+});
+
+describe('housekeepingOptionsFor', () => {
+  const values = (b: ScheduleBlock) => housekeepingOptionsFor(b).map((o) => o.value);
+  it('offers nothing for a stay not yet checked in, its chip is invisible', () => {
+    expect(values(block({ status: 'confirmed' }))).toEqual([]);
+    expect(values(block({ status: 'nyci', housekeeping: 'cleaned' }))).toEqual([]);
+  });
+  it('keeps only the maintenance flag staff already set on a stay not yet checked in', () => {
+    expect(values(block({ status: 'confirmed', housekeeping: 'needs-maintenance' }))).toEqual([
+      'needs-maintenance',
+    ]);
+  });
+  it('keeps a guest in house at Not Checked Out', () => {
+    expect(values(block({ status: 'checked-in', housekeeping: 'cleaned' }))).toEqual([
+      'not-checked-out',
+    ]);
+  });
+  it('offers the four cleaning states after check-out, never Not Checked Out', () => {
+    for (const housekeeping of [undefined, 'cleaned', 'needs-maintenance'] as const) {
+      expect(values(block({ status: 'checked-out', housekeeping }))).toEqual([
+        'needs-cleaning',
+        'cleaned',
+        'ready',
+        'needs-maintenance',
+      ]);
+    }
+  });
+  it('offers nothing where there is no block', () => {
+    expect(values(block({ roomId: '' }))).toEqual([]);
+  });
+});
+
+describe('check-in and check-out effects', () => {
+  it('check-in stores Not Checked Out, check-out Needs Cleaning', () => {
+    expect(housekeepingOnCheckIn()).toBe('not-checked-out');
+    expect(housekeepingOnCheckOut()).toBe('needs-cleaning');
   });
 });
 
