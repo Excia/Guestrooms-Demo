@@ -2,6 +2,7 @@ import {
   SETTABLE_HOUSEKEEPING_STATUSES,
   type HousekeepingStatus,
   type ScheduleBlock,
+  type ScheduleBlockStatus,
   type SettableHousekeepingStatus,
 } from '../api/types';
 
@@ -46,14 +47,97 @@ export function needsHousekeepingBlock(block: Pick<ScheduleBlock, 'roomId' | 'li
   return block.roomId !== '' && block.linkedTo === undefined;
 }
 
+/** Where a stay is in its lifecycle, as far as housekeeping cares. */
+export type StayLifecycle = 'not-checked-in' | 'in-house' | 'checked-out';
+
+export function stayLifecycle(status: ScheduleBlockStatus): StayLifecycle {
+  switch (status) {
+    case 'checked-in':
+      return 'in-house';
+    case 'checked-out':
+      return 'checked-out';
+    case 'confirmed':
+    case 'nyci':
+      return 'not-checked-in';
+    default: {
+      const unreachable: never = status;
+      return unreachable;
+    }
+  }
+}
+
+/** The cleaning states staff set once the guest has left, in the pick-list order (functional doc 15.13.4). */
+const CLEANING_STATUSES: readonly SettableHousekeepingStatus[] = [
+  'needs-cleaning',
+  'cleaned',
+  'ready',
+  'needs-maintenance',
+];
+
+type HousekeepingSubject = Pick<ScheduleBlock, 'roomId' | 'linkedTo' | 'housekeeping' | 'status'>;
+
 /**
- * The status the "H" block shows: the stored one, or, when the backend sent none, the legacy
- * default of a stay whose room has not been checked out ("Not Checked Out"). `nyci` is stored only
- * when the backend says so; it is drawn invisible (Figma).
+ * The status the "H" block shows, derived from the stay's check-in status (D-HK-4); the stored
+ * `block.housekeeping` only refines it where staff may set it:
+ *
+ * | stay                        | shown                                                             |
+ * | --------------------------- | ----------------------------------------------------------------- |
+ * | no room / linked-room block | none (no "H" block)                                               |
+ * | not yet checked in          | `nyci` (drawn invisible), or `needs-maintenance` if staff flagged the room |
+ * | checked in (guest in house) | `not-checked-out`, whatever is stored                             |
+ * | checked out                 | the stored cleaning state; `needs-cleaning` when none is stored   |
+ *
+ * "Stored none" also covers a stored value that makes no sense for the stay's lifecycle (for
+ * example `cleaned` on a stay not checked in, or `not-checked-out` on a checked-out one).
  */
-export function housekeepingStatusOf(
-  block: Pick<ScheduleBlock, 'roomId' | 'linkedTo' | 'housekeeping'>,
-): HousekeepingStatus | undefined {
+export function housekeepingStatusOf(block: HousekeepingSubject): HousekeepingStatus | undefined {
   if (!needsHousekeepingBlock(block)) return undefined;
-  return block.housekeeping ?? 'not-checked-out';
+  switch (stayLifecycle(block.status)) {
+    case 'not-checked-in':
+      return block.housekeeping === 'needs-maintenance' ? 'needs-maintenance' : 'nyci';
+    case 'in-house':
+      return 'not-checked-out';
+    case 'checked-out':
+      return CLEANING_STATUSES.find((s) => s === block.housekeeping) ?? 'needs-cleaning';
+  }
+}
+
+/**
+ * The statuses the pop-up offers for a stay: only transitions that make sense for its lifecycle.
+ * A stay not checked in has nothing to set (its chip is invisible) except the maintenance flag
+ * staff already put on the room; a guest in house stays "Not Checked Out"; after check-out the four
+ * cleaning states. Legacy offers every status on every stay; this is stricter (D-HK-5).
+ */
+export function housekeepingOptionsFor(
+  block: HousekeepingSubject,
+): readonly { value: SettableHousekeepingStatus; label: string }[] {
+  const status = housekeepingStatusOf(block);
+  let allowed: readonly SettableHousekeepingStatus[];
+  switch (status) {
+    case undefined:
+    case 'nyci':
+      allowed = [];
+      break;
+    case 'needs-maintenance':
+      allowed =
+        stayLifecycle(block.status) === 'not-checked-in'
+          ? ['needs-maintenance']
+          : CLEANING_STATUSES;
+      break;
+    case 'not-checked-out':
+      allowed = ['not-checked-out'];
+      break;
+    default:
+      allowed = CLEANING_STATUSES;
+  }
+  return HOUSEKEEPING_OPTIONS.filter((o) => allowed.includes(o.value));
+}
+
+/** The stored value to write when a stay's check-in status changes (the mock flows and the backend agree on it). */
+export function housekeepingOnCheckIn(): SettableHousekeepingStatus {
+  return 'not-checked-out';
+}
+
+export function housekeepingOnCheckOut(): SettableHousekeepingStatus {
+  return 'needs-cleaning';
 }

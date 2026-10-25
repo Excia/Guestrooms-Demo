@@ -65,9 +65,9 @@ afterAll(() => {
 });
 
 describe('schedule housekeeping chip', () => {
-  it('is drawn at the end of stays in every status, also stays not yet checked in', async () => {
+  it('is drawn at the end of stays in every visible status', async () => {
     const { client } = spied();
-    await loaded(client);
+    await loaded(client, '/schedule?start=2026-10-15');
     const shown = new Set(chips().map((c) => c.getAttribute('data-housekeeping')));
     for (const s of ['not-checked-out', 'needs-cleaning', 'cleaned', 'ready', 'needs-maintenance'])
       expect(shown, s).toContain(s);
@@ -119,7 +119,7 @@ describe('schedule housekeeping chip', () => {
   it('saves a picked status through the API and updates the chip', async () => {
     const { client, setHousekeeping } = spied();
     const user = await loaded(client);
-    const chip = withName(/^Housekeeping: not checked out\. Change status/);
+    const chip = withName(/^Housekeeping: needs cleaning\. Change status/);
     await user.click(chip);
     await user.click(screen.getByRole('combobox', { name: 'Status' }));
     await user.click(screen.getByRole('option', { name: 'Ready' }));
@@ -139,7 +139,7 @@ describe('schedule housekeeping chip', () => {
   it('saves the note with Save and shows the "+" marker in the 7 day view, not in the 30 day view', async () => {
     const { client, setHousekeeping } = spied();
     const user = await loaded(client);
-    const chip = withName(/^Housekeeping: not checked out\. Change status/);
+    const chip = withName(/^Housekeeping: needs cleaning\. Change status/);
     expect(chip).toHaveTextContent(/^H$/);
     await user.click(chip);
     await user.click(screen.getByRole('button', { name: 'Add Notes' }));
@@ -147,7 +147,7 @@ describe('schedule housekeeping chip', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(setHousekeeping.mock.calls[0][0]).toMatchObject({
-      status: 'not-checked-out',
+      status: 'needs-cleaning',
       notes: 'Mirror cracked',
     });
     await waitFor(() =>
@@ -155,7 +155,7 @@ describe('schedule housekeeping chip', () => {
         chips().some(
           (c) =>
             c.getAttribute('aria-label') ===
-              'Housekeeping: not checked out, with notes. Change status' && c.textContent === 'H+',
+              'Housekeeping: needs cleaning, with notes. Change status' && c.textContent === 'H+',
         ),
       ).toBe(true),
     );
@@ -179,13 +179,13 @@ describe('schedule housekeeping chip', () => {
       },
     };
     const user = await loaded(client);
-    await user.click(withName(/^Housekeeping: not checked out\. Change status/));
+    await user.click(withName(/^Housekeeping: needs cleaning\. Change status/));
     await user.click(screen.getByRole('combobox', { name: 'Status' }));
     await user.click(screen.getByRole('option', { name: 'Ready' }));
     expect((await screen.findAllByText('Housekeeping could not be saved.')).length).toBeGreaterThan(
       0,
     );
-    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent('Not Checked Out');
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent('Needs Cleaning');
   });
 });
 
@@ -194,9 +194,11 @@ const grid = () => screen.getByRole('grid', { name: 'Schedule', hidden: true });
 describe('schedule housekeeping chip in the default view', () => {
   const OTHER_TODAY = '2026-11-02';
 
+  // Seeded checked-out stays carry the cleaning states; one of them leaves today, so it is drawn
+  // from the view that starts the day before (the departure edge of a stay ending today).
   it('shows a chip for every status, and a checked-out stay, from a date other than the test default', async () => {
     const client = createMockClient({ today: OTHER_TODAY });
-    await loaded(client, '/schedule', true, OTHER_TODAY);
+    await loaded(client, '/schedule?start=2026-11-01', true, OTHER_TODAY);
     const shown = new Set(chips().map((c) => c.getAttribute('data-housekeeping')));
     for (const s of [
       'not-checked-out',

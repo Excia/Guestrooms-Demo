@@ -1,6 +1,6 @@
 // Mock schedule: a small realistic inventory and a deterministic 200-room generator, plus the
 // move mutations applied to that in-memory state. Replaced by the backend later.
-import { needsHousekeepingBlock } from '../app/housekeepingBlocks';
+import { housekeepingOptionsFor, needsHousekeepingBlock } from '../app/housekeepingBlocks';
 import { addDays, daysBetween, nightsOverlap } from '../lib/dates';
 import { rateOutcome } from '../lib/roomChangeRates';
 import { changedNights, normalizeRuns, planFromBlocks, planProblem, stayOf } from '../lib/stayPlan';
@@ -479,6 +479,41 @@ const BLOCK_SEEDS: BlockSeed[] = [
     to: 1,
     status: 'checked-out',
   },
+  // PLACEHOLDERS (P-HK-2): guests who checked out early (booked departure still ahead), so the
+  // default view shows the cleaning states on checked-out stays, like rr-27.
+  {
+    id: 'rr-33',
+    res: 'rs-33',
+    conf: 'GR-50511',
+    guest: 'Henrik Solberg',
+    type: 'guest',
+    room: 'rm-C2',
+    from: -2,
+    to: 1,
+    status: 'checked-out',
+  },
+  {
+    id: 'rr-34',
+    res: 'rs-34',
+    conf: 'GR-50512',
+    guest: 'Amara Okafor',
+    type: 'member',
+    room: 'rm-109',
+    from: -2,
+    to: 2,
+    status: 'checked-out',
+  },
+  {
+    id: 'rr-35',
+    res: 'rs-35',
+    conf: 'GR-50513',
+    guest: 'Louis Ferrand',
+    type: 'guest',
+    room: 'rm-C3',
+    from: -3,
+    to: 0,
+    status: 'checked-out',
+  },
   // PLACEHOLDERS (P-163-2): late arrivals that exercise check in on past dates. GR-50395 never
   // arrived and its departure has passed (check in, then check out automatically); GR-50396 has two
   // rooms, one already in house (the partial case: split the other room off).
@@ -654,6 +689,20 @@ const BLOCK_CONTENT_SEEDS: Record<string, Partial<ScheduleBlock>> = {
   'rr-u3': { roomTypeName: 'Queen Standard' },
 };
 
+/**
+ * PLACEHOLDER (P-HK-1): the cleaning state of each seeded checked-out stay. The ones that left
+ * early and are still on screen (rr-27, rr-33 and rr-34 in the default view, rr-35 from the day before) carry the four states, so every chip color can be seen.
+ */
+const CHECKED_OUT_HOUSEKEEPING: Record<string, HousekeepingStatus> = {
+  'rr-1': 'cleaned',
+  'rr-13': 'ready',
+  'rr-17': 'needs-cleaning',
+  'rr-27': 'needs-maintenance',
+  'rr-33': 'needs-cleaning',
+  'rr-34': 'cleaned',
+  'rr-35': 'ready',
+};
+
 function defaultState(today: IsoDate): ScheduleState {
   const at = (n: number) => addDays(today, n);
   return {
@@ -823,11 +872,10 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
     if (extras?.earlyCheckIn) block.earlyCheckIn = true;
     if (extras?.lateCheckOut) block.lateCheckOut = true;
   }
-  // PLACEHOLDER (P-HK-1): demo housekeeping states until the backend supplies them. In-house rooms
-  // are not checked out and departed rooms cycle through the cleaning states. Departed stays end
-  // before the default view (it starts today), so the first four confirmed stays also carry the
-  // cleaning states, and the first NYCI stay the NYCI state (drawn invisible), so every chip color
-  // can be seen at once. Other stays carry none and show the default (Not Checked Out).
+  // PLACEHOLDER (P-HK-1): demo housekeeping states until the backend supplies them. They follow the
+  // stay's check-in status (D-HK-4): a stay not yet checked in stores none (it shows NYCI; the one
+  // seeded maintenance flag, rr-6, is set in BLOCK_CONTENT_SEEDS), a guest in house is Not Checked
+  // Out, and checked-out stays cycle through the cleaning states.
   const cleaning: HousekeepingStatus[] = [
     'needs-cleaning',
     'cleaned',
@@ -835,20 +883,13 @@ export function createScheduleState(today: IsoDate, size: ScheduleSize = 'defaul
     'needs-maintenance',
   ];
   let departed = 0;
-  let upcoming = 0;
-  let hasNyci = false;
   let hasNotes = state.blocks.some((b) => b.housekeepingNotes);
   for (const block of state.blocks) {
     if (!needsHousekeepingBlock(block)) continue;
     if (block.status === 'checked-in') block.housekeeping = 'not-checked-out';
     else if (block.status === 'checked-out')
-      block.housekeeping = cleaning[departed++ % cleaning.length];
-    else if (block.status === 'confirmed' && upcoming < cleaning.length)
-      block.housekeeping = cleaning[upcoming++];
-    else if (block.status === 'nyci' && !hasNyci) {
-      block.housekeeping = 'nyci';
-      hasNyci = true;
-    }
+      block.housekeeping =
+        CHECKED_OUT_HOUSEKEEPING[block.id] ?? cleaning[departed++ % cleaning.length];
     if (block.housekeeping === 'not-checked-out' && !hasNotes) {
       block.housekeepingNotes = 'Guest asked for extra towels.';
       hasNotes = true;
@@ -1054,6 +1095,11 @@ export function setHousekeeping(
 ): ScheduleBlock[] {
   const block = findBlock(state, request.reservationRoomId);
   if (request.version !== undefined && block.version !== request.version) throw stale();
+  if (!housekeepingOptionsFor(block).some((o) => o.value === request.status)) {
+    throw new ApiError(409, "That housekeeping status does not fit the stay's check-in status", {
+      code: 'not-allowed',
+    });
+  }
   block.housekeeping = request.status;
   if (request.notes !== undefined) {
     if (request.notes === '') delete block.housekeepingNotes;

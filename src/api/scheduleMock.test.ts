@@ -508,29 +508,29 @@ describe('mock schedule.setHousekeeping', () => {
 
   it('sets the status, keeps the note, and shows on the next get with a new version', async () => {
     const c = mk();
-    const before = await find(c, 'rr-3');
-    const res = await c.schedule.setHousekeeping({ ...(await hk(c, 'rr-3')), status: 'ready' });
+    const before = await find(c, 'rr-1');
+    const res = await c.schedule.setHousekeeping({ ...(await hk(c, 'rr-1')), status: 'ready' });
     expect(res.blocks).toHaveLength(1);
-    expect(res.blocks[0]).toMatchObject({ id: 'rr-3', housekeeping: 'ready' });
+    expect(res.blocks[0]).toMatchObject({ id: 'rr-1', housekeeping: 'ready' });
     expect(res.blocks[0].version).not.toBe(before.version);
-    expect(await find(c, 'rr-3')).toMatchObject({ housekeeping: 'ready' });
+    expect(await find(c, 'rr-1')).toMatchObject({ housekeeping: 'ready' });
   });
   it('saves a note, and an empty note removes it', async () => {
     const c = mk();
     const first = await c.schedule.setHousekeeping({
-      ...(await hk(c, 'rr-3')),
+      ...(await hk(c, 'rr-1')),
       status: 'cleaned',
       notes: 'Mini bar restocked',
     });
     expect(first.blocks[0].housekeepingNotes).toBe('Mini bar restocked');
     const kept = await c.schedule.setHousekeeping({
-      reservationRoomId: 'rr-3',
+      reservationRoomId: 'rr-1',
       requestId: 'req-keep-note-1',
       status: 'ready',
     });
     expect(kept.blocks[0].housekeepingNotes).toBe('Mini bar restocked');
     const removed = await c.schedule.setHousekeeping({
-      reservationRoomId: 'rr-3',
+      reservationRoomId: 'rr-1',
       requestId: 'req-drop-note-1',
       status: 'ready',
       notes: '',
@@ -539,16 +539,16 @@ describe('mock schedule.setHousekeeping', () => {
   });
   it('409 stale for another version, applying nothing', async () => {
     const c = mk();
-    const before = await find(c, 'rr-3');
+    const before = await find(c, 'rr-1');
     await expect(
       c.schedule.setHousekeeping({
-        reservationRoomId: 'rr-3',
+        reservationRoomId: 'rr-1',
         requestId: 'req-stale-hk-1',
         version: 'v-old',
         status: 'ready',
       }),
     ).rejects.toMatchObject({ status: 409, code: 'stale' });
-    expect((await find(c, 'rr-3')).housekeeping).toBe(before.housekeeping);
+    expect((await find(c, 'rr-1')).housekeeping).toBe(before.housekeeping);
   });
   it('404 for an unknown reservation room', async () => {
     await expect(
@@ -561,7 +561,7 @@ describe('mock schedule.setHousekeeping', () => {
   });
   it('replays the same request once and rejects the same id with another body', async () => {
     const c = mk();
-    const req = { ...(await hk(c, 'rr-3')), status: 'cleaned' as const };
+    const req = { ...(await hk(c, 'rr-1')), status: 'cleaned' as const };
     const one = await c.schedule.setHousekeeping(req);
     const two = await c.schedule.setHousekeeping(req);
     expect(two).toEqual(one);
@@ -573,10 +573,26 @@ describe('mock schedule.setHousekeeping', () => {
   it('rejects a status that cannot be set (nyci) with 400', async () => {
     await expect(
       mk().schedule.setHousekeeping({
-        reservationRoomId: 'rr-3',
+        reservationRoomId: 'rr-1',
         requestId: 'req-nyci-0001',
         status: 'nyci' as never,
       }),
     ).rejects.toMatchObject({ status: 400, code: 'invalid-query' });
+  });
+  it("refuses a status that does not fit the stay's check-in status, applying nothing", async () => {
+    const c = mk();
+    // Not yet checked in (rr-3): nothing to set; checked in (rr-2): stays Not Checked Out;
+    // checked out (rr-1): cannot go back to Not Checked Out.
+    for (const [id, status] of [
+      ['rr-3', 'cleaned'],
+      ['rr-2', 'ready'],
+      ['rr-1', 'not-checked-out'],
+    ] as const) {
+      const before = await find(c, id);
+      await expect(
+        c.schedule.setHousekeeping({ ...(await hk(c, id)), status }),
+      ).rejects.toMatchObject({ status: 409, code: 'not-allowed' });
+      expect(await find(c, id)).toEqual(before);
+    }
   });
 });

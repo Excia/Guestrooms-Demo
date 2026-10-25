@@ -1,4 +1,5 @@
 import { SETTABLE_HOUSEKEEPING_STATUSES } from '../api/types';
+import type { ScheduleBlock, SettableHousekeepingStatus } from '../api/types';
 import { housekeepingStatusLabel, housekeepingStatusOf } from './housekeepingBlocks';
 import { addDays, nightsOverlap } from '../lib/dates';
 import { queryScheduleData } from '../api/scheduleQuery';
@@ -281,22 +282,32 @@ describe('housekeeping and feature filters', () => {
     );
     expect(HOUSEKEEPING_FILTER_OPTIONS.map((o) => o.id)).not.toContain('nyci');
   });
-  it('a stay with no stored status counts as Not Checked Out, like its chip', () => {
+  it('filters by the status derived from the stay, like its chip', () => {
     const base = all();
     const room = base.rooms[0];
     const stay = { ...base.blocks[0], roomId: room.id, startDate: T, endDate: addDays(T, 2) };
-    const noStatus = { ...stay, housekeeping: undefined };
-    const data = { ...base, rooms: [room], blocks: [noStatus] };
-    expect(applyScheduleFilters(data, { housekeeping: ['not-checked-out'] }).rooms).toEqual([room]);
-    expect(applyScheduleFilters(data, { housekeeping: ['cleaned'] }).rooms).toEqual([]);
-    const stored = { ...data, blocks: [{ ...stay, housekeeping: 'cleaned' as const }] };
-    expect(applyScheduleFilters(stored, { housekeeping: ['not-checked-out'] }).rooms).toEqual([]);
-    expect(applyScheduleFilters(stored, { housekeeping: ['cleaned'] }).rooms).toEqual([room]);
-    // NYCI is not filterable: it matches none of the options.
-    const nyci = { ...data, blocks: [{ ...stay, housekeeping: 'nyci' as const }] };
+    const only = (b: ScheduleBlock) => ({ ...base, rooms: [room], blocks: [b] });
+    const rooms = (b: ScheduleBlock, id: SettableHousekeepingStatus) =>
+      applyScheduleFilters(only(b), { housekeeping: [id] }).rooms;
+    // A guest in house is Not Checked Out, whatever is stored.
+    const inHouse = { ...stay, status: 'checked-in' as const };
+    expect(rooms(inHouse, 'not-checked-out')).toEqual([room]);
+    expect(rooms({ ...inHouse, housekeeping: 'cleaned' }, 'cleaned')).toEqual([]);
+    expect(rooms({ ...inHouse, housekeeping: 'cleaned' }, 'not-checked-out')).toEqual([room]);
+    // After check-out: the stored cleaning state, Needs Cleaning when none.
+    const out = { ...stay, status: 'checked-out' as const };
+    expect(rooms(out, 'needs-cleaning')).toEqual([room]);
+    expect(rooms({ ...out, housekeeping: 'cleaned' }, 'cleaned')).toEqual([room]);
+    expect(rooms({ ...out, housekeeping: 'cleaned' }, 'needs-cleaning')).toEqual([]);
+    // Not yet checked in: NYCI, which matches none of the options; a stored "cleaned" is ignored.
+    const future = { ...stay, status: 'confirmed' as const, housekeeping: 'cleaned' as const };
     for (const o of HOUSEKEEPING_FILTER_OPTIONS) {
-      expect(applyScheduleFilters(nyci, { housekeeping: [o.id] }).rooms).toEqual([]);
+      expect(rooms(future, o.id as SettableHousekeepingStatus)).toEqual([]);
     }
+    // ... except the maintenance flag staff set on the room.
+    expect(rooms({ ...future, housekeeping: 'needs-maintenance' }, 'needs-maintenance')).toEqual([
+      room,
+    ]);
   });
   it('a linked-room block carries no status, so it never matches', () => {
     const base = all();

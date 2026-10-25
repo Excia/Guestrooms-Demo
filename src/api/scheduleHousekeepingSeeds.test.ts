@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { housekeepingStatusOf, needsHousekeepingBlock } from '../app/housekeepingBlocks';
+import {
+  housekeepingStatusOf,
+  needsHousekeepingBlock,
+  stayLifecycle,
+} from '../app/housekeepingBlocks';
 import { blockLayout } from '../app/schedule';
 import { blockFillToken } from '../app/scheduleColors';
 import { createScheduleState } from './scheduleData';
@@ -13,6 +17,26 @@ describe.each(['default', 'large'] as const)('schedule mock seeds (%s)', (size) 
       expect(housekeepingStatusOf(b) !== undefined).toBe(needsHousekeepingBlock(b));
     }
     for (const b of state.unassigned) expect(housekeepingStatusOf(b)).toBeUndefined();
+  });
+
+  // D-HK-4: the stored state follows the stay's check-in status; a stay not yet checked in stores
+  // none, bar the one maintenance flag staff set on the room.
+  it('every seeded stay stores a housekeeping state that fits its check-in status', () => {
+    for (const b of state.blocks) {
+      if (!needsHousekeepingBlock(b)) continue;
+      const lifecycle = stayLifecycle(b.status);
+      const shown = housekeepingStatusOf(b);
+      if (lifecycle === 'not-checked-in') {
+        expect([undefined, 'needs-maintenance'], b.id).toContain(b.housekeeping);
+        expect(shown, b.id).toBe(b.housekeeping ?? 'nyci');
+      } else if (lifecycle === 'in-house') {
+        expect(b.housekeeping, b.id).toBe('not-checked-out');
+      } else {
+        expect(['needs-cleaning', 'cleaned', 'ready', 'needs-maintenance'], b.id).toContain(
+          b.housekeeping,
+        );
+      }
+    }
   });
 
   it('has a note on some chip', () => {
@@ -45,12 +69,16 @@ describe('schedule mock seeds in the default 7-day view', () => {
     ).toBe(true);
   });
 
+  // A stay that leaves today is out of a view that starts today, so the states are looked for in
+  // the default view and in the one that starts a day earlier.
   it('shows every housekeeping state, each chip at a real departure edge', () => {
-    const drawn = new Set(
-      inView
-        .filter((b) => !blockLayout(b, state.today, 7)!.continuesAfter)
-        .map((b) => housekeepingStatusOf(b)),
-    );
+    const drawn = new Set<string | undefined>();
+    for (const start of [state.today, '2026-10-23']) {
+      for (const b of state.blocks) {
+        const layout = blockLayout(b, start, 7);
+        if (layout && !layout.continuesAfter) drawn.add(housekeepingStatusOf(b));
+      }
+    }
     for (const s of [
       'not-checked-out',
       'needs-cleaning',
@@ -62,6 +90,15 @@ describe('schedule mock seeds in the default 7-day view', () => {
     }
     // NYCI is drawn invisible: its stay is on screen, its chip is not.
     expect(inView.some((b) => housekeepingStatusOf(b) === 'nyci')).toBe(true);
+  });
+
+  it('shows a cleaning state only on checked-out stays', () => {
+    for (const b of inView) {
+      const s = housekeepingStatusOf(b);
+      if (s === 'needs-cleaning' || s === 'cleaned' || s === 'ready') {
+        expect(b.status, b.id).toBe('checked-out');
+      }
+    }
   });
 
   it('has a checked-out stay with its chip', () => {

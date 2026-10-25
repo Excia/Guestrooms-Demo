@@ -10,7 +10,7 @@ import { memo, useMemo, useRef, useState, type PointerEventHandler } from 'react
 import type { HousekeepingStatus, ScheduleBlock } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
-import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
+import { housekeepingOptionsFor, housekeepingStatusOf } from '../../app/housekeepingBlocks';
 import {
   blockFillToken,
   closureStripes,
@@ -426,6 +426,7 @@ export default memo(function ScheduleItemView({
         <HousekeepingChip
           block={block}
           status={hkStatus}
+          options={housekeepingOptionsFor(block)}
           chip={hk}
           fill={housekeepingFill(hkStatus, theme)}
           onSave={onSetHousekeeping}

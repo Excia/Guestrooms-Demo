@@ -46,6 +46,18 @@ function view(
   );
 }
 
+describe('ScheduleItemView early and late tabs', () => {
+  // Both tabs come from the same marker and EDGE_TAB_SPACING (0.5 spacing units = 4px).
+  it('draws the Early Check In tab on the left as wide as the Late Check Out tab on the right', () => {
+    const { container } = view({ ...block, linkedTo: undefined });
+    const left = container.querySelector('[data-marker="left"]')!;
+    const right = container.querySelector('[data-marker="right"]')!;
+    expect(left).toHaveStyle({ width: '4px' });
+    expect(right).toHaveStyle({ width: '4px' });
+    expect(getComputedStyle(left).width).toBe(getComputedStyle(right).width);
+  });
+});
+
 describe('ScheduleItemView linked block', () => {
   it('draws the link icon and no early/late markers, whatever the flags', () => {
     const { container } = view(block);

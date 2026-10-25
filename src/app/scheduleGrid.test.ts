@@ -212,7 +212,7 @@ describe('copy', () => {
   });
   it('names a block with guest, confirmation, status, room and dates', () => {
     expect(blockAriaLabel(block({ status: 'nyci' }), { number: '202' })).toBe(
-      'Ada Lovelace, Non-member guest, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026, housekeeping not checked out',
+      'Ada Lovelace, Non-member guest, GR-1, not yet checked in, Room 202, 10/20/2026 to 10/22/2026',
     );
     expect(blockAriaLabel(block({ status: 'checked-in' }), { number: '1' })).toContain(
       'checked in',
@@ -587,7 +587,7 @@ describe('turnoverGap', () => {
   it('is 0 without a previous stay, a gap between stays, or a chip', () => {
     expect(turnoverGap(undefined, next, '2026-10-18', 7)).toBe(0);
     expect(turnoverGap(prev, { ...next, startDate: '2026-10-21' }, '2026-10-18', 7)).toBe(0);
-    expect(turnoverGap({ ...prev, housekeeping: 'nyci' }, next, '2026-10-18', 7)).toBe(0);
+    expect(turnoverGap({ ...prev, status: 'confirmed' }, next, '2026-10-18', 7)).toBe(0);
     expect(turnoverGap({ ...prev, roomId: '' }, next, '2026-10-18', 7)).toBe(0);
   });
 });

@@ -83,6 +83,7 @@ export function undoCheckIn(
   }
   for (const block of targets) {
     block.status = block.startDate <= state.today ? 'nyci' : 'confirmed';
+    delete block.housekeeping; // not checked in again: nothing stored (it shows NYCI)
     bump(state, block);
   }
   const version = bumpVersion(state, request.reservationId);

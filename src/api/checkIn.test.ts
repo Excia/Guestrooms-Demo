@@ -1,3 +1,4 @@
+import { housekeepingStatusOf } from '../app/housekeepingBlocks';
 import { createMockClient } from './mock';
 import { createHttpClient } from './http';
 import { MOCK_OVERRIDE_CODE } from './checkInData';
@@ -237,18 +238,18 @@ describe('mock reservations.checkIn per-room failures', () => {
   it('reports a dirty or not ready room', async () => {
     const c = mk();
     const block = (await c.schedule.get({ startDate: '2026-10-06', days: 30 })).blocks.find(
-      (b) => b.id === 'rr-4',
+      (b) => b.id === 'rr-35',
     )!;
-    // The guest of rr-4 leaves room 202 today and it needs cleaning before rr-5 arrives.
+    // The guest of rr-35 left room C3 and it needs cleaning before rr-25 arrives today.
     await c.schedule.setHousekeeping({
-      reservationRoomId: 'rr-4',
+      reservationRoomId: 'rr-35',
       requestId: rid(),
       version: block.version,
       status: 'needs-cleaning',
     });
-    const detail = await c.reservations.getDetail('rs-5');
+    const detail = await c.reservations.getDetail('rs-22');
     expect(detail.rooms[0].housekeeping).toBe('dirty');
-    const result = await c.reservations.checkIn(await request(c, 'rs-5', ['rr-5']));
+    const result = await c.reservations.checkIn(await request(c, 'rs-22', ['rr-25']));
     expect(result.rooms[0]).toMatchObject({ checkedIn: false, failure: 'room-not-ready' });
   });
 
@@ -456,5 +457,43 @@ describe('http client', () => {
         code: '1',
       }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+});
+
+// D-HK-4: the stored housekeeping state follows the stay's check-in status.
+describe('mock check in and check out set the housekeeping state', () => {
+  const block = async (c: ApiClient, id: string) =>
+    (await c.schedule.get({ startDate: '2026-10-06', days: 30 })).blocks.find((b) => b.id === id)!;
+
+  it('check-in stores Not Checked Out', async () => {
+    const c = mk();
+    expect(housekeepingStatusOf(await block(c, 'rr-5'))).toBe('nyci');
+    await c.reservations.checkIn(await request(c, 'rs-5', ['rr-5']));
+    const after = await block(c, 'rr-5');
+    expect(after.housekeeping).toBe('not-checked-out');
+    expect(housekeepingStatusOf(after)).toBe('not-checked-out');
+  });
+
+  it('automatic check-out leaves the room needing cleaning', async () => {
+    const c = mk({ now: () => new Date('2026-10-16T18:00:00Z') });
+    const result = await c.reservations.checkIn(
+      await request(c, 'rs-31', ['rr-28'], { checkOutAfter: true }),
+    );
+    expect(result.autoCheckedOut).toBe(true);
+    const after = await block(c, 'rr-28');
+    expect(after.status).toBe('checked-out');
+    expect(after.housekeeping).toBe('needs-cleaning');
+    expect(housekeepingStatusOf(after)).toBe('needs-cleaning');
+  });
+
+  it('undoing a check-in goes back to not checked in', async () => {
+    const c = mk({ lastAuditedDate: '2026-10-10' });
+    const d = await c.reservations.getDetail('rs-4');
+    await c.reservations.undoCheckIn({
+      requestId: rid(),
+      reservationId: 'rs-4',
+      version: d.version,
+    });
+    expect(housekeepingStatusOf(await block(c, 'rr-4'))).toBe('nyci');
   });
 });

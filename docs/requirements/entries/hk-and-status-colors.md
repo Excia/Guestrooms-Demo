@@ -33,7 +33,7 @@ No ticket; advances candidates C2 and C4 and gap item 5 of `functional-requireme
 
 ## Placeholders and invented values
 
-- **P-HK-1:** the mock housekeeping states (`createScheduleState`): checked-in stays Not Checked Out (one with a note), checked-out stays cycle through Needs Cleaning, Cleaned, Ready, Needs Maintenance, the first four confirmed stays also carry those four states (departed stays end before the default view, which starts today, except rr-27, whose booked departure is now tomorrow: it checked out early and shows its chip in the default view) and the first NYCI stay carries `nyci`. Covered by `src/api/scheduleHousekeepingSeeds.test.ts`.
+- **P-HK-1 (superseded by `hk-lifecycle.md`, D-HK-4):** the mock housekeeping states (`createScheduleState`): checked-in stays Not Checked Out (one with a note), checked-out stays cycle through Needs Cleaning, Cleaned, Ready, Needs Maintenance, the first four confirmed stays also carry those four states (departed stays end before the default view, which starts today, except rr-27, whose booked departure is now tomorrow: it checked out early and shows its chip in the default view) and the first NYCI stay carries `nyci`. Covered by `src/api/scheduleHousekeepingSeeds.test.ts`.
 
 ## API, permissions, notes
 

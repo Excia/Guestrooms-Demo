@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { useState } from 'react';
 import type { ScheduleBlock } from '../../api';
+import { housekeepingOptionsFor } from '../../app/housekeepingBlocks';
 import { housekeepingChip, type HousekeepingPatch } from '../../app/scheduleGrid';
 import { theme } from '../../theme';
 import HousekeepingChip from './HousekeepingChip';
@@ -36,12 +37,14 @@ function Harness({
   days = 7,
   onSave,
   readOnly = false,
+  options,
   seen,
 }: {
   initial?: ScheduleBlock;
   days?: number;
   onSave?: (patch: HousekeepingPatch) => Promise<boolean>;
   readOnly?: boolean;
+  options?: React.ComponentProps<typeof HousekeepingChip>['options'];
   seen: Seen;
 }) {
   const [block, setBlock] = useState(initial);
@@ -62,6 +65,7 @@ function Harness({
           block={block}
           chip={chip}
           fill="gray"
+          options={options}
           onSave={
             readOnly
               ? undefined
@@ -97,6 +101,20 @@ describe('HousekeepingChip', () => {
       name: 'Housekeeping: needs cleaning. Change status',
     });
     expect(button).toHaveTextContent('H');
+  });
+
+  it('offers only the statuses given for the stay in its Status select', async () => {
+    const user = userEvent.setup();
+    render(
+      <Harness
+        options={housekeepingOptionsFor({ ...base, status: 'checked-in' })}
+        initial={{ ...base, status: 'checked-in', housekeeping: 'not-checked-out' }}
+        seen={seenNone()}
+      />,
+    );
+    await user.click(chipButton());
+    await user.click(screen.getByRole('combobox', { name: 'Status' }));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Not Checked Out']);
   });
 
   it('is only drawn, not a button, without permission', () => {
