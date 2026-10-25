@@ -12,10 +12,10 @@ export const MOCK_TODAY = '2026-10-16';
 // PLACEHOLDER: verify against Figma. Names and fields below were inferred from the ticket, not read
 // from the dashboard frame (69:3712).
 export const rateCategories: RateCategoryStat[] = [
-  { id: 'member', name: 'Member Rate', nights: 18, revenue: 2_880_000 },
-  { id: 'reciprocal', name: 'Reciprocal Club', nights: 7, revenue: 1_365_000 },
-  { id: 'guest-of-member', name: 'Guest of Member', nights: 9, revenue: 2_025_000 },
-  { id: 'event', name: 'Event Package', nights: 4, revenue: 980_000 },
+  { id: 'rc-member', name: 'Member Rate', nights: 18, revenue: 2_880_000 },
+  { id: 'rc-non-member', name: 'Non-Member Rate', nights: 16, revenue: 3_390_000 },
+  { id: 'rc-comp', name: 'Comp Rate', nights: 4, revenue: 0 },
+  { id: 'rc-owner', name: 'Owner Rate', nights: 5, revenue: 525_000 },
 ];
 
 export const roomBlocks: RoomBlock[] = [
@@ -78,7 +78,7 @@ export const mockReservations: Reservation[] = [
     adults: 2,
     children: 0,
     status: 'confirmed',
-    rateCategoryId: 'member',
+    rateCategoryId: 'rc-member',
     hasUnassignedCharges: false,
   },
   {
@@ -92,7 +92,7 @@ export const mockReservations: Reservation[] = [
     adults: 1,
     children: 0,
     status: 'pending',
-    rateCategoryId: 'reciprocal',
+    rateCategoryId: 'rc-non-member',
     hasUnassignedCharges: false,
   },
   {
@@ -106,7 +106,7 @@ export const mockReservations: Reservation[] = [
     adults: 2,
     children: 2,
     status: 'checked-in',
-    rateCategoryId: 'guest-of-member',
+    rateCategoryId: 'rc-non-member',
     hasUnassignedCharges: true,
   },
   {
@@ -120,7 +120,7 @@ export const mockReservations: Reservation[] = [
     adults: 2,
     children: 0,
     status: 'checked-in',
-    rateCategoryId: 'member',
+    rateCategoryId: 'rc-member',
     hasUnassignedCharges: true,
   },
   {
@@ -134,7 +134,7 @@ export const mockReservations: Reservation[] = [
     adults: 2,
     children: 1,
     status: 'checked-out',
-    rateCategoryId: 'event',
+    rateCategoryId: 'rc-comp',
     hasUnassignedCharges: false,
   },
   {
@@ -148,7 +148,7 @@ export const mockReservations: Reservation[] = [
     adults: 2,
     children: 0,
     status: 'cancelled',
-    rateCategoryId: 'member',
+    rateCategoryId: 'rc-member',
     hasUnassignedCharges: false,
   },
 ];

@@ -76,11 +76,30 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
 
 ## 7.2 Rate Categories
 
-Excia/Guestrooms-Demo#71 (**needs design**). Figma: no screen exists for managing rate categories; the
-"Default Rate Categories" tab label in System Settings (11895:16081) has no content. Categories seen:
-Comp Rate, Member Rate, Non-Member Rate, Owner Rate. **D-016:** rate categories are managed inside
-Guest Rooms (not synced from CMA). Rate Change Handling and Alternative Base Rates (7.1) depend on them.
-Blocked until a design exists (Q-71-1).
+Excia/Guestrooms-Demo#71 and Legacy Port #184 (LP-A.3); entry [184-rate-categories.md](../entries/184-rate-categories.md).
+Figma: no screen exists for managing rate categories; the "Default Rate Categories" tab label in System Settings
+(11895:16081) has no content. Categories seen: Comp Rate, Member Rate, Non-Member Rate, Owner Rate. **D-016:**
+rate categories are managed inside Guest Rooms (not synced from CMA). Rate Change Handling and Alternative Base
+Rates (7.1) depend on them.
+
+- **Requirements (ported from legacy, no design):** list with NEW RATE CATEGORY (inactive last); Rate Category Name
+  (25), active start date and optional end date ("Configure active end date?"), Item / Combo and SKU lookup
+  (required), Associations > Room Types, and the **rate table**: a default season plus named, dated seasons
+  (no overlap), one row per associated room type with Standard Base, Alt Base 1 and 2 (while enabled in System
+  Settings), Mon to Sun, Guest 2, Guest 3, Guest 4+ and Child; Add Season (starts from the default rates),
+  duplicate and remove season; delete (blocked while in use) and duplicate through the shared Duplicate dialog;
+  Save, Cancel on an unsaved one, Confirm Leaving, save toast, Change Log button.
+- **Implemented (Legacy Port #184, in review):** `src/pages/RateCategories.tsx` at `/admin/rate-categories` in
+  the Admin Setup shell, with `RateTable`, `AmountField` and `useRateCategoryData` in
+  `src/components/admin/rateCategories/` and the generic `src/components/shared/DuplicateDialog.tsx`. Pure rules
+  in `src/app/rateCategories.ts` (validation, inclusive season overlap, unique names, normalization, in-use
+  check, `seasonFor`, money parsing), unit-tested. API `rateCategories` (`getOptions`, `list`, `save`,
+  `duplicate`, `delete`) with a mock (seeded with the four categories, usage counts, idempotent create and
+  duplicate) and an http client with response guards; see [api-contract.md](../api-contract.md). Quick Stats (mock)
+  now reads the live category list.
+- **Not built:** the "Default Rate Categories" tab in System Settings (separate ticket), pricing a night from the
+  rates, rates for a new room type, per-room overrides (see the entry).
+- **Open questions:** Q-71-1 (design), Q-184-1 to Q-184-7.
 
 ## 7.3 Room Types and Rooms
 

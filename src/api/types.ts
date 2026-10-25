@@ -1066,6 +1066,96 @@ export interface AddOnApi {
   delete(id: string, options?: RequestOptions): Promise<void>;
 }
 
+// ---- rate categories (Admin Setup, ticket 7.2 / LP-A.3) ----------------------------------------
+
+/** Keys of the rate table's money columns, in the order legacy shows them. */
+export type RateColumnKey =
+  | 'standardBase'
+  | 'altBase1'
+  | 'altBase2'
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday'
+  | 'guest2'
+  | 'guest3'
+  | 'guest4Plus'
+  | 'child';
+
+/** One room type's rates in one season, in cents. */
+export type RateAmounts = Record<RateColumnKey, Cents>;
+
+/**
+ * The default season (`isDefault`, no dates) applies when no other season does; the others
+ * ("Season / Special Rates") have a name and an inclusive date range. `rates` is keyed by room
+ * type id.
+ */
+export interface RateSeason {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  /** yyyy-mm-dd, '' for the default season. */
+  startDate: string;
+  endDate: string;
+  rates: Record<string, RateAmounts>;
+}
+
+export interface RateCategorySetup {
+  id: string;
+  name: string;
+  /** Active dates of the category itself; an inactive category is listed last. */
+  startDate: string;
+  endDate: string | null;
+  /** "item" or "combo" SKU the rate posts to (legacy requires one). */
+  kind: AddOnKind;
+  sku: LookupRef | null;
+  /** Room types the category can be used with; the rate table has a row for each. */
+  roomTypeIds: string[];
+  seasons: RateSeason[];
+  /** Read only: reservations on this category, and settings that name it (blocks deleting). */
+  reservationCount: number;
+  settingNames: string[];
+}
+
+/** A form's value: `id` is missing until the first save; `requestId` makes a retried create safe. */
+export type RateCategoryInput = Omit<
+  RateCategorySetup,
+  'id' | 'reservationCount' | 'settingNames'
+> & {
+  id?: string;
+  requestId?: string;
+};
+
+export interface RateCategoryOptions {
+  skus: LookupRef[];
+  roomTypes: LookupRef[];
+}
+
+export interface DuplicateRateCategoryRequest {
+  sourceId: string;
+  name: string;
+  /** Idempotency key: a repeat returns the first copy. */
+  requestId: string;
+}
+
+/**
+ * Errors: 422 `validation` (rules in `src/app/rateCategories.ts`), 404 `not-found`, 409
+ * `duplicate-name` (save, duplicate) and 409 `in-use` (delete).
+ */
+export interface RateCategoryApi {
+  getOptions(options?: RequestOptions): Promise<RateCategoryOptions>;
+  list(options?: RequestOptions): Promise<RateCategorySetup[]>;
+  save(input: RateCategoryInput, options?: RequestOptions): Promise<RateCategorySetup>;
+  duplicate(
+    request: DuplicateRateCategoryRequest,
+    options?: RequestOptions,
+  ): Promise<RateCategorySetup>;
+  delete(id: string, options?: RequestOptions): Promise<void>;
+}
+
 // ---- keycard integration (Admin Setup, ticket 7.6) --------------------------------------------
 
 /**
@@ -1571,6 +1661,7 @@ export interface ApiClient {
   systemSettings: SystemSettingsApi;
   roomSetup: RoomSetupApi;
   addOns: AddOnApi;
+  rateCategories: RateCategoryApi;
   keycards: KeycardApi;
   bookingRules: BookingRulesApi;
   members: MembersApi;

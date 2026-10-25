@@ -52,6 +52,8 @@ export function useSetupEditor<T extends { id: string }, D>({
     draft,
     baseline,
     dirty,
+    /** Runs `action` at once, or after the unsaved-changes prompt when the draft has edits. */
+    guard: guarded,
     /** Show validation messages (after a refused save). */
     attempted,
     setAttempted,

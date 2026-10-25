@@ -35,6 +35,7 @@ export const ROOM_TYPES_PATH = '/admin/room-types';
 export const ROOMS_PATH = '/admin/rooms';
 /** Add-On Items (ticket 7.4). */
 export const ADD_ON_ITEMS_PATH = '/admin/add-on-items';
+export const RATE_CATEGORIES_PATH = '/admin/rate-categories';
 
 /** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
 export const BOOKING_RULES_PATH = '/admin/booking-rules';
@@ -115,7 +116,7 @@ export const routes = [
   },
   {
     id: 'rate-categories',
-    path: '/admin/rate-categories',
+    path: RATE_CATEGORIES_PATH,
     title: 'Rate Categories',
     section: 'admin',
   },

@@ -469,6 +469,32 @@ must be enforced again by the backend, which also answers 422 `validation` when 
 `roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it
 saves. Photo upload and storage are open (Q-72-1).
 
+## Rate categories (ticket 7.2 / Legacy Port 184, built on the mock)
+
+| Method and path                      | Body / response                                                                                     | Errors                                                     |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `GET /rate-categories/options`       | `RateCategoryOptions { skus, roomTypes }`, each a list of `{ id, label }`                           | 5xx                                                        |
+| `GET /rate-categories`               | `RateCategorySetup[]`                                                                               | 5xx                                                        |
+| `POST /rate-categories`              | `RateCategoryInput` (no `id`) returns the stored `RateCategorySetup`; `Idempotency-Key` header      | 422 `validation`, 409 `duplicate-name`                     |
+| `PUT /rate-categories/{id}`          | `RateCategoryInput` returns the stored `RateCategorySetup`                                          | 422 `validation`, 404 `not-found`, 409 `duplicate-name`    |
+| `POST /rate-categories/{id}/duplicate` | `{ name }` returns the new `RateCategorySetup`; `Idempotency-Key` header                          | 404 `not-found`, 422 `validation`, 409 `duplicate-name`    |
+| `DELETE /rate-categories/{id}`       | 204                                                                                                 | 404 `not-found`, 409 `in-use`                              |
+
+`RateCategorySetup`: `id`, `name` (1 to 25, unique ignoring case), `startDate`, `endDate | null` (after the start),
+`kind` (`item` or `combo`) and `sku` (required), `roomTypeIds` (at least one; the rate rows), `seasons`, and the
+read-only `reservationCount` and `settingNames` (the settings that name the category, e.g. a default rate category
+of the Default Rate Categories tab). A season is `{ id, name, isDefault, startDate, endDate, rates }`: exactly one
+default season (no name or dates), the others with a name (1 to 25), `startDate` and `endDate` (end not before
+start, inclusive, no two seasons sharing a day); `rates` is keyed by room type id with one `RateAmounts` per
+associated room type: `standardBase`, `altBase1`, `altBase2`, `monday` to `sunday`, `guest2`, `guest3`,
+`guest4Plus`, `child`, all integer cents from 0 to 999,999,999 (Q-184-1: the weekday columns are stored, not
+interpreted). The rules are in `src/app/rateCategories.ts` and must be enforced again by the backend, which also
+answers 422 when `sku` or a `roomTypeIds` entry is not in the options and stores rates for exactly the associated
+room types. `POST` create and `duplicate` are idempotent by `Idempotency-Key` (the input carries it as
+`requestId`; the key is not stored). `DELETE` answers 409 `in-use` while `reservationCount` is above 0 or
+`settingNames` is not empty (Q-184-3). Duplicating copies the stored category (all seasons and rates, new ids,
+no usage) under the given name.
+
 ## Keycard integration (ticket 7.6, built on the mock)
 
 | Method and path                    | Body / response                                                                       | Errors           |

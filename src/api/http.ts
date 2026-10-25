@@ -46,6 +46,8 @@ import type {
   ScheduleQuery,
   AddOnOptions,
   AddOnSetup,
+  RateCategoryOptions,
+  RateCategorySetup,
   SetHousekeepingRequest,
   RoomSetup,
   RoomSetupOptions,
@@ -782,6 +784,65 @@ const parseAddOnOptions = (body: unknown, status: number): AddOnOptions => {
     throw invalid(status, 'add-on options');
   }
   return body as unknown as AddOnOptions;
+};
+
+const RATE_COLUMN_KEYS = [
+  'standardBase',
+  'altBase1',
+  'altBase2',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+  'sunday',
+  'guest2',
+  'guest3',
+  'guest4Plus',
+  'child',
+] as const;
+const isRateAmounts = (v: unknown) => isObject(v) && RATE_COLUMN_KEYS.every((k) => isCount(v[k]));
+const isRateSeason = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  typeof v.isDefault === 'boolean' &&
+  isString(v.startDate) &&
+  isString(v.endDate) &&
+  isObject(v.rates) &&
+  Object.values(v.rates).every(isRateAmounts);
+const isRateCategory = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.startDate) &&
+  (v.endDate === null || isString(v.endDate)) &&
+  (v.kind === 'item' || v.kind === 'combo') &&
+  (v.sku === null || isLookup(v.sku)) &&
+  Array.isArray(v.roomTypeIds) &&
+  v.roomTypeIds.every(isString) &&
+  Array.isArray(v.seasons) &&
+  v.seasons.every(isRateSeason) &&
+  isCount(v.reservationCount) &&
+  Array.isArray(v.settingNames) &&
+  v.settingNames.every(isString);
+const parseRateCategory = (body: unknown, status: number): RateCategorySetup => {
+  if (!isRateCategory(body)) throw invalid(status, 'rate category');
+  return body as unknown as RateCategorySetup;
+};
+const parseRateCategoryList = (body: unknown, status: number): RateCategorySetup[] => {
+  if (!Array.isArray(body) || !body.every(isRateCategory)) throw invalid(status, 'rate categories');
+  return body as unknown as RateCategorySetup[];
+};
+const parseRateCategoryOptions = (body: unknown, status: number): RateCategoryOptions => {
+  if (
+    !isObject(body) ||
+    !(['skus', 'roomTypes'] as const).every((k) => listOf(body[k], isLookup))
+  ) {
+    throw invalid(status, 'rate category options');
+  }
+  return body as unknown as RateCategoryOptions;
 };
 
 const parseKeys = (body: unknown, status: number): string[] => {
@@ -1652,6 +1713,34 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           : request('/add-ons', {}, o, parseAddOn, { method: 'POST', body: input }),
       delete: (id, o) =>
         request(`/add-ons/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
+    rateCategories: {
+      getOptions: (o) => request('/rate-categories/options', {}, o, parseRateCategoryOptions),
+      list: (o) => request('/rate-categories', {}, o, parseRateCategoryList),
+      // A create carries its request id as the Idempotency-Key, so a retry returns the first result.
+      save: (input, o) =>
+        input.id
+          ? request(`/rate-categories/${encodeURIComponent(input.id)}`, {}, o, parseRateCategory, {
+              method: 'PUT',
+              body: input,
+            })
+          : request('/rate-categories', {}, o, parseRateCategory, {
+              method: 'POST',
+              body: input,
+              headers: input.requestId ? { 'Idempotency-Key': input.requestId } : undefined,
+            }),
+      duplicate: (r, o) =>
+        request(
+          `/rate-categories/${encodeURIComponent(r.sourceId)}/duplicate`,
+          {},
+          o,
+          parseRateCategory,
+          { method: 'POST', body: { name: r.name }, headers: { 'Idempotency-Key': r.requestId } },
+        ),
+      delete: (id, o) =>
+        request(`/rate-categories/${encodeURIComponent(id)}`, {}, o, parseNothing, {
+          method: 'DELETE',
+        }),
     },
     keycards: {
       listEncoders: (o) => request('/keycards/encoders', {}, o, parseKeys),
