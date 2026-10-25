@@ -7,7 +7,6 @@ import Typography from '@mui/material/Typography';
 import { useMemo, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { RoomTypeInput, RoomTypeSetup } from '../api/types';
-import { todayIso } from '../app/dateSelection';
 import {
   blankRoomType,
   checkDeleteRoomType,
@@ -20,6 +19,7 @@ import {
   type DeleteCheck,
   type RoomTypeField,
 } from '../app/roomSetup';
+import { useClubToday } from '../app/useClubToday';
 import AdminShell from '../components/admin/AdminShell';
 import ActiveDatesFields from '../components/admin/roomSetup/ActiveDatesFields';
 import AssociationsPanel from '../components/admin/roomSetup/AssociationsPanel';
@@ -74,12 +74,9 @@ export default function RoomTypes() {
 function RoomTypesEditor({ data }: { data: RoomSetupData }) {
   const api = useApi();
   const options = data.options as NonNullable<RoomSetupData['options']>;
-  const today = useMemo(() => todayIso(), []);
-  const listEntries = useMemo(
-    () => toSetupListEntries(data.roomTypes, today),
-    [data.roomTypes, today],
-  );
+  const today = useClubToday();
   const sorted = useMemo(() => sortSetupItems(data.roomTypes, today), [data.roomTypes, today]);
+  const listEntries = useMemo(() => toSetupListEntries(sorted, today), [sorted, today]);
   const editor = useSetupEditor<RoomTypeSetup, RoomTypeInput>({
     items: sorted,
     toDraft,

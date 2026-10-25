@@ -297,13 +297,15 @@ export interface SetupListEntry {
 }
 
 /**
- * Rows of a setup list (Room Types, Rooms, Add-Ons, Rate Categories): active items first, inactive
- * ones (outside their active dates) last, each group by name. `inactive` drives the red tag.
+ * Rows of a setup list (Room Types, Rooms, Add-Ons) from items ALREADY sorted by `sortSetupItems`
+ * (the order the editor selects from, so the default selection is the first row). `inactive` is true
+ * outside the active dates: past the end date, and also before the start date (a future item).
+ * Rate Categories builds its own rows with `isActiveOn`.
  */
 export function toSetupListEntries<
   T extends { id: string; name: string; startDate: string; endDate: string | null },
->(items: readonly T[], today: string): SetupListEntry[] {
-  return sortSetupItems(items, today).map((i) => ({
+>(sortedItems: readonly T[], today: string): SetupListEntry[] {
+  return sortedItems.map((i) => ({
     id: i.id,
     label: i.name,
     inactive: !isActiveOn(i, today),

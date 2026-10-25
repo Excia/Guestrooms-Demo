@@ -2,6 +2,12 @@ import Add from '@mui/icons-material/Add';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import { visuallyHidden } from '@mui/utils';
+
+// A save can re-sort the list; keep the selected row in view without moving the page.
+function scrollSelectedIntoView(el: HTMLElement | null) {
+  if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
+}
 
 export interface SetupListItem {
   id: string;
@@ -43,7 +49,12 @@ export default function SetupList({
     onClick?: () => void,
     inactive?: boolean,
   ) => (
-    <Box component="li" key={key} sx={{ display: 'flex', position: 'relative' }}>
+    <Box
+      component="li"
+      key={key}
+      ref={selected ? scrollSelectedIntoView : undefined}
+      sx={{ display: 'flex', position: 'relative' }}
+    >
       <Button
         fullWidth
         size="large"
@@ -65,24 +76,31 @@ export default function SetupList({
           {label}
         </Box>
         {inactive ? (
-          <Chip
-            component="span"
-            size="small"
-            variant="outlined"
-            color="error"
-            label="Inactive"
-            sx={(t) => ({
-              ml: 'auto',
-              flexShrink: 0,
-              fontStyle: 'normal',
-              fontWeight: 'bold',
-              // Opaque, so the red text stays AA on the selected (green) item too.
-              bgcolor: 'background.paper',
-              pointerEvents: 'none',
-              height: t.spacing(2.75),
-              '& .MuiChip-label': { px: 1 },
-            })}
-          />
+          <>
+            {/* Read as "Cottage, Inactive": a pause between the name and the tag. */}
+            <Box component="span" sx={visuallyHidden}>
+              ,{' '}
+            </Box>
+            <Chip
+              component="span"
+              size="small"
+              variant="outlined"
+              color="error"
+              label="Inactive"
+              sx={(t) => ({
+                ml: 'auto',
+                textTransform: 'none',
+                flexShrink: 0,
+                fontStyle: 'normal',
+                fontWeight: 'bold',
+                // Opaque, so the red text stays AA on the selected (green) item too.
+                bgcolor: 'background.paper',
+                pointerEvents: 'none',
+                height: t.spacing(2.75),
+                '& .MuiChip-label': { px: 1 },
+              })}
+            />
+          </>
         ) : null}
       </Button>
       {selected ? (

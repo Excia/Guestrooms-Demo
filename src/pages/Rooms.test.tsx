@@ -39,7 +39,7 @@ describe('Rooms page', () => {
       '100',
       '101',
       '200',
-      '300 (retired)Inactive',
+      '300 (retired), Inactive',
     ]);
     expect(within(items[3]).getByText('Inactive')).toBeVisible();
   });

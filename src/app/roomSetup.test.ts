@@ -127,10 +127,14 @@ describe('toSetupListEntries', () => {
     startDate: '2020-01-01',
     endDate,
   });
-  it('flags inactive items and lists them last, each group by name', () => {
+  it('flags inactive items; the first row is the item the editor selects by default', () => {
+    const today = '2026-10-20';
     const entries = toSetupListEntries(
-      [mk('1', 'Zed', '2021-01-01'), mk('2', 'Beta', null), mk('3', 'Alpha', null)],
-      '2026-10-20',
+      sortSetupItems(
+        [mk('1', 'Zed', '2021-01-01'), mk('2', 'Beta', null), mk('3', 'Alpha', null)],
+        today,
+      ),
+      today,
     );
     expect(entries).toEqual([
       { id: '3', label: 'Alpha', inactive: false },
@@ -217,6 +221,9 @@ describe('deleting', () => {
     expect(check.kind).toBe('blocked');
     expect(check.message).toMatch(/2 rooms use it/);
     expect(checkDeleteRoomType(types()[2], rooms()).kind).toBe('ok');
+  });
+  it('counts a retired room too: King Room is used by rooms 200 and 300', () => {
+    expect(checkDeleteRoomType(types()[1], rooms()).message).toMatch(/2 rooms use it/);
   });
   it('warns about a room with upcoming reservations', () => {
     expect(checkDeleteRoom({ name: '100', upcomingReservations: 2 }).kind).toBe('warn');

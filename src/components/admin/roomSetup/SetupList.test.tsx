@@ -34,7 +34,7 @@ describe('SetupList', () => {
     renderList();
     expect(screen.getByRole('button', { name: 'New Room Type' })).toBeInTheDocument();
     const rows = screen.getAllByRole('listitem').map((li) => li.textContent);
-    expect(rows).toEqual(['King Room', 'CottageInactive']);
+    expect(rows).toEqual(['King Room', 'Cottage, Inactive']);
   });
 
   it('tags an inactive item with a visible red "Inactive" chip and greys its name', () => {
