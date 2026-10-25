@@ -195,6 +195,9 @@ export function isNameTaken(
   );
 }
 
+/** "an item" or "a combo", for the SKU messages. */
+const skuPhrase = (kind: AddOnKind) => (kind === 'item' ? 'an item' : 'a combo');
+
 /** Why a name cannot be used for a duplicate, or undefined. */
 export function duplicateNameError(
   name: string,
@@ -291,7 +294,7 @@ export function validateRateCategory(
     const chosen = input.sku;
     const known = skus.find((s) => s.id === chosen.id);
     if (!known || known.kind !== input.kind) {
-      errors.sku = `Select a ${input.kind === 'item' ? 'item' : 'combo'} SKU.`;
+      errors.sku = `Select ${skuPhrase(input.kind)} SKU.`;
     }
   }
   if (
@@ -320,7 +323,7 @@ export function validateRateCategory(
         const kind = season.skuKind ?? 'item';
         const known = skus?.find((k) => k.id === season.sku?.id);
         if (skus && (!known || known.kind !== kind)) {
-          e.sku = `Select a ${kind === 'item' ? 'item' : 'combo'} SKU.`;
+          e.sku = `Select ${skuPhrase(kind)} SKU.`;
         }
       }
       const clash = overlaps.get(season.id);
@@ -345,7 +348,8 @@ const isValidCents = (n: unknown): n is Cents =>
 /** Stored SKU of a season: none on the default season; the others keep a SKU only with its kind. */
 function seasonSku(season: RateSeason): Pick<RateSeason, 'sku' | 'skuKind'> {
   if (season.isDefault) return {};
-  return { sku: season.sku ?? null, skuKind: season.skuKind ?? 'item' };
+  // A kind alone means nothing (the form keeps it to show the radio), so it is not stored.
+  return season.sku ? { sku: season.sku, skuKind: season.skuKind ?? 'item' } : { sku: null };
 }
 
 /**
@@ -390,6 +394,19 @@ export function toRateCategoryInput(c: RateCategorySetup): RateCategoryInput {
     seasons: structuredClone(c.seasons),
   };
 }
+
+/**
+ * Shape of a season's SKU on the wire: the default season has neither field, and a kind is only
+ * sent with a SKU. (The form's draft may hold a kind without a SKU; `normalizeRateCategory` drops it.)
+ */
+export const isSeasonSkuShapeValid = (season: RateSeason): boolean =>
+  season.isDefault
+    ? season.sku == null && season.skuKind === undefined
+    : season.skuKind === undefined || Boolean(season.sku);
+
+/** True when every season of a stored or submitted category has a valid SKU shape. */
+export const seasonSkuShapesValid = (seasons: readonly RateSeason[]): boolean =>
+  seasons.every(isSeasonSkuShapeValid);
 
 /** The kind a season's SKU lookup lists (a season without one reads as item). */
 export const seasonSkuKind = (season: Pick<RateSeason, 'skuKind'>): AddOnKind =>

@@ -21,6 +21,8 @@ export const RATE_TABLE = {
   /** Sticky first column (room type) width in px. */
   roomTypeMinPx: 112,
   roomTypeMaxPx: 160,
+  /** Title rows are this much narrower than the scroll box (see RateTable). */
+  titleAllowancePx: 8,
   /** Width of the colour edge on each season in px. */
   accentPx: 6,
 } as const;

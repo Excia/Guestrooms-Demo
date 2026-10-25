@@ -63,7 +63,7 @@ import type {
 import { normalizeRuns } from '../lib/stayPlan';
 import { normalizeAudienceRules } from '../app/bookingRules';
 import { isStoredEncoderKey } from '../app/keycards';
-import { MAX_RATE_CENTS } from '../app/rateCategories';
+import { isSeasonSkuShapeValid, MAX_RATE_CENTS } from '../app/rateCategories';
 import { expectedLeadOccupantName } from './createRules';
 import { REGISTRATION_CARD_ITEM_IDS } from './registrationCardTypes';
 import { assertChangeLogQuery } from './changeLogValidation';
@@ -847,6 +847,8 @@ const isRateAmounts = (v: unknown) =>
   isObject(v) && RATE_COLUMN_KEYS.every((k) => isRateCents(v[k]));
 const isRateSku = (v: unknown) =>
   isObject(v) && isLookup(v) && (v.kind === 'item' || v.kind === 'combo');
+const isRateSeasonSkuShape = (v: Record<string, unknown>) =>
+  isSeasonSkuShapeValid(v as unknown as Parameters<typeof isSeasonSkuShapeValid>[0]);
 const isRateSeason = (v: unknown) =>
   isObject(v) &&
   isString(v.id) &&
@@ -856,6 +858,7 @@ const isRateSeason = (v: unknown) =>
   isString(v.endDate) &&
   (v.sku === undefined || v.sku === null || isLookup(v.sku)) &&
   (v.skuKind === undefined || v.skuKind === 'item' || v.skuKind === 'combo') &&
+  isRateSeasonSkuShape(v) &&
   isObject(v.rates) &&
   Object.values(v.rates).every(isRateAmounts);
 const isRateCategory = (v: unknown) =>

@@ -149,4 +149,23 @@ describe('mock rate category SKU kinds', () => {
       status: 422,
     });
   });
+
+  it('refuses a SKU or kind on the default season and a kind without a SKU (422)', async () => {
+    const client = createMockClient();
+    const member = (await client.rateCategories.list()).find(
+      (c) => c.id === RATE_CATEGORY_IDS.member,
+    )!;
+    const edit = (index: number, patch: object) => ({
+      ...member,
+      seasons: member.seasons.map((s, i) => (i === index ? { ...s, ...patch } : s)),
+    });
+    for (const bad of [
+      edit(0, { sku, skuKind: 'item' }),
+      edit(1, { skuKind: 'combo' }),
+      edit(1, { sku, skuKind: 'combo' }),
+    ]) {
+      await expect(client.rateCategories.save(bad)).rejects.toMatchObject({ status: 422 });
+    }
+    await expect(client.rateCategories.save(edit(1, { sku: null }))).resolves.toBeDefined();
+  });
 });

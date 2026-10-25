@@ -15,6 +15,7 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import type { Theme } from '@mui/material/styles';
+import { visuallyHidden } from '@mui/utils';
 import type { AddOnKind, LookupRef, RateColumnKey, RateSeason, RateSku } from '../../../api/types';
 import {
   amountsFor,
@@ -100,6 +101,9 @@ export default function RateTable({
         border: 1,
         borderColor: 'divider',
         borderRadius: 1,
+        // Inside a grid or flex cell it must shrink to the cell and scroll, never stretch the page.
+        minWidth: 0,
+        maxWidth: '100%',
         // The title rows are as wide as this box (cqw), not as the table, so they never scroll away.
         containerType: 'inline-size',
         // Inset ring: the scroll box would clip an outer one.
@@ -286,7 +290,9 @@ function SeasonTitle({
         position: 'sticky',
         left: 0,
         // As wide as the scroll box, so the controls stay in view while the rates scroll.
-        width: 'calc(100cqw - 8px)',
+        // Measured in Chrome at 1400px: a title row of exactly 100cqw made the table 6px wider than
+        // the box, so it always scrolled; a small allowance (titleAllowancePx) avoids that.
+        width: `calc(100cqw - ${tablePx(t, RATE_TABLE.titleAllowancePx)})`,
         boxSizing: 'border-box',
         display: 'flex',
         alignItems: 'flex-start',
@@ -309,6 +315,9 @@ function SeasonTitle({
         </Box>
       ) : (
         <>
+          <Typography component="h3" sx={visuallyHidden}>
+            {name}
+          </Typography>
           <TextField
             id={seasonDomId(season.id, 'name')}
             label="Season name"
@@ -404,7 +413,20 @@ function SeasonTitle({
         </>
       )}
       {e.amount ? (
-        <Typography variant="caption" color="error" role="alert" sx={{ flexBasis: '100%' }}>
+        // On a white chip: error text is 4.98:1 on white but under AA on the tinted bands.
+        <Typography
+          variant="caption"
+          color="error"
+          role="alert"
+          sx={{
+            flexBasis: '100%',
+            bgcolor: 'background.paper',
+            px: 1,
+            py: 0.25,
+            borderRadius: 0.5,
+            width: 'fit-content',
+          }}
+        >
           {e.amount}
         </Typography>
       ) : null}

@@ -17,6 +17,8 @@ import {
   removeSeason,
   seasonFor,
   seasonSkuKind,
+  isSeasonSkuShapeValid,
+  seasonSkuShapesValid,
   seasonToneIndex,
   SEASON_TONE_COUNT,
   updateSeason,
@@ -302,7 +304,7 @@ describe('season SKU (owner request: legacy has one SKU per category)', () => {
     const ok = withSeason({ sku: { id: 'sku-c', label: 'C' }, skuKind: 'combo' });
     expect(hasErrors(validateRateCategory(ok, [], skus))).toBe(false);
     const wrong = withSeason({ sku: { id: 'sku-c', label: 'C' }, skuKind: 'item' });
-    expect(validateRateCategory(wrong, [], skus).seasons.s1?.sku).toBe('Select a item SKU.');
+    expect(validateRateCategory(wrong, [], skus).seasons.s1?.sku).toBe('Select an item SKU.');
     const unknown = withSeason({ sku: { id: 'nope', label: 'N' } });
     expect(validateRateCategory(unknown, [], skus).seasons.s1?.sku).toBeDefined();
     expect(hasErrors(validateRateCategory(unknown, [], skus))).toBe(true);
@@ -317,7 +319,8 @@ describe('season SKU (owner request: legacy has one SKU per category)', () => {
     expect(base).not.toHaveProperty('sku');
     expect(summer).toMatchObject({ sku: { id: 'sku-c' }, skuKind: 'combo' });
     const plain = normalizeRateCategory(withSeason({})).seasons[1];
-    expect(plain).toMatchObject({ sku: null, skuKind: 'item' });
+    expect(plain).toMatchObject({ sku: null });
+    expect(plain).not.toHaveProperty('skuKind');
   });
   it('starts empty on Add Season, is editable and is copied by Duplicate', () => {
     const added = addSeason([blankDefaultSeason(['rt-a'])], 's1');
@@ -329,6 +332,24 @@ describe('season SKU (owner request: legacy has one SKU per category)', () => {
     });
     const copy = duplicateSeason(edited, 's1', 's2')[2];
     expect(copy).toMatchObject({ sku: { id: 'sku-c' }, skuKind: 'combo' });
+  });
+});
+
+describe('season SKU shape on the wire', () => {
+  const combo = { sku: { id: 'sku-c', label: 'C' }, skuKind: 'combo' as const };
+  it('refuses a SKU or kind on the default season', () => {
+    const d = blankDefaultSeason(['rt-a']);
+    expect(isSeasonSkuShapeValid(d)).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...d, sku: null })).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...d, ...combo })).toBe(false);
+    expect(isSeasonSkuShapeValid({ ...d, skuKind: 'item' })).toBe(false);
+  });
+  it('refuses a kind without a SKU on a dated season', () => {
+    const s = season('s1', 'Summer', '2026-06-01', '2026-08-31');
+    expect(isSeasonSkuShapeValid(s)).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...s, ...combo })).toBe(true);
+    expect(isSeasonSkuShapeValid({ ...s, sku: null, skuKind: 'combo' })).toBe(false);
+    expect(seasonSkuShapesValid([s, { ...s, skuKind: 'item' }])).toBe(false);
   });
 });
 

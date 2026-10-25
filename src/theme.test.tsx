@@ -216,6 +216,15 @@ describe('season colour tokens (Rate Categories)', () => {
       expect(getContrastRatio(text, tone.band)).toBeGreaterThanOrEqual(4.5);
     }
   });
+  it('keeps error text AA on white, where season errors are drawn (on a chip, not on the bands)', () => {
+    expect(
+      getContrastRatio(theme.palette.error.main, theme.palette.background.paper),
+    ).toBeGreaterThanOrEqual(4.5);
+    // The reason for the chip: error text directly on a band would fail.
+    for (const tone of [neutral, ...tones]) {
+      expect(getContrastRatio(theme.palette.error.main, tone.band)).toBeLessThan(4.5);
+    }
+  });
   it('keeps the colour edge visible on white (3:1 for graphics)', () => {
     for (const tone of [neutral, ...tones]) {
       expect(getContrastRatio(tone.accent, '#ffffff')).toBeGreaterThanOrEqual(3);

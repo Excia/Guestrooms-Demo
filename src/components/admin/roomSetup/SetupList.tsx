@@ -27,6 +27,12 @@ export interface SetupListProps {
   creating: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
+  /**
+   * Legacy `SideBarControl` shows the add action and the new item as ONE row (Rate Categories): the
+   * outlined add button, which becomes the selected row while the new item is edited. Clicking the
+   * selected row does nothing. Off by default: Room Types, Rooms and Add-Ons keep the separate button.
+   */
+  singleNewRow?: boolean;
 }
 
 // Left list of Room Types, Rooms, Add-Ons and Rate Categories (Figma 11964:24902): the NEW button,
@@ -41,6 +47,7 @@ export default function SetupList({
   creating,
   onSelect,
   onNew,
+  singleNewRow = false,
 }: SetupListProps) {
   const row = (
     key: string,
@@ -121,23 +128,51 @@ export default function SetupList({
       ) : null}
     </Box>
   );
+  // The add action as the first row of the list (singleNewRow): outlined until the new item is edited.
+  const addRow = () =>
+    creating ? (
+      row('new', newTitle, true)
+    ) : (
+      <Box component="li" key="new" sx={{ display: 'flex' }}>
+        <Button
+          fullWidth
+          variant="outlined"
+          size="large"
+          startIcon={<Add />}
+          onClick={onNew}
+          sx={(t) => ({
+            justifyContent: 'flex-start',
+            minHeight: t.spacing(7.375),
+            borderColor: 'primary.outlinedBorder',
+            whiteSpace: 'nowrap',
+            px: 1.25,
+            '& .MuiButton-startIcon': { mr: 0.5 },
+            [t.breakpoints.up('lg')]: { mr: t.spacing(1.875) },
+          })}
+        >
+          {newLabel}
+        </Button>
+      </Box>
+    );
   return (
     <Box>
-      <Button
-        fullWidth
-        variant="outlined"
-        size="large"
-        startIcon={<Add />}
-        onClick={onNew}
-        sx={(t) => ({
-          mb: 1.25,
-          minHeight: t.spacing(7.375),
-          borderColor: 'primary.outlinedBorder',
-          [t.breakpoints.up('lg')]: { width: `calc(100% - ${t.spacing(1.875)})` },
-        })}
-      >
-        {newLabel}
-      </Button>
+      {singleNewRow ? null : (
+        <Button
+          fullWidth
+          variant="outlined"
+          size="large"
+          startIcon={<Add />}
+          onClick={onNew}
+          sx={(t) => ({
+            mb: 1.25,
+            minHeight: t.spacing(7.375),
+            borderColor: 'primary.outlinedBorder',
+            [t.breakpoints.up('lg')]: { width: `calc(100% - ${t.spacing(1.875)})` },
+          })}
+        >
+          {newLabel}
+        </Button>
+      )}
       <Box
         component="ul"
         sx={(t) => ({
@@ -150,7 +185,7 @@ export default function SetupList({
           [t.breakpoints.up('lg')]: { flexDirection: 'column', flexWrap: 'nowrap' },
         })}
       >
-        {creating ? row('new', newTitle, true) : null}
+        {singleNewRow ? addRow() : creating ? row('new', newTitle, true) : null}
         {items.map((item) =>
           row(
             item.id,

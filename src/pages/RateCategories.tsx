@@ -10,7 +10,7 @@ import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { AddOnKind, RateCategoryInput, RateCategorySetup } from '../api/types';
 import {
@@ -41,7 +41,7 @@ import AssociationsPanel from '../components/admin/roomSetup/AssociationsPanel';
 import DeleteSetupDialog from '../components/admin/roomSetup/DeleteSetupDialog';
 import SetupActions from '../components/admin/roomSetup/SetupActions';
 import { focusField, useSetupEditor } from '../components/admin/roomSetup/useSetupEditor';
-import RateCategoryList from '../components/admin/rateCategories/RateCategoryList';
+import SetupList from '../components/admin/roomSetup/SetupList';
 import RateTable, { seasonDomId } from '../components/admin/rateCategories/RateTable';
 import {
   useRateCategoryData,
@@ -137,6 +137,14 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
   const [attempt, setAttempt] = useState<{ body: string; requestId: string } | null>(null);
   const [duplicateRequest, setDuplicateRequest] = useState('');
 
+  // Add Season moves focus to the new season's name once it is on screen.
+  const focusNewSeason = useRef<string | null>(null);
+  useEffect(() => {
+    if (!focusNewSeason.current) return;
+    focusField(seasonDomId(focusNewSeason.current, 'name'));
+    focusNewSeason.current = null;
+  }, [draft.seasons]);
+
   const associated = options.roomTypes.filter((t) => draft.roomTypeIds.includes(t.id));
 
   const save = async (): Promise<boolean> => {
@@ -153,15 +161,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       else if (!found.roomTypes) {
         const season = draft.seasons.find((s) => found.seasons[s.id]);
         const e = season ? found.seasons[season.id] : undefined;
-        const f = e?.name
-          ? 'name'
-          : e?.startDate
-            ? 'startDate'
-            : e?.endDate
-              ? 'endDate'
-              : e?.sku
-                ? 'sku'
-                : null;
+        const f = (['name', 'startDate', 'endDate', 'sku'] as const).find((k) => e?.[k]);
         if (season && f) focusField(seasonDomId(season.id, f));
       }
       return false;
@@ -268,7 +268,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       changeLog="rate-categories"
       sidebarLabel="Rate Categories"
       sidebar={
-        <RateCategoryList
+        <SetupList
           items={sorted.map((c) => ({
             id: c.id,
             label: c.name,
@@ -277,6 +277,8 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Rate Category"
+          newTitle="New Rate Category"
+          singleNewRow
           onSelect={editor.select}
           onNew={editor.startNew}
         />
@@ -434,9 +436,11 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
               color="primary"
               startIcon={<Add />}
               disabled={associated.length === 0}
-              onClick={() =>
-                setDraft({ ...draft, seasons: addSeason(draft.seasons, newRequestId()) })
-              }
+              onClick={() => {
+                const id = newRequestId();
+                focusNewSeason.current = id;
+                setDraft({ ...draft, seasons: addSeason(draft.seasons, id) });
+              }}
             >
               Add Season
             </Button>
