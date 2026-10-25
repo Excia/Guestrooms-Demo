@@ -281,6 +281,14 @@ const base = createTheme({
         }),
       },
     },
+    // Table rows with `hover` (the Change Log): the same light green tint, not MUI's grey.
+    MuiTableRow: {
+      styleOverrides: {
+        root: ({ theme }) => ({
+          '&.MuiTableRow-hover:hover': { backgroundColor: theme.palette.primary.tint },
+        }),
+      },
+    },
     // Selected rows keep the tint on hover (a darker wash would drop the text below AA).
     MuiListItemButton: {
       styleOverrides: {
@@ -299,7 +307,11 @@ const base = createTheme({
         root: ({ theme }) => ({
           '&:hover, &.Mui-focusVisible, &.Mui-selected, &.Mui-selected:hover, &.Mui-selected.Mui-focusVisible':
             { backgroundColor: theme.palette.primary.tint },
+          // Selected option: green text (legacy highlights it green) with bold and the left bar as
+          // the non-colour cues. primary.main (#2e7d32) is only 4.49:1 on the tint, just under AA,
+          // so the text uses primary.dark, the same hue, which passes on the tint.
           '&.Mui-selected': {
+            color: theme.palette.primary.dark,
             fontWeight: theme.typography.fontWeightBold,
             boxShadow: `inset 3px 0 0 ${theme.palette.primary.main}`,
           },

@@ -19,6 +19,8 @@ export interface ConfirmDialogProps {
   message?: string;
   confirmLabel?: string;
   discardLabel?: string;
+  /** Full-width actions stacked under the text (the check-in prompts), the safe one first. */
+  stacked?: boolean;
 }
 
 // Confirm Leaving (Figma 88:4839). MUI Dialog traps focus, restores it to the opener on close and
@@ -35,6 +37,7 @@ export default function ConfirmDialog({
   message = 'Are you sure you want to leave without saving?',
   confirmLabel = 'Save now',
   discardLabel = 'Leave without saving',
+  stacked = false,
 }: ConfirmDialogProps) {
   const id = useId();
   return (
@@ -54,15 +57,29 @@ export default function ConfirmDialog({
           {message}
         </DialogContentText>
       </DialogContent>
-      <DialogActions>
+      <DialogActions
+        sx={
+          stacked
+            ? {
+                flexDirection: 'column',
+                alignItems: 'stretch',
+                gap: 1,
+                px: 3,
+                pb: 3,
+                '& > :not(style) ~ :not(style)': { ml: 0 },
+              }
+            : undefined
+        }
+      >
         <Button
           variant="outlined"
+          fullWidth={stacked}
           onClick={onDiscard}
           sx={{ borderColor: 'primary.outlinedBorder' }}
         >
           {discardLabel}
         </Button>
-        <Button ref={focusOnMount} variant="contained" onClick={onConfirm}>
+        <Button ref={focusOnMount} variant="contained" fullWidth={stacked} onClick={onConfirm}>
           {confirmLabel}
         </Button>
       </DialogActions>

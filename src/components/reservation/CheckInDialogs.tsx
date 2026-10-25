@@ -1,11 +1,8 @@
-import Close from '@mui/icons-material/Close';
 import Button from '@mui/material/Button';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
-import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import { useId, useState, type FormEvent, type ReactNode } from 'react';
 import {
@@ -16,7 +13,19 @@ import {
 } from '../../app/checkInCopy';
 import type { CheckInPastDatePlan } from '../../app/checkInDecision';
 import type { CheckInLevel } from '../../app/permissions';
+import DialogHeader from '../shared/DialogHeader';
 import { focusOnMount } from '../shared/focusOnMount';
+
+// Full-width actions stacked under the text, with the same left and right padding as the title and
+// message (MUI adds a left margin to every action after the first, so it is reset).
+const stackedActionsSx = {
+  flexDirection: 'column',
+  alignItems: 'stretch',
+  gap: 1,
+  px: 3,
+  pb: 3,
+  '& > :not(style) ~ :not(style)': { ml: 0 },
+} as const;
 
 interface PromptProps {
   open: boolean;
@@ -47,20 +56,13 @@ function PromptDialog({
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-message`}
     >
-      <DialogActions sx={{ pb: 0 }}>
-        <IconButton color="primary" aria-label={closeLabel} onClick={onClose}>
-          <Close />
-        </IconButton>
-      </DialogActions>
-      <DialogTitle id={`${id}-title`}>{title}</DialogTitle>
+      <DialogHeader id={`${id}-title`} title={title} onClose={onClose} closeLabel={closeLabel} />
       <DialogContent>
         <DialogContentText id={`${id}-message`} sx={{ color: 'text.primary' }}>
           {message}
         </DialogContentText>
       </DialogContent>
-      <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 3, pb: 3 }}>
-        {children}
-      </DialogActions>
+      <DialogActions sx={stackedActionsSx}>{children}</DialogActions>
     </Dialog>
   );
 }
@@ -167,7 +169,7 @@ export function OverrideCodeDialog({
       }}
       aria-labelledby={`${id}-title`}
     >
-      <DialogTitle id={`${id}-title`}>{OVERRIDE_TITLE}</DialogTitle>
+      <DialogHeader id={`${id}-title`} title={OVERRIDE_TITLE} onClose={onCancel} />
       <DialogContent>
         <TextField
           inputRef={focusOnMount}
@@ -183,7 +185,7 @@ export function OverrideCodeDialog({
           slotProps={{ htmlInput: { maxLength: 32 } }}
         />
       </DialogContent>
-      <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1, px: 3, pb: 3 }}>
+      <DialogActions sx={stackedActionsSx}>
         <Button type="submit" variant="contained" fullWidth disabled={busy || code.trim() === ''}>
           Override and check in
         </Button>

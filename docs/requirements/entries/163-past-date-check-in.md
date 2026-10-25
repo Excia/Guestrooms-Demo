@@ -57,3 +57,4 @@ ticket carries no link, the frame comes from ticket #28).
 - **Deferred to ticket 3.12 (not unmet silently):** "Assign now" opening and chaining back from an assign-room edit panel, "Adjust reservation
   dates" opening the edit panel, and the Reservation Hub path. The hooks exist: `onEdit` of `useCheckInFlow` (today a notice), `decideCheckIn`,
   `CheckInPanel` and `useCheckInFlow` for the hub; clicking Check In again after assigning restarts the flow.
+- **Layout 2026-10-25 (D-AP-5 in `admin-polish.md`):** the prompt's title and close icon share one row, and text and full-width stacked actions share the same side padding; no tooltips repeat the button text.
