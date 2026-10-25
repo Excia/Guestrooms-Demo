@@ -13,7 +13,10 @@ import {
   isDirty,
   isFolioField,
   isRegistrationCardField,
+  MESSAGES,
+  UNKNOWN_HOUSE_ACCOUNT,
   validateSystemSettings,
+  type SystemSettingsErrors,
   type SystemSettingsField,
 } from '../app/systemSettings';
 import { isOnlineBookingField } from '../app/onlineBookingSettings';
@@ -36,7 +39,8 @@ const panelId = (id: string) => `system-settings-panel-${id}`;
 
 // System Settings (the menu's "Primary Setup"; Figma 11895:16081 and 11964:11725). One draft
 // for both tabs, one Save button, and Confirm Leaving while the draft differs from what is saved.
-export default function SystemSettings() {
+// `readOnly` (View-only admin, Permissions ticket; false today) disables every control and Save.
+export default function SystemSettings({ readOnly = false }: { readOnly?: boolean }) {
   const api = useApi();
   const { status, settings: saved, reload, apply } = useSystemSettings();
   const [options, setOptions] = useState<SystemSettingsOptions | null>(null);
@@ -61,7 +65,16 @@ export default function SystemSettings() {
     return () => controller.abort();
   }, [api]);
 
-  const errors = useMemo(() => (draft ? validateSystemSettings(draft) : {}), [draft]);
+  // Answers of the backend that the form cannot know; dropped when the field changes again.
+  const [serverErrors, setServerErrors] = useState<SystemSettingsErrors>({});
+  const errors = useMemo(
+    () => ({ ...(draft ? validateSystemSettings(draft) : {}), ...serverErrors }),
+    [draft, serverErrors],
+  );
+  const editDraft = useCallback((next: SystemSettingsValues) => {
+    setServerErrors({});
+    setDraft(next);
+  }, []);
   const dirty = Boolean(saved && draft && isDirty(saved, draft));
   const guard = useLeaveGuard(dirty);
 
@@ -99,9 +112,25 @@ export default function SystemSettings() {
       const stored = await api.systemSettings.save(draft);
       apply(stored);
       setDraft(null);
+      setServerErrors({});
       setToast((t) => ({ open: true, id: t.id + 1 }));
       return true;
     } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status === 422 &&
+        error.code === UNKNOWN_HOUSE_ACCOUNT
+      ) {
+        setServerErrors({ houseAccount: [MESSAGES.unknownHouseAccount] });
+        if (tab !== 'settings') {
+          focusAfterTab.current = 'houseAccount';
+          setTab('settings');
+        } else {
+          // The error text mounts on the next render; focus then.
+          setTimeout(() => document.getElementById(fieldId('houseAccount'))?.focus(), 0);
+        }
+        return false;
+      }
       setSaveError(
         error instanceof ApiError && error.status === 422
           ? 'Some settings are not valid. Check the highlighted fields.'
@@ -118,7 +147,7 @@ export default function SystemSettings() {
       variant="contained"
       size="large"
       onClick={() => void save()}
-      disabled={!dirty || saving}
+      disabled={readOnly || !dirty || saving}
     >
       Save System Settings
     </Button>
@@ -201,20 +230,31 @@ export default function SystemSettings() {
         >
           {tab === 'settings' ? (
             <>
-              <TrainingModeToggle value={draft} onChange={setDraft} errors={errors} />
-              <SettingsTab value={draft} onChange={setDraft} errors={errors} options={options} />
+              <TrainingModeToggle
+                value={draft}
+                onChange={editDraft}
+                errors={errors}
+                readOnly={readOnly}
+              />
+              <SettingsTab
+                value={draft}
+                onChange={editDraft}
+                errors={errors}
+                options={options}
+                readOnly={readOnly}
+              />
             </>
           ) : tab === 'registration' ? (
             <RegistrationCardTab
               value={draft.registrationCard}
-              onChange={(registrationCard) => setDraft({ ...draft, registrationCard })}
+              onChange={(registrationCard) => editDraft({ ...draft, registrationCard })}
               folio={draft.folio}
               errors={errors}
             />
           ) : tab === 'online' ? (
             <OnlineBookingTab
               value={draft.onlineBooking}
-              onChange={(onlineBooking) => setDraft({ ...draft, onlineBooking })}
+              onChange={(onlineBooking) => editDraft({ ...draft, onlineBooking })}
               errors={errors}
             />
           ) : (
@@ -224,7 +264,7 @@ export default function SystemSettings() {
               </Typography>
               <FolioDetailsTab
                 value={draft.folio}
-                onChange={(folio) => setDraft({ ...draft, folio })}
+                onChange={(folio) => editDraft({ ...draft, folio })}
                 errors={errors}
               />
             </>

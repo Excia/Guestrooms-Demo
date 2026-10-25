@@ -13,6 +13,7 @@ export interface ToggleRowProps {
   /** Shown only while the switch is on (e.g. the Late Checkout Time). */
   children?: ReactNode;
   id?: string;
+  disabled?: boolean;
 }
 
 // Switch with its label and optional description (Figma Switch 11896:4304).
@@ -23,12 +24,14 @@ export default function ToggleRow({
   description,
   children,
   id,
+  disabled,
 }: ToggleRowProps) {
   const descriptionId = useId();
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
       <FormControlLabel
         label={label}
+        disabled={disabled}
         control={
           <Switch
             id={id}

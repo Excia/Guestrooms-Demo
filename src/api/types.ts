@@ -907,6 +907,12 @@ export interface SystemSettings {
   transferItem: LookupRef | null;
   guestRoomsArea: LookupRef | null;
   guestMember: LookupRef | null;
+  /**
+   * House Account section (owner request 2026-10-25): an existing house account picked by name.
+   * Optional (null = none chosen). Folio code reads it through `useSystemSettings()`; what it is
+   * charged for is not decided yet (Q-HA-1).
+   */
+  houseAccount: LookupRef | null;
   folio: FolioDetails;
   /** The Registration Card tab (ticket 7.8); also decides whether Print Registration Card is offered. */
   registrationCard: RegistrationCardSettings;
@@ -944,6 +950,11 @@ export interface SystemSettingsApi {
   /** Replaces all settings; answers with what was stored. The backend re-checks the rules. */
   save(settings: SystemSettings, options?: RequestOptions): Promise<SystemSettings>;
   getOptions(options?: RequestOptions): Promise<SystemSettingsOptions>;
+  /**
+   * Type-ahead for the House Account field: house accounts whose name contains `query` (case
+   * insensitive), at most 20, sorted by name. An empty query lists the first 20. Errors: 5xx.
+   */
+  listHouseAccounts(query: string, options?: RequestOptions): Promise<LookupRef[]>;
 }
 
 // ---- room setup (Admin Setup: Room Types and Rooms, ticket 7.3) --------------------------------

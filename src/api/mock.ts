@@ -22,7 +22,12 @@ import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
 import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
-import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
+import {
+  mockSystemSettings,
+  MOCK_HOUSE_ACCOUNTS,
+  MOCK_SYSTEM_SETTINGS_OPTIONS,
+  searchHouseAccounts,
+} from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { mockRoomOptions } from './roomOptionsData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
@@ -901,6 +906,10 @@ export function createMockClient({
         respond(
           () => {
             const errors = validateSystemSettings(settings);
+            const house = settings.houseAccount;
+            if (house && !MOCK_HOUSE_ACCOUNTS.some((a) => a.id === house.id)) {
+              throw new ApiError(422, 'House account not found', { code: 'unknown-house-account' });
+            }
             if (Object.keys(errors).length > 0) {
               throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
             }
@@ -917,6 +926,12 @@ export function createMockClient({
         respond(
           () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
           () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
+          o,
+        ),
+      listHouseAccounts: (query, o) =>
+        respond(
+          () => searchHouseAccounts(query),
+          () => [],
           o,
         ),
     },

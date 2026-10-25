@@ -51,12 +51,15 @@ export default function AdminShell({
       sx={(t) => ({
         display: 'flex',
         flexDirection: 'column',
-        [t.breakpoints.up('lg')]: { flexDirection: 'row', alignItems: 'stretch' },
         mx: { xs: 2, lg: 3 },
         my: 3,
         bgcolor: 'background.paper',
         minHeight: t.spacing(60),
+        // One lg block only: a second object key with the same breakpoint overwrites the first
+        // (that dropped the row layout and collapsed the content column to zero height).
         [t.breakpoints.up('lg')]: {
+          flexDirection: 'row',
+          alignItems: 'stretch',
           // Viewport minus the sticky app bar and the shell's own vertical margins (my: 3, twice).
           height: `calc(100dvh - ${t.spacing(HEADER_HEIGHT)} - ${t.spacing(6)})`,
           minHeight: 0,

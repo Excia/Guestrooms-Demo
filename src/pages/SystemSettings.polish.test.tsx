@@ -261,3 +261,17 @@ describe('Registration Card preview dialog', () => {
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
 });
+
+describe('Training Mode in a view-only page', () => {
+  it('disables the switch', async () => {
+    const { default: TrainingModeToggle } =
+      await import('../components/admin/systemSettings/TrainingModeToggle');
+    const { mockSystemSettings } = await import('../api/systemSettingsData');
+    render(
+      <ThemeProvider theme={theme}>
+        <TrainingModeToggle value={mockSystemSettings()} onChange={() => {}} errors={{}} readOnly />
+      </ThemeProvider>,
+    );
+    expect(screen.getByRole('switch', { name: 'Training Mode' })).toBeDisabled();
+  });
+});

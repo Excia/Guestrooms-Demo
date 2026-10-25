@@ -15,12 +15,19 @@ export interface TrainingModeToggleProps {
   value: SystemSettings;
   onChange: (next: SystemSettings) => void;
   errors: SystemSettingsErrors;
+  /** The person may view but not edit (permissions): the switch is disabled. */
+  readOnly?: boolean;
 }
 
 // Top right of the Settings tab, as in legacy. The visible text reads "Training Mode Enabled" or
 // "Training Mode Disabled" like legacy, but the switch's name stays "Training Mode" (its state is
 // the switch's own) so a screen reader does not hear the state twice.
-export default function TrainingModeToggle({ value, onChange, errors }: TrainingModeToggleProps) {
+export default function TrainingModeToggle({
+  value,
+  onChange,
+  errors,
+  readOnly = false,
+}: TrainingModeToggleProps) {
   const descriptionId = useId();
   const noteId = useId();
   const errorId = `${fieldId('trainingMode')}-error`;
@@ -58,6 +65,7 @@ export default function TrainingModeToggle({ value, onChange, errors }: Training
             <Switch
               id={fieldId('trainingMode')}
               checked={value.trainingMode}
+              disabled={readOnly}
               onChange={(e) => toggle(e.target.checked)}
               slotProps={{
                 input: { 'aria-label': 'Training Mode', 'aria-describedby': describedBy },

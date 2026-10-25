@@ -22,3 +22,32 @@ describe('system settings response validation', () => {
     }
   });
 });
+
+describe('house account', () => {
+  it('rejects settings without houseAccount or with a malformed one, accepts null', async () => {
+    const { houseAccount, ...without } = mockSystemSettings();
+    expect(houseAccount).not.toBeNull();
+    for (const body of [without, { ...without, houseAccount: { id: 1 } }]) {
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).systemSettings.get(),
+      ).rejects.toMatchObject({ status: 200 });
+    }
+    const none = await make(
+      vi.fn().mockResolvedValue(json({ ...without, houseAccount: null })),
+    ).systemSettings.get();
+    expect(none.houseAccount).toBeNull();
+  });
+
+  it('asks the lookup endpoint with the typed text and checks the list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json([{ id: 'h1', label: 'Club' }]));
+    expect(await make(fetchMock).systemSettings.listHouseAccounts('clu')).toEqual([
+      { id: 'h1', label: 'Club' },
+    ]);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      'https://api.example.com/v1/settings/system/house-accounts?query=clu',
+    );
+    await expect(
+      make(vi.fn().mockResolvedValue(json([{ id: 'h1' }]))).systemSettings.listHouseAccounts(''),
+    ).rejects.toMatchObject({ status: 200 });
+  });
+});

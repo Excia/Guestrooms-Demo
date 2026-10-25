@@ -668,7 +668,8 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !isOnlineBooking(body.onlineBooking) ||
     !(body.transferItem === null || isLookup(body.transferItem)) ||
     !(body.guestRoomsArea === null || isLookup(body.guestRoomsArea)) ||
-    !(body.guestMember === null || isLookup(body.guestMember))
+    !(body.guestMember === null || isLookup(body.guestMember)) ||
+    !(body.houseAccount === null || isLookup(body.houseAccount))
   ) {
     throw invalid(status, 'system settings');
   }
@@ -712,6 +713,11 @@ function parseBookingRulesOptions(body: unknown, status: number): BookingRulesOp
   }
   return body as unknown as BookingRulesOptions;
 }
+
+const parseHouseAccounts = (body: unknown, status: number): LookupRef[] => {
+  if (!listOf(body, isLookup)) throw invalid(status, 'house accounts');
+  return body as unknown as LookupRef[];
+};
 
 function parseSystemSettingsOptions(body: unknown, status: number): SystemSettingsOptions {
   if (
@@ -1733,6 +1739,8 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       save: (settings, o) =>
         request('/settings/system', {}, o, parseSystemSettings, { method: 'PUT', body: settings }),
       getOptions: (o) => request('/settings/system/options', {}, o, parseSystemSettingsOptions),
+      listHouseAccounts: (query, o) =>
+        request('/settings/system/house-accounts', { query }, o, parseHouseAccounts),
     },
     roomSetup: {
       getOptions: (o) => request('/room-setup/options', {}, o, parseRoomSetupOptions),

@@ -94,6 +94,7 @@ export type SystemSettingsField =
   | 'alternativeBaseRate1'
   | 'alternativeBaseRate2'
   | 'serviceChargeLabel'
+  | 'houseAccount'
   | 'folio.streetAddress'
   | 'folio.city'
   | 'folio.zip'
@@ -111,6 +112,7 @@ export const MESSAGES = {
     'Close Settled Folios value must be larger than the MPOS Visibility setting after checkout.',
   closeAfterLate: 'Close Settled Folios value must extend past Late Checkout Time.',
   mposAfterLate: 'Folio visibility must extend past Late Checkout Time.',
+  unknownHouseAccount: 'This house account no longer exists. Choose another.',
 } as const;
 
 const inRange = (n: number, r: { min: number; max: number }) =>
@@ -123,6 +125,9 @@ const inRange = (n: number, r: { min: number; max: number }) =>
  *   checkout time compared with the late checkout time's offset; strictly later).
  * - Late Checkout Time lies after the checkout time and no later than the check-in time.
  */
+/** The code of the 422 the backend answers when the chosen house account no longer exists. */
+export const UNKNOWN_HOUSE_ACCOUNT = 'unknown-house-account';
+
 export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors {
   const errors: SystemSettingsErrors = {};
   const add = (field: SystemSettingsField, message: string) => {
@@ -197,6 +202,11 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
     add('serviceChargeLabel', `Use ${SERVICE_CHARGE_LABEL_MAX} characters or fewer.`);
   }
 
+  // House Account is optional; a chosen one must be a real record (an id and a name).
+  if (s.houseAccount && (s.houseAccount.id.trim() === '' || s.houseAccount.label.trim() === '')) {
+    add('houseAccount', 'Choose a house account from the list.');
+  }
+
   for (const [field, message] of Object.entries(validateFolioDetails(s.folio))) {
     add(field as SystemSettingsField, message[0]);
   }
@@ -255,6 +265,7 @@ export const FIELD_ORDER: readonly SystemSettingsField[] = [
   'alternativeBaseRate1',
   'alternativeBaseRate2',
   'serviceChargeLabel',
+  'houseAccount',
   'folio.streetAddress',
   'folio.city',
   'folio.zip',
