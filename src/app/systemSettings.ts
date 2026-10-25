@@ -90,6 +90,7 @@ export type SystemSettingsField =
   | 'mposVisibleAfter'
   | 'closeSettledFolios'
   | 'nightAuditRunTime'
+  | 'trainingMode'
   | 'alternativeBaseRate1'
   | 'alternativeBaseRate2'
   | 'serviceChargeLabel'
@@ -169,6 +170,9 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
       add('closeSettledFolios', MESSAGES.closeAfterLate);
   }
 
+  if (s.trainingMode && s.nightAudit === 'automatic') {
+    add('trainingMode', TRAINING_MODE_AUDIT_MESSAGE);
+  }
   if (s.nightAudit === 'automatic' && !isOnTimeStep(s.nightAuditRunTime)) {
     add('nightAuditRunTime', 'Enter the run time in 5-minute steps.');
   }
@@ -235,8 +239,22 @@ export function validateFolioDetails(f: FolioDetails): SystemSettingsErrors {
   return errors;
 }
 
+/** Shown beside the Run Automatically radio while Training Mode is on (legacy tooltip text). */
+export const TRAINING_MODE_AUDIT_MESSAGE =
+  'Running Night Audit automatically is not available in Training Mode.';
+
+/** Legacy label: the text names the state, so "Training Mode Enabled" / "Training Mode Disabled". */
+export const trainingModeLabel = (on: boolean): string =>
+  on ? 'Training Mode Enabled' : 'Training Mode Disabled';
+
+/** Turning Training Mode on moves the night audit to Run Manually (as legacy does); off changes nothing else. */
+export function withTrainingMode(s: SystemSettings, on: boolean): SystemSettings {
+  return { ...s, trainingMode: on, nightAudit: on ? 'manual' : s.nightAudit };
+}
+
 /** Fields in page order, so the first error can take focus. */
 export const FIELD_ORDER: readonly SystemSettingsField[] = [
+  'trainingMode',
   'checkInTime',
   'checkOutTime',
   'lateCheckOutTime',

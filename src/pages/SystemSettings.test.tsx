@@ -379,7 +379,21 @@ describe('SystemSettings page', () => {
       expect(save.mock.calls[0][0].registrationCard.items.roomType).toBe(true);
     });
 
-    it('Generate Preview asks for the file with the unsaved draft and opens it in a new tab', async () => {
+    it('Generate Preview opens the card in a dialog, not a new tab, from the unsaved draft', async () => {
+      const client = createMockClient();
+      const request = vi.spyOn(client.registrationCard, 'requestPreview');
+      const open = vi.spyOn(window, 'open');
+      const user = await openTab(client);
+      await user.click(screen.getByRole('checkbox', { name: 'Room Type' }));
+      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Registration Card Preview' });
+      expect(within(dialog).getByText('(King Suite)')).toBeInTheDocument();
+      expect(open).not.toHaveBeenCalled();
+      expect(request).not.toHaveBeenCalled();
+      open.mockRestore();
+    });
+
+    it('Print asks the backend for the document with the draft and opens it in a new tab', async () => {
       const client = createMockClient();
       const request = vi
         .spyOn(client.registrationCard, 'requestPreview')
@@ -389,31 +403,11 @@ describe('SystemSettings page', () => {
       const user = await openTab(client);
       await user.click(screen.getByRole('checkbox', { name: 'Room Type' }));
       await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      await user.click(await screen.findByRole('button', { name: 'Print' }));
       await waitFor(() => expect(tab.location.href).toBe('blob:preview'));
       expect(open).toHaveBeenCalledWith('', '_blank');
       expect(request.mock.calls[0][0].settings.items.roomType).toBe(true);
       expect(request.mock.calls[0][0].folio.city).toBe('Cincinnati');
-      open.mockRestore();
-    });
-
-    it('keeps focus on Generate Preview while generating and announces it', async () => {
-      const client = createMockClient();
-      let finish: (v: { url: string }) => void = () => {};
-      const request = vi
-        .spyOn(client.registrationCard, 'requestPreview')
-        .mockReturnValue(new Promise((resolve) => (finish = resolve)));
-      const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
-      const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-      const user = await openTab(client);
-      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
-      const busy = screen.getByRole('button', { name: 'Generating…' });
-      expect(busy).toHaveFocus();
-      expect(busy).toHaveAttribute('aria-disabled', 'true');
-      expect(screen.getByText('Generating preview')).toBeInTheDocument();
-      await user.click(busy);
-      expect(request).toHaveBeenCalledTimes(1);
-      finish({ url: 'blob:preview' });
-      expect(await screen.findByRole('button', { name: 'Generate Preview' })).toHaveFocus();
       open.mockRestore();
     });
 
@@ -423,25 +417,27 @@ describe('SystemSettings page', () => {
       const open = vi.spyOn(window, 'open').mockReturnValue(null);
       const user = await openTab(client);
       await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      await user.click(await screen.findByRole('button', { name: 'Print' }));
       expect(await screen.findByRole('alert')).toHaveTextContent('blocked the new tab');
       expect(request).not.toHaveBeenCalled();
       open.mockRestore();
     });
 
-    it('closes the tab and says so when the preview fails or the address is not safe', async () => {
+    it('closes the tab and says so when printing fails or the address is not safe', async () => {
       const client = createMockClient();
       const request = vi.spyOn(client.registrationCard, 'requestPreview');
       const tab = { location: { href: '' }, close: vi.fn(), opener: {} };
       const open = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
       const user = await openTab(client);
-      request.mockRejectedValueOnce(new Error('down'));
       await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      request.mockRejectedValueOnce(new Error('down'));
+      await user.click(await screen.findByRole('button', { name: 'Print' }));
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'The preview could not be generated',
       );
       expect(tab.close).toHaveBeenCalledTimes(1);
       request.mockResolvedValueOnce({ url: 'javascript:alert(1)' });
-      await user.click(screen.getByRole('button', { name: 'Generate Preview' }));
+      await user.click(screen.getByRole('button', { name: 'Print' }));
       await waitFor(() => expect(tab.close).toHaveBeenCalledTimes(2));
       expect(tab.location.href).toBe('');
       open.mockRestore();

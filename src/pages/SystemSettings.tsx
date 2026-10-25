@@ -28,8 +28,10 @@ import { fieldId } from '../components/admin/systemSettings/fieldParts';
 import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
 import OnlineBookingTab from '../components/admin/systemSettings/OnlineBookingTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
+import TrainingModeToggle from '../components/admin/systemSettings/TrainingModeToggle';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
+import { settingsTextSx } from '../components/admin/systemSettings/settingsText';
 
 type TabId = 'settings' | 'folio' | 'registration' | 'online';
 const tabId = (id: string) => `system-settings-tab-${id}`;
@@ -180,7 +182,7 @@ export default function SystemSettings({ readOnly = false }: { readOnly?: boolea
     );
   } else {
     body = (
-      <>
+      <Box sx={settingsTextSx}>
         <Tabs
           value={tab}
           onChange={(_, next: TabId) => setTab(next)}
@@ -227,13 +229,21 @@ export default function SystemSettings({ readOnly = false }: { readOnly?: boolea
           sx={{ outline: 'none' }}
         >
           {tab === 'settings' ? (
-            <SettingsTab
-              value={draft}
-              onChange={editDraft}
-              errors={errors}
-              options={options}
-              readOnly={readOnly}
-            />
+            <>
+              <TrainingModeToggle
+                value={draft}
+                onChange={editDraft}
+                errors={errors}
+                readOnly={readOnly}
+              />
+              <SettingsTab
+                value={draft}
+                onChange={editDraft}
+                errors={errors}
+                options={options}
+                readOnly={readOnly}
+              />
+            </>
           ) : tab === 'registration' ? (
             <RegistrationCardTab
               value={draft.registrationCard}
@@ -249,7 +259,7 @@ export default function SystemSettings({ readOnly = false }: { readOnly?: boolea
             />
           ) : (
             <>
-              <Typography sx={{ mb: 3 }}>
+              <Typography variant="settings_body" sx={{ mb: 3 }}>
                 Folio Details will be displayed in the header of the printed Folio.
               </Typography>
               <FolioDetailsTab
@@ -260,7 +270,7 @@ export default function SystemSettings({ readOnly = false }: { readOnly?: boolea
             </>
           )}
         </Box>
-      </>
+      </Box>
     );
   }
 
@@ -268,6 +278,7 @@ export default function SystemSettings({ readOnly = false }: { readOnly?: boolea
     <AdminShell
       active="System Settings"
       title="System Settings"
+      titleVariant="settings_title"
       actions={saveButton}
       changeLog="system-settings"
     >

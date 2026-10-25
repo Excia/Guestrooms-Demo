@@ -119,6 +119,10 @@ declare module '@mui/material/styles' {
     list_link: CSSProperties;
     menu_heading: CSSProperties;
     button_small: CSSProperties;
+    settings_title: CSSProperties;
+    settings_heading: CSSProperties;
+    settings_body: CSSProperties;
+    settings_tab: CSSProperties;
   }
   interface TypographyVariantsOptions {
     h4_fixed?: CSSProperties;
@@ -126,6 +130,10 @@ declare module '@mui/material/styles' {
     list_link?: CSSProperties;
     menu_heading?: CSSProperties;
     button_small?: CSSProperties;
+    settings_title?: CSSProperties;
+    settings_heading?: CSSProperties;
+    settings_body?: CSSProperties;
+    settings_tab?: CSSProperties;
   }
 }
 
@@ -136,11 +144,17 @@ declare module '@mui/material/Typography' {
     list_link: true;
     menu_heading: true;
     button_small: true;
+    settings_title: true;
+    settings_heading: true;
+    settings_body: true;
+    settings_tab: true;
   }
 }
 
 // Not in Figma variables, intentionally left at MUI defaults: secondary, success, divider,
 // text.disabled. Figma has one unnamed "Secondary" #545454; add it once its role is confirmed.
+/** System Settings text sizes in px (about 1pt, 1.33px, below the first build). */
+export const SETTINGS_TEXT_PX = { title: 16.67, heading: 13.33, body: 14.67, tab: 12.67 } as const;
 const fontFamily = 'Roboto, Helvetica, Arial, sans-serif';
 const primaryMain = '#2e7d32';
 const errorMain = '#d32f2f';
@@ -231,6 +245,14 @@ const base = createTheme({
     button: font(14, 500, 24 / 14, 0.4),
     // Figma button/small (13px Medium): section captions such as "Compare to:" (set uppercase by the caller).
     button_small: { ...font(13, 500, 22 / 13, 0.46), textTransform: 'uppercase' },
+    // System Settings text (owner feedback 2026-10-25: "a bit thick/large"): legacy weights and family
+    // (Roboto; bold title and headings, regular labels), sized down about 1pt from the first build
+    // (title 18 to 16.67, labels 16 to 14.67, tabs 14 to 12.67; headings 14 to 13.33). Input text, floating
+    // labels and hints keep 16px, 12px and 12px so they stay readable. See entries/settings-polish.md.
+    settings_title: font(SETTINGS_TEXT_PX.title, 700, 1.4, 0.15),
+    settings_heading: font(SETTINGS_TEXT_PX.heading, 700, 1.57, 0.1),
+    settings_body: font(SETTINGS_TEXT_PX.body, 400, 1.5, 0.15),
+    settings_tab: font(SETTINGS_TEXT_PX.tab, 500, 1.5, 0.4),
   },
   components: {
     // Hover: non-solid buttons, icon buttons, list rows and unstyled links get the light green tint
@@ -361,6 +383,10 @@ const base = createTheme({
           list_link: 'span',
           menu_heading: 'h2',
           button_small: 'span',
+          settings_title: 'h1',
+          settings_heading: 'h3',
+          settings_body: 'p',
+          settings_tab: 'span',
         },
       },
     },

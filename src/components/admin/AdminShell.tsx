@@ -21,6 +21,8 @@ export interface AdminShellProps {
   sidebarLabel?: string;
   /** Page title (Figma "Section Header"). */
   title: string;
+  /** Typography variant of the title; System Settings uses its own smaller one. */
+  titleVariant?: 'subtitle1' | 'settings_title';
   /** The page's primary save button. */
   actions?: ReactNode;
   /** Adds the Change Log button, which opens the overlay for this page (ticket 7.10). */
@@ -38,6 +40,7 @@ export default function AdminShell({
   sidebar,
   sidebarLabel,
   title,
+  titleVariant = 'subtitle1',
   actions,
   changeLog,
   children,
@@ -170,7 +173,7 @@ export default function AdminShell({
           >
             <Typography
               id="admin-page-title"
-              variant="subtitle1"
+              variant={titleVariant}
               component="h1"
               sx={{ fontWeight: 'bold' }}
             >

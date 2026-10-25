@@ -114,7 +114,16 @@ export default function PhotosField({ photos, onChange, disabled, error, id }: P
               aria-label={`Remove photo ${photo.name}`}
               disabled={disabled}
               onClick={() => onChange(removePhoto(photos, photo.id))}
-              sx={{ position: 'absolute', top: 0, right: 0, color: 'text.secondary' }}
+              sx={{
+                position: 'absolute',
+                top: 0.25,
+                right: 0.25,
+                p: 0.25,
+                color: 'error.main',
+                // A halo, so the red X reads on any photo.
+                bgcolor: 'background.paper',
+                '&:hover': { bgcolor: 'background.paper' },
+              }}
             >
               <Cancel fontSize="small" />
             </IconButton>

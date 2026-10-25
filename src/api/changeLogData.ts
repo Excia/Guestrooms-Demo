@@ -37,6 +37,7 @@ const DESCRIPTIONS: Record<ChangeLogPageId, readonly [string, string][]> = {
     ['updated', 'Folio Details: property address updated'],
     ['setting-changed', 'Service Charge Label changed to "Service Charge"'],
     ['setting-changed', 'Enable Early Check In and Late Check Out turned on'],
+    ['setting-changed', 'Training Mode turned on'],
   ],
   'booking-rules': [
     ['updated', 'Reservation Hold for Member Online Booking changed from 10 to 15 minutes'],

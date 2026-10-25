@@ -3,33 +3,10 @@
 // built from the same rules the backend must follow. PLACEHOLDER sample reservation (see
 // docs/requirements/entries/95-registration-card.md).
 import { buildRegistrationCard, type RegistrationCardModel } from '../app/registrationCard';
-import type {
-  RegistrationCardPreviewRequest,
-  RegistrationCardReservation,
-} from './registrationCardTypes';
+import { SAMPLE_RESERVATION, SAMPLE_SYSTEM_NAME } from '../app/registrationCardSample';
+import type { RegistrationCardPreviewRequest } from './registrationCardTypes';
 
-/** A sample stay that exercises every item: early and late flags, a unique reserver, notes. */
-export const SAMPLE_RESERVATION: RegistrationCardReservation = {
-  confirmationNumber: '123456',
-  checkIn: '2026-10-21',
-  checkOut: '2026-10-24',
-  earlyCheckIn: true,
-  lateCheckOut: true,
-  roomNumber: 'Room 204',
-  roomType: 'King Suite',
-  adults: 2,
-  children: 2,
-  stayTotalCents: 112_500,
-  nights: 3,
-  leadOccupant: {
-    name: 'Jordan Rivers',
-    memberNumber: 'M-10482',
-    phone: '555-010-2200',
-    address: { street: '123 Address Street', city: 'Cincinnati', state: 'OH', zip: '45238' },
-  },
-  reserver: { name: 'Sam Ortega', memberNumber: 'M-20931', phone: '555-010-3300' },
-  publicNotes: 'Late arrival expected after 9 PM.',
-};
+export { SAMPLE_RESERVATION, SAMPLE_SYSTEM_NAME };
 
 const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -91,7 +68,7 @@ export function previewRegistrationCardUrl(request: RegistrationCardPreviewReque
     request.settings,
     request.reservation ?? SAMPLE_RESERVATION,
     request.folio,
-    'Pine Ridge Club',
+    SAMPLE_SYSTEM_NAME,
   );
   const html = renderRegistrationCardHtml(card);
   return URL.createObjectURL(new Blob([html], { type: 'text/html' }));

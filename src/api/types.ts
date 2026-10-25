@@ -884,6 +884,11 @@ export interface SystemSettings {
   mposVisibleAfter: Duration;
   /** A settled folio closes this long after the checkout time. */
   closeSettledFolios: Duration;
+  /**
+   * "Training Mode": the club is practicing, not running live. Turning it on forces the night audit to
+   * run manually (legacy behavior); an automatic audit is refused while it is on.
+   */
+  trainingMode: boolean;
   nightAudit: NightAuditMode;
   /** Daily run time of an automatic night audit; unused while the audit runs manually. */
   nightAuditRunTime: string;
