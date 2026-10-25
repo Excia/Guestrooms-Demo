@@ -104,22 +104,43 @@ export default function ScheduleControls({
           sx={{ width: (t) => t.spacing(14.25) }}
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <IconButton aria-label="Previous page" sx={navSx} onClick={() => onShift(-1, 'page')}>
+          <IconButton
+            aria-label="Previous page"
+            color="primary"
+            sx={navSx}
+            onClick={() => onShift(-1, 'page')}
+          >
             <KeyboardDoubleArrowLeft />
           </IconButton>
-          <IconButton aria-label="Previous day" sx={navSx} onClick={() => onShift(-1, 'day')}>
+          <IconButton
+            aria-label="Previous day"
+            color="primary"
+            sx={navSx}
+            onClick={() => onShift(-1, 'day')}
+          >
             <ChevronLeft />
           </IconButton>
-          <IconButton aria-label="Next day" sx={navSx} onClick={() => onShift(1, 'day')}>
+          <IconButton
+            aria-label="Next day"
+            color="primary"
+            sx={navSx}
+            onClick={() => onShift(1, 'day')}
+          >
             <ChevronRight />
           </IconButton>
-          <IconButton aria-label="Next page" sx={navSx} onClick={() => onShift(1, 'page')}>
+          <IconButton
+            aria-label="Next page"
+            color="primary"
+            sx={navSx}
+            onClick={() => onShift(1, 'page')}
+          >
             <KeyboardDoubleArrowRight />
           </IconButton>
           <IconButton
             aria-label="Choose start date"
             aria-haspopup="dialog"
             aria-expanded={calendarAnchor !== null}
+            color="primary"
             sx={navSx}
             onClick={(e) => setCalendarAnchor(e.currentTarget)}
           >
