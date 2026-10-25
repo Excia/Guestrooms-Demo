@@ -1,6 +1,6 @@
 # 7.11 Locations (Legacy Port LP-A.1)
 
-Tickets Excia/Guestrooms-Demo#182 and #123 (one PR closes both); PR to be linked. Figma: no frame (checked file
+Tickets Excia/Guestrooms-Demo#182 and #123 (one PR closes both); PR Excia/Guestrooms-Demo#192. Figma: no frame (checked file
 `WksR3zAy2S8cDsjrVvRklE`; the Admin Setup frames show the "Locations" item in the left navigation only).
 **Status:** in review (branch `feat/182-locations`), 2026-10-25.
 
