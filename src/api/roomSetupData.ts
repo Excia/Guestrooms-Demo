@@ -118,5 +118,16 @@ export function mockRooms(roomTypes: readonly RoomTypeSetup[]): RoomSetup[] {
       linkedRoomIds: [],
       upcomingReservations: 0,
     },
+    {
+      ...base,
+      id: 'room-300',
+      name: '300 (retired)',
+      startDate: '2020-01-01',
+      endDate: '2022-12-31',
+      roomTypeId: 'rt-king',
+      details: structuredClone(type('rt-king').details),
+      linkedRoomIds: [],
+      upcomingReservations: 0,
+    },
   ];
 }

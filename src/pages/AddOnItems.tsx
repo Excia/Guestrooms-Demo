@@ -26,7 +26,12 @@ import {
 import { showLocations } from '../app/locations';
 import { newRequestId } from '../lib/requestId';
 import { todayIso } from '../app/dateSelection';
-import { duplicateName, isActiveOn, sortSetupItems, type DeleteCheck } from '../app/roomSetup';
+import {
+  duplicateName,
+  sortSetupItems,
+  toSetupListEntries,
+  type DeleteCheck,
+} from '../app/roomSetup';
 import AdminShell from '../components/admin/AdminShell';
 import NightlyCountdownRow from '../components/admin/addOns/NightlyCountdownRow';
 import { useAddOnData, type AddOnData } from '../components/admin/addOns/useAddOnData';
@@ -89,6 +94,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
   const today = useMemo(() => todayIso(), []);
   // One location: the Locations tab is hidden and the add-on belongs to that location.
   const multiLocation = showLocations(options.locations);
+  const listEntries = useMemo(() => toSetupListEntries(data.addOns, today), [data.addOns, today]);
   const sorted = useMemo(() => sortSetupItems(data.addOns, today), [data.addOns, today]);
   // A deleted location or room type drops out of the draft, so counts and hints match what exists.
   const toDraft = useCallback(
@@ -179,11 +185,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
       sidebarLabel="Add-Ons"
       sidebar={
         <SetupList
-          items={sorted.map((a) => ({
-            id: a.id,
-            label: a.name,
-            inactive: !isActiveOn(a, today),
-          }))}
+          items={listEntries}
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Add-On"

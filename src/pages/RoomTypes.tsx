@@ -13,9 +13,9 @@ import {
   checkDeleteRoomType,
   DESCRIPTION_MAX,
   duplicateName,
-  isActiveOn,
   NAME_MAX,
   sortSetupItems,
+  toSetupListEntries,
   validateRoomType,
   type DeleteCheck,
   type RoomTypeField,
@@ -75,6 +75,10 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
   const api = useApi();
   const options = data.options as NonNullable<RoomSetupData['options']>;
   const today = useMemo(() => todayIso(), []);
+  const listEntries = useMemo(
+    () => toSetupListEntries(data.roomTypes, today),
+    [data.roomTypes, today],
+  );
   const sorted = useMemo(() => sortSetupItems(data.roomTypes, today), [data.roomTypes, today]);
   const editor = useSetupEditor<RoomTypeSetup, RoomTypeInput>({
     items: sorted,
@@ -149,11 +153,7 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
       sidebarLabel="Room Types"
       sidebar={
         <SetupList
-          items={sorted.map((t) => ({
-            id: t.id,
-            label: t.name,
-            inactive: !isActiveOn(t, today),
-          }))}
+          items={listEntries}
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Room Type"

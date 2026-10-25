@@ -31,6 +31,19 @@ const loaded = () => screen.findByRole('textbox', { name: /Room Name/ });
 const list = () => screen.getByRole('navigation', { name: 'Rooms' });
 
 describe('Rooms page', () => {
+  it('lists retired rooms last with an Inactive tag', async () => {
+    await renderPage();
+    await loaded();
+    const items = within(list()).getAllByRole('listitem');
+    expect(items.map((li) => li.textContent)).toEqual([
+      '100',
+      '101',
+      '200',
+      '300 (retired)Inactive',
+    ]);
+    expect(within(items[3]).getByText('Inactive')).toBeVisible();
+  });
+
   it('shows the room with inherited details disabled', async () => {
     await renderPage();
     await loaded();

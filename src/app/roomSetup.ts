@@ -289,3 +289,23 @@ export function clampCount(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min;
   return Math.min(max, Math.max(min, Math.round(value)));
 }
+
+export interface SetupListEntry {
+  id: string;
+  label: string;
+  inactive: boolean;
+}
+
+/**
+ * Rows of a setup list (Room Types, Rooms, Add-Ons, Rate Categories): active items first, inactive
+ * ones (outside their active dates) last, each group by name. `inactive` drives the red tag.
+ */
+export function toSetupListEntries<
+  T extends { id: string; name: string; startDate: string; endDate: string | null },
+>(items: readonly T[], today: string): SetupListEntry[] {
+  return sortSetupItems(items, today).map((i) => ({
+    id: i.id,
+    label: i.name,
+    inactive: !isActiveOn(i, today),
+  }));
+}

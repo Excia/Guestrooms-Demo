@@ -15,10 +15,10 @@ import {
   DESCRIPTION_MAX,
   duplicateName,
   effectiveDetails,
-  isActiveOn,
   NAME_MAX,
   setInheritDetails,
   sortSetupItems,
+  toSetupListEntries,
   validateRoom,
   type DeleteCheck,
   type RoomField,
@@ -80,6 +80,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const ownerEnabled = settings?.roomOwnerFieldEnabled === true;
   const options = data.options as NonNullable<RoomSetupData['options']>;
   const today = useMemo(() => todayIso(), []);
+  const listEntries = useMemo(() => toSetupListEntries(data.rooms, today), [data.rooms, today]);
   const sorted = useMemo(() => sortSetupItems(data.rooms, today), [data.rooms, today]);
   const sortedTypes = useMemo(() => sortSetupItems(data.roomTypes, today), [data.roomTypes, today]);
   const typeOptions = useMemo(
@@ -162,11 +163,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       sidebarLabel="Rooms"
       sidebar={
         <SetupList
-          items={sorted.map((r) => ({
-            id: r.id,
-            label: r.name,
-            inactive: !isActiveOn(r, today),
-          }))}
+          items={listEntries}
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Room"

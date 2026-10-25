@@ -43,9 +43,11 @@ describe('Folio Details logo remove badge', () => {
     );
     const remove = await screen.findByRole('button', { name: 'Remove logo' });
     const style = getComputedStyle(remove);
-    expect(style.backgroundColor).toBe('rgb(211, 47, 47)');
-    expect(style.minWidth).toBe('24px');
-    expect(style.minHeight).toBe('24px');
+    expect(style.width).toBe('24px');
+    expect(style.height).toBe('24px');
+    const circle = within(remove).getByTestId('photo-remove-circle');
+    expect(getComputedStyle(circle).backgroundColor).toBe('rgb(211, 47, 47)');
+    expect(getComputedStyle(circle).width).toBe('20px');
     remove.focus();
     expect(remove).toHaveFocus();
     await user.click(remove);
