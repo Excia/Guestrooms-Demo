@@ -26,7 +26,6 @@ import {
   type SystemSettingsField,
 } from '../../../app/systemSettings';
 import Select from '../../shared/Select';
-import SearchLookupField from './SearchLookupField';
 import { ErrorLines, fieldId, Hint, Section } from './fieldParts';
 import LookupField from './LookupField';
 import NightsStepper from './NightsStepper';
@@ -37,7 +36,7 @@ export interface SettingsTabProps {
   onChange: (next: SystemSettings) => void;
   errors: SystemSettingsErrors;
   options: SystemSettingsOptions;
-  /** View mode: the lookups cannot be changed. */
+  /** View mode: every control of the tab is disabled (View-only admin; the page passes it). */
   readOnly?: boolean;
 }
 
@@ -60,10 +59,20 @@ interface DurationRowProps {
   errors: SystemSettingsErrors;
   before?: string;
   after: string;
+  disabled?: boolean;
 }
 
 // "N | Hours or Days | text" row of the MPOS and Close Settled Folios settings (Figma 11895:16081).
-function DurationRow({ field, label, value, onChange, errors, before, after }: DurationRowProps) {
+function DurationRow({
+  field,
+  label,
+  value,
+  onChange,
+  errors,
+  before,
+  after,
+  disabled,
+}: DurationRowProps) {
   const messages = errors[field];
   const errorId = `${fieldId(field)}-error`;
   return (
@@ -85,6 +94,7 @@ function DurationRow({ field, label, value, onChange, errors, before, after }: D
           onChange={(amount) => onChange({ ...value, amount })}
           error={Boolean(messages)}
           describedBy={messages ? errorId : undefined}
+          disabled={disabled}
           sx={{ width: (t) => t.spacing(10) }}
         />
         <Select<DurationUnit>
@@ -94,6 +104,7 @@ function DurationRow({ field, label, value, onChange, errors, before, after }: D
           options={UNITS}
           onChange={(unit) => onChange({ ...value, unit })}
           error={Boolean(messages)}
+          disabled={disabled}
           sx={{ width: (t) => t.spacing(15) }}
         />
         <Typography
@@ -138,6 +149,7 @@ export default function SettingsTab({
       onChange={(e) => setTime(field, e.target.value)}
       error={Boolean(errors[field])}
       helperText={errors[field]?.[0]}
+      disabled={readOnly}
       slotProps={{
         inputLabel: { shrink: true },
         htmlInput: { step: TIME_STEP_MINUTES * 60 },
@@ -151,6 +163,7 @@ export default function SettingsTab({
       <Box sx={{ display: 'flex', flexDirection: 'column' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
           <ToggleRow
+            disabled={readOnly}
             label={`Enable Alternative Base Rate ${n}`}
             checked={rate.enabled}
             onChange={(enabled) => set(key, { ...rate, enabled })}
@@ -159,6 +172,7 @@ export default function SettingsTab({
             <>
               <NightsStepper
                 id={fieldId(key)}
+                disabled={readOnly}
                 label={`Alternative Base Rate ${n} nights`}
                 value={rate.minNights}
                 min={ALT_RATE_NIGHTS.min}
@@ -192,6 +206,7 @@ export default function SettingsTab({
         <Section title="Time Zone">
           <Select
             fullWidth
+            disabled={readOnly}
             label="Time Zone"
             value={value.timeZone}
             options={options.timeZones.map((z) => ({ value: z.id, label: z.label }))}
@@ -205,12 +220,14 @@ export default function SettingsTab({
             {timeField('checkOutTime', 'Checkout Time')}
           </Box>
           <ToggleRow
+            disabled={readOnly}
             label="Enable Early Check In and Late Check Out"
             checked={value.earlyLateEnabled}
             onChange={(v) => set('earlyLateEnabled', v)}
             description="If a reservation has Late Checkout selected, the room(s) will automatically be checked out at the Late Checkout Time instead of the standard Checkout Time."
           >
             <Select
+              disabled={readOnly}
               id={fieldId('lateCheckOutTime')}
               label="Late Checkout Time"
               value={
@@ -240,6 +257,7 @@ export default function SettingsTab({
             value={value.mposVisibleBefore}
             onChange={(v) => set('mposVisibleBefore', v)}
             errors={errors}
+            disabled={readOnly}
             after="before system check in time on the day of check in"
           />
           <DurationRow
@@ -249,6 +267,7 @@ export default function SettingsTab({
             value={value.mposVisibleAfter}
             onChange={(v) => set('mposVisibleAfter', v)}
             errors={errors}
+            disabled={readOnly}
             after="after system checkout time on the day of checkout"
           />
         </Section>
@@ -266,13 +285,14 @@ export default function SettingsTab({
             value={value.closeSettledFolios}
             onChange={(v) => set('closeSettledFolios', v)}
             errors={errors}
+            disabled={readOnly}
             after="after system checkout time"
           />
         </Section>
       </Box>
 
       <Box sx={column}>
-        <FormControl component="fieldset" variant="standard">
+        <FormControl component="fieldset" variant="standard" disabled={readOnly}>
           <FormLabel component="legend" sx={{ typography: 'body2', fontWeight: 'bold', mb: 1 }}>
             Night Audit
           </FormLabel>
@@ -290,6 +310,7 @@ export default function SettingsTab({
               label="Daily Run Time"
               value={value.nightAuditRunTime}
               onChange={(e) => set('nightAuditRunTime', e.target.value)}
+              disabled={readOnly}
               error={Boolean(errors.nightAuditRunTime)}
               helperText={errors.nightAuditRunTime?.[0]}
               slotProps={{
@@ -308,12 +329,14 @@ export default function SettingsTab({
 
         <Section title="Credit Card Options">
           <ToggleRow
+            disabled={readOnly}
             label="Enable Credit Card Authorization"
             checked={value.creditCardAuthorization}
             onChange={(v) => set('creditCardAuthorization', v)}
             description="When enabled, new credit cards added will be authorized for $0.01."
           />
           <ToggleRow
+            disabled={readOnly}
             label="Enable Card Present Transactions"
             checked={value.cardPresentEnabled}
             onChange={(v) => set('cardPresentEnabled', v)}
@@ -321,6 +344,7 @@ export default function SettingsTab({
           >
             <Select
               fullWidth
+              disabled={readOnly}
               label="Default Card Reader"
               value={value.defaultCardReaderId ?? ''}
               options={readerOptions}
@@ -329,7 +353,7 @@ export default function SettingsTab({
           </ToggleRow>
         </Section>
 
-        <FormControl component="fieldset" variant="standard">
+        <FormControl component="fieldset" variant="standard" disabled={readOnly}>
           <FormLabel component="legend" sx={{ typography: 'body2', fontWeight: 'bold', mb: 1 }}>
             Rate Change Handling
           </FormLabel>
@@ -358,6 +382,7 @@ export default function SettingsTab({
 
         <Section title="Member Owners">
           <ToggleRow
+            disabled={readOnly}
             label="Enable Room Owner Field"
             checked={value.roomOwnerFieldEnabled}
             onChange={(v) => set('roomOwnerFieldEnabled', v)}
@@ -370,6 +395,7 @@ export default function SettingsTab({
             label="Label"
             value={value.serviceChargeLabel}
             onChange={(e) => set('serviceChargeLabel', e.target.value)}
+            disabled={readOnly}
             error={Boolean(errors.serviceChargeLabel)}
             helperText={
               <>
@@ -392,6 +418,7 @@ export default function SettingsTab({
 
         <Section title="Transfer Item">
           <LookupField
+            disabled={readOnly}
             id="system-settings-transferItem"
             label="Item | SKU"
             value={value.transferItem}
@@ -401,6 +428,7 @@ export default function SettingsTab({
         </Section>
         <Section title="Guest Rooms Area">
           <LookupField
+            disabled={readOnly}
             id="system-settings-guestRoomsArea"
             label="Area"
             value={value.guestRoomsArea}
@@ -410,6 +438,7 @@ export default function SettingsTab({
         </Section>
         <Section title="Guest Member">
           <LookupField
+            disabled={readOnly}
             id="system-settings-guestMember"
             label="Guest Member"
             value={value.guestMember}
@@ -418,10 +447,11 @@ export default function SettingsTab({
           />
         </Section>
         <Section title="House Account">
-          <SearchLookupField
+          <LookupField
             id={fieldId('houseAccount')}
             label="House Account"
             placeholder="House Account Name"
+            noOptionsText="No house accounts found"
             value={value.houseAccount}
             onChange={(v) => set('houseAccount', v)}
             search={searchHouseAccounts}

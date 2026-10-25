@@ -52,8 +52,7 @@ export function searchHouseAccounts(query: string): LookupRef[] {
   const q = query.trim().toLowerCase();
   return MOCK_HOUSE_ACCOUNTS.filter((a) => a.label.toLowerCase().includes(q))
     .sort((a, b) => a.label.localeCompare(b.label))
-    .slice(0, HOUSE_ACCOUNT_RESULTS_MAX)
-    .map((a) => ({ ...a }));
+    .slice(0, HOUSE_ACCOUNT_RESULTS_MAX);
 }
 
 /** Values from Figma 15957:84617. */

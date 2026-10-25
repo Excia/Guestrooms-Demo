@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
-import type { ApiClient } from '../api/types';
+import { ApiError, type ApiClient } from '../api/types';
 import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
 import { GrantedAccess } from '../app/testing';
 import { useSystemSettings } from '../app/useSystemSettings';
@@ -14,7 +14,7 @@ function Probe() {
   return <output aria-label="early late">{String(settings?.earlyLateEnabled)}</output>;
 }
 
-function renderPage(client: ApiClient = createMockClient()) {
+function renderPage(client: ApiClient = createMockClient(), readOnly = false) {
   return render(
     <ApiProvider client={client}>
       <SystemSettingsProvider>
@@ -22,7 +22,7 @@ function renderPage(client: ApiClient = createMockClient()) {
           <MemoryRouter initialEntries={['/admin/primary-setup']}>
             <Link to="/schedule">Go to schedule</Link>
             <Probe />
-            <SystemSettings />
+            <SystemSettings readOnly={readOnly} />
           </MemoryRouter>
         </GrantedAccess>
       </SystemSettingsProvider>
@@ -596,5 +596,64 @@ describe('SystemSettings page', () => {
     expect(
       await screen.findByRole('dialog', { name: 'System Settings have not been saved.' }),
     ).toBeInTheDocument();
+  });
+
+  it('shows a house account that no longer exists as a field error and focuses it', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = client.systemSettings.save;
+    renderPage({
+      ...client,
+      systemSettings: {
+        ...client.systemSettings,
+        save: (settings, o) =>
+          settings.houseAccount?.id === 'house-2'
+            ? Promise.reject(new ApiError(422, 'gone', { code: 'unknown-house-account' }))
+            : save(settings, o),
+      },
+    });
+    await loaded();
+    const field = screen.getByRole('combobox', { name: 'House Account' });
+    await user.clear(field);
+    await user.type(field, 'banq');
+    await user.click(await screen.findByRole('option', { name: 'Banquet Comp Account' }));
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    expect(
+      await screen.findByText('This house account no longer exists. Choose another.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveFocus(),
+    );
+    expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveAccessibleDescription(
+      'This house account no longer exists. Choose another.',
+    );
+    expect(screen.queryByText(/could not be saved/)).not.toBeInTheDocument();
+    // Choosing another account clears the message.
+    await user.clear(screen.getByRole('combobox', { name: 'House Account' }));
+    await user.type(screen.getByRole('combobox', { name: 'House Account' }), 'club');
+    await user.click(await screen.findByRole('option', { name: 'Club House Account' }));
+    expect(
+      screen.queryByText('This house account no longer exists. Choose another.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables every Settings control and Save in read-only mode', async () => {
+    renderPage(createMockClient(), true);
+    await loaded();
+    const panel = screen.getByRole('tabpanel');
+    const controls = within(panel).queryAllByRole('combobox');
+    controls.push(
+      ...within(panel).queryAllByRole('switch'),
+      ...within(panel).queryAllByRole('radio'),
+      ...within(panel).queryAllByRole('textbox'),
+    );
+    expect(controls.length).toBeGreaterThan(10);
+    for (const control of controls) {
+      const disabled =
+        (control as HTMLInputElement).disabled || control.getAttribute('aria-disabled') === 'true';
+      expect(disabled, control.getAttribute('aria-label') ?? control.id).toBe(true);
+    }
+    expect(screen.getByRole('button', { name: 'Search House Account' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
   });
 });

@@ -81,6 +81,9 @@ describe('mock house accounts', () => {
   it('refuses an account the backend does not know with a 422', async () => {
     const client = createMockClient();
     const bad = { ...mockSystemSettings(), houseAccount: { id: 'nope', label: 'Nope' } };
-    await expect(client.systemSettings.save(bad)).rejects.toMatchObject({ status: 422 });
+    await expect(client.systemSettings.save(bad)).rejects.toMatchObject({
+      status: 422,
+      code: 'unknown-house-account',
+    });
   });
 });

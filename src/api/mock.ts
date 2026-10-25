@@ -907,10 +907,10 @@ export function createMockClient({
           () => {
             const errors = validateSystemSettings(settings);
             const house = settings.houseAccount;
-            if (
-              Object.keys(errors).length > 0 ||
-              (house && !MOCK_HOUSE_ACCOUNTS.some((a) => a.id === house.id))
-            ) {
+            if (house && !MOCK_HOUSE_ACCOUNTS.some((a) => a.id === house.id)) {
+              throw new ApiError(422, 'House account not found', { code: 'unknown-house-account' });
+            }
+            if (Object.keys(errors).length > 0) {
               throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
             }
             systemSettings = structuredClone({
