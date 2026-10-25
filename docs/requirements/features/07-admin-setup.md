@@ -12,6 +12,9 @@ Admin Setup entries (Primary Setup, Rate Categories, Room Types, Rooms, Add-On I
 the routes `/admin/primary-setup`, `/admin/rate-categories`, `/admin/room-types`, `/admin/rooms`,
 `/admin/add-on-items`, `/admin/notifications` (all placeholder pages today). Booking Rules, Keycard
 Integration and Migration Tool have **no route yet**. Responsive: desktop-first, stack below 1200px (D-010).
+**Scrolling (D-AP-4):** from 1200px up the page itself does not scroll: `AdminShell` fills the viewport below the
+app bar, the left navigation and the page header row stay fixed, and only the content body scrolls. Below
+1200px it stacks and scrolls normally.
 All tickets are **not started**.
 
 ## 7.1 Primary Setup / System Settings

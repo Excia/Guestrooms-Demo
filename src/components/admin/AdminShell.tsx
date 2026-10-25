@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router';
 import type { ChangeLogPageId } from '../../api/changeLogTypes';
 import { ADMIN_NAV } from '../../app/adminNav';
+import { HEADER_HEIGHT } from '../../app/layout';
 import { useAccess } from '../../app/useAccess';
 import ChangeLogButton from './changeLog/ChangeLogButton';
 
@@ -29,7 +30,9 @@ export interface AdminShellProps {
 
 // Admin Setup shell (Figma 11964:11725): left navigation, then a white panel with the page title,
 // the primary save button and the content. Desktop-first: below 1200px (lg) the navigation stacks
-// above the panel as a wrapping row (decision D-010).
+// above the panel as a wrapping row and the page scrolls normally (decisions D-010, D-AP-4).
+// From lg up the shell fills the viewport below the app bar and the document never scrolls: the
+// navigation column and the page header stay put, and only the content body scrolls (D-AP-4).
 export default function AdminShell({
   active,
   sidebar,
@@ -50,6 +53,12 @@ export default function AdminShell({
         my: 3,
         bgcolor: 'background.paper',
         minHeight: t.spacing(60),
+        [t.breakpoints.up('lg')]: {
+          // Viewport minus the sticky app bar and the shell's own vertical margins (my: 3, twice).
+          height: `calc(100dvh - ${t.spacing(HEADER_HEIGHT)} - ${t.spacing(6)})`,
+          minHeight: 0,
+          overflow: 'hidden',
+        },
       })}
     >
       <Box
@@ -66,6 +75,9 @@ export default function AdminShell({
             pt: 1.25,
             // The active bar sits against the panel edge (legacy SideBarControl), so no right padding.
             pr: 0,
+            // A long list (or a short window) scrolls inside the column, never the page.
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
           },
         })}
       >
@@ -133,36 +145,72 @@ export default function AdminShell({
       <Box
         component="section"
         aria-labelledby="admin-page-title"
-        sx={{ flex: 1, minWidth: 0, p: 2.5 }}
+        sx={(t) => ({
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          [t.breakpoints.up('lg')]: { minHeight: 0 },
+        })}
       >
+        <Box data-testid="admin-header" sx={{ flexShrink: 0, px: 2.5, pt: 2.5 }}>
+          <Box
+            sx={(t) => ({
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 2,
+              flexWrap: 'wrap',
+              pb: 2,
+              borderBottom: `1px solid ${t.palette.divider}`,
+            })}
+          >
+            <Typography
+              id="admin-page-title"
+              variant="subtitle1"
+              component="h1"
+              sx={{ fontWeight: 'bold' }}
+            >
+              {title}
+            </Typography>
+            {changeLog || actions ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {changeLog ? <ChangeLogButton page={changeLog} /> : null}
+                {actions}
+              </Box>
+            ) : null}
+          </Box>
+        </Box>
+        {/* The only scrolling area from lg up. Focusable so keyboard users can scroll it even when
+            the content has nothing focusable (loading, error). The header sits outside it, so it can
+            never cover a focused field; scroll-padding keeps that field off the container's edge. */}
         <Box
+          role="region"
+          aria-label="Page content"
+          tabIndex={0}
+          data-testid="admin-scroll"
           sx={(t) => ({
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 2,
-            flexWrap: 'wrap',
-            pb: 2,
-            mb: 3.75,
-            borderBottom: `1px solid ${t.palette.divider}`,
+            flex: 1,
+            minWidth: 0,
+            px: 2.5,
+            pt: 3.75,
+            pb: 2.5,
+            // Inset ring: the overflow clip would cut an outer one.
+            '&:focus-visible': {
+              outline: `2px solid ${t.palette.primary.main}`,
+              outlineOffset: -2,
+            },
+            [t.breakpoints.up('lg')]: {
+              minHeight: 0,
+              overflowY: 'auto',
+              overflowX: 'auto',
+              overscrollBehavior: 'contain',
+              scrollPaddingBlock: t.spacing(2),
+            },
           })}
         >
-          <Typography
-            id="admin-page-title"
-            variant="subtitle1"
-            component="h1"
-            sx={{ fontWeight: 'bold' }}
-          >
-            {title}
-          </Typography>
-          {changeLog || actions ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {changeLog ? <ChangeLogButton page={changeLog} /> : null}
-              {actions}
-            </Box>
-          ) : null}
+          {children}
         </Box>
-        {children}
       </Box>
     </Box>
   );
