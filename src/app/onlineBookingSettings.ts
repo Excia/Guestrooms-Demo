@@ -94,7 +94,7 @@ export function cancellationNotice(s: OnlineBookingSettings): CancellationNotice
 /**
  * Whether the add-ons popup follows room selection. This switch is the club-wide master; the
  * per-audience "Display Add-On Popup" row of Booking Rules (7.5) narrows it (Q-96-1). A null row
- * (N/A, employee booking) does not narrow.
+ * (N/A, admin booking) does not narrow.
  */
 export const showAddOnsPopup = (s: OnlineBookingSettings, audienceRule: boolean | null): boolean =>
   s.showAddOnsPopup && audienceRule !== false;

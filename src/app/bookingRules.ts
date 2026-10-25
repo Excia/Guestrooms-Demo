@@ -1,5 +1,6 @@
 // Business rules of Booking Rules (ticket 7.5): column toggles, validation and the lookup the
 // online booking and the admin New Reservation search use. Pure functions; the page only calls them.
+import { MAX_RATE_CENTS } from './rateCategories';
 import type {
   AudienceRules,
   BookingHold,
@@ -83,7 +84,16 @@ export function setUniqueMemberTypeRules(rules: BookingRules, on: boolean): Book
   return { ...rules, uniqueMemberTypeRules: on, memberTypeRules: on ? rules.memberTypeRules : [] };
 }
 
+export const PAYMENTS: readonly AudienceRules['payment'][] = [
+  'optional',
+  'on-file',
+  'deposit',
+  'prepayment',
+];
 export const DEPOSIT_PERCENT = { min: 0.01, max: 100 } as const;
+/** A dollar deposit is at least one cent and at most the largest money value used elsewhere. */
+export const DEPOSIT_MIN_DOLLARS = 0.01;
+export const DEPOSIT_MAX_CENTS: Cents = MAX_RATE_CENTS;
 
 /** Payment method changes clear the deposit unless it is a deposit (which starts as a dollar amount). */
 export function withPayment(
@@ -117,9 +127,13 @@ export function depositError(c: AudienceRules): string | null {
       ? null
       : `Enter a percentage from ${DEPOSIT_PERCENT.min} to ${DEPOSIT_PERCENT.max}, up to 2 decimals.`;
   }
-  return c.depositType === 'amount' && v !== null && Number.isInteger(v) && v > 0
+  return c.depositType === 'amount' &&
+    v !== null &&
+    Number.isInteger(v) &&
+    v >= Math.round(DEPOSIT_MIN_DOLLARS * 100) &&
+    v <= DEPOSIT_MAX_CENTS
     ? null
-    : 'Enter the deposit amount.';
+    : `Enter a deposit from $${DEPOSIT_MIN_DOLLARS} to $${(DEPOSIT_MAX_CENTS / 100).toLocaleString('en-US')}.`;
 }
 
 /**
@@ -130,10 +144,22 @@ export function depositDueCents(
   rule: Pick<AudienceRules, 'payment' | 'depositType' | 'depositValue'>,
   totalCents: Cents,
 ): Cents {
-  if (rule.payment !== 'deposit' || rule.depositValue === null || totalCents <= 0) return 0;
-  if (rule.depositType === 'percent')
-    return Math.round((totalCents * Math.round(rule.depositValue * 100)) / 10_000);
-  return rule.depositType === 'amount' ? Math.min(rule.depositValue, totalCents) : 0;
+  const v = rule.depositValue;
+  if (
+    rule.payment !== 'deposit' ||
+    v === null ||
+    !Number.isFinite(v) ||
+    !Number.isFinite(totalCents)
+  )
+    return 0;
+  if (totalCents <= 0) return 0;
+  const due =
+    rule.depositType === 'percent'
+      ? Math.round((totalCents * Math.round(v * 100)) / 10_000)
+      : rule.depositType === 'amount'
+        ? v
+        : 0;
+  return Math.min(Math.max(due, 0), totalCents);
 }
 
 /**
@@ -142,10 +168,14 @@ export function depositDueCents(
  */
 export function normalizeAudienceRules(raw: AudienceRules): AudienceRules {
   const { depositCents, ...rest } = raw as AudienceRules & { depositCents?: Cents | null };
-  if (raw.depositType !== undefined) return rest;
-  if (depositCents === undefined || depositCents === null)
-    return { ...rest, depositType: null, depositValue: null };
-  return { ...rest, depositType: 'amount', depositValue: depositCents };
+  // An unknown payment value is treated as the safe default instead of blocking the page.
+  const payment = PAYMENTS.includes(raw.payment) ? raw.payment : 'on-file';
+  if (payment !== 'deposit') return { ...rest, payment, depositType: null, depositValue: null };
+  if (raw.depositType === undefined || raw.depositType === null) {
+    const legacy = raw.depositValue ?? depositCents ?? null;
+    return { ...rest, payment, depositType: 'amount', depositValue: legacy };
+  }
+  return { ...rest, payment, depositType: raw.depositType, depositValue: raw.depositValue ?? null };
 }
 
 export const newMemberTypeRule = (id: string): MemberTypeRule => ({

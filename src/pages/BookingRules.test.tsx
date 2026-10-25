@@ -104,12 +104,12 @@ describe('BookingRules page', () => {
     const save = vi.spyOn(client.bookingRules, 'save');
     renderPage(client);
     await loaded();
-    const amount = screen.getByRole('spinbutton', {
-      name: 'Payment Method at Booking, Member Online Booking deposit amount',
+    const amount = screen.getByRole('textbox', {
+      name: 'Amount, Payment Method at Booking, Member Online Booking',
     });
-    expect(amount).toHaveValue(99);
+    expect(amount).toHaveValue('99');
     await user.clear(amount);
-    expect(screen.getByText('Enter the deposit amount.')).toBeInTheDocument();
+    expect(screen.getByText(/Enter a deposit from \$0.01/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
     expect(save).not.toHaveBeenCalled();
     expect(amount).toHaveFocus();
@@ -126,8 +126,8 @@ describe('BookingRules page', () => {
     );
     await user.click(screen.getByRole('option', { name: 'Optional' }));
     expect(
-      screen.queryByRole('spinbutton', {
-        name: 'Payment Method at Booking, Member Online Booking deposit amount',
+      screen.queryByRole('textbox', {
+        name: 'Amount, Payment Method at Booking, Member Online Booking',
       }),
     ).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
@@ -148,15 +148,15 @@ describe('BookingRules page', () => {
     const group = screen.getByRole('group', {
       name: 'Payment Method at Booking, Member Online Booking deposit type',
     });
-    expect(within(group).getByRole('button', { name: 'Dollar amount' })).toHaveAttribute(
+    expect(within(group).getByRole('button', { name: '$ dollar amount' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    await user.click(within(group).getByRole('button', { name: 'Percentage of the total stay' }));
-    const percent = screen.getByRole('spinbutton', {
-      name: 'Payment Method at Booking, Member Online Booking deposit percentage',
+    await user.click(within(group).getByRole('button', { name: '% percentage of the total stay' }));
+    const percent = screen.getByRole('textbox', {
+      name: 'Percent of stay, Payment Method at Booking, Member Online Booking',
     });
-    expect(percent).toHaveValue(null);
+    expect(percent).toHaveValue('');
     await user.type(percent, '150');
     expect(screen.getByText(/Enter a percentage from 0.01 to 100/)).toBeInTheDocument();
     await user.clear(percent);
@@ -168,6 +168,32 @@ describe('BookingRules page', () => {
       depositType: 'percent',
       depositValue: 12.5,
     });
+  });
+
+  it('keeps what is typed in the deposit box and stores the parsed value', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.bookingRules, 'save');
+    renderPage(client);
+    await loaded();
+    const amount = screen.getByRole('textbox', {
+      name: 'Amount, Payment Method at Booking, Member Online Booking',
+    });
+    await user.clear(amount);
+    await user.type(amount, '12.50');
+    expect(amount).toHaveValue('12.50');
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    expect(save.mock.calls[0][0].member).toMatchObject({
+      depositType: 'amount',
+      depositValue: 1250,
+    });
+    await user.clear(amount);
+    await user.type(amount, '1.05');
+    expect(amount).toHaveValue('1.05');
+    await user.type(amount, '9');
+    expect(amount).toHaveValue('1.05');
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    expect(save.mock.calls[1][0].member).toMatchObject({ depositValue: 105 });
   });
 
   it('refuses a hold outside 1 to 99', async () => {

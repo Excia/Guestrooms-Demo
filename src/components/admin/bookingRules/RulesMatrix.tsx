@@ -15,7 +15,7 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type {
   AudienceRules,
   BookingRules,
@@ -28,7 +28,6 @@ import type {
 } from '../../../api/types';
 import {
   setUniqueMemberTypeRules,
-  DEPOSIT_PERCENT,
   toggleColumn,
   withDepositType,
   withPayment,
@@ -150,6 +149,71 @@ function NumberCell({
   );
 }
 
+const toText = (type: DepositType, value: number | null) =>
+  value === null ? '' : String(type === 'percent' ? value : value / 100);
+
+/** Parses what was typed; null for an empty box, undefined for text that is not a number yet. */
+function parseDeposit(type: DepositType, text: string): number | null | undefined {
+  if (text === '') return null;
+  if (!/^\d*\.?\d{0,2}$/.test(text) || text === '.') return undefined;
+  const n = Number(text);
+  return type === 'percent' ? n : Math.round(n * 100);
+}
+
+// Keeps what the person typed ("1.", "12.50") while the stored value is the parsed number.
+function DepositField({
+  id,
+  type,
+  value,
+  message,
+  ariaLabelSuffix,
+  onChange,
+}: {
+  id: string;
+  type: DepositType;
+  value: number | null;
+  message: string | undefined;
+  ariaLabelSuffix: string;
+  onChange: (value: number | null) => void;
+}) {
+  const [draft, setDraft] = useState(toText(type, value));
+  // Follow outside changes (type switch, reload) but not our own commits.
+  if (parseDeposit(type, draft) !== value && !(draft === '.' && value === null)) {
+    setDraft(toText(type, value));
+  }
+  const percent = type === 'percent';
+  const label = percent ? 'Percent of stay' : 'Amount';
+  return (
+    <TextField
+      id={id}
+      label={label}
+      size="small"
+      value={draft}
+      error={Boolean(message)}
+      helperText={message}
+      onChange={(e) => {
+        const parsed = parseDeposit(type, e.target.value);
+        if (parsed === undefined) return;
+        setDraft(e.target.value);
+        onChange(parsed);
+      }}
+      onBlur={() => setDraft(toText(type, value))}
+      slotProps={{
+        inputLabel: { shrink: true },
+        input: percent
+          ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+          : { startAdornment: <InputAdornment position="start">$</InputAdornment> },
+        htmlInput: {
+          inputMode: 'decimal',
+          'aria-label': `${label}, ${ariaLabelSuffix}`,
+          'aria-describedby': message ? `${id}-helper-text` : undefined,
+        },
+      }}
+      sx={{ width: (t) => t.spacing(16) }}
+    />
+  );
+}
+
 const ROWS: RowDef[] = [
   {
     id: 'requireMemberReserver',
@@ -268,10 +332,7 @@ const ROWS: RowDef[] = [
     label: 'Payment Method at Booking',
     cell: (ctx, row) => {
       const message = err(ctx, 'deposit');
-      const depositId = cellId(ctx.audience, 'deposit');
       const type = ctx.col?.depositType ?? 'amount';
-      const percent = type === 'percent';
-      const value = ctx.col?.depositValue ?? null;
       return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <CellSelect<PaymentRequirement>
@@ -294,40 +355,20 @@ const ROWS: RowDef[] = [
                   next && ctx.col && ctx.set(withDepositType(ctx.col, next))
                 }
               >
-                <ToggleButton value="amount" aria-label="Dollar amount">
+                <ToggleButton value="amount" aria-label="$ dollar amount">
                   $
                 </ToggleButton>
-                <ToggleButton value="percent" aria-label="Percentage of the total stay">
+                <ToggleButton value="percent" aria-label="% percentage of the total stay">
                   %
                 </ToggleButton>
               </ToggleButtonGroup>
-              <TextField
-                id={depositId}
-                label={percent ? 'Percent of stay' : 'Amount'}
-                type="number"
-                size="small"
-                value={value === null ? '' : String(percent ? value : value / 100)}
-                error={Boolean(message)}
-                helperText={message}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  ctx.set({
-                    depositValue: e.target.value === '' ? null : percent ? n : Math.round(n * 100),
-                  });
-                }}
-                slotProps={{
-                  inputLabel: { shrink: true },
-                  input: percent
-                    ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
-                    : { startAdornment: <InputAdornment position="start">$</InputAdornment> },
-                  htmlInput: {
-                    min: percent ? DEPOSIT_PERCENT.min : 0.01,
-                    max: percent ? DEPOSIT_PERCENT.max : undefined,
-                    step: 0.01,
-                    'aria-label': `${name(ctx, row)} deposit ${percent ? 'percentage' : 'amount'}`,
-                  },
-                }}
-                sx={{ width: (t) => t.spacing(16) }}
+              <DepositField
+                id={cellId(ctx.audience, 'deposit')}
+                type={type}
+                value={ctx.col.depositValue}
+                message={message}
+                ariaLabelSuffix={name(ctx, row)}
+                onChange={(depositValue) => ctx.set({ depositType: type, depositValue })}
               />
             </Box>
           ) : null}

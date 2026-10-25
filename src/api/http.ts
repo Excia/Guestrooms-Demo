@@ -673,12 +673,10 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
   return body as unknown as SystemSettings;
 }
 
-const PAYMENTS = ['optional', 'on-file', 'deposit', 'prepayment'];
 const isAudience = (v: unknown) =>
   isObject(v) &&
   isObject(v.opens) &&
   isCount(v.holdMinutes) &&
-  PAYMENTS.includes(v.payment as string) &&
   (v.depositType === undefined ||
     v.depositType === null ||
     v.depositType === 'amount' ||

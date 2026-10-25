@@ -213,6 +213,64 @@ describe('validateBookingRules', () => {
     expect(depositDueCents({ ...base, depositType: 'percent', depositValue: 10 }, 0)).toBe(0);
   });
 
+  it('treats a deposit without a type as dollars and keeps the invariant otherwise', () => {
+    const base = rules().member!;
+    expect(
+      normalizeAudienceRules({ ...base, payment: 'deposit', depositType: null, depositValue: 500 }),
+    ).toMatchObject({ depositType: 'amount', depositValue: 500 });
+    expect(
+      normalizeAudienceRules({
+        ...base,
+        payment: 'deposit',
+        depositType: null,
+        depositValue: null,
+      }),
+    ).toMatchObject({ depositType: 'amount', depositValue: null });
+    expect(
+      normalizeAudienceRules({
+        ...base,
+        payment: 'prepayment',
+        depositType: 'percent',
+        depositValue: 5,
+      }),
+    ).toMatchObject({ depositType: null, depositValue: null });
+    expect(
+      normalizeAudienceRules({ ...base, payment: 'on-file', depositCents: 900 } as never),
+    ).toMatchObject({ depositType: null, depositValue: null });
+    const noValue = {
+      ...base,
+      payment: 'deposit',
+      depositType: 'percent',
+      depositValue: undefined,
+    } as never;
+    expect(normalizeAudienceRules(noValue).depositValue).toBeNull();
+    expect(normalizeAudienceRules({ ...base, payment: 'bitcoin' } as never).payment).toBe(
+      'on-file',
+    );
+  });
+
+  it('clamps the deposit due and ignores values that are not numbers', () => {
+    const d = (depositType: 'amount' | 'percent', depositValue: number | null, total: number) =>
+      depositDueCents({ payment: 'deposit', depositType, depositValue }, total);
+    expect(d('amount', -500, 10000)).toBe(0);
+    expect(d('percent', -5, 10000)).toBe(0);
+    expect(d('amount', Number.NaN, 10000)).toBe(0);
+    expect(d('percent', Number.POSITIVE_INFINITY, 10000)).toBe(0);
+    expect(d('amount', 500, Number.NaN)).toBe(0);
+    expect(d('amount', 0, 10000)).toBe(0);
+    expect(d('percent', 0, 10000)).toBe(0);
+    expect(d('percent', 150, 10000)).toBe(10000);
+    expect(d('percent', 100, 999_999_999)).toBe(999_999_999);
+    expect(d('percent', 0.01, 999_999_999)).toBe(100_000);
+  });
+
+  it('bounds a dollar deposit', () => {
+    expect(validateBookingRules(withDeposit('amount', 999_999_999))).toEqual({});
+    expect(
+      validateBookingRules(withDeposit('amount', 1_000_000_000))['member.deposit'],
+    ).toBeDefined();
+  });
+
   it('reads older stored columns that have depositCents as a dollar amount', () => {
     const { depositType: _t, depositValue: _v, ...rest } = rules().member!;
     void _t;

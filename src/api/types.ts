@@ -1262,10 +1262,10 @@ export interface AudienceRules {
   /** `amount`: cents; `percent`: 0.01 to 100 with at most two decimals. Set only for a deposit. */
   depositValue: number | null;
   roomSelection: RoomSelection;
-  /** Room type ids that cannot be booked. Null (N/A) for employee booking. */
+  /** Room type ids that cannot be booked. Null (N/A) for admin booking. */
   excludedRoomTypeIds: string[] | null;
   maxRoomsPerReservation: number;
-  /** Show the add-on popup after room select. Null (N/A) for employee booking. */
+  /** Show the add-on popup after room select. Null (N/A) for admin booking. */
   addOnPopup: boolean | null;
 }
 
