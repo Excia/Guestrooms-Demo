@@ -1038,6 +1038,13 @@ export interface RoomSetupApi {
   listRooms(options?: RequestOptions): Promise<RoomSetup[]>;
   saveRoom(input: RoomInput, options?: RequestOptions): Promise<RoomSetup>;
   deleteRoom(id: string, options?: RequestOptions): Promise<void>;
+  /**
+   * Saves the display order of the rooms (Rooms setup "Reorder"). `roomIds` are the rooms to put first,
+   * in order (the active ones); rooms not listed follow in their current order. `listRooms` and the
+   * Schedule's room rows then use it. 422 `validation` for a duplicate id; 404 `not-found` for an
+   * unknown one. Answers the rooms in the new order.
+   */
+  saveRoomOrder(roomIds: string[], options?: RequestOptions): Promise<RoomSetup[]>;
 }
 
 // ---- room options (Admin Setup, ticket LP-A.2 / 7.12) -----------------------------------------

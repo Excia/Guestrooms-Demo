@@ -10,6 +10,7 @@ import { GrantedAccess, saveButtonName } from '../app/testing';
 import { blankRateCategory } from '../app/rateCategories';
 import { theme } from '../theme';
 import RateCategories from './RateCategories';
+import { clickMoreMenuItem } from './moreMenuTestHelpers';
 
 function renderPage(client: ApiClient = createMockClient(), withSettings = false) {
   const page = (
@@ -229,7 +230,7 @@ describe('Rate Categories page', () => {
     renderPage(client);
     await loaded();
     await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
-    await user.click(screen.getByRole('button', { name: 'Duplicate rate category' }));
+    await clickMoreMenuItem(user, 'Copy Rate Category');
     const dialog = await screen.findByRole('dialog', { name: 'Duplicate Rate Category' });
     const field = within(dialog).getByRole('textbox');
     expect(field).toHaveValue('Member Rate (Copy)');
@@ -266,7 +267,7 @@ describe('Rate Categories page', () => {
     renderPage(client);
     await loaded();
     await user.click(within(list()).getByRole('button', { name: 'Owner Rate' }));
-    await user.click(screen.getByRole('button', { name: 'Delete rate category' }));
+    await clickMoreMenuItem(user, 'Delete Rate Category');
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Delete Owner Rate?');
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
@@ -282,7 +283,7 @@ describe('Rate Categories page', () => {
     renderPage();
     await loaded();
     await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
-    await user.click(screen.getByRole('button', { name: 'Delete rate category' }));
+    await clickMoreMenuItem(user, 'Delete Rate Category');
     const dialog = await screen.findByRole('dialog', { name: 'Cannot delete this rate category' });
     expect(dialog).toHaveTextContent(/3 reservations use it/);
     expect(dialog).toHaveTextContent(/Members default rate category/);
@@ -303,7 +304,7 @@ describe('Rate Categories page', () => {
     vi.spyOn(client.rateCategories, 'delete').mockRejectedValue(
       new ApiError(409, 'in use', { code: 'in-use' }),
     );
-    await user.click(screen.getByRole('button', { name: 'Delete rate category' }));
+    await clickMoreMenuItem(user, 'Delete Rate Category');
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
     expect(await screen.findByText(/is in use and cannot be deleted/)).toBeInTheDocument();
   });
@@ -424,7 +425,7 @@ describe('Rate Categories page', () => {
     const client = createMockClient();
     renderPage(client);
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Duplicate rate category' }));
+    await clickMoreMenuItem(user, 'Copy Rate Category');
     const dialog = await screen.findByRole('dialog', { name: 'Duplicate Rate Category' });
     const { ApiError } = await import('../api/types');
     vi.spyOn(client.rateCategories, 'duplicate').mockRejectedValue(

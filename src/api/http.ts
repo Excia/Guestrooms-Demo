@@ -95,6 +95,7 @@ import {
   assertQuickStatsQuery,
   assertReservationListQuery,
   assertResourceId,
+  assertRoomOrder,
   assertScheduleQuery,
   assertSetHousekeepingRequest,
 } from './validation';
@@ -1771,6 +1772,14 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           : request('/rooms', {}, o, parseRoomSetup, { method: 'POST', body: input }),
       deleteRoom: (id, o) =>
         request(`/rooms/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+      saveRoomOrder: (roomIds, o) =>
+        Promise.resolve().then(() => {
+          assertRoomOrder(roomIds);
+          return request('/rooms/order', {}, o, parseRoomList, {
+            method: 'PUT',
+            body: { roomIds },
+          });
+        }),
     },
     roomOptions: {
       get: (o) => request('/room-options', {}, o, parseRoomOptions),

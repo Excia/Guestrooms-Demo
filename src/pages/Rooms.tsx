@@ -16,6 +16,8 @@ import {
   effectiveDetails,
   NAME_MAX,
   setInheritDetails,
+  activeFirst,
+  isActiveOn,
   sortSetupItems,
   toSetupListEntries,
   validateRoom,
@@ -31,6 +33,7 @@ import DeleteSetupDialog from '../components/admin/roomSetup/DeleteSetupDialog';
 import DetailsFields from '../components/admin/roomSetup/DetailsFields';
 import PhotosField from '../components/admin/roomSetup/PhotosField';
 import SetupActions from '../components/admin/roomSetup/SetupActions';
+import RoomOrderPanel from '../components/admin/roomSetup/RoomOrderPanel';
 import SetupList from '../components/admin/roomSetup/SetupList';
 import {
   useRoomSetupData,
@@ -80,7 +83,8 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const ownerEnabled = settings?.roomOwnerFieldEnabled === true;
   const options = data.options as NonNullable<RoomSetupData['options']>;
   const today = useClubToday();
-  const sorted = useMemo(() => sortSetupItems(data.rooms, today), [data.rooms, today]);
+  // Rooms keep the saved order (Reorder), inactive ones last.
+  const sorted = useMemo(() => activeFirst(data.rooms, today), [data.rooms, today]);
   const listEntries = useMemo(() => toSetupListEntries(sorted, today), [sorted, today]);
   const sortedTypes = useMemo(() => sortSetupItems(data.roomTypes, today), [data.roomTypes, today]);
   const typeOptions = useMemo(
@@ -96,10 +100,17 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const errors = editor.attempted ? validateRoom(draft) : {};
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [toast, setToast] = useState({ open: false, id: 0 });
+  const [toast, setToast] = useState({ open: false, id: 0, message: 'Room Saved' });
   const [deleteCheck, setDeleteCheck] = useState<DeleteCheck | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const orderItems = useMemo(
+    () => sorted.filter((r) => isActiveOn(r, today)).map((r) => ({ id: r.id, label: r.name })),
+    [sorted, today],
+  );
 
   const inheriting = draft.inheritDetails;
   // While inheriting, the fields show the room type's current values.
@@ -124,7 +135,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       });
       await data.refresh();
       editor.afterSave(stored.id);
-      setToast((t) => ({ open: true, id: t.id + 1 }));
+      setToast((t) => ({ open: true, id: t.id + 1, message: 'Room Saved' }));
       return true;
     } catch (error) {
       setSaveError(
@@ -154,6 +165,21 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
     }
   };
 
+  const saveOrder = async (ids: string[]) => {
+    setOrderSaving(true);
+    setOrderError(null);
+    try {
+      await api.roomSetup.saveRoomOrder(ids);
+      await data.refresh();
+      setReordering(false);
+      setToast((t) => ({ open: true, id: t.id + 1, message: 'Room Order Saved' }));
+    } catch {
+      setOrderError('The room order could not be saved. Try again.');
+    } finally {
+      setOrderSaving(false);
+    }
+  };
+
   const title = editor.selected?.name ?? 'New Room';
   return (
     <AdminShell
@@ -162,38 +188,57 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       changeLog="rooms"
       sidebarLabel="Rooms"
       sidebar={
-        <SetupList
-          items={listEntries}
-          selectedId={editor.selectedId}
-          creating={editor.creating}
-          newLabel="New Room"
-          newTitle="New Room"
-          onSelect={editor.select}
-          onNew={editor.startNew}
-        />
+        reordering ? (
+          <RoomOrderPanel
+            items={orderItems}
+            saving={orderSaving}
+            error={orderError}
+            onSave={(ids) => void saveOrder(ids)}
+            onClose={() => {
+              setOrderError(null);
+              setReordering(false);
+            }}
+          />
+        ) : (
+          <SetupList
+            reorder={{
+              label: 'Reorder rooms',
+              onClick: () => editor.guard(() => setReordering(true)),
+            }}
+            items={listEntries}
+            selectedId={editor.selectedId}
+            creating={editor.creating}
+            newLabel="New Room"
+            newTitle="New Room"
+            onSelect={editor.select}
+            onNew={editor.startNew}
+            more={{
+              noun: 'Room',
+              changeLogPage: 'rooms',
+              onDelete: () => {
+                setDeleteError(null);
+                if (editor.selected) setDeleteCheck(checkDeleteRoom(editor.selected));
+              },
+              onCopy: () =>
+                editor.duplicate((saved) => ({
+                  ...structuredClone(saved),
+                  id: undefined,
+                  upcomingReservations: undefined,
+                  name: duplicateName(saved.name),
+                  // Links belong to the original room; the copy starts unlinked.
+                  linkedRoomIds: [],
+                })),
+            }}
+          />
+        )
       }
       actions={
         <SetupActions
-          noun="room"
           saveNoun="Room"
           creating={editor.creating}
           dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
-          onDelete={() => {
-            setDeleteError(null);
-            if (editor.selected) setDeleteCheck(checkDeleteRoom(editor.selected));
-          }}
-          onDuplicate={() =>
-            editor.duplicate((saved) => ({
-              ...structuredClone(saved),
-              id: undefined,
-              upcomingReservations: undefined,
-              name: duplicateName(saved.name),
-              // Links belong to the original room; the copy starts unlinked.
-              linkedRoomIds: [],
-            }))
-          }
           onCancel={editor.cancelNew}
         />
       }
@@ -378,7 +423,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
         open={toast.open}
         saveId={toast.id}
         onClose={() => setToast((t) => ({ ...t, open: false }))}
-        message="Room Saved"
+        message={toast.message}
       />
     </AdminShell>
   );

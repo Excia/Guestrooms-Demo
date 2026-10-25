@@ -173,20 +173,20 @@ describe('inheriting from the room type', () => {
     expect(next.details.bedTypes['bed-king']).toBe(1);
   });
   it('changing the room type keeps edited details while Inherit Details is off', () => {
-    const edited = { ...rooms()[2] };
+    const edited = { ...rooms().find((r) => r.id === 'room-200') as RoomSetup };
     const next = changeRoomType(edited, 'rt-double-queen', types());
     expect(next.inheritDetails).toBe(false);
     expect(next.details.maxOccupancy).toBe(3);
   });
   it('turning Inherit Details on re-reads the room type; off keeps the values', () => {
-    const edited = { ...rooms()[2] };
+    const edited = { ...rooms().find((r) => r.id === 'room-200') as RoomSetup };
     expect(setInheritDetails(edited, true, types()).details.maxOccupancy).toBe(2);
     const off = setInheritDetails(rooms()[0], false, types());
     expect(off.inheritDetails).toBe(false);
     expect(off.details.maxOccupancy).toBe(4);
   });
   it('never touches the owner', () => {
-    const room = { ...rooms()[2] };
+    const room = { ...rooms().find((r) => r.id === 'room-200') as RoomSetup };
     expect(changeRoomType(room, 'rt-double-queen', types()).owner).toEqual(room.owner);
     expect(setInheritDetails(room, true, types()).owner).toEqual(room.owner);
   });
@@ -210,7 +210,13 @@ describe('linked rooms', () => {
   });
   it('removes a deleted room from every link', () => {
     const left = withoutRoom(rooms(), 'room-100');
-    expect(left.map((r) => r.id)).toEqual(['room-101', 'room-200', 'room-300']);
+    expect(left.map((r) => r.id)).toEqual([
+      'room-101',
+      'room-102',
+      'room-103',
+      'room-200',
+      'room-300',
+    ]);
     expect(left.find((r) => r.id === 'room-101')?.linkedRoomIds).toEqual([]);
   });
 });
@@ -219,7 +225,7 @@ describe('deleting', () => {
   it('blocks a room type that rooms use', () => {
     const check = checkDeleteRoomType(types()[0], rooms());
     expect(check.kind).toBe('blocked');
-    expect(check.message).toMatch(/2 rooms use it/);
+    expect(check.message).toMatch(/4 rooms use it/);
     expect(checkDeleteRoomType(types()[2], rooms()).kind).toBe('ok');
   });
   it('counts a retired room too: King Room is used by rooms 200 and 300', () => {

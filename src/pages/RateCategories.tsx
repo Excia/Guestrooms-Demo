@@ -283,27 +283,29 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
           singleNewRow
           onSelect={editor.select}
           onNew={editor.startNew}
+          more={{
+            noun: 'Rate Category',
+            changeLogPage: 'rate-categories',
+            onDelete: () => {
+              setDeleteError(null);
+              if (editor.selected) setDeleteCheck(checkDeleteRateCategory(editor.selected));
+            },
+            onCopy: () =>
+              editor.guard(() => {
+                setDuplicateRequest(newRequestId());
+                setDuplicateError(null);
+                setDuplicating(true);
+              }),
+          }}
         />
       }
       actions={
         <SetupActions
-          noun="rate category"
           saveNoun="Rate Category"
           creating={editor.creating}
           dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
-          onDelete={() => {
-            setDeleteError(null);
-            if (editor.selected) setDeleteCheck(checkDeleteRateCategory(editor.selected));
-          }}
-          onDuplicate={() =>
-            editor.guard(() => {
-              setDuplicateRequest(newRequestId());
-              setDuplicateError(null);
-              setDuplicating(true);
-            })
-          }
           onCancel={editor.cancelNew}
         />
       }

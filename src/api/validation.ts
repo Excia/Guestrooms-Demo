@@ -327,3 +327,14 @@ export function assertDeleteClosureRequest(request: DeleteClosureRequest): void 
   assertRequestId(request.requestId);
   assertResourceId(request.closureId, 'closure');
 }
+
+/** A room order is a list of distinct, non-empty room ids; they go into the body of a request. */
+export function assertRoomOrder(roomIds: unknown): asserts roomIds is string[] {
+  if (!Array.isArray(roomIds) || roomIds.length > 1000) {
+    throw new ApiError(400, 'Invalid room order', { code: 'invalid-order' });
+  }
+  roomIds.forEach((id) => assertResourceId(id as string, 'room'));
+  if (new Set(roomIds).size !== roomIds.length) {
+    throw new ApiError(422, 'Room order lists a room twice', { code: 'validation' });
+  }
+}
