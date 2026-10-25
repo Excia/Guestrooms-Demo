@@ -1,16 +1,15 @@
 import AddCircle from '@mui/icons-material/AddCircle';
-import ShieldMoon from '@mui/icons-material/ShieldMoon';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
 import type { Theme } from '@mui/material/styles';
-import { Link as RouterLink } from 'react-router';
 import type { ScheduleLocation } from '../../api';
 import { ALL_LOCATIONS_LABEL } from '../../app/locationSelection';
-import { NIGHT_AUDIT_HISTORY_PATH } from '../../app/routes';
 import type { IsoDate } from '../../lib/dates';
+import { TOOLBAR_FIELD_SIZE, toolbarWidth } from '../shared/controlSizes';
 import DateField from '../shared/DateField';
+import NightAuditButton from '../shared/NightAuditButton';
 import Select from '../shared/Select';
 
 const ALL_LOCATIONS_VALUE = '__all__';
@@ -41,7 +40,7 @@ export default function ReservationListToolbar({
   onLocations,
   onNewReservation,
 }: ReservationListToolbarProps) {
-  // Figma 14041:71098: both buttons 200px wide with a 16px gap.
+  // Figma 14041:71098: both buttons 200px wide with a 16px gap (Night Audit is the shared button).
   const cta = { width: (t: Theme) => t.spacing(25), whiteSpace: 'nowrap' } as const;
   return (
     <Box
@@ -66,7 +65,8 @@ export default function ReservationListToolbar({
           today={today}
           onChange={(v) => onDates({ checkInFrom: v })}
           fullWidth={false}
-          sx={{ width: (t) => t.spacing(22) }}
+          size={TOOLBAR_FIELD_SIZE}
+          sx={{ width: toolbarWidth('date') }}
         />
         <DateField
           label="To"
@@ -76,21 +76,12 @@ export default function ReservationListToolbar({
           min={checkInFrom || undefined}
           onChange={(v) => onDates({ checkInTo: v })}
           fullWidth={false}
-          sx={{ width: (t) => t.spacing(22) }}
+          size={TOOLBAR_FIELD_SIZE}
+          sx={{ width: toolbarWidth('date') }}
         />
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Button
-          variant="outlined"
-          color="info"
-          size="large"
-          component={RouterLink}
-          to={NIGHT_AUDIT_HISTORY_PATH}
-          startIcon={<ShieldMoon />}
-          sx={[cta, (t) => ({ bgcolor: t.palette.background.paper })]}
-        >
-          Night Audit
-        </Button>
+        <NightAuditButton />
         <Button
           variant="contained"
           color="primary"
@@ -117,7 +108,8 @@ export default function ReservationListToolbar({
               ...locations.map((l) => ({ value: l.id, label: l.name })),
             ]}
             onChange={(v) => onLocations(v === ALL_LOCATIONS_VALUE ? [] : [v])}
-            sx={{ width: (t) => t.spacing(25) }}
+            size={TOOLBAR_FIELD_SIZE}
+            sx={{ width: toolbarWidth('wideSelect') }}
           />
         ) : null}
       </Box>

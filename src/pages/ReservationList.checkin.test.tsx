@@ -50,6 +50,36 @@ const select = async (conf: string) => {
   await userEvent.click(within(row).getByRole('checkbox'));
 };
 
+describe('floating check-in bar', () => {
+  it('floats fixed at the bottom, centred, above the table and below dialogs; follows the selection', async () => {
+    setup(() => 'ok');
+    await rowFor('GR-50402');
+    expect(screen.queryByTestId('bulk-check-in-bar')).toBeNull();
+    await select('GR-50402');
+    const bar = screen.getByTestId('bulk-check-in-bar');
+    expect(bar).toHaveStyle({ position: 'fixed', justifyContent: 'center' });
+    // Above content, under dialogs (modal layer).
+    const z = Number(getComputedStyle(bar).zIndex);
+    expect(z).toBe(theme.zIndex.speedDial);
+    expect(z).toBeLessThan(theme.zIndex.modal);
+    expect(within(bar).getByRole('button', { name: 'CHECK IN 1 ROOM' })).toBeEnabled();
+    expect(screen.getByRole('status')).toHaveTextContent('1 selected, check in button available');
+    await select('GR-50402');
+    expect(screen.queryByTestId('bulk-check-in-bar')).toBeNull();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
+  it('is reachable by keyboard and operable with Enter', async () => {
+    const { checkInRoom } = setup(() => 'ok');
+    await select('GR-50402');
+    const button = screen.getByRole('button', { name: 'CHECK IN 1 ROOM' });
+    button.focus();
+    expect(button).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(checkInRoom).toHaveBeenCalled());
+  });
+});
+
 describe('bulk check-in', () => {
   it('shows no button with nothing selected and counts rooms, not reservations', async () => {
     setup(() => 'ok');
