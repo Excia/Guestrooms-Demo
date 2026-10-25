@@ -37,6 +37,9 @@ export const ROOMS_PATH = '/admin/rooms';
 export const ADD_ON_ITEMS_PATH = '/admin/add-on-items';
 export const RATE_CATEGORIES_PATH = '/admin/rate-categories';
 
+/** Room Options: Features and Bed Sizes (LP-A.2, ticket 7.12); the Admin Setup navigation links to it, the menu does not. */
+export const ROOM_OPTIONS_PATH = '/admin/room-options';
+
 /** Booking Rules (ticket 7.5); the Admin Setup navigation links to it, the menu does not. */
 export const BOOKING_RULES_PATH = '/admin/booking-rules';
 /** Keycard Integration (ticket 7.6); the Admin Setup navigation links to it, the menu does not. */
@@ -123,6 +126,13 @@ export const routes = [
   { id: 'room-types', path: ROOM_TYPES_PATH, title: 'Room Types', section: 'admin' },
   { id: 'rooms', path: ROOMS_PATH, title: 'Rooms', section: 'admin' },
   { id: 'add-on-items', path: ADD_ON_ITEMS_PATH, title: 'Add-On Items', section: 'admin' },
+  {
+    id: 'room-options',
+    path: ROOM_OPTIONS_PATH,
+    title: 'Room Options',
+    section: 'admin',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
+  },
   {
     id: 'notifications',
     path: '/admin/notifications',

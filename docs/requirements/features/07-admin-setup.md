@@ -324,3 +324,26 @@ table sits next to it).
   retention, sort toggling, filters); typed API `changeLog` (`src/api/changeLogTypes.ts`) with a mock that filters,
   sorts, pages and drops entries older than a year. Details in [entries/97-change-log.md](entries/97-change-log.md).
 - **Open questions:** Q-97-1, Q-97-2, Q-97-3.
+
+## 7.12 Room Options (Features and Bed Sizes)
+
+Excia/Guestrooms-Demo#124 (main board) and #183 (Legacy Port LP-A.2); one PR closes both. No Figma frame:
+the legacy page is the reference (see [entries/183-room-options.md](entries/183-room-options.md)).
+
+- **Requirements:** two lists, Features (offered as associations on Room Types and Rooms) and Bed Sizes
+  (quantity-selectable on Room Type or Room setup). "Add Feature" / "Add Bed Size", "Remove" (later items move
+  up), 50 characters per item, no duplicates in a list (case-insensitive). Removing an item in use is handled
+  (rule below). The same list feeds Room Types, Rooms and the Schedule's Room Features filter.
+- **Implemented:** `src/pages/RoomOptions.tsx` at `/admin/room-options` (Admin Setup navigation "Room Options"),
+  two tabs Features and Bed Sizes over one draft and one **Save Room Options** button, Change Log button, save toast,
+  Confirm Leaving while the draft differs from what is saved. Pure rules in `src/app/featureBedOptions.ts`
+  (validation, dirty check, in-use check and its message), unit-tested. API `roomOptions.get` / `save` (replace both
+  lists, idempotent on `requestId`). The mock keeps the one list (`src/api/roomOptionsData.ts`);
+  `roomSetup.getOptions` and `schedule.get` read it, so the duplicated feature and bed lists are gone.
+- **In-use rule:** the page and the API refuse to remove a Feature ticked, or a Bed Size with a quantity above 0,
+  on any Room Type or Room (409 `in-use`, nothing saved). The page names what uses it. Legacy asks "Are you sure?"
+  and leaves the check to its server (unknown); this follows the Room Types delete rule. Q-183-1.
+- **Not built:** per-item usage counts in the list, drag reordering, renaming that propagates a notice to open
+  Room Types tabs, a separate Bed Sizes / Features page per legacy route (one page with two tabs instead).
+- **Status:** in review, 2026-10-25.
+- **Open questions:** Q-183-1, Q-183-2, Q-183-3.
