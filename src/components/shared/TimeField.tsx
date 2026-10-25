@@ -8,11 +8,13 @@ import TextField from '@mui/material/TextField';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import type { SxProps, Theme } from '@mui/material/styles';
-import { useRef, useState } from 'react';
+import { visuallyHidden } from '@mui/utils';
+import { useId, useRef, useState } from 'react';
 import {
   formatFieldTime,
   fromClockParts,
   halfDayHasAllowed,
+  isCompleteTypedTime,
   nearestAllowed,
   parseTypedTime,
   toClockParts,
@@ -35,6 +37,8 @@ export interface TimeFieldProps {
   error?: boolean;
   helperText?: string;
   disabled?: boolean;
+  /** Turns the clock button off (nothing to pick); the field stays typeable. */
+  pickerDisabled?: boolean;
   size?: 'small' | 'medium';
   sx?: SxProps<Theme>;
 }
@@ -58,6 +62,7 @@ export default function TimeField({
   error,
   helperText,
   disabled,
+  pickerDisabled,
   size = 'medium',
   sx,
 }: TimeFieldProps) {
@@ -78,17 +83,33 @@ export default function TimeField({
     const start = nearestAllowed(current ?? NOON, step, isAllowed) ?? current ?? NOON;
     setParts(toClockParts(current !== null && isAllowed(current) ? current : start));
     setMode('hours');
+    setAnnounce('Hours');
     setOpen(true);
   };
-  const close = (focusInput = true) => {
-    refocus.current = focusInput;
+  // Every way out (Escape, backdrop, Cancel, OK) puts focus back in the input and drops stale text.
+  const close = () => {
+    refocus.current = true;
+    setTyped(null);
     setOpen(false);
+  };
+  const [announce, setAnnounce] = useState('');
+  const hintId = useId();
+  const restricted = isAllowed !== ALL;
+  const changeMode = (next: ClockMode, p: ClockParts = parts) => {
+    setMode(next);
+    setAnnounce(
+      next === 'hours' ? `Hours, ${p.hour}` : `Minutes, ${String(p.minute).padStart(2, '0')}`,
+    );
+  };
+  // Typed text applies once complete; the rest waits for blur or Enter.
+  const commitTyped = (text: string) => {
+    const parsed = parseTypedTime(text);
+    if (parsed !== null) onChange(parsed);
   };
   const accept = () => {
     const total = fromClockParts(parts);
     if (!isAllowed(total)) return;
     onChange(formatTimeValue(total));
-    setTyped(null);
     close();
   };
 
@@ -107,7 +128,7 @@ export default function TimeField({
         size="small"
         edge="end"
         color="primary"
-        disabled={disabled}
+        disabled={disabled || pickerDisabled}
         aria-label={`Choose ${name}`}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -116,7 +137,7 @@ export default function TimeField({
           input.current?.focus();
           openPicker();
         }}
-        sx={{ p: 0.5 }}
+        sx={{ p: 0.5, minWidth: (t) => t.spacing(4), minHeight: (t) => t.spacing(4) }}
       >
         <AccessTime fontSize="small" />
       </IconButton>
@@ -135,10 +156,7 @@ export default function TimeField({
           const text = e.target.value;
           setTyped(text);
           if (text.trim() === '') onChange('');
-          else {
-            const parsed = parseTypedTime(text);
-            if (parsed !== null) onChange(parsed);
-          }
+          else if (isCompleteTypedTime(text)) commitTyped(text);
         }}
         error={error}
         helperText={helperText}
@@ -153,6 +171,7 @@ export default function TimeField({
             onBlur: (e: React.FocusEvent<HTMLElement>) => {
               if (open || (e.relatedTarget instanceof Node && anchor?.contains(e.relatedTarget)))
                 return;
+              if (typed !== null) commitTyped(typed);
               setTyped(null);
             },
           },
@@ -160,6 +179,10 @@ export default function TimeField({
           htmlInput: {
             autoComplete: 'off',
             onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' && typed !== null) {
+                commitTyped(typed);
+                setTyped(null);
+              }
               if ((e.altKey && e.key === 'ArrowDown') || e.key === 'F4') {
                 e.preventDefault();
                 openPicker();
@@ -172,7 +195,7 @@ export default function TimeField({
       <Popover
         open={open}
         anchorEl={anchor}
-        onClose={(_, reason) => close(reason === 'escapeKeyDown')}
+        onClose={close}
         disableRestoreFocus
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
@@ -194,13 +217,16 @@ export default function TimeField({
             exclusive
             size="small"
             value={mode}
-            onChange={(_, next: ClockMode | null) => next && setMode(next)}
+            onChange={(_, next: ClockMode | null) => next && changeMode(next)}
             aria-label="Hours or minutes"
           >
-            <ToggleButton value="hours" aria-label="Hours">
+            <ToggleButton value="hours" aria-label={`Hours ${String(parts.hour).padStart(2, '0')}`}>
               {String(parts.hour).padStart(2, '0')}
             </ToggleButton>
-            <ToggleButton value="minutes" aria-label="Minutes">
+            <ToggleButton
+              value="minutes"
+              aria-label={`Minutes ${String(parts.minute).padStart(2, '0')}`}
+            >
               {String(parts.minute).padStart(2, '0')}
             </ToggleButton>
           </ToggleButtonGroup>
@@ -226,12 +252,21 @@ export default function TimeField({
           step={step}
           isAllowed={isAllowed}
           onChange={setParts}
+          describedBy={restricted ? hintId : undefined}
           onHourDone={() => {
-            setMode('minutes');
+            changeMode('minutes');
             dial.current?.focus();
           }}
           onMinuteDone={accept}
         />
+        <Box role="status" aria-live="polite" sx={visuallyHidden}>
+          {announce}
+        </Box>
+        {restricted ? (
+          <Box id={hintId} sx={visuallyHidden}>
+            Times that are not available are greyed out and skipped.
+          </Box>
+        ) : null}
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
           <Button size="small" onClick={() => close()}>
             Cancel

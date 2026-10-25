@@ -73,6 +73,7 @@ export default function Pagination({
       <Select
         inlineLabel
         size={TOOLBAR_FIELD_SIZE}
+        sx={{ minWidth: (t) => t.spacing(24) }}
         label="Rows per page"
         value={rowsPerPage}
         options={options}

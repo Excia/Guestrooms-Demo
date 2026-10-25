@@ -55,8 +55,29 @@ describe('SystemSettings page', () => {
     renderPage();
     await loaded();
     await user.click(screen.getByRole('button', { name: 'Choose check in time' }));
-    await user.click(await screen.findByRole('button', { name: 'Minutes' }));
+    await user.click(await screen.findByRole('button', { name: /^Minutes/ }));
     expect(screen.getByRole('slider', { name: 'Minutes' })).toHaveAttribute('aria-valuemax', '55');
+  });
+
+  it('disables every clock button in a view-only page', async () => {
+    renderPage(createMockClient(), true);
+    await loaded();
+    expect(screen.getByRole('button', { name: 'Choose check in time' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Choose checkout time' })).toBeDisabled();
+    expect(screen.getByLabelText('Check In Time')).toBeDisabled();
+  });
+
+  it('explains and turns off the late checkout clock when check in is not after checkout', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    const checkIn = screen.getByLabelText('Check In Time');
+    await user.clear(checkIn);
+    await user.type(checkIn, '11:00 AM');
+    expect(screen.getByRole('button', { name: 'Choose late checkout time' })).toBeDisabled();
+    expect(
+      screen.getByText(/Set a check-in time later than the checkout time/),
+    ).toBeInTheDocument();
   });
 
   it('hides the late checkout field while early check in and late check out is off', async () => {

@@ -3,6 +3,7 @@ import {
   fromClockParts,
   hourAtAngle,
   minuteAtAngle,
+  isCompleteTypedTime,
   nearestAllowed,
   parseTypedTime,
   pointAngle,
@@ -28,20 +29,32 @@ describe('clock parts', () => {
 describe('parseTypedTime', () => {
   it.each([
     ['4:05 pm', '16:05'],
+    ['4:05 p.m.', '16:05'],
     ['04:05PM', '16:05'],
     ['12:00 AM', '00:00'],
     ['12:30 pm', '12:30'],
     ['4 PM', '16:00'],
     ['16:05', '16:05'],
   ])('reads %s', (text, expected) => expect(parseTypedTime(text)).toBe(expected));
-  it.each(['', 'abc', '13:00 PM', '0:30 AM', '4:75 PM', '25:00', '4'])('rejects %s', (text) =>
-    expect(parseTypedTime(text)).toBeNull(),
-  );
+  it.each([
+    '',
+    'abc',
+    '4:05 m',
+    '4:05 a',
+    '4:05.',
+    '4:05 pmx',
+    '13:00 PM',
+    '0:30 AM',
+    '4:75 PM',
+    '25:00',
+    '4',
+  ])('rejects %s', (text) => expect(parseTypedTime(text)).toBeNull());
 });
 
 describe('dial geometry', () => {
   it("turns a point into a clockwise angle from 12 o'clock", () => {
     expect(pointAngle(0, -1)).toBe(0);
+    expect(pointAngle(0, 0)).toBeNull();
     expect(pointAngle(1, 0)).toBe(90);
     expect(pointAngle(0, 1)).toBe(180);
     expect(pointAngle(-1, 0)).toBe(270);
@@ -70,5 +83,13 @@ describe('allowed times', () => {
     expect(stepHour(parts, -1, 5, afternoon)).toBe(2);
     expect(stepMinute({ hour: 3, minute: 0, pm: true }, 1, 5, afternoon)).toBe(0);
     expect(stepMinute({ hour: 12, minute: 5, pm: true }, -1, 5, afternoon)).toBe(55);
+  });
+});
+
+describe('isCompleteTypedTime', () => {
+  it('waits for a meridiem or a full 24 hour time', () => {
+    for (const t of ['4:05 pm', '4:05PM', '16:05', '4 p.m.'])
+      expect(isCompleteTypedTime(t)).toBe(true);
+    for (const t of ['4', '4:0', '4:05', '4:05 ']) expect(isCompleteTypedTime(t)).toBe(false);
   });
 });

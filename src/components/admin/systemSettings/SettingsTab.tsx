@@ -251,7 +251,13 @@ export default function SettingsTab({
               isAllowed={(t) => lateOptions.has(formatTimeValue(t))}
               onChange={(v) => set('lateCheckOutTime', v)}
               error={Boolean(errors.lateCheckOutTime)}
-              helperText={errors.lateCheckOutTime?.[0]}
+              helperText={
+                errors.lateCheckOutTime?.[0] ??
+                (lateOptions.size === 0
+                  ? 'Set a check-in time later than the checkout time to choose a late checkout.'
+                  : undefined)
+              }
+              pickerDisabled={lateOptions.size === 0}
               sx={{ minWidth: (t) => t.spacing(25) }}
             />
           </ToggleRow>

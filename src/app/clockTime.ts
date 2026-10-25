@@ -33,7 +33,7 @@ export function formatFieldTime(value: string): string {
  * time. Whether it is on the 5-minute step is the form validation's job, not the parser's.
  */
 export function parseTypedTime(text: string): string | null {
-  const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?\s*$/i.exec(text);
+  const m = /^\s*(\d{1,2})(?::(\d{2}))?(?:\s*([ap])\.?m\.?)?\s*$/i.exec(text);
   if (!m) return null;
   const hours = Number(m[1]);
   const minutes = m[2] === undefined ? 0 : Number(m[2]);
@@ -46,8 +46,12 @@ export function parseTypedTime(text: string): string | null {
   return formatTimeValue(hours * 60 + minutes);
 }
 
-/** Clockwise angle in degrees (0 = 12 o'clock, 0 to 360) of a point relative to the dial centre. */
-export function pointAngle(dx: number, dy: number): number {
+/**
+ * Clockwise angle in degrees (0 = 12 o'clock, 0 to 360) of a point relative to the dial centre;
+ * null at the exact centre, where no direction exists.
+ */
+export function pointAngle(dx: number, dy: number): number | null {
+  if (dx === 0 && dy === 0) return null;
   const deg = (Math.atan2(dx, -dy) * 180) / Math.PI;
   return (deg + 360) % 360;
 }
@@ -121,3 +125,10 @@ export function stepMinute(
   }
   return null;
 }
+
+/**
+ * Whether typed text is complete enough to apply while typing: it ends in AM/PM or is a full
+ * 24 hour HH:mm. Anything else (4, 4:0, 4:05) waits for blur or Enter.
+ */
+export const isCompleteTypedTime = (text: string): boolean =>
+  /[ap]\.?m\.?\s*$/i.test(text) || /^\s*\d{2}:\d{2}\s*$/.test(text);

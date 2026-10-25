@@ -28,6 +28,8 @@ export interface ClockDialProps {
   onHourDone: () => void;
   /** Enter on the minutes face: accept the time. */
   onMinuteDone: () => void;
+  /** Id of an element describing the dial (e.g. that unavailable times are skipped). */
+  describedBy?: string;
   ref?: Ref<SVGSVGElement>;
 }
 
@@ -53,10 +55,13 @@ export default function ClockDial({
   onChange,
   onHourDone,
   onMinuteDone,
+  describedBy,
   ref,
 }: ClockDialProps) {
   const theme = useTheme();
   const dragging = useRef(false);
+  // Whether the latest pick of the gesture chose something (a greyed value or a miss does not).
+  const picked = useRef(false);
   const hours = mode === 'hours';
   const value = hours ? parts.hour : parts.minute;
   const angle = hours ? hourAngle(parts.hour) : minuteAngle(parts.minute);
@@ -83,15 +88,32 @@ export default function ClockDial({
     return true;
   };
 
-  const pick = (e: PointerEvent<SVGSVGElement>) => {
+  // Dial angle of a pointer position; null off the dial, at the exact centre, or without layout.
+  const locate = (e: PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    if (rect.width === 0) return false;
+    if (rect.width === 0) return null;
     const scale = SIZE / rect.width;
-    const a = pointAngle(
-      (e.clientX - rect.left) * scale - CENTRE,
-      (e.clientY - rect.top) * scale - CENTRE,
-    );
-    return choose(hours ? hourAtAngle(a) : minuteAtAngle(a, step));
+    const dx = (e.clientX - rect.left) * scale - CENTRE;
+    const dy = (e.clientY - rect.top) * scale - CENTRE;
+    if (Math.hypot(dx, dy) > CENTRE) return null;
+    return pointAngle(dx, dy);
+  };
+
+  const pick = (e: PointerEvent<SVGSVGElement>) => {
+    const a = locate(e);
+    picked.current = a !== null && choose(hours ? hourAtAngle(a) : minuteAtAngle(a, step));
+  };
+
+  const stepBy = (dir: 1 | -1, count: number) => {
+    let current = parts;
+    for (let i = 0; i < count; i += 1) {
+      const next = hours
+        ? stepHour(current, dir, step, isAllowed)
+        : stepMinute(current, dir, step, isAllowed);
+      if (next === null) break;
+      current = hours ? { ...current, hour: next } : { ...current, minute: next };
+    }
+    if (current !== parts) onChange(current);
   };
 
   const onKeyDown = (e: KeyboardEvent<SVGSVGElement>) => {
@@ -103,10 +125,11 @@ export default function ClockDial({
           : 0;
     if (dir) {
       e.preventDefault();
-      const next = hours
-        ? stepHour(parts, dir, step, isAllowed)
-        : stepMinute(parts, dir, step, isAllowed);
-      if (next !== null) choose(next);
+      stepBy(dir, 1);
+    } else if (e.key === 'PageUp' || e.key === 'PageDown') {
+      e.preventDefault();
+      // A quarter of the face: 3 hours or 15 minutes.
+      stepBy(e.key === 'PageUp' ? 1 : -1, hours ? 3 : 15 / step);
     } else if (e.key === 'Home' || e.key === 'End') {
       e.preventDefault();
       const candidates = hours ? HOURS : Array.from({ length: 60 / step }, (_, i) => i * step);
@@ -120,7 +143,10 @@ export default function ClockDial({
     }
   };
 
-  const valueText = hours ? `${parts.hour} o'clock` : `${parts.minute} minutes`;
+  const half = parts.pm ? 'PM' : 'AM';
+  const valueText = hours
+    ? `${parts.hour} ${half}`
+    : `${parts.minute} minutes, ${parts.hour}:${String(parts.minute).padStart(2, '0')} ${half}`;
 
   return (
     <Box
@@ -130,13 +156,14 @@ export default function ClockDial({
       role="slider"
       tabIndex={0}
       aria-label={hours ? 'Hours' : 'Minutes'}
-      aria-orientation="horizontal"
+      aria-describedby={describedBy}
       aria-valuemin={hours ? 1 : 0}
       aria-valuemax={hours ? 12 : 60 - step}
       aria-valuenow={value}
       aria-valuetext={valueText}
       onKeyDown={onKeyDown}
       onPointerDown={(e: PointerEvent<SVGSVGElement>) => {
+        if (e.button !== 0) return;
         dragging.current = true;
         e.currentTarget.setPointerCapture?.(e.pointerId);
         pick(e);
@@ -144,10 +171,11 @@ export default function ClockDial({
       onPointerMove={(e: PointerEvent<SVGSVGElement>) => {
         if (dragging.current) pick(e);
       }}
-      onPointerUp={() => {
+      onPointerUp={(e: PointerEvent<SVGSVGElement>) => {
         if (!dragging.current) return;
         dragging.current = false;
-        if (hours) onHourDone();
+        // Move on to the minutes only when an hour was chosen and the release is on the dial.
+        if (hours && picked.current && locate(e) !== null) onHourDone();
       }}
       onPointerCancel={() => {
         dragging.current = false;
