@@ -58,8 +58,8 @@ export function housekeepingFillToken(status: HousekeepingStatus): HousekeepingF
   }
 }
 
-/** Width of the Early Check In / Late Check Out tab, in theme spacing units (6px). */
-export const EDGE_TAB_SPACING = 0.75;
+/** Width of the Early Check In / Late Check Out tab, in theme spacing units (4px, owner decision 2026-10-25). */
+export const EDGE_TAB_SPACING = 0.5;
 
 /** Legacy closure fill: grey 45 degree stripes (3px steps), from the `closureStripe*` tokens. */
 export function closureStripes(c: ScheduleColors): string {
