@@ -8,6 +8,8 @@ Follow-up to 3.1 (list) and 3.2 (bulk check-in); no separate ticket. Figma: Rese
 | ID      | Area | Figma | Built | Why | Choice |
 | ------- | ---- | ----- | ----- | --- | ------ |
 | F-178-1 | Check-in bar | Centred button under the table | Same button, fixed centred near the viewport bottom while rooms are ticked | Owner asked for a floating bar | owner |
+| F-178-2 | Pager rows-per-page | Filled select (Figma 20:2576) | Kept filled (144px wide), outside the toolbar standard | Figma draws it filled on purpose | Figma |
+
 ## Open questions
 
 None.
