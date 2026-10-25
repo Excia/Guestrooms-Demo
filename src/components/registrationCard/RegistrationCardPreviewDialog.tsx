@@ -1,4 +1,3 @@
-import Close from '@mui/icons-material/Close';
 import Print from '@mui/icons-material/Print';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -7,12 +6,11 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
 import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 import type { RegistrationCardModel } from '../../app/registrationCard';
 import { openCardErrorMessage, openCardInNewTab } from '../../app/openCardPreview';
+import DialogHeader from '../shared/DialogHeader';
 import RegistrationCardSheet from './RegistrationCardSheet';
 
 export interface RegistrationCardPreviewDialogProps {
@@ -68,15 +66,12 @@ export default function RegistrationCardPreviewDialog({
         paper: { sx: { maxWidth: (t) => t.spacing(100), maxHeight: '90vh', m: 2 } },
       }}
     >
-      <DialogTitle
+      <DialogHeader
         id={titleId}
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}
-      >
-        Registration Card Preview
-        <IconButton aria-label="Close preview" onClick={close} edge="end">
-          <Close />
-        </IconButton>
-      </DialogTitle>
+        title="Registration Card Preview"
+        onClose={close}
+        closeLabel="Close preview"
+      />
       <DialogContent dividers sx={{ bgcolor: 'grey.100', p: { xs: 1.5, sm: 3 } }}>
         <RegistrationCardSheet card={card} />
       </DialogContent>
