@@ -3,13 +3,12 @@ import CloseIcon from '@mui/icons-material/Close';
 import Box from '@mui/material/Box';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useId } from 'react';
+import DialogHeader from '../shared/DialogHeader';
 import { roomResultLabel, summarizeCheckIn, type RoomCheckInResult } from '../../app/bulkCheckIn';
 
 export interface CheckInResultDialogProps {
@@ -30,14 +29,7 @@ export default function CheckInResultDialog({ open, results, onClose }: CheckInR
   const heading = summary.successTitle ?? summary.failureTitle;
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth aria-labelledby={`${id}-title`}>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1, px: 1 }}>
-        <IconButton aria-label="Close" onClick={onClose} autoFocus>
-          <CloseIcon />
-        </IconButton>
-      </Box>
-      <DialogTitle id={`${id}-title`} component="h2">
-        {heading}
-      </DialogTitle>
+      <DialogHeader id={`${id}-title`} title={heading ?? ''} onClose={onClose} closeAutoFocus />
       <Box role="status" sx={visuallyHidden}>
         {summary.announcement}
       </Box>

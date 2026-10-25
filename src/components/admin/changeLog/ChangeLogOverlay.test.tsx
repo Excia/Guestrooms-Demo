@@ -21,7 +21,7 @@ const loaded = () => screen.findAllByRole('cell', { name: /^(Mon|Tue|Wed|Thu|Fri
 describe('ChangeLogOverlay', () => {
   it('names the page, lists the five columns and formats date and time', async () => {
     renderOverlay();
-    expect(screen.getByRole('dialog', { name: 'System Settings Change Log' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'System Settings: Change Log' })).toBeInTheDocument();
     await loaded();
     const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
     expect(headers[0]).toMatch(/^Date/);
@@ -214,7 +214,7 @@ describe('ChangeLogOverlay', () => {
 
   it('is a modal dialog, not a full-screen page', async () => {
     renderOverlay();
-    const dialog = screen.getByRole('dialog', { name: 'System Settings Change Log' });
+    const dialog = screen.getByRole('dialog', { name: 'System Settings: Change Log' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog.className).not.toMatch(/fullScreen/);
     // 85vw wide and 80vh tall, like the legacy hub change log modal (jsdom window: 1024 x 768).
