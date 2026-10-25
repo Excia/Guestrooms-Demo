@@ -201,3 +201,24 @@ describe('hover tint', () => {
     ).toBeUndefined();
   });
 });
+
+describe('season colour tokens (Rate Categories)', () => {
+  const { neutral, tones } = theme.palette.season;
+  const text = theme.palette.text.primary;
+  it('has six tones and a neutral one for the default season', () => {
+    expect(tones).toHaveLength(6);
+    expect(new Set(tones.map((t) => t.band)).size).toBe(6);
+    expect(new Set(tones.map((t) => t.accent)).size).toBe(6);
+  });
+  it('keeps the text AA (4.5:1) on every row tint and title band', () => {
+    for (const tone of [neutral, ...tones]) {
+      expect(getContrastRatio(text, tone.row)).toBeGreaterThanOrEqual(4.5);
+      expect(getContrastRatio(text, tone.band)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps the colour edge visible on white (3:1 for graphics)', () => {
+    for (const tone of [neutral, ...tones]) {
+      expect(getContrastRatio(tone.accent, '#ffffff')).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
