@@ -1,10 +1,7 @@
-import Close from '@mui/icons-material/Close';
 import Dialog from '@mui/material/Dialog';
-import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
 import { useId, type ReactNode } from 'react';
+import DialogHeader from './DialogHeader';
 import { focusOnMount } from './focusOnMount';
 
 export interface NonActionableDialogProps {
@@ -39,12 +36,13 @@ export default function NonActionableDialog({
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-body`}
     >
-      <DialogActions sx={{ pb: 0 }}>
-        <IconButton ref={focusOnMount} color="primary" aria-label={closeLabel} onClick={onClose}>
-          <Close />
-        </IconButton>
-      </DialogActions>
-      <DialogTitle id={`${id}-title`}>{title}</DialogTitle>
+      <DialogHeader
+        id={`${id}-title`}
+        title={title}
+        onClose={onClose}
+        closeLabel={closeLabel}
+        closeRef={focusOnMount}
+      />
       <DialogContent id={`${id}-body`}>{children}</DialogContent>
     </Dialog>
   );

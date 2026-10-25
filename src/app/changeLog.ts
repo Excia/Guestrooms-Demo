@@ -64,9 +64,9 @@ export const isWithinRetention = (date: string, today: string): boolean =>
 export const changeLogPageLabel = (id: ChangeLogPageId): string =>
   CHANGE_LOG_PAGES.find((p) => p.id === id)?.label ?? id;
 
-/** "[Page] Change Log": the overlay title names the page it was opened from. */
+/** "[Page]: Change Log": the overlay title names the page it was opened from. */
 export const changeLogTitle = (id: ChangeLogPageId): string =>
-  `${changeLogPageLabel(id)} Change Log`;
+  `${changeLogPageLabel(id)}: Change Log`;
 
 /** Choosing a column's sort: the same field flips direction; a new field starts ascending (date and time: newest first). */
 export function toggleSort(current: ChangeLogSort, field: ChangeLogSortField): ChangeLogSort {
