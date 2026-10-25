@@ -9,7 +9,7 @@ import type {
   RateSeason,
 } from '../api/types';
 import { addDays, daysBetween, parseIsoDate, type IsoDate } from '../lib/dates';
-import { blankAmounts, seasonFor } from './rateCategories';
+import { blankAmounts } from './rateCategories';
 
 /** Columns of the weekday add-ons, indexed by `Date.getUTCDay()` (0 = Sunday). */
 const WEEKDAY_COLUMNS: readonly RateColumnKey[] = [
@@ -77,6 +77,23 @@ const ZERO_NIGHT = (date: IsoDate): NightlyRate => ({
 });
 
 /**
+ * The season whose rates price a night: a dated season strictly containing it, else the default.
+ * LEGACY PARITY: legacy `getRateForDate` compares with isAfter(start) and isBefore(end), so a night
+ * ON the start or end date of a season is priced by the default season. That looks like an
+ * off-by-one (Q-184-8, owner to decide); it is kept on purpose. `seasonFor` (rateCategories.ts) is
+ * inclusive and is not used for pricing.
+ */
+export function pricingSeasonFor(
+  seasons: readonly RateSeason[],
+  date: IsoDate,
+): RateSeason | undefined {
+  return (
+    seasons.find((s) => !s.isDefault && s.startDate < date && date < s.endDate) ??
+    seasons.find((s) => s.isDefault)
+  );
+}
+
+/**
  * Which base column a stay of `stayNights` uses: alternative base rate 2 when enabled and the stay
  * has at least its night count, else alternative base rate 1 likewise, else the standard base.
  */
@@ -116,7 +133,7 @@ export function nightlyRate(input: NightlyRateInput): NightlyRate {
   const { seasons, roomTypeId, date, stayNights, guests, alternativeBaseRates } = input;
   const night = ZERO_NIGHT(date);
   const day = parseIsoDate(date);
-  const season = day ? seasonFor(seasons, date) : undefined;
+  const season = day ? pricingSeasonFor(seasons, date) : undefined;
   const row = season ? rowFor(seasons, season, roomTypeId) : undefined;
   if (!day || !season || !row) return night;
 

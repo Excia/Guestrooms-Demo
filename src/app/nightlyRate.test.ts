@@ -132,26 +132,32 @@ describe('nightlyRate', () => {
       endDate: '2026-10-28',
       rates: { rt: amounts({ standardBase: 2000 }) },
     });
-    it('uses a dated season, with inclusive start and end', () => {
+    it('uses a dated season only strictly between its dates (legacy parity: the start and end days use the default)', () => {
       const seasons = [rate, summer];
       expect(run(seasons, { date: '2026-10-25' }).seasonId).toBe('default');
-      expect(run(seasons, { date: '2026-10-26' })).toMatchObject({
+      expect(run(seasons, { date: '2026-10-26' }).seasonId).toBe('default'); // start day
+      expect(run(seasons, { date: '2026-10-27' })).toMatchObject({
         seasonId: 'summer',
         base: 2000,
       });
-      expect(run(seasons, { date: '2026-10-28' }).seasonId).toBe('summer');
+      expect(run(seasons, { date: '2026-10-28' }).seasonId).toBe('default'); // end day
       expect(run(seasons, { date: '2026-10-29' }).seasonId).toBe('default');
     });
     it('falls back to the default season row (not per field) when the season has no row', () => {
       const other = season({
         id: 'other',
-        startDate: MON,
-        endDate: MON,
+        startDate: '2026-10-25',
+        endDate: '2026-10-27',
         rates: { rt2: amounts({ standardBase: 9 }) },
       });
       expect(run([rate, other]).total).toBe(1250);
       // A row that exists keeps its zeros: no field-by-field fallback.
-      const sparse = season({ id: 's', startDate: MON, endDate: MON, rates: { rt: amounts({}) } });
+      const sparse = season({
+        id: 's',
+        startDate: '2026-10-25',
+        endDate: '2026-10-27',
+        rates: { rt: amounts({}) },
+      });
       expect(run([rate, sparse]).total).toBe(0);
     });
     it('costs 0 without a default season, a matching row or a valid date', () => {
@@ -167,8 +173,8 @@ describe('stayRate', () => {
     defaultSeason({ rt: amounts({ standardBase: 1000, monday: 250, altBase1: 800 }) }),
     season({
       id: 'peak',
-      startDate: '2026-10-27',
-      endDate: '2026-10-27',
+      startDate: '2026-10-26',
+      endDate: '2026-10-28',
       rates: { rt: amounts({ standardBase: 3000, altBase1: 2500 }) },
     }),
   ];

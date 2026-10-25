@@ -85,6 +85,7 @@ describe('Rate Categories page', () => {
     expect(
       headers.filter((h) => h.getAttribute('scope') === 'col').map((h) => h.textContent),
     ).toEqual([
+      'Season / Special Rates',
       'Room Type',
       'Standard Base',
       'Mon',
