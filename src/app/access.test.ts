@@ -14,6 +14,7 @@ const ADMIN_IDS = [
   'room-types',
   'rooms',
   'add-on-items',
+  'room-options',
   'notifications',
 ] as const;
 

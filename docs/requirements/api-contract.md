@@ -469,6 +469,22 @@ must be enforced again by the backend, which also answers 422 `validation` when 
 `roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it
 saves. Photo upload and storage are open (Q-72-1).
 
+## Room options (LP-A.2 / ticket 7.12, built on the mock)
+
+| Method and path     | Body / response                                                                                         | Errors                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET /room-options` | `RoomOptions { features, bedSizes }`, each a list of `{ id, label }` in display order                   | 5xx                                                                         |
+| `PUT /room-options` | `{ requestId, features, bedSizes }`, items `{ id?, label }`; replaces both lists; returns `RoomOptions` | 422 `validation`, 404 `not-found`, 409 `in-use`, 409 `idempotency-conflict` |
+
+`PUT` takes the `Idempotency-Key` header (= `requestId`); a repeat answers the first result. An item without `id` is new
+(the server assigns the id); an item with an `id` keeps it (ids are stable: Room Types, Rooms and schedule filters refer to
+them); a saved item that is no longer listed is removed. Rules (`src/app/featureBedOptions.ts`, to be enforced again by
+the backend): label required after trimming, at most 50 characters, no two items of one list equal ignoring case. 409
+`in-use`: a removed Feature is in a `featureIds` list, or a removed Bed Size has a quantity above 0 in `bedTypes`, of any
+Room Type or Room; `details.features` / `details.bedSizes` list the ids; nothing is saved. When a Bed Size is removed the
+backend drops its key from the `bedTypes` of Room Types and Rooms. `GET /room-setup/options` (ticket 7.3) and
+`GET /schedule` (`features`) must answer from this same list.
+
 ## Keycard integration (ticket 7.6, built on the mock)
 
 | Method and path                    | Body / response                                                                       | Errors           |
