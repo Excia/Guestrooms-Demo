@@ -14,6 +14,8 @@ import {
   normalizeRateCategory,
   overlappingSeasonIds,
   parseDollars,
+  RATE_COLUMNS,
+  rateColumnGroups,
   removeSeason,
   seasonFor,
   seasonSkuKind,
@@ -368,5 +370,40 @@ describe('season colour index', () => {
     expect(seasonToneIndex(seasons, 's0')).toBe(0);
     expect(seasonToneIndex(seasons, 's5')).toBe(5);
     expect(seasonToneIndex(seasons, 's6')).toBe(0);
+  });
+});
+
+describe('rateColumnGroups', () => {
+  it('groups base, weekday and guest columns with their widths', () => {
+    const groups = rateColumnGroups(visibleRateColumns(null));
+    expect(groups.map((g) => [g.key, g.span])).toEqual([
+      ['base', 1],
+      ['weekday', 7],
+      ['guest', 4],
+    ]);
+  });
+
+  it('widens the base group with the enabled alternative base rates', () => {
+    const on = { enabled: true, minNights: 7 };
+    const groups = rateColumnGroups(
+      visibleRateColumns({ alternativeBaseRate1: on, alternativeBaseRate2: on }),
+    );
+    expect(groups[0]).toMatchObject({ key: 'base', span: 3 });
+  });
+
+  it('says the amounts are added on top and 0 is no extra charge', () => {
+    const [base, weekday, guest] = rateColumnGroups(visibleRateColumns(null));
+    expect(base?.note).toBeUndefined();
+    expect(weekday?.note).toMatch(/added to the base rate/i);
+    expect(weekday?.note).toMatch(/0 = no extra charge/);
+    expect(guest?.note).toMatch(/0 = no extra charge/);
+  });
+
+  it('keeps every group contiguous in the column order (one header per group)', () => {
+    const keys = rateColumnGroups(RATE_COLUMNS).map((g) => g.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(rateColumnGroups(RATE_COLUMNS).reduce((n, g) => n + g.span, 0)).toBe(
+      RATE_COLUMNS.length,
+    );
   });
 });

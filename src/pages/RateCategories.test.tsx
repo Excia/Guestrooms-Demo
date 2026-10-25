@@ -73,11 +73,19 @@ describe('Rate Categories page', () => {
     await loaded();
     await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
     const table = await screen.findByRole('table', { name: 'Rates by season and room type' });
+    const headers = within(table).getAllByRole('columnheader');
+    // The group headers say weekday and guest amounts are added on top of the base rate.
     expect(
-      within(table)
-        .getAllByRole('columnheader')
-        .map((h) => h.textContent),
+      headers.filter((h) => h.getAttribute('scope') === 'colgroup').map((h) => h.textContent),
     ).toEqual([
+      'Base rate',
+      'Weekday add-onadded to the base rate; 0 = no extra charge',
+      'Guest add-onadded per night; 0 = no extra charge',
+    ]);
+    expect(
+      headers.filter((h) => h.getAttribute('scope') === 'col').map((h) => h.textContent),
+    ).toEqual([
+      'Season / Special Rates',
       'Room Type',
       'Standard Base',
       'Mon',
@@ -93,7 +101,11 @@ describe('Rate Categories page', () => {
       'Child',
     ]);
     // Three seasons, three room types each.
-    expect(within(table).getAllByRole('rowheader')).toHaveLength(9);
+    expect(
+      within(table)
+        .getAllByRole('rowheader')
+        .filter((h) => h.getAttribute('scope') === 'row'),
+    ).toHaveLength(9);
     expect(
       within(table).getByText(/If no other seasons or special rates apply/),
     ).toBeInTheDocument();
