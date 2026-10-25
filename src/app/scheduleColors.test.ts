@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { theme } from '../theme';
-import { blockFillToken, housekeepingFillToken } from './scheduleColors';
+import { blockFillToken, housekeepingFillToken, EDGE_TAB_SPACING } from './scheduleColors';
 
 const today = '2026-10-24';
 const res = (status: 'confirmed' | 'nyci' | 'checked-in' | 'checked-out', endDate = '2026-10-27') =>
@@ -44,5 +44,9 @@ describe('housekeepingFillToken', () => {
     expect(c.checkedOut).toBe('rgba(224, 224, 224, 0.8)');
     expect(c.dueOut).toBe('rgba(228, 113, 0, 0.4)');
     expect(c.linked).toBe('rgba(189, 189, 189, 0.8)');
+  });
+
+  it('draws the early and late tabs 4px wide (owner decision, 8px spacing unit)', () => {
+    expect(EDGE_TAB_SPACING * 8).toBe(4);
   });
 });
