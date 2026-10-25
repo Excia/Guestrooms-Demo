@@ -184,6 +184,8 @@ describe('Room Options page', () => {
     renderPage({ ...client, roomOptions: { ...client.roomOptions, save } });
     await loaded();
     await user.click(screen.getByRole('button', { name: 'Remove Soaking tub' }));
+    // Focus moves to the neighbouring field; wait for it before typing elsewhere.
+    await waitFor(() => expect(withLabel('Golf course view')).toHaveFocus());
     await user.type(withLabel('Balcony'), '!');
     const before = listRooms.mock.calls.length;
     await user.click(saveButton());
