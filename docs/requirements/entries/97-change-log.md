@@ -1,4 +1,4 @@
-# 7.10 Change Log overlay (admin pages)
+# 7.10 Change Log (admin pages; a dialog since D-AP-3)
 
 Ticket Excia/Guestrooms-Demo#97; PR #158. Figma: Change Log 16718:6217 (header row 16734:6811). The Event Types
 reference table next to it in the System Settings section was not read (an image of a spreadsheet).
@@ -10,7 +10,7 @@ reference table next to it in the System Settings section was not read (an image
 | ------ | ----------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ------ |
 | F-97-1 | Date format       | Placeholder "Day, MM/DD/YYYY"                          | "Wed, 10/21/26" (two-digit year)                                                                                                           | The ticket's annotation says "Day, MM/DD/YY"; the Figma placeholder disagrees    | ticket |
 | F-97-2 | Time format       | "HH:MM XM"                                             | "04:05 PM" (zero-padded hour)                                                                                                              | Follows the pattern literally                                                    | agent  |
-| F-97-3 | Search button     | A green search button at the top right, no behavior    | Opens a small "Search descriptions" popover (free text over the Description column)                                                        | The annotation says sort and filter by four columns; the button needed a purpose | agent  |
+| F-97-3 | Search button     | A green search button at the top right, no behavior    | A labelled "Search descriptions" field in the dialog header (free text over the Description column; changed by D-AP-3, was a popover)      | The annotation says sort and filter by four columns; the button needed a purpose | agent  |
 | F-97-4 | Column filters    | A filter icon after Date, Time, Change Type, Action By | The icon opens a popover: sort direction, that column's filter (date range, time range, change type checkboxes, employee), Apply and Clear | The frame shows no filter UI                                                     | agent  |
 | F-97-5 | Pagination        | None drawn                                             | The shared Pagination under the table (25 rows per page)                                                                                   | The ticket asks for pagination                                                   | ticket |
 | F-97-6 | Change Log button | No frame for the button                                | A text button "Change Log" with a history icon, left of the Save button in the page header                                                 | The ticket does not place it                                                     | agent  |
@@ -30,7 +30,7 @@ reference table next to it in the System Settings section was not read (an image
 | D-97-1 | 2026-10-24 | One year of retention is the backend's rule: `GET /change-log` never returns an entry older than one year before today. The mock enforces it (`retentionCutoff`, `isWithinRetention`)                                         | Ticket: "enforced by the API contract"  | ticket 7.10 | provisional |
 | D-97-2 | 2026-10-24 | Entries carry the club's local `date` and `time` (`HH:mm`); the UI only formats them, so no time zone maths happens in the browser                                                                                            | The backend knows the club's zone       | agent       | provisional |
 | D-97-3 | 2026-10-24 | Default order is newest first (date, then time, descending). Sorting by time compares the time of day and then the date                                                                                                       | Ticket                                  | ticket 7.10 | provisional |
-| D-97-4 | 2026-10-24 | The overlay is a full-screen MUI Dialog (focus trap, Escape, focus returns to the Change Log button); the X is a labelled button                                                                                              | Accessible by default                   | agent       | provisional |
+| D-97-4 | 2026-10-24 | The overlay is a full-screen MUI Dialog (focus trap, Escape, focus returns to the Change Log button); the X is a labelled button. **Superseded 2026-10-25 by D-AP-3** (a normal dialog, not full screen)                      | Accessible by default                   | agent       | superseded  |
 | D-97-5 | 2026-10-24 | The overlay starts fresh on every opening (sort, filters, search, page and rows reset); the button remounts it with a new key. Search applies after a 300 ms pause or on Done; a failed request shows no rows under the error | Stale rows or filters on reopen mislead | agent       | provisional |
 
 ## Placeholders and invented values
@@ -41,4 +41,4 @@ reference table next to it in the System Settings section was not read (an image
 
 - **API:** `GET /change-log?page=&sort=&dateFrom=&dateTo=&timeFrom=&timeTo=&changeTypes=&actionBy=&search=&pageNumber=&limit=` answers `Page<ChangeLogEntry>` (`{items, total}`); `GET /change-log/event-types` answers `[{id, label}]`. See the section "Change Log (ticket 7.10)" in `api-contract.md`.
 - **Permissions:** none new (admin routes only, ticket 0.8).
-- **Notes:** the page ids are in `CHANGE_LOG_PAGES` (`src/api/changeLogTypes.ts`).
+- **Notes:** since 2026-10-25 the log opens as a normal modal dialog (85vw by 80vh, D-AP-3 in `admin-polish.md`); the component keeps the name `ChangeLogOverlay`. The page ids are in `CHANGE_LOG_PAGES` (`src/api/changeLogTypes.ts`).

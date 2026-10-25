@@ -64,6 +64,8 @@ export default function AdminShell({
             borderBottom: 'none',
             borderRight: `1px solid ${t.palette.divider}`,
             pt: 1.25,
+            // The active bar sits against the panel edge (legacy SideBarControl), so no right padding.
+            pr: 0,
           },
         })}
       >
@@ -84,7 +86,7 @@ export default function AdminShell({
               const isActive = item.label === active;
               const available = item.path !== undefined && (!item.id || canAccessPage(item.id));
               return (
-                <Box component="li" key={item.label} sx={{ display: 'flex' }}>
+                <Box component="li" key={item.label} sx={{ display: 'flex', position: 'relative' }}>
                   <Button
                     fullWidth
                     size="large"
@@ -97,7 +99,11 @@ export default function AdminShell({
                       justifyContent: 'flex-start',
                       minHeight: t.spacing(7.375),
                       color: isActive ? undefined : 'text.secondary',
-                      [t.breakpoints.up('lg')]: { minHeight: t.spacing(7.375) },
+                      // 15px gap between the tab and the bar (legacy: the tab's margin-right).
+                      [t.breakpoints.up('lg')]: {
+                        minHeight: t.spacing(7.375),
+                        mr: t.spacing(1.875),
+                      },
                     })}
                   >
                     {item.label}
@@ -105,11 +111,16 @@ export default function AdminShell({
                   {isActive ? (
                     <Box
                       aria-hidden
+                      data-testid="admin-nav-active-bar"
                       sx={(t) => ({
                         display: { xs: 'none', lg: 'block' },
-                        width: t.spacing(0.875),
+                        position: 'absolute',
+                        top: 0,
+                        right: 0,
+                        height: '100%',
+                        width: t.spacing(0.625),
                         bgcolor: 'primary.main',
-                        borderRadius: `${t.spacing(0.25)} 0 0 ${t.spacing(0.25)}`,
+                        borderRadius: `${t.spacing(0.5)} 0 0 ${t.spacing(0.5)}`,
                       })}
                     />
                   ) : null}

@@ -447,7 +447,7 @@ describe('SystemSettings page', () => {
       open.mockRestore();
     });
   });
-  it('opens the Change Log overlay for this page and returns focus when it closes', async () => {
+  it('opens the Change Log dialog for this page and returns focus when it closes', async () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();

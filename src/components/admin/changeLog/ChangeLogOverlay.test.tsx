@@ -123,11 +123,10 @@ describe('ChangeLogOverlay', () => {
     expect(bodyRows().length).toBeGreaterThan(1);
   });
 
-  it('searches the descriptions from the search button', async () => {
+  it('searches the descriptions from the search field in the header', async () => {
     const user = userEvent.setup();
     renderOverlay();
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Search descriptions' }));
     await user.type(screen.getByRole('textbox', { name: 'Search descriptions' }), 'night audit');
     await waitFor(() => {
       const rows = bodyRows();
@@ -195,26 +194,65 @@ describe('ChangeLogOverlay', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });
 
-  it('waits for a pause before searching and marks the search button while it is applied', async () => {
+  it('waits for a pause before searching and offers Clear all filters while it is applied', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
     const list = vi.spyOn(client.changeLog, 'list');
     renderOverlay(client);
     await loaded();
     const before = list.mock.calls.length;
-    await user.click(screen.getByRole('button', { name: 'Search descriptions' }));
-    await user.type(screen.getByRole('textbox', { name: 'Search descriptions' }), 'night audit');
+    const search = screen.getByRole('textbox', { name: 'Search descriptions' });
+    await user.type(search, 'night audit');
+    expect(list.mock.calls.length - before).toBe(0);
+    const clear = await screen.findByRole('button', { name: 'Clear all filters' });
+    // One request for the whole phrase, not one per keystroke.
+    expect(list.mock.calls.length - before).toBe(1);
+    await user.click(clear);
+    await waitFor(() => expect(search).toHaveValue(''));
+    expect(screen.queryByRole('button', { name: 'Clear all filters' })).not.toBeInTheDocument();
+  });
+
+  it('is a modal dialog, not a full-screen page', async () => {
+    renderOverlay();
+    const dialog = screen.getByRole('dialog', { name: 'System Settings Change Log' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog.className).not.toMatch(/fullScreen/);
+    // 85vw wide and 80vh tall, like the legacy hub change log modal (jsdom window: 1024 x 768).
+    expect(parseFloat(getComputedStyle(dialog).width)).toBeCloseTo(window.innerWidth * 0.85);
+    expect(parseFloat(getComputedStyle(dialog).height)).toBeCloseTo(window.innerHeight * 0.8);
+    await loaded();
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    // Sticky header and a scrolling body keep the table inside the dialog.
+    expect(screen.getAllByRole('columnheader')[0].className).toMatch(/stickyHeader/);
+  });
+
+  it('closes with Escape, the X and a click on the backdrop', async () => {
+    const user = userEvent.setup();
+    const onClose = renderOverlay();
+    await loaded();
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Close Change Log' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+    const backdrop = document.querySelector('.MuiBackdrop-root') as HTMLElement;
+    await user.click(backdrop);
+    expect(onClose).toHaveBeenCalledTimes(3);
+  });
+
+  it('opens a column popover above the dialog and Escape closes only the popover', async () => {
+    const user = userEvent.setup();
+    const onClose = renderOverlay();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Sort and filter Date' }));
+    const popover = await screen.findByRole('dialog', { name: 'Sort and filter Date' });
+    expect(popover).toBeVisible();
+    await user.keyboard('{Escape}');
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'Search descriptions (search on)', hidden: true }),
-      ).toBeInTheDocument(),
+        screen.queryByRole('dialog', { name: 'Sort and filter Date' }),
+      ).not.toBeInTheDocument(),
     );
-    expect(list.mock.calls.length - before).toBe(1);
-    await user.click(screen.getByRole('button', { name: 'Done' }));
-    await user.click(screen.getByRole('button', { name: 'Clear all filters' }));
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Search descriptions' })).toBeInTheDocument(),
-    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('starts from the defaults each time it opens', async () => {

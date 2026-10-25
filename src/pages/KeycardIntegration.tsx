@@ -1,5 +1,4 @@
 import AddCircle from '@mui/icons-material/AddCircle';
-import DeleteIcon from '@mui/icons-material/Delete';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -10,7 +9,6 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import IconButton from '@mui/material/IconButton';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -30,6 +28,7 @@ import { useLeaveGuard } from '../app/useLeaveGuard';
 import AdminShell from '../components/admin/AdminShell';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import { focusOnMount } from '../components/shared/focusOnMount';
+import RemoveIconButton from '../components/shared/RemoveIconButton';
 import SaveToast from '../components/shared/SaveToast';
 
 type Status = 'loading' | 'error' | 'ready';
@@ -307,13 +306,11 @@ export default function KeycardIntegration() {
                       }}
                       sx={{ m: 2 }}
                     />
-                    <IconButton
-                      aria-label={`Remove Encoder Key ${index + 1}`}
+                    <RemoveIconButton
+                      label={`Encoder Key ${index + 1}`}
                       onClick={() => removeRow(index)}
                       sx={{ m: 2, mt: 2.5 }}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
+                    />
                   </Box>
                 );
               })}

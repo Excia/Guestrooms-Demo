@@ -1,11 +1,8 @@
 import Box from '@mui/material/Box';
-import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
-import Tooltip from '@mui/material/Tooltip';
-import { visuallyHidden } from '@mui/utils';
-import { useId } from 'react';
 import type { LocationInput, LookupRef } from '../../../api/types';
 import { LOCATION_NAME_MAX, type LocationField } from '../../../app/locations';
+import RemoveIconButton from '../../shared/RemoveIconButton';
 import LookupField from '../systemSettings/LookupField';
 
 /** DOM id of a row's control; the page focuses the first invalid one after a refused save. */
@@ -39,7 +36,6 @@ export default function LocationRow({
   onRemove,
 }: LocationRowProps) {
   const nameId = locationFieldId(row.id, 'name');
-  const reasonId = useId();
   return (
     <Box
       component="li"
@@ -80,26 +76,13 @@ export default function LocationRow({
         required
       />
       {readOnly ? null : (
-        <Tooltip title={removable ? '' : ONLY_ROW_REASON}>
-          {/* A disabled button cannot show a tooltip itself. */}
-          <Box component="span" sx={{ mt: { md: 0.5 }, display: 'inline-flex' }}>
-            <Button
-              variant="outlined"
-              onClick={onRemove}
-              disabled={!removable}
-              aria-label={`Remove ${row.name.trim() || `location ${index}`}`}
-              aria-describedby={removable ? undefined : reasonId}
-              sx={{ borderColor: 'primary.outlinedBorder' }}
-            >
-              Remove
-            </Button>
-            {removable ? null : (
-              <Box id={reasonId} component="span" sx={visuallyHidden}>
-                {ONLY_ROW_REASON}
-              </Box>
-            )}
-          </Box>
-        </Tooltip>
+        <RemoveIconButton
+          label={row.name.trim() || `location ${index}`}
+          onClick={onRemove}
+          disabled={!removable}
+          disabledReason={ONLY_ROW_REASON}
+          sx={{ mt: { md: 1 } }}
+        />
       )}
     </Box>
   );

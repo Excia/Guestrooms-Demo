@@ -1,10 +1,8 @@
 import AddCircle from '@mui/icons-material/AddCircle';
-import Delete from '@mui/icons-material/Delete';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import FormHelperText from '@mui/material/FormHelperText';
-import IconButton from '@mui/material/IconButton';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -14,6 +12,7 @@ import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import type { BookingRules, BookingRulesOptions, MemberTypeRule } from '../../../api/types';
 import { newMemberTypeRule, type BookingRulesErrors } from '../../../app/bookingRules';
+import RemoveIconButton from '../../shared/RemoveIconButton';
 import CellSelect from './CellSelect';
 import PeriodField from './PeriodField';
 import RoomTypesField from './RoomTypesField';
@@ -158,17 +157,15 @@ export default function MemberTypeRulesTable({
                   />
                 </TableCell>
                 <TableCell align="center" sx={cellSx}>
-                  <IconButton
-                    aria-label={`Remove rule for ${label}`}
+                  <RemoveIconButton
+                    label={`rule for ${label}`}
                     onClick={() =>
                       onChange({
                         ...rules,
                         memberTypeRules: rules.memberTypeRules.filter((r) => r.id !== row.id),
                       })
                     }
-                  >
-                    <Delete />
-                  </IconButton>
+                  />
                 </TableCell>
               </TableRow>
             );
