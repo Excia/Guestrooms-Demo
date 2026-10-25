@@ -861,6 +861,8 @@ const parseRateCategoryOptions = (body: unknown, status: number): RateCategoryOp
     throw invalid(status, 'rate category options');
   }
   return body as unknown as RateCategoryOptions;
+};
+
 const isLocation = (v: unknown) =>
   isObject(v) &&
   isString(v.id) &&
