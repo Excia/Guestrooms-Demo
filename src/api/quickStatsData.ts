@@ -28,10 +28,10 @@ const BLOCK_NAMES = [
 
 /** Base nightly rate per rate category id, in cents (placeholder). */
 const BASE_RATE: Record<string, number> = {
-  member: 16_000,
-  reciprocal: 19_500,
-  'guest-of-member': 22_500,
-  event: 24_500,
+  'rc-member': 16_000,
+  'rc-non-member': 21_000,
+  'rc-comp': 0,
+  'rc-owner': 10_000,
 };
 
 function hash(text: string): number {
@@ -84,13 +84,19 @@ export function apportion(total: number, weights: readonly number[]): number[] {
 }
 
 /** Revenue for `nightsTotal` room nights, split over the rate categories deterministically. */
-function revenueFor(seedKey: string, nightsTotal: number): QuickStatsRevenue {
+function revenueFor(
+  seedKey: string,
+  nightsTotal: number,
+  categories: readonly CategoryRef[],
+): QuickStatsRevenue {
   const rand = seeded(hash(`revenue:${seedKey}`));
-  const weights = rateCategories.map(() => 0.5 + rand());
+  const weights = categories.map(() => 0.5 + rand());
   const shares = apportion(nightsTotal, weights);
-  const rows = rateCategories.map((c, i) => {
+  const rows = categories.map((c, i) => {
     const nights = shares[i];
-    const rate = (BASE_RATE[c.id] ?? 18_000) + between(rand, -1_500, 1_500);
+    const base = BASE_RATE[c.id] ?? 18_000;
+    const jitter = between(rand, -1_500, 1_500);
+    const rate = base === 0 ? 0 : base + jitter;
     return { id: c.id, name: c.name, nights, revenue: nights * rate };
   });
   const totals = totalsFor(rows);
@@ -120,8 +126,20 @@ function roomBlocksFor(from: string, to: string): QuickStatsRoomBlock[] {
   });
 }
 
-/** The answer to `query`. Shapes follow the three Figma views. */
-export function buildQuickStats(query: QuickStatsQuery): QuickStats {
+/** A rate category as the revenue table needs it. */
+export interface CategoryRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * The answer to `query`. `categories` are the club's rate categories (the Rate Categories setup);
+ * the seed list is used without it.
+ */
+export function buildQuickStats(
+  query: QuickStatsQuery,
+  categories: readonly CategoryRef[] = rateCategories,
+): QuickStats {
   switch (query.view) {
     case 'day': {
       const occupancy = occupancyForDay(query.date);
@@ -130,7 +148,7 @@ export function buildQuickStats(query: QuickStatsQuery): QuickStats {
         view: 'day',
         date: query.date,
         occupancy,
-        revenue: revenueFor(query.date, occupancy.booked),
+        revenue: revenueFor(query.date, occupancy.booked, categories),
         roomBlocks,
         roomBlocksTotal: summarizeOccupancy(roomBlocks.map((b) => b.counts)),
       };
@@ -146,7 +164,7 @@ export function buildQuickStats(query: QuickStatsQuery): QuickStats {
         view: 'week',
         startDate: query.startDate,
         occupancy: daysTotal,
-        revenue: revenueFor(query.startDate, nights),
+        revenue: revenueFor(query.startDate, nights, categories),
         days,
         daysTotal,
       };
@@ -164,6 +182,7 @@ export function buildQuickStats(query: QuickStatsQuery): QuickStats {
         revenue: revenueFor(
           query.month,
           perDay.reduce((sum, d) => sum + d.booked, 0),
+          categories,
         ),
         roomBlocks,
         roomBlocksTotal: summarizeOccupancy(roomBlocks.map((b) => b.counts)),

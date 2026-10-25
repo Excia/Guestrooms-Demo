@@ -26,6 +26,7 @@ import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettin
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { mockRoomOptions } from './roomOptionsData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
+import { mockRateCategories, mockRateCategoryOptions } from './rateCategoryData';
 import { MOCK_RETRIEVED_ENCODERS, mockEncoderKeys } from './keycardData';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
@@ -67,6 +68,13 @@ import type { ScheduleSize } from './scheduleData';
 import { queryScheduleData } from './scheduleQuery';
 import { assertNotHeldByOther, dropHold, holdsInWindow, placeHold, seedHolds } from './holdData';
 import { normalizeAddOn, validateAddOn } from '../app/addOns';
+import {
+  duplicateNameError,
+  hasErrors,
+  isNameTaken,
+  normalizeRateCategory,
+  validateRateCategory,
+} from '../app/rateCategories';
 import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
@@ -187,6 +195,7 @@ export function createMockClient({
   let nextOptionId = 1;
   let optionsVersion = 1;
   let addOns = mockAddOns();
+  let rateCategories = mockRateCategories();
   let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
   let locations = mockLocations();
@@ -286,7 +295,10 @@ export function createMockClient({
         respond(
           () => {
             assertQuickStatsQuery(query);
-            return buildQuickStats(query);
+            return buildQuickStats(
+              query,
+              rateCategories.map((c) => ({ id: c.id, name: c.name })),
+            );
           },
           () => {
             assertQuickStatsQuery(query);
@@ -1190,6 +1202,114 @@ export function createMockClient({
               throw new ApiError(404, 'Add-on not found', { code: 'not-found' });
             }
             addOns = addOns.filter((a) => a.id !== id);
+          },
+          () => undefined,
+          o,
+        ),
+    },
+    rateCategories: {
+      getOptions: (o) =>
+        respond(
+          () => mockRateCategoryOptions(roomTypes.map((t) => ({ id: t.id, label: t.name }))),
+          () => mockRateCategoryOptions([]),
+          o,
+        ),
+      list: (o) =>
+        respond(
+          () => structuredClone(rateCategories),
+          () => [],
+          o,
+        ),
+      save: (input, o) =>
+        respond(
+          () => {
+            const create = () => {
+              const known = mockRateCategoryOptions(
+                roomTypes.map((t) => ({ id: t.id, label: t.name })),
+              );
+              if (isNameTaken(input.name, rateCategories, input.id)) {
+                throw new ApiError(409, 'A rate category with this name exists', {
+                  code: 'duplicate-name',
+                });
+              }
+              if (
+                hasErrors(validateRateCategory(input, [], known.skus)) ||
+                input.roomTypeIds.some((id) => !known.roomTypes.some((k) => k.id === id))
+              ) {
+                throw new ApiError(422, 'Rate category is not valid', { code: 'validation' });
+              }
+              const current = input.id ? rateCategories.find((c) => c.id === input.id) : undefined;
+              if (input.id && !current) {
+                throw new ApiError(404, 'Rate category not found', { code: 'not-found' });
+              }
+              const rest = normalizeRateCategory(input);
+              const id = input.id ?? `rc-new-${nextSetupId++}`;
+              const saved = {
+                ...structuredClone(rest),
+                id,
+                reservationCount: current?.reservationCount ?? 0,
+                settingNames: current?.settingNames ?? [],
+              };
+              rateCategories = input.id
+                ? rateCategories.map((c) => (c.id === id ? saved : c))
+                : [...rateCategories, saved];
+              return structuredClone(saved);
+            };
+            // A retried create (same request id) returns the first result instead of a second category.
+            return !input.id && input.requestId
+              ? replayable({ ...input, requestId: input.requestId }, create)
+              : create();
+          },
+          () => ({
+            ...structuredClone(normalizeRateCategory(input)),
+            id: input.id ?? 'rc-new',
+            reservationCount: 0,
+            settingNames: [],
+          }),
+          o,
+        ),
+      duplicate: (request, o) =>
+        respond(
+          () =>
+            replayable(request, () => {
+              const source = rateCategories.find((c) => c.id === request.sourceId);
+              if (!source)
+                throw new ApiError(404, 'Rate category not found', { code: 'not-found' });
+              const problem = duplicateNameError(request.name, rateCategories);
+              if (problem) {
+                throw new ApiError(isNameTaken(request.name, rateCategories) ? 409 : 422, problem, {
+                  code: isNameTaken(request.name, rateCategories) ? 'duplicate-name' : 'validation',
+                });
+              }
+              const id = `rc-new-${nextSetupId++}`;
+              const copy = {
+                ...structuredClone(source),
+                id,
+                name: request.name.trim(),
+                reservationCount: 0,
+                settingNames: [],
+                seasons: source.seasons.map((s) => ({
+                  ...structuredClone(s),
+                  id: `${id}-${s.id}`,
+                })),
+              };
+              rateCategories = [...rateCategories, copy];
+              return structuredClone(copy);
+            }),
+          () => {
+            throw new ApiError(404, 'Rate category not found', { code: 'not-found' });
+          },
+          o,
+        ),
+      delete: (id, o) =>
+        respond(
+          () => {
+            const found = rateCategories.find((c) => c.id === id);
+            if (!found) throw new ApiError(404, 'Rate category not found', { code: 'not-found' });
+            if (found.reservationCount > 0 || found.settingNames.length > 0) {
+              throw new ApiError(409, 'Rate category is in use', { code: 'in-use' });
+            }
+            rateCategories = rateCategories.filter((c) => c.id !== id);
           },
           () => undefined,
           o,
