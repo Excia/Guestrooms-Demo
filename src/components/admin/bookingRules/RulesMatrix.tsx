@@ -3,6 +3,8 @@ import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import FormHelperText from '@mui/material/FormHelperText';
 import InputAdornment from '@mui/material/InputAdornment';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Link from '@mui/material/Link';
 import Switch from '@mui/material/Switch';
 import Table from '@mui/material/Table';
@@ -13,19 +15,21 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type {
   AudienceRules,
   BookingRules,
   BookingRulesOptions,
   ContactRequirement,
   NamedOccupants,
+  DepositType,
   PaymentRequirement,
   RoomSelection,
 } from '../../../api/types';
 import {
   setUniqueMemberTypeRules,
   toggleColumn,
+  withDepositType,
   withPayment,
   type Audience,
   type BookingRulesErrors,
@@ -38,7 +42,7 @@ export const UNIQUE_RULES_ID = 'booking-rules-unique-member-type-rules';
 export const cellId = (audience: Audience, field: string) => `booking-rules-${audience}-${field}`;
 
 const COLUMNS: { audience: Audience; label: string }[] = [
-  { audience: 'employee', label: 'Employee Booking' },
+  { audience: 'employee', label: 'Admin Booking' },
   { audience: 'member', label: 'Member Online Booking' },
   { audience: 'nonMember', label: 'Non-Member Online Booking' },
 ];
@@ -55,6 +59,7 @@ const CONTACT: { value: ContactRequirement; label: string }[] = [
   { value: 'email-or-phone', label: 'Email OR Phone' },
 ];
 const PAYMENT: { value: PaymentRequirement; label: string }[] = [
+  { value: 'optional', label: 'Optional' },
   { value: 'on-file', label: 'Payment on File Required' },
   { value: 'deposit', label: 'Deposit Required' },
   { value: 'prepayment', label: 'Prepayment Required' },
@@ -87,7 +92,7 @@ interface RowDef {
 const name = (ctx: Ctx, row: string) => `${row}, ${ctx.columnLabel}`;
 const err = (
   ctx: Ctx,
-  field: 'opens' | 'closes' | 'holdMinutes' | 'depositCents' | 'maxRoomsPerReservation',
+  field: 'opens' | 'closes' | 'holdMinutes' | 'deposit' | 'maxRoomsPerReservation',
 ) => ctx.errors[`${ctx.audience}.${field}`];
 
 function NumberCell({
@@ -141,6 +146,71 @@ function NumberCell({
         </FormHelperText>
       ) : null}
     </Box>
+  );
+}
+
+const toText = (type: DepositType, value: number | null) =>
+  value === null ? '' : String(type === 'percent' ? value : value / 100);
+
+/** Parses what was typed; null for an empty box, undefined for text that is not a number yet. */
+function parseDeposit(type: DepositType, text: string): number | null | undefined {
+  if (text === '') return null;
+  if (!/^\d*\.?\d{0,2}$/.test(text) || text === '.') return undefined;
+  const n = Number(text);
+  return type === 'percent' ? n : Math.round(n * 100);
+}
+
+// Keeps what the person typed ("1.", "12.50") while the stored value is the parsed number.
+function DepositField({
+  id,
+  type,
+  value,
+  message,
+  ariaLabelSuffix,
+  onChange,
+}: {
+  id: string;
+  type: DepositType;
+  value: number | null;
+  message: string | undefined;
+  ariaLabelSuffix: string;
+  onChange: (value: number | null) => void;
+}) {
+  const [draft, setDraft] = useState(toText(type, value));
+  // Follow outside changes (type switch, reload) but not our own commits.
+  if (parseDeposit(type, draft) !== value && !(draft === '.' && value === null)) {
+    setDraft(toText(type, value));
+  }
+  const percent = type === 'percent';
+  const label = percent ? 'Percent of stay' : 'Amount';
+  return (
+    <TextField
+      id={id}
+      label={label}
+      size="small"
+      value={draft}
+      error={Boolean(message)}
+      helperText={message}
+      onChange={(e) => {
+        const parsed = parseDeposit(type, e.target.value);
+        if (parsed === undefined) return;
+        setDraft(e.target.value);
+        onChange(parsed);
+      }}
+      onBlur={() => setDraft(toText(type, value))}
+      slotProps={{
+        inputLabel: { shrink: true },
+        input: percent
+          ? { endAdornment: <InputAdornment position="end">%</InputAdornment> }
+          : { startAdornment: <InputAdornment position="start">$</InputAdornment> },
+        htmlInput: {
+          inputMode: 'decimal',
+          'aria-label': `${label}, ${ariaLabelSuffix}`,
+          'aria-describedby': message ? `${id}-helper-text` : undefined,
+        },
+      }}
+      sx={{ width: (t) => t.spacing(16) }}
+    />
   );
 }
 
@@ -261,10 +331,10 @@ const ROWS: RowDef[] = [
     id: 'payment',
     label: 'Payment Method at Booking',
     cell: (ctx, row) => {
-      const message = err(ctx, 'depositCents');
-      const depositId = cellId(ctx.audience, 'depositCents');
+      const message = err(ctx, 'deposit');
+      const type = ctx.col?.depositType ?? 'amount';
       return (
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <CellSelect<PaymentRequirement>
             id={cellId(ctx.audience, 'payment')}
             ariaLabel={name(ctx, row)}
@@ -272,30 +342,35 @@ const ROWS: RowDef[] = [
             options={PAYMENT}
             onChange={(payment) => ctx.col && ctx.set(withPayment(ctx.col, payment))}
             disabled={!ctx.col}
-            sx={{ flex: 1 }}
           />
           {ctx.col?.payment === 'deposit' ? (
-            <TextField
-              id={depositId}
-              label="Amount"
-              type="number"
-              size="small"
-              value={ctx.col.depositCents ? String(ctx.col.depositCents / 100) : ''}
-              error={Boolean(message)}
-              helperText={message}
-              onChange={(e) =>
-                ctx.set({
-                  depositCents:
-                    e.target.value === '' ? null : Math.round(Number(e.target.value)) * 100,
-                })
-              }
-              slotProps={{
-                inputLabel: { shrink: true },
-                input: { startAdornment: <InputAdornment position="start">$</InputAdornment> },
-                htmlInput: { min: 1, step: 1, 'aria-label': `${name(ctx, row)} deposit amount` },
-              }}
-              sx={{ width: (t) => t.spacing(14) }}
-            />
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                color="primary"
+                value={type}
+                aria-label={`${name(ctx, row)} deposit type`}
+                onChange={(_, next: DepositType | null) =>
+                  next && ctx.col && ctx.set(withDepositType(ctx.col, next))
+                }
+              >
+                <ToggleButton value="amount" aria-label="$ dollar amount">
+                  $
+                </ToggleButton>
+                <ToggleButton value="percent" aria-label="% percentage of the total stay">
+                  %
+                </ToggleButton>
+              </ToggleButtonGroup>
+              <DepositField
+                id={cellId(ctx.audience, 'deposit')}
+                type={type}
+                value={ctx.col.depositValue}
+                message={message}
+                ariaLabelSuffix={name(ctx, row)}
+                onChange={(depositValue) => ctx.set({ depositType: type, depositValue })}
+              />
+            </Box>
           ) : null}
         </Box>
       );
@@ -403,7 +478,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
           </TableCell>
           <TableCell scope="col" sx={(t) => ({ ...cellSx(t), verticalAlign: 'top' })}>
             <Typography variant="h4_fixed" component="span">
-              Employee Booking
+              Admin Booking
             </Typography>
           </TableCell>
           <TableCell scope="col" sx={(t) => ({ ...cellSx(t), verticalAlign: 'top' })}>

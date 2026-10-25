@@ -32,9 +32,7 @@ describe('BookingRules page', () => {
     expect(
       within(table).getByRole('rowheader', { name: /Cancellation Period/ }),
     ).toBeInTheDocument();
-    expect(
-      within(table).getByRole('columnheader', { name: /Employee Booking/ }),
-    ).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: /Admin Booking/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Booking Rules' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Booking Rules' })).toHaveAttribute(
       'aria-current',
@@ -53,9 +51,9 @@ describe('BookingRules page', () => {
   it('reads the hold minutes in each column', async () => {
     renderPage();
     await loaded();
-    expect(
-      screen.getByRole('spinbutton', { name: 'Reservation Hold, Employee Booking' }),
-    ).toHaveValue(15);
+    expect(screen.getByRole('spinbutton', { name: 'Reservation Hold, Admin Booking' })).toHaveValue(
+      15,
+    );
     expect(
       screen.getByRole('spinbutton', { name: 'Reservation Hold, Member Online Booking' }),
     ).toHaveValue(10);
@@ -83,7 +81,7 @@ describe('BookingRules page', () => {
     ).not.toBeInTheDocument();
     // The employee column is always on.
     expect(
-      screen.getByRole('spinbutton', { name: 'Reservation Hold, Employee Booking' }),
+      screen.getByRole('spinbutton', { name: 'Reservation Hold, Admin Booking' }),
     ).toBeEnabled();
   });
 
@@ -106,22 +104,103 @@ describe('BookingRules page', () => {
     const save = vi.spyOn(client.bookingRules, 'save');
     renderPage(client);
     await loaded();
-    const amount = screen.getByRole('spinbutton', {
-      name: 'Payment Method at Booking, Member Online Booking deposit amount',
+    const amount = screen.getByRole('textbox', {
+      name: 'Amount, Payment Method at Booking, Member Online Booking',
     });
-    expect(amount).toHaveValue(99);
+    expect(amount).toHaveValue('99');
     await user.clear(amount);
-    expect(screen.getByText('Enter the deposit amount.')).toBeInTheDocument();
+    expect(screen.getByText(/Enter a deposit from \$0.01/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
     expect(save).not.toHaveBeenCalled();
     expect(amount).toHaveFocus();
+  });
+
+  it('offers Optional as a payment method and clears the deposit when chosen', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.bookingRules, 'save');
+    renderPage(client);
+    await loaded();
+    await user.click(
+      screen.getByRole('combobox', { name: 'Payment Method at Booking, Member Online Booking' }),
+    );
+    await user.click(screen.getByRole('option', { name: 'Optional' }));
+    expect(
+      screen.queryByRole('textbox', {
+        name: 'Amount, Payment Method at Booking, Member Online Booking',
+      }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    const saved = save.mock.calls[0][0];
+    expect(saved.member).toMatchObject({
+      payment: 'optional',
+      depositType: null,
+      depositValue: null,
+    });
+  });
+
+  it('switches a deposit between dollars and a percentage and validates each', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.bookingRules, 'save');
+    renderPage(client);
+    await loaded();
+    const group = screen.getByRole('group', {
+      name: 'Payment Method at Booking, Member Online Booking deposit type',
+    });
+    expect(within(group).getByRole('button', { name: '$ dollar amount' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await user.click(within(group).getByRole('button', { name: '% percentage of the total stay' }));
+    const percent = screen.getByRole('textbox', {
+      name: 'Percent of stay, Payment Method at Booking, Member Online Booking',
+    });
+    expect(percent).toHaveValue('');
+    await user.type(percent, '150');
+    expect(screen.getByText(/Enter a percentage from 0.01 to 100/)).toBeInTheDocument();
+    await user.clear(percent);
+    await user.type(percent, '12.5');
+    expect(screen.queryByText(/Enter a percentage/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    expect(save.mock.calls[0][0].member).toMatchObject({
+      payment: 'deposit',
+      depositType: 'percent',
+      depositValue: 12.5,
+    });
+  });
+
+  it('keeps what is typed in the deposit box and stores the parsed value', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = vi.spyOn(client.bookingRules, 'save');
+    renderPage(client);
+    await loaded();
+    const amount = screen.getByRole('textbox', {
+      name: 'Amount, Payment Method at Booking, Member Online Booking',
+    });
+    await user.clear(amount);
+    await user.type(amount, '12.50');
+    expect(amount).toHaveValue('12.50');
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    expect(save.mock.calls[0][0].member).toMatchObject({
+      depositType: 'amount',
+      depositValue: 1250,
+    });
+    await user.clear(amount);
+    await user.type(amount, '1.05');
+    expect(amount).toHaveValue('1.05');
+    await user.type(amount, '9');
+    expect(amount).toHaveValue('1.05');
+    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    expect(save.mock.calls[1][0].member).toMatchObject({ depositValue: 105 });
   });
 
   it('refuses a hold outside 1 to 99', async () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    const hold = screen.getByRole('spinbutton', { name: 'Reservation Hold, Employee Booking' });
+    const hold = screen.getByRole('spinbutton', { name: 'Reservation Hold, Admin Booking' });
     await user.clear(hold);
     await user.type(hold, '150');
     expect(screen.getByText('Enter 1 to 99 minutes.')).toBeInTheDocument();

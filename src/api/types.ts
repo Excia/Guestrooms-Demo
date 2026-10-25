@@ -1230,11 +1230,17 @@ export interface TimePeriod {
 /** Which occupants must be named (never TBD). */
 export type NamedOccupants = 'all' | 'lead' | 'none';
 export type ContactRequirement = 'email' | 'phone' | 'email-and-phone' | 'email-or-phone';
-export type PaymentRequirement = 'on-file' | 'deposit' | 'prepayment';
+/**
+ * Payment method at booking. `optional`: the booker may skip adding a payment method; `on-file`:
+ * one must be added; `deposit`: a deposit is collected (see `DepositType`); `prepayment`: paid in full.
+ */
+export type PaymentRequirement = 'optional' | 'on-file' | 'deposit' | 'prepayment';
+/** A deposit is a fixed dollar amount or a percentage of the total stay. */
+export type DepositType = 'amount' | 'percent';
 export type RoomSelection = 'room-optional' | 'room-only' | 'room-type-only';
 
 /**
- * One column of the Booking Rules matrix (Employee, Member Online or Non-Member Online). `null`
+ * One column of the Booking Rules matrix (Admin, Member Online or Non-Member Online; the id stays `employee`). `null`
  * on a field is the "N/A" cell: the rule does not apply to that audience.
  */
 export interface AudienceRules {
@@ -1251,13 +1257,15 @@ export interface AudienceRules {
   /** "Reservation Hold": minutes a selected room is held, 1 to 99. Drives the hold timer. */
   holdMinutes: number;
   payment: PaymentRequirement;
-  /** Deposit amount; set only while `payment` is `deposit`. */
-  depositCents: Cents | null;
+  /** Set only while `payment` is `deposit`. */
+  depositType: DepositType | null;
+  /** `amount`: cents; `percent`: 0.01 to 100 with at most two decimals. Set only for a deposit. */
+  depositValue: number | null;
   roomSelection: RoomSelection;
-  /** Room type ids that cannot be booked. Null (N/A) for employee booking. */
+  /** Room type ids that cannot be booked. Null (N/A) for admin booking. */
   excludedRoomTypeIds: string[] | null;
   maxRoomsPerReservation: number;
-  /** Show the add-on popup after room select. Null (N/A) for employee booking. */
+  /** Show the add-on popup after room select. Null (N/A) for admin booking. */
   addOnPopup: boolean | null;
 }
 
