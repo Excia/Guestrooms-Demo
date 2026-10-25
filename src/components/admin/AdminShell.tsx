@@ -201,6 +201,9 @@ export default function AdminShell({
             px: 2.5,
             pt: 3.75,
             pb: 2.5,
+            // The positioning context for absolutely placed children (visually hidden live regions,
+            // popper anchors): without it they escape the overflow clip and stretch the document.
+            position: 'relative',
             // Inset ring: the overflow clip would cut an outer one.
             '&:focus-visible': {
               outline: `2px solid ${t.palette.primary.main}`,

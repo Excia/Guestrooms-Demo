@@ -82,6 +82,12 @@ describe('AdminShell scroll regions', () => {
     );
   });
 
+  it('makes the scroll region the positioning context so hidden absolute children cannot stretch the page', () => {
+    renderShell();
+    expect(cssText()).toMatch(/position:relative/);
+    expect(screen.getByTestId('admin-scroll')).toBeInTheDocument();
+  });
+
   it('lets keyboard users reach the scroll region and keeps focused fields inside it', async () => {
     const user = userEvent.setup();
     renderShell('Locations', <input aria-label="Last field" />);
