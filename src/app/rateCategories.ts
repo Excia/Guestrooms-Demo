@@ -63,6 +63,65 @@ export function visibleRateColumns(
   });
 }
 
+export type RateColumnGroupKey = 'base' | 'weekday' | 'guest';
+
+export interface RateColumnGroup {
+  key: RateColumnGroupKey;
+  title: string;
+  /** Plain-language help, also the group header's tooltip text. */
+  help: string;
+  /** Short line under the title (none for the base rate). */
+  note?: string;
+  /** Number of the visible columns in the group. */
+  span: number;
+}
+
+const GROUP_OF: Record<RateColumnKey, RateColumnGroupKey> = {
+  standardBase: 'base',
+  altBase1: 'base',
+  altBase2: 'base',
+  monday: 'weekday',
+  tuesday: 'weekday',
+  wednesday: 'weekday',
+  thursday: 'weekday',
+  friday: 'weekday',
+  saturday: 'weekday',
+  sunday: 'weekday',
+  guest2: 'guest',
+  guest3: 'guest',
+  guest4Plus: 'guest',
+  child: 'guest',
+};
+
+const GROUP_TEXT: Record<RateColumnGroupKey, Pick<RateColumnGroup, 'title' | 'help' | 'note'>> = {
+  base: {
+    title: 'Base rate',
+    help: 'Price per night. An alternative base replaces it on long stays.',
+  },
+  weekday: {
+    title: 'Weekday add-on',
+    note: 'added to the base rate; 0 = no extra charge',
+    help: 'Added to the base rate for a night on that day. 0 = no extra charge.',
+  },
+  guest: {
+    title: 'Guest add-on',
+    note: 'added per night; 0 = no extra charge',
+    help: 'Added per night on top of the base rate (Guest 4+ and Child: for each). 0 = no extra charge.',
+  },
+};
+
+/** The group headers over the visible columns (they are contiguous in `RATE_COLUMNS`). */
+export function rateColumnGroups(columns: readonly RateColumn[]): RateColumnGroup[] {
+  const groups: RateColumnGroup[] = [];
+  for (const column of columns) {
+    const key = GROUP_OF[column.key];
+    const last = groups[groups.length - 1];
+    if (last?.key === key) last.span += 1;
+    else groups.push({ key, ...GROUP_TEXT[key], span: 1 });
+  }
+  return groups;
+}
+
 export const blankAmounts = (): RateAmounts =>
   Object.fromEntries(RATE_COLUMNS.map((c) => [c.key, 0])) as RateAmounts;
 

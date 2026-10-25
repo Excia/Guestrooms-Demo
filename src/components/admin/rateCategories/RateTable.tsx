@@ -19,6 +19,7 @@ import { visuallyHidden } from '@mui/utils';
 import type { AddOnKind, LookupRef, RateColumnKey, RateSeason, RateSku } from '../../../api/types';
 import {
   amountsFor,
+  rateColumnGroups,
   SEASON_NAME_MAX,
   seasonSkuKind,
   seasonToneIndex,
@@ -92,6 +93,7 @@ export default function RateTable({
 }: RateTableProps) {
   const ordered = [...seasons.filter((s) => s.isDefault), ...seasons.filter((s) => !s.isDefault)];
   const span = columns.length + 1;
+  const groups = rateColumnGroups(columns);
   return (
     <TableContainer
       tabIndex={0}
@@ -132,6 +134,50 @@ export default function RateTable({
         })}
       >
         <TableHead>
+          <TableRow>
+            <TableCell
+              aria-hidden
+              sx={(t) => ({
+                ...stickyFirst(t),
+                bgcolor: 'background.paper',
+                zIndex: 3,
+                borderBottom: 0,
+              })}
+            />
+            {groups.map((g) => (
+              <TableCell
+                key={g.key}
+                colSpan={g.span}
+                scope="colgroup"
+                align="center"
+                title={g.help}
+                sx={(t) => ({
+                  fontSize: t.typography.pxToRem(RATE_TABLE.headerFontPx),
+                  fontWeight: 'bold',
+                  lineHeight: 1.25,
+                  borderBottom: 0,
+                  borderLeft: `1px solid ${t.palette.divider}`,
+                  // Long help wraps inside the group; the header never widens the columns.
+                  whiteSpace: 'normal',
+                })}
+              >
+                {g.title}
+                {g.note ? (
+                  <Typography
+                    component="span"
+                    sx={(t) => ({
+                      display: 'block',
+                      fontWeight: 'normal',
+                      fontSize: t.typography.pxToRem(RATE_TABLE.headerFontPx),
+                      color: 'text.secondary',
+                    })}
+                  >
+                    {g.note}
+                  </Typography>
+                ) : null}
+              </TableCell>
+            ))}
+          </TableRow>
           <TableRow>
             <TableCell
               scope="col"
@@ -315,8 +361,14 @@ function SeasonTitle({
         </Box>
       ) : (
         <>
-          <Typography component="h3" sx={visuallyHidden}>
-            {name}
+          <Typography
+            component="h3"
+            sx={{ flexBasis: '100%', fontWeight: 'bold', typography: 'body2' }}
+          >
+            Season / Special Rates
+            <Box component="span" sx={visuallyHidden}>
+              {`: ${name}`}
+            </Box>
           </Typography>
           <TextField
             id={seasonDomId(season.id, 'name')}
