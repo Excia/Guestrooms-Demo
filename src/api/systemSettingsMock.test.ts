@@ -57,3 +57,33 @@ describe('mock system settings', () => {
     await expect(client.systemSettings.get()).rejects.toMatchObject({ status: 500 });
   });
 });
+
+describe('mock house accounts', () => {
+  it('searches by name, ignoring case, sorted, and lists some for an empty query', async () => {
+    const client = createMockClient();
+    expect((await client.systemSettings.listHouseAccounts('')).length).toBeGreaterThan(3);
+    const found = await client.systemSettings.listHouseAccounts('  COMP ');
+    expect(found.map((a) => a.label)).toEqual(['Banquet Comp Account', 'Guest Rooms Comp Account']);
+    expect(await client.systemSettings.listHouseAccounts('zzz')).toEqual([]);
+  });
+
+  it('saves and returns the chosen house account, or none', async () => {
+    const client = createMockClient();
+    const next = {
+      ...mockSystemSettings(),
+      houseAccount: { id: 'house-3', label: 'Events House Account' },
+    };
+    expect((await client.systemSettings.save(next)).houseAccount?.id).toBe('house-3');
+    const cleared = await client.systemSettings.save({ ...next, houseAccount: null });
+    expect(cleared.houseAccount).toBeNull();
+  });
+
+  it('refuses an account the backend does not know with a 422', async () => {
+    const client = createMockClient();
+    const bad = { ...mockSystemSettings(), houseAccount: { id: 'nope', label: 'Nope' } };
+    await expect(client.systemSettings.save(bad)).rejects.toMatchObject({
+      status: 422,
+      code: 'unknown-house-account',
+    });
+  });
+});

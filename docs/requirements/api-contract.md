@@ -451,6 +451,15 @@ answers 422 `validation`; the UI checks the same rules (`src/app/onlineBookingSe
 trimmed, and must not carry a username or password. This is a breaking contract change: the client rejects a
 `GET /settings/system` response without `onlineBooking`, so the backend must send it before this ships.
 
+## House Account (System Settings 7.1, owner request 2026-10-25)
+
+`GET` and `PUT /settings/system` (row 15 above) gain `houseAccount: {id, label} | null` (null = none chosen). The client
+rejects a `GET /settings/system` response without the key, so the backend must send it before this ships. New endpoint:
+
+| Method and path                                    | Body / response                                                                                                                              | Errors                                                                  |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `GET /settings/system/house-accounts?query=<text>` | A list of `{id, label}`: house accounts whose name contains `query` (any case), sorted by name, at most 20; an empty query lists the first 20 | 5xx. `PUT /settings/system` answers 422 with code `unknown-house-account` for an id that is not (or no longer) a house account; the UI shows "This house account no longer exists. Choose another." under the field |
+
 ## Add-on items (ticket 7.4, built on the mock)
 
 | Method and path        | Body / response                                                               | Errors                            |

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
-import type { ApiClient } from '../api/types';
+import { ApiError, type ApiClient } from '../api/types';
 import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
 import { GrantedAccess } from '../app/testing';
 import { useSystemSettings } from '../app/useSystemSettings';
@@ -14,7 +14,7 @@ function Probe() {
   return <output aria-label="early late">{String(settings?.earlyLateEnabled)}</output>;
 }
 
-function renderPage(client: ApiClient = createMockClient()) {
+function renderPage(client: ApiClient = createMockClient(), readOnly = false) {
   return render(
     <ApiProvider client={client}>
       <SystemSettingsProvider>
@@ -22,7 +22,7 @@ function renderPage(client: ApiClient = createMockClient()) {
           <MemoryRouter initialEntries={['/admin/primary-setup']}>
             <Link to="/schedule">Go to schedule</Link>
             <Probe />
-            <SystemSettings />
+            <SystemSettings readOnly={readOnly} />
           </MemoryRouter>
         </GrantedAccess>
       </SystemSettingsProvider>
@@ -544,5 +544,116 @@ describe('SystemSettings page', () => {
     expect(
       await screen.findByRole('dialog', { name: 'System Settings have not been saved.' }),
     ).toBeInTheDocument();
+  });
+
+  it('searches house accounts as you type, saves the choice and can clear it', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    const field = screen.getByRole('combobox', { name: 'House Account' });
+    expect(field).toHaveValue('Club House Account');
+    expect(screen.getByRole('button', { name: 'Search House Account' })).toBeInTheDocument();
+    await user.clear(field);
+    await user.type(field, 'banq');
+    await user.click(await screen.findByRole('option', { name: 'Banquet Comp Account' }));
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await waitFor(async () =>
+      expect((await client.systemSettings.get()).houseAccount?.id).toBe('house-2'),
+    );
+    await user.click(screen.getByRole('combobox', { name: 'House Account' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await waitFor(async () => expect((await client.systemSettings.get()).houseAccount).toBeNull());
+    expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveAttribute(
+      'placeholder',
+      'House Account Name',
+    );
+  });
+
+  it('shows a no results message and a failure message', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    const field = screen.getByRole('combobox', { name: 'House Account' });
+    await user.clear(field);
+    await user.type(field, 'zzz');
+    expect(await screen.findByText('No house accounts found')).toBeInTheDocument();
+    client.systemSettings.listHouseAccounts = () => Promise.reject(new Error('down'));
+    await user.type(field, 'z');
+    expect(await screen.findByText('Search failed. Try again.')).toBeInTheDocument();
+  });
+
+  it('asks before leaving after a House Account change', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('combobox', { name: 'House Account' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'System Settings have not been saved.' }),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a house account that no longer exists as a field error and focuses it', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const save = client.systemSettings.save;
+    renderPage({
+      ...client,
+      systemSettings: {
+        ...client.systemSettings,
+        save: (settings, o) =>
+          settings.houseAccount?.id === 'house-2'
+            ? Promise.reject(new ApiError(422, 'gone', { code: 'unknown-house-account' }))
+            : save(settings, o),
+      },
+    });
+    await loaded();
+    const field = screen.getByRole('combobox', { name: 'House Account' });
+    await user.clear(field);
+    await user.type(field, 'banq');
+    await user.click(await screen.findByRole('option', { name: 'Banquet Comp Account' }));
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    expect(
+      await screen.findByText('This house account no longer exists. Choose another.'),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveFocus(),
+    );
+    expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveAccessibleDescription(
+      'This house account no longer exists. Choose another.',
+    );
+    expect(screen.queryByText(/could not be saved/)).not.toBeInTheDocument();
+    // Choosing another account clears the message.
+    await user.clear(screen.getByRole('combobox', { name: 'House Account' }));
+    await user.type(screen.getByRole('combobox', { name: 'House Account' }), 'club');
+    await user.click(await screen.findByRole('option', { name: 'Club House Account' }));
+    expect(
+      screen.queryByText('This house account no longer exists. Choose another.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('disables every Settings control and Save in read-only mode', async () => {
+    renderPage(createMockClient(), true);
+    await loaded();
+    const panel = screen.getByRole('tabpanel');
+    const controls = within(panel).queryAllByRole('combobox');
+    controls.push(
+      ...within(panel).queryAllByRole('switch'),
+      ...within(panel).queryAllByRole('radio'),
+      ...within(panel).queryAllByRole('textbox'),
+    );
+    expect(controls.length).toBeGreaterThan(10);
+    for (const control of controls) {
+      const disabled =
+        (control as HTMLInputElement).disabled || control.getAttribute('aria-disabled') === 'true';
+      expect(disabled, control.getAttribute('aria-label') ?? control.id).toBe(true);
+    }
+    expect(screen.getByRole('button', { name: 'Search House Account' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Save System Settings' })).toBeDisabled();
   });
 });
