@@ -118,7 +118,7 @@ with itself).
 | Inherit Rates from Room Type | Shown with Inherit Details on | Shown always, as in Figma; the PDF (10.4.7) shows it only while Inherit Details is off | ticket |
 | Display in Online Booking | Always shown | Always shown; the PDF shows it only when Online Booking is on and the Room Selection setting matches (7.5 not built) | agent |
 | Photos | Thumbnails with a remove icon | Same; no per-photo description, no drag reorder (PDF 9.4.10.7, 9.4.10.12) | agent |
-| Rooms list | New Room, then rooms | No Edit Room Order (PDF 10.3.1) | agent |
+| Rooms list | New Room, then rooms | Reorder button next to New Room and a Room Order view (PDF 10.3.1 Edit Room Order); no Figma frame for it (F-MM-1 in `entries/setup-more-menu-reorder.md`) | agent |
 | Room Type and Room rates tables (PDF 9.4.12, 10.4.8) | no frame | not built (depend on 7.2) | forced |
-| Duplicate, delete confirmation | icons only, no dialog frames | Own dialogs: Delete or Cancel (PDF 8.9), Cancel on a new item (PDF 8.5.5) | agent |
+| Duplicate, delete confirmation | icons only in the header, no dialog frames | Copy and Delete moved into the three-dot menu of the selected active row (D-MM-3); own dialogs: Delete or Cancel (PDF 8.9), Cancel on a new item (PDF 8.5.5) | owner |
 | Room Type / Room form on narrow screens | desktop only | two columns stack below 1200px (D-010) | agent |

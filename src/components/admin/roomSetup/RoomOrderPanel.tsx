@@ -7,8 +7,8 @@ import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import { useRef, useState } from 'react';
-import { moveItem, sameOrder } from '../../../app/roomOrder';
+import { useEffect, useRef, useState } from 'react';
+import { moveItem, reconcileOrder, sameOrder } from '../../../app/roomOrder';
 import ConfirmDialog from '../../shared/ConfirmDialog';
 
 export interface RoomOrderItem {
@@ -40,12 +40,23 @@ export default function RoomOrderPanel({
   onClose,
 }: RoomOrderPanelProps) {
   const original = items.map((i) => i.id);
-  const [order, setOrder] = useState(original);
+  // The user's moves; the shown order is reconciled with the current items on every render, so a room
+  // that was deleted, retired or added while the view is open never shows blank or gets sent.
+  const [moves, setMoves] = useState(original);
+  const order = reconcileOrder(moves, original);
+  const setOrder = setMoves;
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [over, setOver] = useState<number | null>(null);
   const [announcement, setAnnouncement] = useState('');
   const [confirming, setConfirming] = useState(false);
   const rows = useRef(new Map<string, HTMLElement>());
+  const frame = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
   const labelOf = new Map(items.map((i) => [i.id, i.label]));
   const dirty = !sameOrder(order, original);
 
@@ -55,10 +66,20 @@ export default function RoomOrderPanel({
     setOrder(moveItem(order, from, to));
     setAnnouncement(`${labelOf.get(id)} moved to position ${to + 1} of ${order.length}`);
     if (focusButton) {
-      // Keep the focus on the same button of the moved row.
-      requestAnimationFrame(() =>
-        rows.current.get(id)?.querySelector<HTMLElement>(`[data-move="${focusButton}"]`)?.focus(),
-      );
+      // Keep the focus on the same button of the moved row; at the top or bottom that button is
+      // disabled, so the focus goes to the opposite one instead of falling to the page.
+      const last = order.length - 1;
+      const target =
+        (focusButton === 'up' && to === 0) || (focusButton === 'down' && to === last)
+          ? focusButton === 'up'
+            ? 'down'
+            : 'up'
+          : focusButton;
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null;
+        rows.current.get(id)?.querySelector<HTMLElement>(`[data-move="${target}"]`)?.focus();
+      });
     }
   };
   const close = () => (dirty ? setConfirming(true) : onClose());
@@ -147,8 +168,7 @@ export default function RoomOrderPanel({
               <Box
                 data-testid={`drag-handle-${id}`}
                 draggable
-                role="img"
-                aria-label={`Drag ${labelOf.get(id)}`}
+                aria-hidden
                 onDragStart={(e: React.DragEvent) => {
                   setDragFrom(index);
                   e.dataTransfer.effectAllowed = 'move';
@@ -169,6 +189,7 @@ export default function RoomOrderPanel({
               </Typography>
               <IconButton
                 size="small"
+                sx={(t) => ({ minWidth: t.spacing(4), minHeight: t.spacing(4) })}
                 data-move="up"
                 aria-label={`Move ${labelOf.get(id)} up`}
                 disabled={index === 0}
@@ -178,6 +199,7 @@ export default function RoomOrderPanel({
               </IconButton>
               <IconButton
                 size="small"
+                sx={(t) => ({ minWidth: t.spacing(4), minHeight: t.spacing(4) })}
                 data-move="down"
                 aria-label={`Move ${labelOf.get(id)} down`}
                 disabled={index === order.length - 1}

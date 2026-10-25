@@ -654,6 +654,7 @@ hides; it never decides a conflict. The mock (`src/api/holdData.ts`) behaves lik
 - `PUT /rooms/order` body `{ "roomIds": string[] }` answers the rooms (`RoomSetup[]`) in the new order. `roomIds` are the rooms to put
   first, in order (the UI sends the active rooms); rooms not listed follow in their current relative order. 404 `not-found` for an
   unknown id; 422 `validation` for a repeated id; the client refuses a malformed list (400 `invalid-order` / `invalid-id`) before fetching.
+- Last write wins: two users saving an order overwrite each other (no version token); the UI refreshes the list after a 404/422 and shows which case it was.
 - `GET /rooms` answers the rooms in the saved order. A new room is appended. The Rooms setup list keeps that order (inactive rooms last).
 - **The Schedule reads the same order.** `GET /schedule` lists `rooms` in the saved order (the row order of the grid and of every
   room list built from it). In the mock the two room lists are separate placeholders, so a Schedule room is matched to a setup room by

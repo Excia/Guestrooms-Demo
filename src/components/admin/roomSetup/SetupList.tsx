@@ -13,7 +13,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import { visuallyHidden } from '@mui/utils';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ChangeLogPageId } from '../../../api/changeLogTypes';
 import { setupMoreMenuLabels, showsMoreMenu } from '../../../app/setupMoreMenu';
 import ChangeLogOverlay from '../changeLog/ChangeLogOverlay';
@@ -82,6 +82,13 @@ export default function SetupList({
   // A new key on every opening gives the dialog fresh sort, filters, page and rows (D-97-5).
   const [logSession, setLogSession] = useState(0);
   const closeMenu = () => setMenuAnchor(null);
+  // Copy and Delete open a dialog (or switch the selection). They run after the menu has finished
+  // closing, so the menu hands focus back to its button first and the dialog returns focus there.
+  const afterMenu = useRef<(() => void) | null>(null);
+  const chooseAfterClose = (action: () => void) => {
+    afterMenu.current = action;
+    closeMenu();
+  };
   const row = (
     key: string,
     label: string,
@@ -288,14 +295,22 @@ export default function SetupList({
             open={menuAnchor !== null}
             onClose={closeMenu}
             slotProps={{
+              transition: {
+                onExited: () => {
+                  const action = afterMenu.current;
+                  afterMenu.current = null;
+                  action?.();
+                },
+              },
               list: { 'aria-label': setupMoreMenuLabels(more.noun, '').menu },
             }}
           >
             <MenuItem
               onClick={() => {
-                closeMenu();
-                setLogSession((n) => n + 1);
-                setLogOpen(true);
+                chooseAfterClose(() => {
+                  setLogSession((n) => n + 1);
+                  setLogOpen(true);
+                });
               }}
             >
               <ListItemIcon>
@@ -305,8 +320,7 @@ export default function SetupList({
             </MenuItem>
             <MenuItem
               onClick={() => {
-                closeMenu();
-                more.onCopy();
+                chooseAfterClose(more.onCopy);
               }}
             >
               <ListItemIcon>
@@ -316,8 +330,7 @@ export default function SetupList({
             </MenuItem>
             <MenuItem
               onClick={() => {
-                closeMenu();
-                more.onDelete();
+                chooseAfterClose(more.onDelete);
               }}
               sx={{ color: 'error.main' }}
             >

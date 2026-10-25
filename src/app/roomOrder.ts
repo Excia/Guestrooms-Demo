@@ -67,3 +67,15 @@ export function orderScheduleRooms<T extends { number: string }>(
   });
   return result;
 }
+
+/**
+ * The order the reorder view shows: the user's moves (`local`) kept for the rooms that still exist, then
+ * any room that appeared since, in `currentIds` order. A deleted or retired room drops out, so the
+ * view never renders a blank row or sends a stale id.
+ */
+export function reconcileOrder(local: readonly string[], currentIds: readonly string[]): string[] {
+  const current = new Set(currentIds);
+  const kept = local.filter((id, i) => current.has(id) && local.indexOf(id) === i);
+  const seen = new Set(kept);
+  return [...kept, ...currentIds.filter((id) => !seen.has(id))];
+}

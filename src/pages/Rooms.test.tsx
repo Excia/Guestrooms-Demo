@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { ApiProvider } from '../api';
+import { ApiError, ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { mockSystemSettings } from '../api/systemSettingsData';
@@ -247,14 +247,76 @@ describe('Rooms reorder', () => {
     expect(screen.getByRole('button', { name: 'Save Order' })).toBeEnabled();
   });
 
-  it('keeps the other switches on the page working', async () => {
+  it('discarding unsaved room edits before reordering resets the form to the saved room', async () => {
+    const user = userEvent.setup();
+    await renderPage();
+    const name = await loaded();
+    await user.type(name, 'X');
+    expect(name).toHaveValue('100X');
+    await user.click(screen.getByRole('button', { name: 'Reorder rooms' }));
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Leave without saving',
+      }),
+    );
+    expect(await screen.findByRole('list', { name: 'Room order' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Close room order' }));
+    expect(await screen.findByRole('textbox', { name: /Room Name/ })).toHaveValue('100');
+  });
+
+  it('locks the form and Save Room while the order is open', async () => {
+    await openReorder();
+    const name = screen.getByRole('textbox', { name: /Room Name/, hidden: true });
+    expect(name.closest('[inert]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: /^Saved/, hidden: true })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+  });
+
+  it('moves focus to the opposite move button when a move reaches the top or bottom', async () => {
+    const { user } = await openReorder();
+    await user.click(screen.getByRole('button', { name: 'Move 101 up' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Move 101 down' })).toHaveFocus(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Move 200 up' }));
+    await user.click(screen.getByRole('button', { name: 'Move 200 down' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Move 200 up' })).toHaveFocus());
+  });
+
+  it('drops on the same row without changing the order, and an Escape-cancelled drag changes nothing', async () => {
+    await openReorder();
+    const dataTransfer = { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: '' };
+    const handle = screen.getByTestId('drag-handle-room-101');
+    const row = handle.closest('li') as HTMLElement;
+    fireEvent.dragStart(handle, { dataTransfer });
+    fireEvent.drop(row, { dataTransfer });
+    expect(names()).toEqual(['100', '101', '102', '103', '200']);
+    fireEvent.dragStart(handle, { dataTransfer });
+    fireEvent.dragEnd(handle, { dataTransfer });
+    expect(names()).toEqual(['100', '101', '102', '103', '200']);
+    expect(screen.getByRole('button', { name: 'Save Order' })).toBeDisabled();
+  });
+
+  it('shows the specific message and refreshes the list when a room no longer exists', async () => {
+    const { user, client } = await openReorder();
+    vi.spyOn(client.roomSetup, 'saveRoomOrder').mockRejectedValue(new ApiError(404, 'gone'));
+    const list = vi.spyOn(client.roomSetup, 'listRooms');
+    await user.click(screen.getByRole('button', { name: 'Move 100 down' }));
+    await user.click(screen.getByRole('button', { name: 'Save Order' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('no longer exists');
+    expect(list).toHaveBeenCalled();
+  });
+
+  it('returns focus to the more-options button when the Delete dialog is cancelled', async () => {
     const user = userEvent.setup();
     await renderPage();
     await loaded();
-    const online = screen.getByRole('switch', { name: 'Display in Online Booking' });
-    expect(online).toBeChecked();
-    await user.click(online);
-    expect(online).not.toBeChecked();
-    expect(screen.getByRole('button', { name: 'Save Room' })).toBeEnabled();
+    await clickMoreMenuItem(user, 'Delete Room');
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: '100 more options' })).toHaveFocus();
   });
 });

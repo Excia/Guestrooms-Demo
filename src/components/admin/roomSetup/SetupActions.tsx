@@ -11,6 +11,9 @@ export interface SetupActionsProps {
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
+  /** Blocks saving (the form is locked while reordering). */
+  disabled?: boolean;
+  disabledReason?: string;
   onCancel: () => void;
 }
 
@@ -22,6 +25,8 @@ export default function SetupActions({
   dirty,
   saving,
   onSave,
+  disabled,
+  disabledReason,
   onCancel,
 }: SetupActionsProps) {
   return (
@@ -31,7 +36,14 @@ export default function SetupActions({
           Cancel
         </Button>
       ) : null}
-      <SaveButton dirty={dirty || creating} saving={saving} noun={saveNoun} onClick={onSave} />
+      <SaveButton
+        dirty={dirty || creating}
+        saving={saving}
+        noun={saveNoun}
+        onClick={onSave}
+        disabled={disabled}
+        disabledReason={disabledReason}
+      />
     </Box>
   );
 }

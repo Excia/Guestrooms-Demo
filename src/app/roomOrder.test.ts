@@ -3,6 +3,7 @@ import {
   applyRoomOrder,
   moveItem,
   orderScheduleRooms,
+  reconcileOrder,
   reorderableRooms,
   sameOrder,
 } from './roomOrder';
@@ -51,5 +52,18 @@ describe('orderScheduleRooms', () => {
   });
   it('is unchanged when nothing matches', () => {
     expect(orderScheduleRooms(rows, ['999'])).toEqual(rows);
+  });
+});
+
+describe('reconcileOrder', () => {
+  it('keeps the local moves for rooms that still exist', () => {
+    expect(reconcileOrder(['c', 'a', 'b'], ['a', 'b', 'c'])).toEqual(['c', 'a', 'b']);
+  });
+  it('drops a room that was deleted or retired and appends a new one', () => {
+    expect(reconcileOrder(['c', 'a', 'b'], ['a', 'b', 'd'])).toEqual(['a', 'b', 'd']);
+    expect(reconcileOrder(['b', 'a'], ['a', 'b', 'd'])).toEqual(['b', 'a', 'd']);
+  });
+  it('ignores repeated ids in the local list', () => {
+    expect(reconcileOrder(['a', 'a', 'b'], ['a', 'b'])).toEqual(['a', 'b']);
   });
 });

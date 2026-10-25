@@ -67,6 +67,15 @@ export function useSetupEditor<T extends { id: string }, D>({
     /** A new, unsaved item with the saved values of the selected one (PDF 8.8). */
     duplicate: (copy: (saved: D) => D) => guarded(() => reset(null, copy(baseline))),
     cancelNew: () => guarded(() => reset(undefined)),
+    /**
+     * Runs `action` (a mode that locks the form, e.g. reordering) after the same unsaved-changes guard
+     * as selecting another item; discarding resets the draft to the saved item, so nothing stale remains.
+     */
+    leaveEdit: (action: () => void) =>
+      guarded(() => {
+        reset(selected?.id);
+        action();
+      }),
     afterSave: (id: string) => reset(id),
     afterDelete: () => reset(undefined),
     /** Props of the "has not been saved" dialog; `save` resolves true when the save succeeded. */
