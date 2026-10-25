@@ -102,4 +102,18 @@ describe('http rate category money guard', () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ skus: [sku], roomTypes: [sku] }));
     await expect(make(fetchMock).rateCategories.getOptions()).rejects.toBeInstanceOf(ApiError);
   });
+
+  it('accepts a season SKU (and its absence) and refuses a malformed one', async () => {
+    const [saved] = mockRateCategories();
+    const withSku = structuredClone(saved);
+    withSku.seasons[0] = { ...withSku.seasons[0], sku: sku, skuKind: 'combo' };
+    const ok = vi.fn().mockResolvedValue(json([withSku]));
+    expect((await make(ok).rateCategories.list())[0].seasons[0].skuKind).toBe('combo');
+    for (const bad of [{ sku: 'x' }, { skuKind: 'both' }, { sku: { id: 1 } }]) {
+      const broken = structuredClone(saved);
+      broken.seasons[0] = { ...broken.seasons[0], ...bad } as never;
+      const fetchMock = vi.fn().mockResolvedValue(json([broken]));
+      await expect(make(fetchMock).rateCategories.list()).rejects.toBeInstanceOf(ApiError);
+    }
+  });
 });

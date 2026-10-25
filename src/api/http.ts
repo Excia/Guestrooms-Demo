@@ -854,6 +854,8 @@ const isRateSeason = (v: unknown) =>
   typeof v.isDefault === 'boolean' &&
   isString(v.startDate) &&
   isString(v.endDate) &&
+  (v.sku === undefined || v.sku === null || isLookup(v.sku)) &&
+  (v.skuKind === undefined || v.skuKind === 'item' || v.skuKind === 'combo') &&
   isObject(v.rates) &&
   Object.values(v.rates).every(isRateAmounts);
 const isRateCategory = (v: unknown) =>

@@ -2,6 +2,7 @@
 // and the mock API only call them. Ported from the legacy Rate Categories screen (see
 // docs/requirements/entries/184-rate-categories.md for what was kept and what was guessed).
 import type {
+  AddOnKind,
   Cents,
   RateAmounts,
   RateCategoryInput,
@@ -117,6 +118,8 @@ export function addSeason(seasons: readonly RateSeason[], id: string): RateSeaso
       isDefault: false,
       startDate: '',
       endDate: '',
+      sku: null,
+      skuKind: 'item',
       rates: cloneRates(base?.rates ?? {}),
     },
   ];
@@ -141,10 +144,15 @@ export function duplicateSeason(
 export const removeSeason = (seasons: readonly RateSeason[], seasonId: string): RateSeason[] =>
   seasons.filter((s) => s.id !== seasonId || s.isDefault);
 
+/** The fields of a season's header the table edits. */
+export type SeasonChange = Partial<
+  Pick<RateSeason, 'name' | 'startDate' | 'endDate' | 'sku' | 'skuKind'>
+>;
+
 export const updateSeason = (
   seasons: readonly RateSeason[],
   seasonId: string,
-  change: Partial<Pick<RateSeason, 'name' | 'startDate' | 'endDate'>>,
+  change: SeasonChange,
 ): RateSeason[] => seasons.map((s) => (s.id === seasonId ? { ...s, ...change } : s));
 
 export function setAmount(
@@ -227,6 +235,7 @@ export interface SeasonErrors {
   name?: string;
   startDate?: string;
   endDate?: string;
+  sku?: string;
   /** First invalid amount, "Room type, column". */
   amount?: string;
 }
@@ -307,6 +316,13 @@ export function validateRateCategory(
       else if (sOk && season.endDate < season.startDate) {
         e.endDate = 'The end date cannot be before the start date.';
       }
+      if (season.sku) {
+        const kind = season.skuKind ?? 'item';
+        const known = skus?.find((k) => k.id === season.sku?.id);
+        if (skus && (!known || known.kind !== kind)) {
+          e.sku = `Select a ${kind === 'item' ? 'item' : 'combo'} SKU.`;
+        }
+      }
       const clash = overlaps.get(season.id);
       if (clash && !e.startDate && !e.endDate) e.endDate = `Dates overlap ${clash}.`;
     }
@@ -318,13 +334,19 @@ export function validateRateCategory(
         break;
       }
     }
-    if (e.name || e.startDate || e.endDate || e.amount) errors.seasons[season.id] = e;
+    if (e.name || e.startDate || e.endDate || e.sku || e.amount) errors.seasons[season.id] = e;
   }
   return errors;
 }
 
 const isValidCents = (n: unknown): n is Cents =>
   typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= MAX_RATE_CENTS;
+
+/** Stored SKU of a season: none on the default season; the others keep a SKU only with its kind. */
+function seasonSku(season: RateSeason): Pick<RateSeason, 'sku' | 'skuKind'> {
+  if (season.isDefault) return {};
+  return { sku: season.sku ?? null, skuKind: season.skuKind ?? 'item' };
+}
 
 /**
  * What is stored (without the request id): trimmed names, a rate row for exactly the associated room types (a removed
@@ -337,6 +359,7 @@ export function normalizeRateCategory(input: RateCategoryInput): RateCategoryInp
     name: season.isDefault ? '' : season.name.trim(),
     startDate: season.isDefault ? '' : season.startDate,
     endDate: season.isDefault ? '' : season.endDate,
+    ...seasonSku(season),
     rates: Object.fromEntries(roomTypeIds.map((t) => [t, amountsFor(season, t)])),
   });
   const base =
@@ -366,6 +389,24 @@ export function toRateCategoryInput(c: RateCategorySetup): RateCategoryInput {
     roomTypeIds: [...c.roomTypeIds],
     seasons: structuredClone(c.seasons),
   };
+}
+
+/** The kind a season's SKU lookup lists (a season without one reads as item). */
+export const seasonSkuKind = (season: Pick<RateSeason, 'skuKind'>): AddOnKind =>
+  season.skuKind ?? 'item';
+
+/** Seasons that get a colour: every non-default one, in list order. The default season is neutral. */
+export const SEASON_TONE_COUNT = 6;
+
+/**
+ * Index into the season colour tokens (`palette.season.tones`) for a season: the non-default seasons
+ * take the tones in the order they are listed and wrap after six; the default season has none
+ * (it uses the neutral tone). The name and dates are always shown too, so colour is never the only cue.
+ */
+export function seasonToneIndex(seasons: readonly RateSeason[], seasonId: string): number | null {
+  const own = seasons.filter((s) => !s.isDefault);
+  const at = own.findIndex((s) => s.id === seasonId);
+  return at < 0 ? null : at % SEASON_TONE_COUNT;
 }
 
 /** SKUs of one kind, for the SKU lookup. */
