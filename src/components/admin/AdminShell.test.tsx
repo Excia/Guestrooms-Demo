@@ -74,6 +74,14 @@ describe('AdminShell scroll regions', () => {
     expect(css).toMatch(/scroll-padding-block:/);
   });
 
+  it('puts the row layout and the fixed height in the SAME lg block (a repeated key dropped the row)', () => {
+    renderShell();
+    // If the row direction is lost, the fixed-height shell stays a column and the content collapses.
+    expect(cssText()).toMatch(
+      /@media \(min-width:1200px\)\{[^}]*flex-direction:row;[^}]*height:calc\(100dvh - /,
+    );
+  });
+
   it('lets keyboard users reach the scroll region and keeps focused fields inside it', async () => {
     const user = userEvent.setup();
     renderShell('Locations', <input aria-label="Last field" />);
