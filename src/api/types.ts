@@ -1024,6 +1024,41 @@ export interface RoomSetupApi {
   deleteRoom(id: string, options?: RequestOptions): Promise<void>;
 }
 
+// ---- room options (Admin Setup, ticket LP-A.2 / 7.12) -----------------------------------------
+
+/** The club's Features and Bed Sizes: the one list Room Types, Rooms and the Schedule filter read. */
+export interface RoomOptions {
+  features: LookupRef[];
+  bedSizes: LookupRef[];
+}
+
+/** An item of a save: no `id` means a new item. */
+export interface RoomOptionInput {
+  id?: string;
+  label: string;
+}
+
+/**
+ * Replaces both lists with these, in this order (a removed item is one that is no longer listed).
+ * Idempotent on `requestId` (body and `Idempotency-Key` header).
+ */
+export interface SaveRoomOptionsRequest {
+  requestId: string;
+  features: RoomOptionInput[];
+  bedSizes: RoomOptionInput[];
+}
+
+/**
+ * Errors: 422 `validation` (`details.features` / `details.bedSizes`: one message per refused item,
+ * rules in `src/app/featureBedOptions.ts`); 409 `in-use` (a removed item is still used by a Room Type or
+ * Room; `details.features` / `details.bedSizes` list the ids; nothing is saved); 409
+ * `idempotency-conflict`.
+ */
+export interface RoomOptionsApi {
+  get(options?: RequestOptions): Promise<RoomOptions>;
+  save(request: SaveRoomOptionsRequest, options?: RequestOptions): Promise<RoomOptions>;
+}
+
 // ---- add-on items (Admin Setup, ticket 7.4) ---------------------------------------------------
 
 /** "item" sells one SKU. "combo" is open (Q-73-1): it is stored and flagged but behaves like an item. */
@@ -1570,6 +1605,7 @@ export interface ApiClient {
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
   roomSetup: RoomSetupApi;
+  roomOptions: RoomOptionsApi;
   addOns: AddOnApi;
   keycards: KeycardApi;
   bookingRules: BookingRulesApi;

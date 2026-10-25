@@ -48,6 +48,7 @@ import type {
   AddOnSetup,
   SetHousekeepingRequest,
   RoomSetup,
+  RoomOptions,
   RoomSetupOptions,
   RoomTypeSetup,
   BookingRules,
@@ -721,6 +722,13 @@ const parseRoomSetupOptions = (body: unknown, status: number): RoomSetupOptions 
     throw invalid(status, 'room setup options');
   }
   return body as unknown as RoomSetupOptions;
+};
+
+const parseRoomOptions = (body: unknown, status: number): RoomOptions => {
+  if (!isObject(body) || !listOf(body.features, isLookup) || !listOf(body.bedSizes, isLookup)) {
+    throw invalid(status, 'room options');
+  }
+  return body as unknown as RoomOptions;
 };
 
 const isSetupItem = (v: unknown) =>
@@ -1639,6 +1647,15 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           : request('/rooms', {}, o, parseRoomSetup, { method: 'POST', body: input }),
       deleteRoom: (id, o) =>
         request(`/rooms/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
+    roomOptions: {
+      get: (o) => request('/room-options', {}, o, parseRoomOptions),
+      save: (r, o) =>
+        request('/room-options', {}, o, parseRoomOptions, {
+          method: 'PUT',
+          body: r,
+          headers: { 'Idempotency-Key': r.requestId },
+        }),
     },
     addOns: {
       getOptions: (o) => request('/add-ons/options', {}, o, parseAddOnOptions),
