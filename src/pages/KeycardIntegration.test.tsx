@@ -4,7 +4,7 @@ import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import KeycardIntegration from './KeycardIntegration';
 
 function renderPage(client: ApiClient = createMockClient()) {
@@ -23,7 +23,7 @@ function renderPage(client: ApiClient = createMockClient()) {
 const loaded = () => screen.findByRole('list', { name: 'Encoder Key' });
 const inputs = () => screen.getAllByRole('textbox', { name: /^Encoder Key \d+$/ });
 const values = () => inputs().map((i) => (i as HTMLInputElement).value);
-const save = () => screen.getByRole('button', { name: /^(Save Encoder Keys|Saved, Encoder Keys)$/ });
+const save = () => screen.getByRole('button', { name: saveButtonName('Encoder Keys') });
 const withRetrieve = (retrieveEncoders: ApiClient['keycards']['retrieveEncoders']): ApiClient => {
   const client = createMockClient();
   return { ...client, keycards: { ...client.keycards, retrieveEncoders } };

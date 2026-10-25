@@ -69,4 +69,14 @@ describe('SaveButton', () => {
     render(<SaveButton dirty onClick={() => {}} />);
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
+
+  it('announces Save failed, not a stale Saving, when the changes are still there', () => {
+    const { rerender } = render(<SaveButton dirty noun="Rooms" onClick={() => {}} />);
+    rerender(<SaveButton dirty saving noun="Rooms" onClick={() => {}} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Saving');
+    rerender(<SaveButton dirty noun="Rooms" onClick={() => {}} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Save failed');
+    rerender(<SaveButton dirty={false} noun="Rooms" onClick={() => {}} />);
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
 });

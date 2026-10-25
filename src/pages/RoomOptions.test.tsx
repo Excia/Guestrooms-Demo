@@ -7,7 +7,7 @@ import { mockRoomOptions } from '../api/roomOptionsData';
 
 const MOCK_ROOM_OPTIONS = mockRoomOptions();
 import { ApiError, type ApiClient } from '../api/types';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import RoomOptions from './RoomOptions';
 import RoomTypes from './RoomTypes';
 import Rooms from './Rooms';
@@ -27,7 +27,7 @@ function renderPage(client: ApiClient = createMockClient()) {
 
 const loaded = async () =>
   (await screen.findAllByRole('textbox', { name: /^Feature \d+$/ }, { timeout: 3000 }))[0];
-const saveButton = () => screen.getByRole('button', { name: /^(Save Room Options|Saved, Room Options)$/ });
+const saveButton = () => screen.getByRole('button', { name: saveButtonName('Room Options') });
 const withLabel = (name: string) => screen.getByDisplayValue(name);
 
 describe('Room Options page', () => {

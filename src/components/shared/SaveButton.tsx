@@ -39,7 +39,8 @@ export default function SaveButton({
   const name = noun ? `Save ${noun}` : 'Save';
   const subject = noun ? `, ${noun}` : '';
 
-  // Announce Saving / Saved when the state changes, never on first render.
+  // Announce Saving, then Saved (or Save failed when the changes are still there) on a state
+  // change, never on first render; any other change clears a stale message.
   const previous = useRef<SaveButtonState>(state);
   const [announcement, setAnnouncement] = useState('');
   useEffect(() => {
@@ -47,6 +48,8 @@ export default function SaveButton({
     previous.current = state;
     if (state === 'saving' && was !== 'saving') setAnnouncement('Saving');
     else if (state === 'saved' && was === 'saving') setAnnouncement('Saved');
+    else if (was === 'saving') setAnnouncement('Save failed');
+    else setAnnouncement('');
   }, [state]);
 
   const inactive = state !== 'save';

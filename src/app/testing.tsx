@@ -19,3 +19,8 @@ export function GrantedAccess({
     </AccessStatusContext.Provider>
   );
 }
+
+/** Test helper: the accessible name of a page's Save button, whether it reads Save or Saved. */
+export function saveButtonName(noun: string): RegExp {
+  return new RegExp(`^(Save ${noun}|Saved, ${noun}|Saving, ${noun})$`);
+}

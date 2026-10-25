@@ -1,17 +1,18 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import { blankRateCategory } from '../app/rateCategories';
 import RateCategories from './RateCategories';
 
 function renderPage(client: ApiClient = createMockClient(), withSettings = false) {
   const page = (
     <MemoryRouter initialEntries={['/admin/rate-categories']}>
+      <Link to="/schedule">Go to schedule</Link>
       <RateCategories />
     </MemoryRouter>
   );
@@ -381,6 +382,23 @@ describe('Rate Categories page', () => {
     expect(cell).toBeValid();
     await user.click(screen.getByRole('button', { name: 'Save Rate Category' }));
     expect((await screen.findAllByText('Rate Category Saved')).length).toBeGreaterThan(0);
+  });
+
+  it('counts text that is not money as an unsaved change: Save is offered and leaving asks first', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
+    const saved = screen.getByRole('button', { name: saveButtonName('Rate Category') });
+    expect(saved).toHaveAccessibleName('Saved, Rate Category');
+    const cell = await screen.findByRole('textbox', { name: 'Default, King Room, Standard Base' });
+    await user.clear(cell);
+    await user.type(cell, 'abc');
+    await user.tab();
+    const save = screen.getByRole('button', { name: 'Save Rate Category' });
+    expect(save).not.toHaveAttribute('aria-disabled');
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('has not been saved');
   });
 
   it('offers only SKUs of the chosen kind and clears one that no longer matches', async () => {

@@ -4,7 +4,7 @@ import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import { ApiError, type ApiClient } from '../api/types';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import type { Permission } from '../app/permissions';
 import Locations from './Locations';
 
@@ -22,7 +22,7 @@ function renderPage(client: ApiClient = createMockClient(), granted?: readonly P
 }
 
 const loaded = () => screen.findByRole('list', { name: 'Locations' });
-const save = () => screen.getByRole('button', { name: /^(Save Locations|Saved, Locations)$/ });
+const save = () => screen.getByRole('button', { name: saveButtonName('Locations') });
 
 describe('Locations page', () => {
   it('lists the saved locations in the shared shell with the nav item current', async () => {
@@ -213,6 +213,8 @@ describe('Locations page', () => {
     }
     expect(screen.queryByRole('button', { name: 'Add Location' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(Save Locations|Saved, Locations)$/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: saveButtonName('Locations') }),
+    ).not.toBeInTheDocument();
   });
 });

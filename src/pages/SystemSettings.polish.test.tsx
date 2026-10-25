@@ -7,7 +7,7 @@ import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import { theme } from '../theme';
 import SystemSettings from './SystemSettings';
 
@@ -89,7 +89,7 @@ describe('Training Mode', () => {
     const auto = screen.getByRole('radio', { name: 'Run Automatically' });
     expect(auto).toBeDisabled();
     expect(auto).toHaveAccessibleDescription(/not available in Training Mode/);
-    await user.click(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('System Settings') }));
     await waitFor(() => expect(save).toHaveBeenCalled());
     expect(save.mock.calls[0][0].trainingMode).toBe(true);
     expect(save.mock.calls[0][0].nightAudit).toBe('manual');
@@ -106,13 +106,41 @@ describe('Training Mode', () => {
     expect(screen.getByText(/was set to Run Manually/)).toBeInTheDocument();
   });
 
+  it('shows Save greyed and described when there are changes but access turns view-only', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const tree = (readOnly: boolean) => (
+      <ApiProvider client={client}>
+        <SystemSettingsProvider>
+          <GrantedAccess>
+            <MemoryRouter initialEntries={['/admin/primary-setup']}>
+              <SystemSettings readOnly={readOnly} />
+            </MemoryRouter>
+          </GrantedAccess>
+        </SystemSettingsProvider>
+      </ApiProvider>
+    );
+    const { rerender } = render(tree(false));
+    await loaded();
+    await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
+    rerender(tree(true));
+    const button = screen.getByRole('button', { name: 'Save System Settings' });
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    expect(button).toHaveAccessibleDescription('You have view-only access');
+  });
+
   it('counts as an unsaved change for Confirm Leaving (the Save button enables)', async () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: saveButtonName('System Settings') })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
-    expect(screen.getByRole('button', { name: /^(Save System Settings|Saved, System Settings)$/ })).not.toHaveAttribute('aria-disabled');
+    expect(
+      screen.getByRole('button', { name: saveButtonName('System Settings') }),
+    ).not.toHaveAttribute('aria-disabled');
   });
 });
 
