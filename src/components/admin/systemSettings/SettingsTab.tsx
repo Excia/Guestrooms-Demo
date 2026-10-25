@@ -252,10 +252,9 @@ export default function SettingsTab({
               onChange={(v) => set('lateCheckOutTime', v)}
               error={Boolean(errors.lateCheckOutTime)}
               helperText={
-                errors.lateCheckOutTime?.[0] ??
-                (lateOptions.size === 0
+                lateOptions.size === 0
                   ? 'Set a check-in time later than the checkout time to choose a late checkout.'
-                  : undefined)
+                  : errors.lateCheckOutTime?.[0]
               }
               pickerDisabled={lateOptions.size === 0}
               sx={{ minWidth: (t) => t.spacing(25) }}
