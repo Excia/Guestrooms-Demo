@@ -1,5 +1,10 @@
 import { defaultRegistrationCard } from '../app/registrationCard';
-import type { OnlineBookingSettings, SystemSettings, SystemSettingsOptions } from './types';
+import type {
+  LookupRef,
+  OnlineBookingSettings,
+  SystemSettings,
+  SystemSettingsOptions,
+} from './types';
 
 // PLACEHOLDER sample data until the backend exists (see docs/requirements/placeholders.md).
 export const MOCK_SYSTEM_SETTINGS_OPTIONS: SystemSettingsOptions = {
@@ -29,6 +34,27 @@ export const MOCK_SYSTEM_SETTINGS_OPTIONS: SystemSettingsOptions = {
     { id: 'member-3', label: 'Sam Ortega (Member)' },
   ],
 };
+
+// PLACEHOLDER (P-HA-1): invented house accounts until the backend exists.
+export const MOCK_HOUSE_ACCOUNTS: readonly LookupRef[] = [
+  { id: 'house-1', label: 'Club House Account' },
+  { id: 'house-2', label: 'Banquet Comp Account' },
+  { id: 'house-3', label: 'Events House Account' },
+  { id: 'house-4', label: 'Golf Outings House Account' },
+  { id: 'house-5', label: 'Guest Rooms Comp Account' },
+  { id: 'house-6', label: 'Pro Shop Staff Account' },
+];
+
+export const HOUSE_ACCOUNT_RESULTS_MAX = 20;
+
+/** Pure filter behind the mock lookup: name contains the query, by name, at most 20. */
+export function searchHouseAccounts(query: string): LookupRef[] {
+  const q = query.trim().toLowerCase();
+  return MOCK_HOUSE_ACCOUNTS.filter((a) => a.label.toLowerCase().includes(q))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .slice(0, HOUSE_ACCOUNT_RESULTS_MAX)
+    .map((a) => ({ ...a }));
+}
 
 /** Values from Figma 15957:84617. */
 export const mockOnlineBookingSettings = (): OnlineBookingSettings => ({
@@ -64,6 +90,7 @@ export const mockSystemSettings = (): SystemSettings => ({
   transferItem: { id: 'item-transfer', label: 'Folio Transfer' },
   guestRoomsArea: { id: 'area-hotel', label: 'Hotel' },
   guestMember: { id: 'member-1', label: 'First Last (Member)' },
+  houseAccount: { id: 'house-1', label: 'Club House Account' },
   folio: {
     streetAddress: '4111 Clubessential Drive',
     city: 'Cincinnati',

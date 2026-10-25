@@ -1,6 +1,7 @@
 import { mockSystemSettings } from '../api/systemSettingsData';
 import type { SystemSettings } from '../api/types';
 import {
+  FIELD_ORDER,
   firstErrorField,
   formatTime12,
   durationMinutes,
@@ -253,5 +254,34 @@ describe('logoFileProblem', () => {
     expect(logoFileProblem({ type: 'image/png', size: 1000 })).toBeNull();
     expect(logoFileProblem({ type: 'application/pdf', size: 1000 })).toMatch(/PNG, JPG or SVG/);
     expect(logoFileProblem({ type: 'image/png', size: 3 * 1024 * 1024 })).toMatch(/2 MB/);
+  });
+});
+
+describe('House Account', () => {
+  it('is optional, so none chosen is valid', () => {
+    expect(validateSystemSettings({ ...base(), houseAccount: null }).houseAccount).toBeUndefined();
+  });
+
+  it('accepts a chosen account and refuses one without an id or a name', () => {
+    const ok = { id: 'house-1', label: 'Club House Account' };
+    expect(validateSystemSettings({ ...base(), houseAccount: ok }).houseAccount).toBeUndefined();
+    for (const bad of [
+      { id: '', label: 'X' },
+      { id: 'house-1', label: '  ' },
+    ]) {
+      expect(validateSystemSettings({ ...base(), houseAccount: bad }).houseAccount).toEqual([
+        'Choose a house account from the list.',
+      ]);
+    }
+  });
+
+  it('takes focus after the service charge label and before the folio fields', () => {
+    expect(FIELD_ORDER.indexOf('houseAccount')).toBe(FIELD_ORDER.indexOf('serviceChargeLabel') + 1);
+    expect(firstErrorField({ houseAccount: ['x'], 'folio.city': ['y'] })).toBe('houseAccount');
+  });
+
+  it('counts a change as unsaved', () => {
+    const saved = base();
+    expect(isDirty(saved, { ...saved, houseAccount: null })).toBe(true);
   });
 });

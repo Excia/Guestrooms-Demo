@@ -545,4 +545,56 @@ describe('SystemSettings page', () => {
       await screen.findByRole('dialog', { name: 'System Settings have not been saved.' }),
     ).toBeInTheDocument();
   });
+
+  it('searches house accounts as you type, saves the choice and can clear it', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    const field = screen.getByRole('combobox', { name: 'House Account' });
+    expect(field).toHaveValue('Club House Account');
+    expect(screen.getByRole('button', { name: 'Search House Account' })).toBeInTheDocument();
+    await user.clear(field);
+    await user.type(field, 'banq');
+    await user.click(await screen.findByRole('option', { name: 'Banquet Comp Account' }));
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await waitFor(async () =>
+      expect((await client.systemSettings.get()).houseAccount?.id).toBe('house-2'),
+    );
+    await user.click(screen.getByRole('combobox', { name: 'House Account' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await user.click(screen.getByRole('button', { name: 'Save System Settings' }));
+    await waitFor(async () => expect((await client.systemSettings.get()).houseAccount).toBeNull());
+    expect(screen.getByRole('combobox', { name: 'House Account' })).toHaveAttribute(
+      'placeholder',
+      'House Account Name',
+    );
+  });
+
+  it('shows a no results message and a failure message', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    const field = screen.getByRole('combobox', { name: 'House Account' });
+    await user.clear(field);
+    await user.type(field, 'zzz');
+    expect(await screen.findByText('No house accounts found')).toBeInTheDocument();
+    client.systemSettings.listHouseAccounts = () => Promise.reject(new Error('down'));
+    await user.type(field, 'z');
+    expect(await screen.findByText('Search failed. Try again.')).toBeInTheDocument();
+  });
+
+  it('asks before leaving after a House Account change', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('combobox', { name: 'House Account' }));
+    await user.click(screen.getByRole('button', { name: 'Clear' }));
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'System Settings have not been saved.' }),
+    ).toBeInTheDocument();
+  });
 });

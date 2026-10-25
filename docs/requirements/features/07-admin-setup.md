@@ -64,6 +64,10 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
   - **Not built here:** the Change Log button (7.10), the Print Registration Card setting (7.8, which owns its
     tab), consumers of the settings (3.11, 3.12, 7.3 still read their own defaults). Browser Back is not
     intercepted by Confirm Leaving (the app has no data router); the main menu's links are.
+  - **House Account (owner request 2026-10-25):** a "House Account" section at the end of the Settings tab's right
+    column: one optional type-ahead lookup (label "House Account", placeholder "House Account Name", green search icon,
+    clear X, loading and no-results states). Stored as `houseAccount {id, label} | null` with the other settings. What
+    the folio does with it is open (Q-HA-1). See [entries/house-account.md](entries/house-account.md).
   - **Backend:** `GET` and `PUT /settings/system`, `GET /settings/system/options` (see
     [api-contract.md](../api-contract.md)).
   - **Doc items with no Figma content or no ticket (candidate tickets):** 6.7 Default Rate Categories for Room

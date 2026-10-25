@@ -6,6 +6,8 @@ import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
+import { useCallback } from 'react';
+import { useApi } from '../../../api';
 import type {
   Duration,
   DurationUnit,
@@ -24,6 +26,7 @@ import {
   type SystemSettingsField,
 } from '../../../app/systemSettings';
 import Select from '../../shared/Select';
+import SearchLookupField from './SearchLookupField';
 import { ErrorLines, fieldId, Hint, Section } from './fieldParts';
 import LookupField from './LookupField';
 import NightsStepper from './NightsStepper';
@@ -34,6 +37,8 @@ export interface SettingsTabProps {
   onChange: (next: SystemSettings) => void;
   errors: SystemSettingsErrors;
   options: SystemSettingsOptions;
+  /** View mode: the lookups cannot be changed. */
+  readOnly?: boolean;
 }
 
 const range = ({ min, max }: { min: number; max: number }) =>
@@ -103,7 +108,18 @@ function DurationRow({ field, label, value, onChange, errors, before, after }: D
   );
 }
 
-export default function SettingsTab({ value, onChange, errors, options }: SettingsTabProps) {
+export default function SettingsTab({
+  value,
+  onChange,
+  errors,
+  options,
+  readOnly,
+}: SettingsTabProps) {
+  const api = useApi();
+  const searchHouseAccounts = useCallback(
+    (query: string, signal: AbortSignal) => api.systemSettings.listHouseAccounts(query, { signal }),
+    [api],
+  );
   const set = <K extends keyof SystemSettings>(key: K, v: SystemSettings[K]) =>
     onChange({ ...value, [key]: v });
   // Times change the late checkout options, so the late time follows into range.
@@ -399,6 +415,18 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
             value={value.guestMember}
             options={options.members}
             onChange={(v) => set('guestMember', v)}
+          />
+        </Section>
+        <Section title="House Account">
+          <SearchLookupField
+            id={fieldId('houseAccount')}
+            label="House Account"
+            placeholder="House Account Name"
+            value={value.houseAccount}
+            onChange={(v) => set('houseAccount', v)}
+            search={searchHouseAccounts}
+            error={errors.houseAccount?.[0]}
+            disabled={readOnly}
           />
         </Section>
       </Box>

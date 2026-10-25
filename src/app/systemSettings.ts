@@ -93,6 +93,7 @@ export type SystemSettingsField =
   | 'alternativeBaseRate1'
   | 'alternativeBaseRate2'
   | 'serviceChargeLabel'
+  | 'houseAccount'
   | 'folio.streetAddress'
   | 'folio.city'
   | 'folio.zip'
@@ -193,6 +194,11 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
     add('serviceChargeLabel', `Use ${SERVICE_CHARGE_LABEL_MAX} characters or fewer.`);
   }
 
+  // House Account is optional; a chosen one must be a real record (an id and a name).
+  if (s.houseAccount && (s.houseAccount.id.trim() === '' || s.houseAccount.label.trim() === '')) {
+    add('houseAccount', 'Choose a house account from the list.');
+  }
+
   for (const [field, message] of Object.entries(validateFolioDetails(s.folio))) {
     add(field as SystemSettingsField, message[0]);
   }
@@ -237,6 +243,7 @@ export const FIELD_ORDER: readonly SystemSettingsField[] = [
   'alternativeBaseRate1',
   'alternativeBaseRate2',
   'serviceChargeLabel',
+  'houseAccount',
   'folio.streetAddress',
   'folio.city',
   'folio.zip',
