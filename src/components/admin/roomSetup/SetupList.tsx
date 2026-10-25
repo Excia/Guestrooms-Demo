@@ -1,6 +1,13 @@
 import Add from '@mui/icons-material/Add';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import { visuallyHidden } from '@mui/utils';
+
+// A save can re-sort the list; keep the selected row in view without moving the page.
+function scrollSelectedIntoView(el: HTMLElement | null) {
+  if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'nearest' });
+}
 
 export interface SetupListItem {
   id: string;
@@ -22,8 +29,10 @@ export interface SetupListProps {
   onNew: () => void;
 }
 
-// Left list of Room Types and Rooms (Figma 11964:24902): the NEW button, then the items; the
-// selected one is filled and has the green tab on its edge.
+// Left list of Room Types, Rooms, Add-Ons and Rate Categories (Figma 11964:24902): the NEW button,
+// then the items; the selected one is filled and has the green bar on the panel edge. Geometry follows
+// the legacy SideBarControl and the Primary Setup navigation (D-SL-1): 59px tall items, 10px apart,
+// the tab 15px short of the bar, 5px bar. Inactive items carry a red "Inactive" tag and are greyed.
 export default function SetupList({
   items,
   selectedId,
@@ -40,36 +49,73 @@ export default function SetupList({
     onClick?: () => void,
     inactive?: boolean,
   ) => (
-    <Box component="li" key={key} sx={{ display: 'flex' }}>
+    <Box
+      component="li"
+      key={key}
+      ref={selected ? scrollSelectedIntoView : undefined}
+      sx={{ display: 'flex', position: 'relative' }}
+    >
       <Button
         fullWidth
         size="large"
         variant={selected ? 'contained' : 'text'}
         color={selected ? 'primary' : 'inherit'}
         aria-current={selected ? 'true' : undefined}
+        data-inactive={inactive ? 'true' : undefined}
         onClick={onClick}
         sx={(t) => ({
           justifyContent: 'flex-start',
-          minHeight: t.spacing(5.25),
-          color: selected ? undefined : 'text.secondary',
-          opacity: inactive && !selected ? 0.7 : 1,
+          minHeight: t.spacing(7.375),
+          // Active items read in the primary text colour, inactive ones are greyed (still AA).
+          color: selected ? undefined : inactive ? 'text.secondary' : 'text.primary',
+          fontStyle: inactive ? 'italic' : undefined,
+          [t.breakpoints.up('lg')]: { mr: t.spacing(1.875) },
         })}
       >
-        {label}
+        <Box component="span" sx={{ minWidth: 0, overflowWrap: 'anywhere', textAlign: 'left' }}>
+          {label}
+        </Box>
         {inactive ? (
-          <Box component="span" sx={{ ml: 1, fontWeight: 'normal', textTransform: 'none' }}>
-            (Inactive)
-          </Box>
+          <>
+            {/* Read as "Cottage, Inactive": a pause between the name and the tag. */}
+            <Box component="span" sx={visuallyHidden}>
+              ,{' '}
+            </Box>
+            <Chip
+              component="span"
+              size="small"
+              variant="outlined"
+              color="error"
+              label="Inactive"
+              sx={(t) => ({
+                ml: 'auto',
+                textTransform: 'none',
+                flexShrink: 0,
+                fontStyle: 'normal',
+                fontWeight: 'bold',
+                // Opaque, so the red text stays AA on the selected (green) item too.
+                bgcolor: 'background.paper',
+                pointerEvents: 'none',
+                height: t.spacing(2.75),
+                '& .MuiChip-label': { px: 1 },
+              })}
+            />
+          </>
         ) : null}
       </Button>
       {selected ? (
         <Box
           aria-hidden
+          data-testid="setup-list-active-bar"
           sx={(t) => ({
             display: { xs: 'none', lg: 'block' },
-            width: t.spacing(0.875),
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            height: '100%',
+            width: t.spacing(0.625),
             bgcolor: 'primary.main',
-            borderRadius: `${t.spacing(0.25)} 0 0 ${t.spacing(0.25)}`,
+            borderRadius: `${t.spacing(0.5)} 0 0 ${t.spacing(0.5)}`,
           })}
         />
       ) : null}
@@ -83,7 +129,12 @@ export default function SetupList({
         size="large"
         startIcon={<Add />}
         onClick={onNew}
-        sx={(t) => ({ mb: 1, minHeight: t.spacing(7.375), borderColor: 'primary.outlinedBorder' })}
+        sx={(t) => ({
+          mb: 1.25,
+          minHeight: t.spacing(7.375),
+          borderColor: 'primary.outlinedBorder',
+          [t.breakpoints.up('lg')]: { width: `calc(100% - ${t.spacing(1.875)})` },
+        })}
       >
         {newLabel}
       </Button>
@@ -95,8 +146,8 @@ export default function SetupList({
           p: 0,
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 1,
-          [t.breakpoints.up('lg')]: { flexDirection: 'column', flexWrap: 'nowrap', gap: 0.5 },
+          gap: 1.25,
+          [t.breakpoints.up('lg')]: { flexDirection: 'column', flexWrap: 'nowrap' },
         })}
       >
         {creating ? row('new', newTitle, true) : null}

@@ -53,7 +53,7 @@ describe('Rate Categories page', () => {
       'Member Rate',
       'Non-Member Rate',
       'Owner Rate',
-      'Aardvark Special(Inactive)',
+      'Aardvark Special, Inactive',
     ]);
     expect(screen.getByRole('heading', { level: 1, name: 'Comp Rate' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'SKU' })).toHaveValue('Room night, complimentary');

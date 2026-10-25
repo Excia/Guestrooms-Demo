@@ -25,8 +25,13 @@ import {
 } from '../app/addOns';
 import { showLocations } from '../app/locations';
 import { newRequestId } from '../lib/requestId';
-import { todayIso } from '../app/dateSelection';
-import { duplicateName, isActiveOn, sortSetupItems, type DeleteCheck } from '../app/roomSetup';
+import {
+  duplicateName,
+  sortSetupItems,
+  toSetupListEntries,
+  type DeleteCheck,
+} from '../app/roomSetup';
+import { useClubToday } from '../app/useClubToday';
 import AdminShell from '../components/admin/AdminShell';
 import NightlyCountdownRow from '../components/admin/addOns/NightlyCountdownRow';
 import { useAddOnData, type AddOnData } from '../components/admin/addOns/useAddOnData';
@@ -86,10 +91,11 @@ export default function AddOnItems() {
 function AddOnEditor({ data }: { data: AddOnData }) {
   const api = useApi();
   const options = data.options as NonNullable<AddOnData['options']>;
-  const today = useMemo(() => todayIso(), []);
+  const today = useClubToday();
   // One location: the Locations tab is hidden and the add-on belongs to that location.
   const multiLocation = showLocations(options.locations);
   const sorted = useMemo(() => sortSetupItems(data.addOns, today), [data.addOns, today]);
+  const listEntries = useMemo(() => toSetupListEntries(sorted, today), [sorted, today]);
   // A deleted location or room type drops out of the draft, so counts and hints match what exists.
   const toDraft = useCallback(
     (a: AddOnSetup): AddOnInput => ({ ...a, ...pruneAssociations(a, options) }),
@@ -179,11 +185,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
       sidebarLabel="Add-Ons"
       sidebar={
         <SetupList
-          items={sorted.map((a) => ({
-            id: a.id,
-            label: a.name,
-            inactive: !isActiveOn(a, today),
-          }))}
+          items={listEntries}
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Add-On"

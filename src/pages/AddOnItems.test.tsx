@@ -32,7 +32,7 @@ describe('Add-On Items page', () => {
       'Late checkout',
       'Rollaway bed',
       'Welcome package',
-      'Holiday decorations (retired)(Inactive)',
+      'Holiday decorations (retired), Inactive',
     ]);
     expect(screen.getByRole('heading', { level: 1, name: 'Crib' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Add-On Name/)).toHaveValue('Crib');

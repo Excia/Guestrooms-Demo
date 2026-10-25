@@ -144,7 +144,7 @@ Picker 11964:13394, Image Placeholder 11964:13054, Section Header 11895:18681.
 - **Implemented (Excia/Guestrooms-Demo#72, in review):** `src/pages/RoomTypes.tsx` at `/admin/room-types` and
   `src/pages/Rooms.tsx` at `/admin/rooms`, both inside the Admin Setup shell (`AdminShell` gained an optional
   `sidebar` for the item list, D-088). Left list (`SetupList`) with NEW ROOM TYPE / NEW ROOM, the selected item
-  filled, inactive items last with "(Inactive)" (PDF 9.4.2.4); a new item shows the default title and a Cancel
+  filled, inactive items last with a red "Inactive" tag and greyed (PDF 9.4.2.4; setup lists polish 2026-10-25); a new item shows the default title and a Cancel
   button; duplicate makes a new unsaved item named "Copy of ..."; delete asks Delete or Cancel (D-087). Form
   parts: Active Start/End Date with "Configure active end date?" (end must be after start), SKU lookup, switches,
   the shared `QuantityPicker` (`src/components/shared`, min 0 by default; occupancy 1 to 99, bedrooms 0 to 10,
@@ -393,3 +393,7 @@ the legacy page is the reference (see [entries/183-room-options.md](entries/183-
   Room Types tabs, a separate Bed Sizes / Features page per legacy route (one page with two tabs instead).
 - **Status:** in review, 2026-10-25.
 - **Open questions:** Q-183-1, Q-183-2, Q-183-3.
+- **Setup lists polish (2026-10-25, branch `fix/setup-lists-inactive-legacy-spacing`):** the Room Types, Rooms, Add-On Items (and
+  Rate Categories) list uses the legacy side-bar spacing (59px items, 10px apart, 5px bar); inactive items get a red "Inactive" tag, are
+  greyed and sorted last (`toSetupListEntries`); the photo and logo remove control is a 20px red badge (`PhotoRemoveBadge`). Details
+  in [entries/setup-lists-polish.md](entries/setup-lists-polish.md).
