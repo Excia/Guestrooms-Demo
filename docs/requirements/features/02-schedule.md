@@ -15,7 +15,7 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   only / Booked only, filter icon; list/calendar toggle (list is ticket 3.1); filter panel with
   Locations and Room Types checkbox lists and Select All / Select None; row header "location | room
   type" plus room number; weekday header such as "Monday 11/10"; closures as gray blocks (e.g.
-  "Reserved: Fixed Loss") with an orange block-end marker. Drag and drop (Figma notes): can drag to
+  "Reserved: Fixed Loss") (the Figma orange block-end marker is not drawn, owner 2026-10-25, D-EM-2). Drag and drop (Figma notes): can drag to
   the same room type, a different room type, a future date, and NYCI rooms; cannot drag onto a room
   with a reservation or closure on the same dates, checked-out rooms, closures; a room of a multi-room
   reservation dragged to a new date moves all rooms. Confirmations: **Room Change** dialog and **Date
@@ -67,7 +67,7 @@ filters, drag dialogs) 15967:188321; Schedule Blocks 15963:188278.
   (`LinkedRoom`: room number, reserver name) draws the link icon, grey at 75% opacity and
   not clickable or draggable; its text follows the view and the stay length (`linkedBlockText`, D-LM-1, legacy); tooltip
   "Linked to [Room][ +N Room]" / "Reserver First Last" on hover and keyboard focus; text is cut with an ellipsis.
-  Indicators follow D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
+  Indicators follow D-EM-1, which replaced D-21-3 (`blockIndicators`, `src/app/scheduleLinked.ts`); a linked block shows none. There is no
   "canceled" block: canceling removes the event from the schedule (Q-21-3 answered). Entry: `entries/21-schedule-blocks.md`.
 - **Block content, month view and tooltips (ticket #147, LP-S.1):** lead occupant with "+N", else reserver, block name;
   second line by the legacy detail order (room type, balance due, reserver, Maintenance, block name); month view with a
@@ -163,7 +163,8 @@ Res Details Panel with Split CTA 2623:9046; New Res Panel 11905:17751; Search Re
   - **Schedule markers (small part of ticket 2.4):** the early check-in sliver is drawn on any block with
     `earlyCheckIn`, including a stay clipped at the left edge of the visible range (drawn as the card's
     own rounded left edge, the GR-50240 case); the late check-out marker only at a real departure edge
-    (D-084).
+    (D-084). Since 2026-10-25 both tabs follow the flags whatever the status (D-EM-1,
+    `entries/edge-markers.md`).
 - **Owner feedback applied during review (2026-10-20/21):** D-057, D-063 to D-069 and D-079 to D-085 in
   [decisions.md](../decisions.md). The dashboard "New Reservation" search is unchanged (D-085).
 - **Deviations from Figma:** header shows "Confirmed" / "Pending" before check in (Figma draws no
@@ -330,8 +331,8 @@ Schedule Block Exploration 12843:35986; States and Variations 12423:59315.
 - **Requirements:** `<ScheduleBlock>` renders not yet checked in, checked in, checked out, canceled,
   unassigned, closure, linked states; treatment icon and name color per ticket 3.11. Linked room
   block text by view and stay length, as in the legacy system (D-LM-1): see `entries/legacy-match.md`. Linked rooms show no early/late indicators (owner, 2026-10-24; legacy draws none). Tooltip on hover/focus: "Linked to [Room Number]" then "Reserver First Last". Early/late
-  indicators: Not Yet Checked In shows only early check in; Checked In and Checked Out show only late
-  check out, even if both are selected (linked blocks excepted). Truncation with an ellipsis and the full text in the tooltip.
+  tabs: each selected flag draws its tab whatever the status (legacy, owner 2026-10-25, D-EM-1; this
+  replaces the Figma note on 3.12 that gated them by status); linked blocks excepted. Truncation with an ellipsis and the full text in the tooltip.
   Owner icon: the svgrepo hand/key icon (D-018).
 - **Implemented:** a base block renderer exists from 2.1 (`ScheduleItemView`: confirmed/NYCI,
   checked-in, checked-out, due-out, closure, guest type colors); minimal early/late edge markers in

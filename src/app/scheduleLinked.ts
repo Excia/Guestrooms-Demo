@@ -57,31 +57,15 @@ export interface EarlyLateFlags {
 }
 
 /**
- * Not Yet Checked In (`confirmed` and `nyci`) shows only the early check in indicator; Checked In and
- * Checked Out show only late check out, even when both are set. A status that is not known keeps
- * both flags as given.
+ * The indicators a block draws. Each set flag draws its own tab whatever the status (legacy behavior,
+ * owner decision 2026-10-25, D-EM-1): Early Check In on a checked-in stay and Late Check Out on a not
+ * yet checked in one both show. A linked-room block draws none (the legacy system draws none either,
+ * owner decision 2026-10-24).
  */
-export function indicatorsForStatus(
-  status: ScheduleBlockStatus | undefined,
-  flags: EarlyLateFlags,
+export function blockIndicators(
+  /** `status` is accepted for callers that pass a whole block; it never changes the result. */
+  block: EarlyLateFlags & { status?: ScheduleBlockStatus; linkedTo?: LinkedRoom },
 ): { early: boolean; late: boolean } {
-  const early = Boolean(flags.earlyCheckIn);
-  const late = Boolean(flags.lateCheckOut);
-  if (status === undefined) return { early, late };
-  if (status === 'checked-in' || status === 'checked-out') return { early: false, late };
-  return { early, late: false };
-}
-
-/**
- * The indicators a block draws. A linked-room block draws none (the legacy system draws none either,
- * owner decision 2026-10-24); any other block follows the status rule on its own flags.
- */
-export function blockIndicators(block: {
-  status?: ScheduleBlockStatus;
-  earlyCheckIn?: boolean;
-  lateCheckOut?: boolean;
-  linkedTo?: LinkedRoom;
-}): { early: boolean; late: boolean } {
   if (block.linkedTo) return { early: false, late: false };
-  return indicatorsForStatus(block.status, block);
+  return { early: Boolean(block.earlyCheckIn), late: Boolean(block.lateCheckOut) };
 }
