@@ -319,7 +319,7 @@ export default function SettingsTab({
                 />
               }
               label="Run Automatically"
-              disabled={value.trainingMode}
+              disabled={readOnly || value.trainingMode}
             />
           </RadioGroup>
           {value.trainingMode ? (
