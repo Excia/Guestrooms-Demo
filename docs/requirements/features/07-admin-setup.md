@@ -72,6 +72,11 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
     clear X, loading, no-results and failure states, shared `LookupField` in async mode; the whole Settings tab can be
     disabled through the page's `readOnly` prop for the View-only admin). Stored as `houseAccount {id, label} | null` with the other settings. What
     the folio does with it is open (Q-HA-1). See [entries/house-account.md](entries/house-account.md).
+  - **SSO Admin (owner request 2026-10-25):** an "SSO Admin" section as the first section of the Settings tab's left
+    column (above Time Zone): the shared `LookupField`, always disabled, showing the placeholder "Admin User" with the
+    pale disabled search icon; always visible (also in View mode and Training Mode); display-only, so it is not in the
+    settings data, the dirty check or the Save payload. What it will do is open (Q-SSO-1, Q-SSO-2). See
+    [entries/sso-admin.md](entries/sso-admin.md).
   - **Backend:** `GET` and `PUT /settings/system`, `GET /settings/system/options` (see
     [api-contract.md](../api-contract.md)).
   - **Doc items with no Figma content or no ticket (candidate tickets):** 6.7 Default Rate Categories for Room
