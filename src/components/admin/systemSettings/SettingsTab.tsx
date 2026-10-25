@@ -19,6 +19,7 @@ import {
   lateCheckoutOptions,
   SERVICE_CHARGE_LABEL_MAX,
   TIME_STEP_MINUTES,
+  TRAINING_MODE_AUDIT_MESSAGE,
   withLateCheckoutInRange,
   type SystemSettingsErrors,
   type SystemSettingsField,
@@ -257,7 +258,10 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
 
       <Box sx={column}>
         <FormControl component="fieldset" variant="standard">
-          <FormLabel component="legend" sx={{ typography: 'body2', fontWeight: 'bold', mb: 1 }}>
+          <FormLabel
+            component="legend"
+            sx={{ typography: 'settings_heading', color: 'text.secondary', mb: 1 }}
+          >
             Night Audit
           </FormLabel>
           <RadioGroup
@@ -265,8 +269,26 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
             onChange={(e) => set('nightAudit', e.target.value as SystemSettings['nightAudit'])}
           >
             <FormControlLabel value="manual" control={<Radio />} label="Run Manually" />
-            <FormControlLabel value="automatic" control={<Radio />} label="Run Automatically" />
+            <FormControlLabel
+              value="automatic"
+              control={
+                <Radio
+                  slotProps={{
+                    input: {
+                      'aria-describedby': value.trainingMode
+                        ? 'training-mode-audit-note'
+                        : undefined,
+                    },
+                  }}
+                />
+              }
+              label="Run Automatically"
+              disabled={value.trainingMode}
+            />
           </RadioGroup>
+          {value.trainingMode ? (
+            <Hint id="training-mode-audit-note">{TRAINING_MODE_AUDIT_MESSAGE}</Hint>
+          ) : null}
           {value.nightAudit === 'automatic' ? (
             <TextField
               id={fieldId('nightAuditRunTime')}
@@ -314,7 +336,10 @@ export default function SettingsTab({ value, onChange, errors, options }: Settin
         </Section>
 
         <FormControl component="fieldset" variant="standard">
-          <FormLabel component="legend" sx={{ typography: 'body2', fontWeight: 'bold', mb: 1 }}>
+          <FormLabel
+            component="legend"
+            sx={{ typography: 'settings_heading', color: 'text.secondary', mb: 1 }}
+          >
             Rate Change Handling
           </FormLabel>
           <Typography id="rate-change-intro">

@@ -303,11 +303,16 @@ Excia/Guestrooms-Demo#95 (added during refinement). Figma: tab 13319:41951, PDF 
 - **Implemented (Excia/Guestrooms-Demo#95, in review):** a "Registration Card" tab in `src/pages/SystemSettings.tsx`
   (`src/components/admin/systemSettings/RegistrationCardTab.tsx`); the values are `SystemSettings.registrationCard`,
   saved with the rest. Pure rules in `src/app/registrationCard.ts` (item dependencies, validation, `buildRegistrationCard`:
-  what the card prints for a reservation, including the reserver-hidden case). Generate Preview calls the typed API
-  `registrationCard.requestPreview` (mock: a printable HTML page laid out like the PDF frame) and opens the result in a
-  new tab. Print Registration Card(s) leaves the reservation menus while the switch is off. Details in
+  what the card prints for a reservation, including the reserver-hidden case). Generate Preview opens a modal dialog that
+  draws the card in the app (`src/components/registrationCard/`, from `buildRegistrationCard` and a sample reservation);
+  its Print button calls the typed API `registrationCard.requestPreview` (mock: a printable HTML page laid out like the PDF
+  frame) and opens the result in a new tab (settings polish 2026-10-25, D-settings-polish-4). Print Registration Card(s) leaves the reservation menus while the switch is off. Details in
   [entries/95-registration-card.md](entries/95-registration-card.md).
 - **Open questions:** Q-95-1 to Q-95-5.
+- **Settings polish (2026-10-25, branch `fix/settings-polish-registration-preview-modal`):** red Remove logo X; **Training Mode**
+  switch at the top right of the Settings tab ("Training Mode Enabled" / "Training Mode Disabled", as legacy; on forces Night Audit
+  to Run Manually and disables Run Automatically); smaller System Settings text (theme variants `settings_*`); Registration Card
+  preview as a dialog. Details and values in [entries/settings-polish.md](entries/settings-polish.md).
 
 ## 7.9 Online Booking settings tab
 

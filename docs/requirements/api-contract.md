@@ -632,3 +632,10 @@ hides; it never decides a conflict. The mock (`src/api/holdData.ts`) behaves lik
   unless it is the holder's own; hold requests and bookings are serialised per room so two users cannot both win; a hold does
   not extend itself; expiry is the server's clock only. Other users' holds reach a client only when it loads the schedule (no
   push yet, Q-152-4).
+
+## System Settings polish: Training Mode (branch `fix/settings-polish-registration-preview-modal`)
+
+- `GET` and `PUT /settings/system` (row 15 above) gain `trainingMode: boolean` (the club is practicing, not running live). The client rejects a System Settings response that omits it, so a backend must send it before this UI loads against it.
+- Rule the backend must enforce (422 `validation`): `trainingMode: true` with `nightAudit: "automatic"` is refused ("Running Night Audit automatically is not available in Training Mode."). Legacy forces `nightAudit: "manual"` when the toggle goes on; the UI does the same before saving.
+- What else Training Mode changes in the product is not defined yet (Q-settings-polish-1).
+- `POST /registration-card/preview` (Registration Card section above) is now requested only when Print is pressed in the preview dialog; Generate Preview itself draws the card in the UI and makes no request.

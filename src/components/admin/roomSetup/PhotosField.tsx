@@ -114,7 +114,7 @@ export default function PhotosField({ photos, onChange, disabled, error, id }: P
               aria-label={`Remove photo ${photo.name}`}
               disabled={disabled}
               onClick={() => onChange(removePhoto(photos, photo.id))}
-              sx={{ position: 'absolute', top: 0, right: 0, color: 'text.secondary' }}
+              sx={{ position: 'absolute', top: 0, right: 0, color: 'error.main' }}
             >
               <Cancel fontSize="small" />
             </IconButton>

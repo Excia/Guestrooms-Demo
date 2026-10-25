@@ -11,8 +11,11 @@ import {
   logoFileProblem,
   MESSAGES,
   parseTime,
+  TRAINING_MODE_AUDIT_MESSAGE,
+  trainingModeLabel,
   validateSystemSettings,
   withLateCheckoutInRange,
+  withTrainingMode,
 } from './systemSettings';
 
 const h = (amount: number) => ({ amount, unit: 'hours' as const });
@@ -253,5 +256,32 @@ describe('logoFileProblem', () => {
     expect(logoFileProblem({ type: 'image/png', size: 1000 })).toBeNull();
     expect(logoFileProblem({ type: 'application/pdf', size: 1000 })).toMatch(/PNG, JPG or SVG/);
     expect(logoFileProblem({ type: 'image/png', size: 3 * 1024 * 1024 })).toMatch(/2 MB/);
+  });
+});
+
+describe('Training Mode', () => {
+  it('names the state in its label, as legacy does', () => {
+    expect(trainingModeLabel(true)).toBe('Training Mode Enabled');
+    expect(trainingModeLabel(false)).toBe('Training Mode Disabled');
+  });
+
+  it('turning it on forces Run Manually; turning it off leaves the audit alone', () => {
+    const auto = base({ nightAudit: 'automatic' });
+    expect(withTrainingMode(auto, true)).toMatchObject({
+      trainingMode: true,
+      nightAudit: 'manual',
+    });
+    expect(withTrainingMode(auto, false)).toMatchObject({
+      trainingMode: false,
+      nightAudit: 'automatic',
+    });
+  });
+
+  it('refuses an automatic night audit while on, and marks the draft dirty', () => {
+    const bad = base({ trainingMode: true, nightAudit: 'automatic' });
+    expect(validateSystemSettings(bad).trainingMode).toEqual([TRAINING_MODE_AUDIT_MESSAGE]);
+    expect(firstErrorField(validateSystemSettings(bad))).toBe('trainingMode');
+    expect(validateSystemSettings(base({ trainingMode: true }))).toEqual({});
+    expect(isDirty(base(), base({ trainingMode: true }))).toBe(true);
   });
 });

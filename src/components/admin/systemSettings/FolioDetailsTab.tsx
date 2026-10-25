@@ -189,9 +189,12 @@ export default function FolioDetailsTab({ value, onChange, errors }: FolioDetail
                     position: 'absolute',
                     top: t.spacing(-1),
                     right: t.spacing(-1.5),
-                    bgcolor: 'text.secondary',
-                    color: 'background.paper',
-                    '&:hover': { bgcolor: 'text.primary' },
+                    // Red X (the theme's error colour); 24px minimum target.
+                    minWidth: t.spacing(3),
+                    minHeight: t.spacing(3),
+                    bgcolor: 'error.main',
+                    color: 'error.contrastText',
+                    '&:hover': { bgcolor: 'error.dark' },
                   })}
                 >
                   <Close fontSize="small" />

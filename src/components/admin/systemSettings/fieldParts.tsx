@@ -7,15 +7,10 @@ import type { SystemSettingsField } from '../../../app/systemSettings';
 /** DOM id of a field's control; the page focuses the first invalid one after a refused save. */
 export const fieldId = (field: SystemSettingsField) => `system-settings-${field}`;
 
-/** Figma typography/h5_fixed: 14px bold, secondary text. */
+/** Figma typography/h5_fixed (bold, secondary text), at the System Settings heading size (theme `settings_heading`). */
 export function SectionTitle({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <Typography
-      id={id}
-      variant="body2"
-      component="h3"
-      sx={{ fontWeight: 'bold', color: 'text.secondary' }}
-    >
+    <Typography id={id} variant="settings_heading" component="h3" sx={{ color: 'text.secondary' }}>
       {children}
     </Typography>
   );

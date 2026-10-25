@@ -652,6 +652,7 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !isString(body.checkOutTime) ||
     !isString(body.lateCheckOutTime) ||
     typeof body.earlyLateEnabled !== 'boolean' ||
+    typeof body.trainingMode !== 'boolean' ||
     !isObject(body.mposVisibleBefore) ||
     !isObject(body.mposVisibleAfter) ||
     !isObject(body.closeSettledFolios) ||

@@ -51,6 +51,7 @@ export const mockSystemSettings = (): SystemSettings => ({
   mposVisibleBefore: { amount: 1, unit: 'hours' },
   mposVisibleAfter: { amount: 6, unit: 'hours' },
   closeSettledFolios: { amount: 8, unit: 'hours' },
+  trainingMode: false,
   nightAudit: 'manual',
   nightAuditRunTime: '02:00',
   alternativeBaseRate1: { enabled: true, minNights: 7 },

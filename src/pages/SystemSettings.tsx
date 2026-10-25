@@ -25,8 +25,10 @@ import { fieldId } from '../components/admin/systemSettings/fieldParts';
 import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
 import OnlineBookingTab from '../components/admin/systemSettings/OnlineBookingTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
+import TrainingModeToggle from '../components/admin/systemSettings/TrainingModeToggle';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
+import { settingsTextSx } from '../components/admin/systemSettings/settingsText';
 
 type TabId = 'settings' | 'folio' | 'registration' | 'online';
 const tabId = (id: string) => `system-settings-tab-${id}`;
@@ -151,7 +153,7 @@ export default function SystemSettings() {
     );
   } else {
     body = (
-      <>
+      <Box sx={settingsTextSx}>
         <Tabs
           value={tab}
           onChange={(_, next: TabId) => setTab(next)}
@@ -198,7 +200,10 @@ export default function SystemSettings() {
           sx={{ outline: 'none' }}
         >
           {tab === 'settings' ? (
-            <SettingsTab value={draft} onChange={setDraft} errors={errors} options={options} />
+            <>
+              <TrainingModeToggle value={draft} onChange={setDraft} errors={errors} />
+              <SettingsTab value={draft} onChange={setDraft} errors={errors} options={options} />
+            </>
           ) : tab === 'registration' ? (
             <RegistrationCardTab
               value={draft.registrationCard}
@@ -225,7 +230,7 @@ export default function SystemSettings() {
             </>
           )}
         </Box>
-      </>
+      </Box>
     );
   }
 
@@ -233,6 +238,7 @@ export default function SystemSettings() {
     <AdminShell
       active="System Settings"
       title="System Settings"
+      titleVariant="settings_title"
       actions={saveButton}
       changeLog="system-settings"
     >

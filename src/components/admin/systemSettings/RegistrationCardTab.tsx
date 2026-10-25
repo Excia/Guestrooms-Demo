@@ -1,13 +1,10 @@
 import FindInPage from '@mui/icons-material/FindInPage';
-import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
-import CircularProgress from '@mui/material/CircularProgress';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import FormHelperText from '@mui/material/FormHelperText';
 import TextField from '@mui/material/TextField';
-import { visuallyHidden } from '@mui/utils';
 import { useId, useState } from 'react';
 import { useApi } from '../../../api';
 import type {
@@ -23,7 +20,9 @@ import {
   REGISTRATION_CARD_CUSTOM_TEXT_MAX,
   setItem,
 } from '../../../app/registrationCard';
-import { openCardErrorMessage, openCardInNewTab } from '../../../app/openCardPreview';
+import { buildRegistrationCard } from '../../../app/registrationCard';
+import { SAMPLE_RESERVATION, SAMPLE_SYSTEM_NAME } from '../../../app/registrationCardSample';
+import RegistrationCardPreviewDialog from '../../registrationCard/RegistrationCardPreviewDialog';
 import type { SystemSettingsErrors } from '../../../app/systemSettings';
 import { fieldId, SectionTitle } from './fieldParts';
 import ToggleRow from './ToggleRow';
@@ -37,7 +36,8 @@ export interface RegistrationCardTabProps {
 }
 
 // Registration Card tab (Figma 13319:41951): the enable switch, the items printed on the card, the
-// custom text and Generate Preview (the backend renders the PDF; it opens in a new tab, D-003).
+// custom text and Generate Preview (the card in a dialog; its Print button asks the backend for the PDF
+// and opens it in a new tab, D-003).
 export default function RegistrationCardTab({
   value,
   onChange,
@@ -47,22 +47,8 @@ export default function RegistrationCardTab({
   const api = useApi();
   const titleId = useId();
   const baseId = useId();
-  const [previewing, setPreviewing] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const textError = errors['registrationCard.customText']?.[0];
-
-  const generatePreview = async () => {
-    if (previewing) return;
-    setPreviewing(true);
-    setPreviewError(null);
-    try {
-      await openCardInNewTab(() => api.registrationCard.requestPreview({ settings: value, folio }));
-    } catch (error) {
-      setPreviewError(openCardErrorMessage(error));
-    } finally {
-      setPreviewing(false);
-    }
-  };
 
   const item = (id: RegistrationCardItemId) => {
     const parent = ITEM_PARENT[id];
@@ -113,24 +99,13 @@ export default function RegistrationCardTab({
           <SectionTitle id={titleId}>Registration Card Items</SectionTitle>
           <Button
             size="small"
-            startIcon={previewing ? <CircularProgress size={16} color="inherit" /> : <FindInPage />}
-            onClick={() => void generatePreview()}
+            startIcon={<FindInPage />}
+            onClick={() => setPreviewOpen(true)}
             disabled={!value.enabled}
-            // Stays focusable while it works (a disabled button would drop the keyboard's place).
-            aria-disabled={previewing || undefined}
-            sx={previewing ? { cursor: 'progress', opacity: 0.7 } : undefined}
           >
-            {previewing ? 'Generating…' : 'Generate Preview'}
+            Generate Preview
           </Button>
-          <Box role="status" aria-live="polite" sx={visuallyHidden}>
-            {previewing ? 'Generating preview' : ''}
-          </Box>
         </Box>
-        {previewError ? (
-          <Alert severity="error" role="alert">
-            {previewError}
-          </Alert>
-        ) : null}
         <Box
           role="group"
           aria-labelledby={titleId}
@@ -193,6 +168,12 @@ export default function RegistrationCardTab({
           )}
         </Box>
       </Box>
+      <RegistrationCardPreviewDialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        card={buildRegistrationCard(value, SAMPLE_RESERVATION, folio, SAMPLE_SYSTEM_NAME)}
+        requestDocument={() => api.registrationCard.requestPreview({ settings: value, folio })}
+      />
     </Box>
   );
 }
