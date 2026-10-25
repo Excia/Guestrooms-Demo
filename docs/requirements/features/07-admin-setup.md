@@ -331,7 +331,7 @@ Excia/Guestrooms-Demo#96 (added during refinement). Figma: Online Booking tab 15
 Excia/Guestrooms-Demo#97 (added during refinement). Figma: Change Log overlay 16718:6217 (an Event Types
 table sits next to it).
 
-- **Requirements:** a reusable `<ChangeLogOverlay page=...>` full-screen overlay titled "[Page] Change
+- **Requirements:** a reusable `<ChangeLogOverlay page=...>` modal dialog (not full screen, D-AP-3) titled "[Page] Change
   Log", listing only that page's changes; columns Date ("Day, MM/DD/YY"), Time ("HH:MM XM"), Change Type,
   Description, Action By; newest first; sort and filter by date, time, change type and action by;
   pagination; the X closes; **retention one year** on admin setup screens (enforced by the API contract);

@@ -14,11 +14,11 @@ No ticket. Touches tickets 2.4 (#21), 2.5 (#22) and 7.4 (#73). Figma is not the 
 
 ## Open questions
 
-| ID     | Question                                                                                                                | Blocks       | Default used                                                                                                   | Who answers | Status |
-| ------ | ----------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
-| Q-LM-1 | Is the "+N" after a linked room the number of linked rooms (legacy `multilinkageCount`) or the number of further rooms? | Linked block | The field value is shown as is, only when it is more than 1 ("202 +3"); the backend decides what it counts     | Owner       | open   |
-| Q-LM-2 | Add Another Room has no permission check in legacy, so a user without `reservation.edit` sees it. Keep that?            | Menu rules   | Yes, as the owner said; built in ticket 151 (`entries/151-edit-panel.md`, D-151-4): no check in the panel or the mock; the backend decides on save     | Owner       | open   |
-| Q-LM-3 | Where does the backend get "night audit has run" for a reservation: the folio inference or an audit log?                | Menu rules   | The UI reads `ReservationDetail.folioCharges` (legacy inference); a backend may send the same fact differently | Backend     | open   |
+| ID     | Question                                                                                                                | Blocks       | Default used                                                                                                                                       | Who answers | Status |
+| ------ | ----------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ------ |
+| Q-LM-1 | Is the "+N" after a linked room the number of linked rooms (legacy `multilinkageCount`) or the number of further rooms? | Linked block | The field value is shown as is, only when it is more than 1 ("202 +3"); the backend decides what it counts                                         | Owner       | open   |
+| Q-LM-2 | Add Another Room has no permission check in legacy, so a user without `reservation.edit` sees it. Keep that?            | Menu rules   | Yes, as the owner said; built in ticket 151 (`entries/151-edit-panel.md`, D-151-4): no check in the panel or the mock; the backend decides on save | Owner       | open   |
+| Q-LM-3 | Where does the backend get "night audit has run" for a reservation: the folio inference or an audit log?                | Menu rules   | The UI reads `ReservationDetail.folioCharges` (legacy inference); a backend may send the same fact differently                                     | Backend     | open   |
 
 ## Decisions
 

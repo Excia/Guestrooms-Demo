@@ -394,11 +394,11 @@ All three are idempotent on `requestId` (body and `Idempotency-Key` header) and 
 each answers the `ReservationDetail` as it is now, with a new `version`. Add room needs **no permission** (owner decision,
 D-LM-5 / Q-LM-2: legacy has none), so it has no 403 row; guests and notes need `reservation.edit` (403 `forbidden`).
 
-| #   | Method and path                      | Request                                                                                                  | Errors                                                                                               |
-| --- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| #   | Method and path                      | Request                                                                                                  | Errors                                                                                                  |
+| --- | ------------------------------------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | 1   | `POST /reservations/{id}/rooms`      | `AddRoomRequest {requestId, reservationId, version, roomId?, adults, children, leadOccupant?}`           | 400; 404 (reservation or room); 409 `stale`, `conflict`, `held`, `not-editable`, `idempotency-conflict` |
-| 2   | `PUT /reservation-rooms/{id}/guests` | `UpdateGuestsRequest {requestId, reservationId, reservationRoomId, version, adults, children, guests[]}` | 400; 403; 404; 409 `stale`, `not-editable`, `idempotency-conflict`                                   |
-| 3   | `PUT /reservations/{id}/notes`       | `UpdateNotesRequest {requestId, reservationId, version, publicNotes, privateNotes}`                      | 400; 403; 404; 409 `stale`, `not-editable`, `idempotency-conflict`                                   |
+| 2   | `PUT /reservation-rooms/{id}/guests` | `UpdateGuestsRequest {requestId, reservationId, reservationRoomId, version, adults, children, guests[]}` | 400; 403; 404; 409 `stale`, `not-editable`, `idempotency-conflict`                                      |
+| 3   | `PUT /reservations/{id}/notes`       | `UpdateNotesRequest {requestId, reservationId, version, publicNotes, privateNotes}`                      | 400; 403; 404; 409 `stale`, `not-editable`, `idempotency-conflict`                                      |
 
 - Add room: the new room takes the arrival and departure of the whole stay (dates are never sent). `roomId` null or absent adds an
   UNASSIGNED room. 409 `conflict` when the room is booked or closed on any night of the stay. 409 `not-editable` in the cases that
@@ -471,14 +471,14 @@ saves. Photo upload and storage are open (Q-72-1).
 
 ## Rate categories (ticket 7.2 / Legacy Port 184, built on the mock)
 
-| Method and path                      | Body / response                                                                                     | Errors                                                     |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `GET /rate-categories/options`       | `RateCategoryOptions { skus, roomTypes }`, each a list of `{ id, label }`                           | 5xx                                                        |
-| `GET /rate-categories`               | `RateCategorySetup[]`                                                                               | 5xx                                                        |
-| `POST /rate-categories`              | `RateCategoryInput` (no `id`) returns the stored `RateCategorySetup`; `Idempotency-Key` header      | 422 `validation`, 409 `duplicate-name`                     |
-| `PUT /rate-categories/{id}`          | `RateCategoryInput` returns the stored `RateCategorySetup`                                          | 422 `validation`, 404 `not-found`, 409 `duplicate-name`    |
-| `POST /rate-categories/{id}/duplicate` | `{ name }` returns the new `RateCategorySetup`; `Idempotency-Key` header                          | 404 `not-found`, 422 `validation`, 409 `duplicate-name`    |
-| `DELETE /rate-categories/{id}`       | 204                                                                                                 | 404 `not-found`, 409 `in-use`                              |
+| Method and path                        | Body / response                                                                                | Errors                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `GET /rate-categories/options`         | `RateCategoryOptions { skus, roomTypes }`, each a list of `{ id, label }`                      | 5xx                                                     |
+| `GET /rate-categories`                 | `RateCategorySetup[]`                                                                          | 5xx                                                     |
+| `POST /rate-categories`                | `RateCategoryInput` (no `id`) returns the stored `RateCategorySetup`; `Idempotency-Key` header | 422 `validation`, 409 `duplicate-name`                  |
+| `PUT /rate-categories/{id}`            | `RateCategoryInput` returns the stored `RateCategorySetup`                                     | 422 `validation`, 404 `not-found`, 409 `duplicate-name` |
+| `POST /rate-categories/{id}/duplicate` | `{ name }` returns the new `RateCategorySetup`; `Idempotency-Key` header                       | 404 `not-found`, 422 `validation`, 409 `duplicate-name` |
+| `DELETE /rate-categories/{id}`         | 204                                                                                            | 404 `not-found`, 409 `in-use`                           |
 
 `RateCategorySetup`: `id`, `name` (1 to 25, unique ignoring case), `startDate`, `endDate | null` (after the start),
 `kind` (`item` or `combo`) and `sku` (required), `roomTypeIds` (at least one; the rate rows), `seasons`, and the
@@ -494,11 +494,12 @@ room types. `POST` create and `duplicate` are idempotent by `Idempotency-Key` (t
 `requestId`; the key is not stored). `PUT` is last-write-wins (no version; two admins editing one category overwrite each other). `options.skus` carries each SKU's `kind` (`item` or `combo`); `kind` and `sku` must match (422). Two default seasons or a repeated season id answer 422. `DELETE` answers 409 `in-use` while `reservationCount` is above 0 or
 `settingNames` is not empty (Q-184-3). Duplicating copies the stored category (all seasons and rates, new ids,
 no usage) under the given name.
+
 ## Room options (LP-A.2 / ticket 7.12, built on the mock)
 
-| Method and path     | Body / response                                                                                         | Errors                                                                      |
-| ------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `GET /room-options` | `RoomOptions { version, features, bedSizes }`, each list `{ id, label }` in display order                   | 5xx                                                                         |
+| Method and path     | Body / response                                                                                         | Errors                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `GET /room-options` | `RoomOptions { version, features, bedSizes }`, each list `{ id, label }` in display order               | 5xx                                                                                      |
 | `PUT /room-options` | `{ requestId, features, bedSizes }`, items `{ id?, label }`; replaces both lists; returns `RoomOptions` | 422 `validation`, 404 `not-found`, 409 `stale`, 409 `in-use`, 409 `idempotency-conflict` |
 
 `PUT` takes the `Idempotency-Key` header (= `requestId`) and `If-Match` (= `version`, also in the body); a repeat of a request id answers the first result. A `version` that is not the current one answers 409 `stale` and saves nothing, so a tab with old lists cannot silently delete what another tab added. The answer lists the items in the order sent (the UI keeps its field keys by position). The same `id` twice in one request is 422. An item without `id` is new
@@ -527,7 +528,7 @@ backend's concern (Q-75-3).
 ## Locations (tickets 182 and 123, built on the mock)
 
 - `GET /locations` (`locations.list`): the club's locations, in display order. Each is `{ id, name, area: {id, label} | null,
-  usage: { roomTypes: string[], roomCount: number } }`; `usage` lists the names of the room types in the location and the number
+usage: { roomTypes: string[], roomCount: number } }`; `usage` lists the names of the room types in the location and the number
   of rooms, read-only. A club with one location hides every location selector in the UI (rule in `src/app/locations.ts`).
 - `GET /locations/areas` (`locations.listAreas`): the areas a location can be tied to, `[{ id, label }]`. The UI filters them
   as the user types.
@@ -553,12 +554,12 @@ backend's concern (Q-75-3).
 
 ## Check in on past dates (ticket 163, built on the mock)
 
-| Method and path                           | Body / response                                                                                                                                    | Errors                                                                                                                                           |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Method and path                           | Body / response                                                                                                                                                                                                                                         | Errors                                                                                                                                                                          |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `POST /reservations/{id}/check-in`        | `CheckInReservationRequest { requestId, reservationId, version, reservationRoomIds[], pastDateConfirmed, overrideCode?, checkOutAfter }` returns `CheckInReservationResult { reservation, rooms[], autoCheckedOut, nightsPosted, integrationErrors[] }` | 400 `invalid-id`/`invalid-query`; 403 `forbidden`, `override-required`, `override-invalid`; 404; 409 `stale`, `future-arrival`, `past-date-unconfirmed`, `idempotency-conflict` |
-| `POST /override-codes/verify`             | `{ permission: 'reservation.check-in.any-time', code }` returns `{ valid }` (a wrong code is a normal answer)                                       | 400                                                                                                                                              |
-| `POST /reservation-rooms/{id}/split`      | `SplitRoomRequest { requestId, reservationId, reservationRoomId, version }` returns the **new** `ReservationDetail`                                 | 400; 403 `forbidden`; 404; 409 `stale`, `not-splittable` (one room), `idempotency-conflict`                                                      |
-| `POST /reservations/{id}/payment-methods` | PLACEHOLDER (ticket 3.9): puts a mock card on file; returns the `ReservationDetail`                                                                | 400; 404                                                                                                                                         |
+| `POST /override-codes/verify`             | `{ permission: 'reservation.check-in.any-time', code }` returns `{ valid }` (a wrong code is a normal answer)                                                                                                                                           | 400                                                                                                                                                                             |
+| `POST /reservation-rooms/{id}/split`      | `SplitRoomRequest { requestId, reservationId, reservationRoomId, version }` returns the **new** `ReservationDetail`                                                                                                                                     | 400; 403 `forbidden`; 404; 409 `stale`, `not-splittable` (one room), `idempotency-conflict`                                                                                     |
+| `POST /reservations/{id}/payment-methods` | PLACEHOLDER (ticket 3.9): puts a mock card on file; returns the `ReservationDetail`                                                                                                                                                                     | 400; 404                                                                                                                                                                        |
 
 Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI decides the same in `src/app/checkInDecision.ts`):
 
@@ -597,7 +598,6 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   offers it only for one chosen room and the backend should refuse a split that leaves a room with nothing to split from (`not-splittable`).
 - A request that names a room arriving after today fails the whole request (409 `future-arrival`); the UI never sends such a room
   (it lists it as "not yet"). The automatic check out is decided per room.
-
 
 ## Slot holds (ticket 152, built on the mock)
 

@@ -7,7 +7,7 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import Dialog from '@mui/material/Dialog';
 import IconButton from '@mui/material/IconButton';
-import Popover from '@mui/material/Popover';
+import InputAdornment from '@mui/material/InputAdornment';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
@@ -57,8 +57,9 @@ const COLUMNS: { field: ChangeLogSortField | 'description'; label: string; width
   { field: 'actionBy', label: 'Action By', width: '25%' },
 ];
 
-// Change Log overlay (Figma 16718:6217): a full-screen page-specific log, newest first, with sort and
-// filter on date, time, change type and action by. The X closes it; Escape does too.
+// Change Log dialog (Figma 16718:6217, decision D-AP-3): a page-specific log in a modal dialog, newest
+// first, with sort and filter on date, time, change type and action by. The X closes it; so do Escape
+// and a click on the backdrop. The table scrolls under a sticky header; the search sits in the header.
 export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverlayProps) {
   const api = useApi();
   const titleId = useId();
@@ -68,7 +69,6 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
   const [rowsPerPage, setRowsPerPage] = useState(CHANGE_LOG_ROWS_PER_PAGE);
   const [eventTypes, setEventTypes] = useState<ChangeEventType[]>([]);
   const [typesStatus, setTypesStatus] = useState<'loading' | 'error' | 'ready'>('loading');
-  const [searchAnchor, setSearchAnchor] = useState<HTMLElement | null>(null);
   // What is typed in the search box; it reaches the query after a pause (or on Done).
   const [searchDraft, setSearchDraft] = useState('');
 
@@ -148,179 +148,180 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
 
   return (
     <Dialog
-      fullScreen
       open={open}
       onClose={onClose}
       aria-labelledby={titleId}
-      slotProps={{ paper: { sx: { bgcolor: 'background.default' } } }}
+      maxWidth={false}
+      scroll="paper"
+      slotProps={{
+        paper: {
+          sx: (t) => ({
+            // Legacy hub change log modal: 85vw wide, 80vh tall. Below 600px it keeps 16px margins.
+            width: '85vw',
+            height: '80vh',
+            m: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            [t.breakpoints.down('sm')]: {
+              width: '100%',
+              m: 2,
+              maxHeight: `calc(100% - ${t.spacing(4)})`,
+            },
+          }),
+        },
+      }}
     >
-      <IconButton
-        aria-label="Close Change Log"
-        onClick={onClose}
-        sx={(t) => ({ position: 'absolute', top: t.spacing(1), right: t.spacing(1) })}
-      >
-        <Close fontSize="large" />
-      </IconButton>
       <Box
         sx={(t) => ({
-          bgcolor: 'background.paper',
-          borderRadius: 1,
-          mx: { xs: 1, lg: 5 },
-          mt: 7.5,
-          mb: 2,
-          p: 2.5,
-          [t.breakpoints.down('lg')]: { overflowX: 'auto' },
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 2,
+          px: 2.5,
+          pt: 2,
+          pb: 1.5,
+          borderBottom: `1px solid ${t.palette.divider}`,
         })}
       >
         <Typography
           id={titleId}
           variant="subtitle1"
           component="h2"
-          sx={{ fontWeight: 'bold', mb: 2 }}
+          sx={{ fontWeight: 'bold', flex: 1, minWidth: 0 }}
         >
           {changeLogTitle(page)}
         </Typography>
-        <Box component="p" role="status" sx={{ ...visuallyHidden }}>
-          {status === 'loading'
-            ? 'Loading change log'
-            : status === 'ready'
-              ? `${total} ${total === 1 ? 'change' : 'changes'}`
-              : ''}
+        <Box
+          component="form"
+          role="search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setFilters((f) => ({ ...f, search: searchDraft.trim() || undefined }));
+            setPageNumber(1);
+          }}
+          sx={(t) => ({ flex: '0 1 auto', width: { xs: '100%', sm: t.spacing(40) } })}
+        >
+          <TextField
+            label="Search descriptions"
+            size="small"
+            fullWidth
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    {active.has('search') ? <ManageSearch aria-hidden /> : <Search aria-hidden />}
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
         </Box>
-        {active.size > 0 ? (
-          <Box sx={{ mb: 1 }}>
-            <Button onClick={clearAll}>Clear all filters</Button>
-          </Box>
-        ) : null}
-        <Box sx={{ position: 'relative' }}>
-          <Box sx={(t) => ({ position: 'absolute', top: t.spacing(1), right: 0, zIndex: 1 })}>
-            <IconButton
-              aria-label={`Search descriptions${active.has('search') ? ' (search on)' : ''}`}
-              aria-haspopup="dialog"
-              aria-expanded={searchAnchor ? true : undefined}
-              onClick={(e) => setSearchAnchor(e.currentTarget)}
-              sx={{
-                bgcolor: 'primary.main',
-                color: 'primary.contrastText',
-                borderRadius: 1,
-                '&:hover': { bgcolor: 'primary.dark' },
-              }}
-            >
-              {active.has('search') ? <ManageSearch /> : <Search />}
-            </IconButton>
-            <Popover
-              open={Boolean(searchAnchor)}
-              anchorEl={searchAnchor}
-              onClose={() => setSearchAnchor(null)}
-              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-              slotProps={{ paper: { role: 'dialog', 'aria-label': 'Search descriptions' } }}
-            >
-              <Box
-                component="form"
-                role="search"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setFilters((f) => ({ ...f, search: searchDraft.trim() || undefined }));
-                  setPageNumber(1);
-                  setSearchAnchor(null);
-                }}
-                sx={{ p: 2, display: 'flex', gap: 1, alignItems: 'center' }}
-              >
-                <TextField
-                  autoFocus
-                  label="Search descriptions"
-                  size="small"
-                  value={searchDraft}
-                  onChange={(e) => setSearchDraft(e.target.value)}
-                />
-                <Button type="submit" variant="contained">
-                  Done
-                </Button>
-              </Box>
-            </Popover>
-          </Box>
-          <Table
-            aria-labelledby={titleId}
-            aria-busy={status === 'loading'}
-            size="medium"
-            sx={{ opacity: reloading ? 0.5 : 1 }}
-          >
-            <TableHead>
-              <TableRow>
-                {COLUMNS.map((c) => (
-                  <TableCell
-                    key={c.field}
-                    component="th"
-                    scope="col"
-                    aria-sort={c.field === 'description' ? undefined : ariaSortFor(sort, c.field)}
-                    sx={{ width: c.width, whiteSpace: 'nowrap' }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
-                        {c.label}
-                      </Typography>
-                      {c.field !== 'description' ? (
-                        <ColumnFilter
-                          field={c.field}
-                          label={c.label}
-                          sort={sort}
-                          onSort={(direction) => {
-                            setSort({ field: c.field as ChangeLogSortField, direction });
-                            setPageNumber(1);
-                          }}
-                          filters={filters}
-                          onApply={applyFilters}
-                          eventTypes={eventTypes}
-                          typesStatus={typesStatus}
-                          active={active.has(c.field)}
-                        />
-                      ) : null}
-                    </Box>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {status === 'ready' && items.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={COLUMNS.length}>
-                    <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                      {active.size > 0
-                        ? 'No changes match the filters.'
-                        : 'No changes have been recorded for this page in the last year.'}
+        <IconButton aria-label="Close Change Log" onClick={onClose} edge="end">
+          <Close />
+        </IconButton>
+      </Box>
+      <Box component="p" role="status" sx={{ ...visuallyHidden }}>
+        {status === 'loading'
+          ? 'Loading change log'
+          : status === 'ready'
+            ? `${total} ${total === 1 ? 'change' : 'changes'}`
+            : ''}
+      </Box>
+      {active.size > 0 ? (
+        <Box sx={{ px: 2.5, pt: 1 }}>
+          <Button onClick={clearAll}>Clear all filters</Button>
+        </Box>
+      ) : null}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 2.5 }}>
+        <Table
+          stickyHeader
+          aria-labelledby={titleId}
+          aria-busy={status === 'loading'}
+          size="medium"
+          sx={{ opacity: reloading ? 0.5 : 1 }}
+        >
+          <TableHead>
+            <TableRow>
+              {COLUMNS.map((c) => (
+                <TableCell
+                  key={c.field}
+                  component="th"
+                  scope="col"
+                  aria-sort={c.field === 'description' ? undefined : ariaSortFor(sort, c.field)}
+                  sx={{ width: c.width, whiteSpace: 'nowrap' }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                    <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+                      {c.label}
                     </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : null}
-              {items.map((entry) => (
-                <TableRow key={entry.id} hover>
-                  <TableCell>{formatLogDate(entry.date)}</TableCell>
-                  <TableCell>{formatLogTime(entry.time)}</TableCell>
-                  <TableCell>{changeTypeLabel(entry.changeType, typeLabels) ?? '…'}</TableCell>
-                  <TableCell>{entry.description}</TableCell>
-                  <TableCell>{entry.actionBy}</TableCell>
-                </TableRow>
+                    {c.field !== 'description' ? (
+                      <ColumnFilter
+                        field={c.field}
+                        label={c.label}
+                        sort={sort}
+                        onSort={(direction) => {
+                          setSort({ field: c.field as ChangeLogSortField, direction });
+                          setPageNumber(1);
+                        }}
+                        filters={filters}
+                        onApply={applyFilters}
+                        eventTypes={eventTypes}
+                        typesStatus={typesStatus}
+                        active={active.has(c.field)}
+                      />
+                    ) : null}
+                  </Box>
+                </TableCell>
               ))}
-            </TableBody>
-          </Table>
-        </Box>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {status === 'ready' && items.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length}>
+                  <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+                    {active.size > 0
+                      ? 'No changes match the filters.'
+                      : 'No changes have been recorded for this page in the last year.'}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : null}
+            {items.map((entry) => (
+              <TableRow key={entry.id} hover>
+                <TableCell>{formatLogDate(entry.date)}</TableCell>
+                <TableCell>{formatLogTime(entry.time)}</TableCell>
+                <TableCell>{changeTypeLabel(entry.changeType, typeLabels) ?? '…'}</TableCell>
+                <TableCell>{entry.description}</TableCell>
+                <TableCell>{entry.actionBy}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
         {body ? <Box sx={{ mt: 2 }}>{body}</Box> : null}
+      </Box>
+      <Box
+        sx={(t) => ({
+          px: 2.5,
+          py: 1.5,
+          borderTop: `1px solid ${t.palette.divider}`,
+        })}
+      >
         {status !== 'error' ? (
-          <Box sx={{ mt: 2 }}>
-            <Pagination
-              label="Change Log pages"
-              page={pageNumber}
-              rowsPerPage={rowsPerPage}
-              total={status === 'ready' ? total : undefined}
-              onChange={(next) => {
-                setPageNumber(next.page);
-                setRowsPerPage(next.rowsPerPage);
-              }}
-            />
-          </Box>
+          <Pagination
+            label="Change Log pages"
+            page={pageNumber}
+            rowsPerPage={rowsPerPage}
+            total={status === 'ready' ? total : undefined}
+            onChange={(next) => {
+              setPageNumber(next.page);
+              setRowsPerPage(next.rowsPerPage);
+            }}
+          />
         ) : null}
-        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 2 }}>
+        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
           Changes are kept for one year.
         </Typography>
       </Box>

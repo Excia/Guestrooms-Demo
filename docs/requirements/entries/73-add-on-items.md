@@ -17,8 +17,8 @@ Ticket Excia/Guestrooms-Demo#73; PR #155. Figma: Add-Ons 13533:74182 (frame 1353
 `Q-73-1` and `Q-73-2` already exist in `open-questions.md`; their "Default used" cells there hold the agent's
 defaults (updated in this PR). Only the new question is listed here.
 
-| ID     | Question                                                                                           | Blocks       | Default used                                                                                                       | Who answers | Status |
-| ------ | -------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------ | ----------- | ------ |
+| ID     | Question                                                                                           | Blocks       | Default used                                                                                                       | Who answers | Status                                                                        |
+| ------ | -------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------ | ----------- | ----------------------------------------------------------------------------- |
 | Q-73-3 | What does an add-on with no location or no room type selected mean: offered everywhere or nowhere? | Associations | Nowhere (the safest). A new add-on starts with nothing selected and the page shows a hint; saving is still allowed | Owner       | answered 2026-10-24: matches legacy, saving allowed, offered nowhere (D-LM-4) |
 
 ## Decisions
