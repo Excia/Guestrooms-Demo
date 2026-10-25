@@ -14,6 +14,18 @@ export function showLocations(locations: readonly unknown[] | number): boolean {
   return count >= 2;
 }
 
+/**
+ * The location ids a filter may use: none for a one-location club (it has no location control),
+ * and only ids that still exist, so a stale link such as `?locations=old-id` filters nothing.
+ */
+export function usableLocationIds(
+  ids: readonly string[],
+  locations: readonly { id: string }[],
+): string[] {
+  if (!showLocations(locations)) return [];
+  return ids.filter((id) => locations.some((l) => l.id === id));
+}
+
 export type LocationField = 'name' | 'area';
 /** Messages by row id, then field. A row without problems has no entry. */
 export type LocationErrors = Record<string, Partial<Record<LocationField, string>>>;

@@ -12,13 +12,14 @@ export const MOCK_LOCATION_AREAS: LookupRef[] = [
 ];
 
 // Ids and names come from the placeholder list the other screens use, so the Locations page and
-// the selectors agree. The usage is invented: two locations are in use, North Lodge is free.
+// the selectors agree. The usage is invented: only Main Clubhouse is in use, so a tester can remove the other two
+// (their rooms and bookings leave the mock schedule with them) and reach the one-location rule.
 export function mockLocations(): LocationSetup[] {
   const area = (id: string) => MOCK_LOCATION_AREAS.find((a) => a.id === id) ?? null;
   const usage: Record<string, LocationUsage> = {
     'main-clubhouse': { roomTypes: ['Double Queen Room', 'King Room'], roomCount: 8 },
     'north-lodge': { roomTypes: [], roomCount: 0 },
-    lakeside: { roomTypes: ['Two-Bedroom Cottage'], roomCount: 4 },
+    lakeside: { roomTypes: [], roomCount: 0 },
   };
   const areas: Record<string, string> = {
     'main-clubhouse': 'area-guest-rooms',

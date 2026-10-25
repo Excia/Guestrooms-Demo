@@ -169,7 +169,7 @@ Excia/Guestrooms-Demo#123, built as Legacy Port #182. No Figma frame; behavior p
   search, the New Reservation and Add Room panels, the online booking widget and Adjust Search, and Add-On Items. Typed API
   `locations` (`list`, `listAreas`, `save`) with a mock and http guards; read-only without `locations.edit`.
   - **Built defaults (open questions):** Q-182-1 to Q-182-7 in [entries/182-locations.md](entries/182-locations.md).
-  - **Not built:** the schedule and other mock data do not follow locations saved here; the "Location | Room type" captions
+  - **Not built:** the online booking demo and the Room Types / Rooms mock data do not follow locations saved here (the schedule, add-ons, reservation list and dashboard search do); the "Location | Room type" captions
     still show the location name for a one-location club.
   - **Status:** in review, 2026-10-25.
 - **Open questions:** Q-182-1 to Q-182-7.

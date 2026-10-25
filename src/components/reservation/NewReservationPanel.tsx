@@ -586,9 +586,11 @@ export default function NewReservationPanel({
             Room Details
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            {data && showLocations(data.locations) ? (
+            {/* Space is kept while the locations load; a one-location club then loses the select. */}
+            {!data || showLocations(data.locations) ? (
               <Select
                 label="Location"
+                disabled={!data}
                 placeholder="Unassigned"
                 size="small"
                 fullWidth

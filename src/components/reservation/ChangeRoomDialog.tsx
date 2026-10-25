@@ -51,6 +51,7 @@ import {
   type RoomFilter,
 } from '../../app/changeRoom';
 import { formatPanelDate } from '../../app/newReservation';
+import { showLocations } from '../../app/locations';
 import { filterRoomOptions } from '../../app/roomOptions';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { newRequestId } from '../../lib/requestId';
@@ -276,7 +277,7 @@ export default function ChangeRoomDialog({
   // The rooms the user chose, by night; a night not listed keeps its current room (or the choice
   // carried over from a reopened dialog, when that is still valid).
   const [edits, setEdits] = useState<Record<IsoDate, string>>({});
-  const [filter, setFilter] = useState<RoomFilter>(NO_ROOM_FILTER);
+  const [pickedFilter, setFilter] = useState<RoomFilter>(NO_ROOM_FILTER);
   const [answer, setAnswer] = useState<RateChoice>('retain');
   const [scrollTop, setScrollTop] = useState(0);
   const submitted = useRef(false);
@@ -292,6 +293,12 @@ export default function ChangeRoomDialog({
   );
 
   const ready = data.status === 'ready' ? data : null;
+  // One location: the Location select is hidden and no location filter applies.
+  const showLocation = ready ? showLocations(ready.inventory.locations) : false;
+  const filter = useMemo<RoomFilter>(
+    () => (showLocation ? pickedFilter : { ...pickedFilter, locationId: '' }),
+    [showLocation, pickedFilter],
+  );
   useEffect(() => {
     if (focusedFirst.current || !ready || step !== 'plan') return;
     const first = bodyRef.current?.querySelector<HTMLElement>(
@@ -465,21 +472,23 @@ export default function ChangeRoomDialog({
               aria-label="Show rooms in"
               sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}
             >
-              <TextField
-                select
-                size="small"
-                label="Location"
-                value={filter.locationId}
-                onChange={(e) => setFilter((f) => ({ ...f, locationId: e.target.value }))}
-                sx={{ flex: '1 1 12rem' }}
-              >
-                <MenuItem value="">All locations</MenuItem>
-                {ready?.inventory.locations.map((l) => (
-                  <MenuItem key={l.id} value={l.id}>
-                    {l.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+              {showLocation ? (
+                <TextField
+                  select
+                  size="small"
+                  label="Location"
+                  value={filter.locationId}
+                  onChange={(e) => setFilter((f) => ({ ...f, locationId: e.target.value }))}
+                  sx={{ flex: '1 1 12rem' }}
+                >
+                  <MenuItem value="">All locations</MenuItem>
+                  {ready?.inventory.locations.map((l) => (
+                    <MenuItem key={l.id} value={l.id}>
+                      {l.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              ) : null}
               <TextField
                 select
                 size="small"

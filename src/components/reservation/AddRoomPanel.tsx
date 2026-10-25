@@ -364,9 +364,11 @@ export default function AddRoomPanel({
             Room Details
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            {inventory && showLocations(inventory.locations) ? (
+            {/* Space is kept while the locations load; a one-location club then loses the select. */}
+            {!inventory || showLocations(inventory.locations) ? (
               <Select
                 label="Location"
+                disabled={!inventory}
                 placeholder="Unassigned"
                 size="small"
                 fullWidth

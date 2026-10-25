@@ -2,7 +2,7 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { HEADER_HEIGHT } from '../app/layout';
-import NewReservationSearch from '../components/NewReservationSearch';
+import ClubNewReservationSearch from '../components/ClubNewReservationSearch';
 import ReservationManagement from '../components/ReservationManagement';
 import DashboardColumn, { COLUMN_MAX_WIDTH_SPACING } from '../components/DashboardColumn';
 import QuickStats from '../components/QuickStats';
@@ -30,7 +30,7 @@ export interface DashboardProps {
 export default function Dashboard({
   reservationManagement = <ReservationManagement />,
   quickStats = <QuickStats placement="dashboard" />,
-  newReservation = <NewReservationSearch />,
+  newReservation = <ClubNewReservationSearch />,
 }: DashboardProps) {
   return (
     <Box

@@ -8,6 +8,7 @@ import {
   locationsDirty,
   normalizeLocations,
   showLocations,
+  usableLocationIds,
   validateLocations,
 } from './locations';
 
@@ -26,6 +27,16 @@ describe('showLocations (the single-location rule)', () => {
     expect(showLocations(0)).toBe(false);
     expect(showLocations(1)).toBe(false);
     expect(showLocations(3)).toBe(true);
+  });
+});
+
+describe('usableLocationIds', () => {
+  const two = [{ id: 'a' }, { id: 'b' }];
+  it('keeps known ids and drops stale ones', () => {
+    expect(usableLocationIds(['b', 'old'], two)).toEqual(['b']);
+  });
+  it('is empty for a one-location club', () => {
+    expect(usableLocationIds(['a'], [{ id: 'a' }])).toEqual([]);
   });
 });
 
@@ -83,9 +94,9 @@ describe('locationsDirty', () => {
 
   it('is dirty after a rename, an area change, an added or a removed row', () => {
     expect(locationsDirty(saved, [row('a', 'Lodge 2'), saved[1]])).toBe(true);
-    expect(locationsDirty(saved, [row('a', 'Lodge', { id: 'area-2', label: 'F&B' }), saved[1]])).toBe(
-      true,
-    );
+    expect(
+      locationsDirty(saved, [row('a', 'Lodge', { id: 'area-2', label: 'F&B' }), saved[1]]),
+    ).toBe(true);
     expect(locationsDirty(saved, [...saved, row('c', 'New')])).toBe(true);
     expect(locationsDirty(saved, [saved[0]])).toBe(true);
   });
@@ -111,7 +122,9 @@ describe('checkRemoveLocation', () => {
   });
 
   it('blocks a location used only by rooms', () => {
-    expect(checkRemoveLocation({ roomTypes: [], roomCount: 1 }).reason).toMatch(/used by 1 room\. /);
+    expect(checkRemoveLocation({ roomTypes: [], roomCount: 1 }).reason).toMatch(
+      /used by 1 room\. /,
+    );
   });
 });
 

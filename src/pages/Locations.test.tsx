@@ -59,7 +59,9 @@ describe('Locations page', () => {
     const list = await loaded();
     expect(within(list).getAllByRole('group')).toHaveLength(1);
     expect(save()).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Remove location 1' })).toBeDisabled();
+    const remove = screen.getByRole('button', { name: 'Remove location 1' });
+    expect(remove).toBeDisabled();
+    expect(remove).toHaveAccessibleDescription('A club needs at least one location');
   });
 
   it('limits the name to 50 characters and counts them', async () => {
@@ -135,6 +137,18 @@ describe('Locations page', () => {
     expect(area).toBeInvalid();
     expect(area).toHaveAccessibleDescription('Select an area.');
     expect(saveSpy).not.toHaveBeenCalled();
+  });
+
+  it('keeps the character counter visible next to a name error', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Location' }));
+    await user.keyboard('Main Clubhouse');
+    await user.click(save());
+    const name = screen.getAllByRole('textbox', { name: /Location Name/ })[3];
+    expect(name).toHaveFocus();
+    expect(name).toHaveAccessibleDescription('Another location already has this name. (14 / 50)');
   });
 
   it('picks an area by typing and saves a new location', async () => {

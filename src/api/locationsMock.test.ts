@@ -67,5 +67,51 @@ describe('mock locations API', () => {
     });
     const saved = await api.save([input(main), input(lake)]);
     expect(saved.map((l) => l.id)).toEqual([main.id, lake.id]);
+    expect((await api.save([input(main)])).map((l) => l.id)).toEqual([main.id]);
+  });
+
+  it('answers 403 forbidden without locations.edit and changes nothing', async () => {
+    const api = createMockClient({ grant: { role: 'Viewer', permissions: [] } }).locations;
+    const [main] = await api.list();
+    await expect(api.save([input({ ...main, name: 'Renamed' })])).rejects.toMatchObject({
+      status: 403,
+      code: 'forbidden',
+    });
+    expect((await api.list())[0].name).toBe(main.name);
+  });
+
+  it('rejects an area that does not exist', async () => {
+    const api = createMockClient().locations;
+    const [main] = await api.list();
+    await expect(
+      api.save([input({ ...main, area: { id: 'area-nope', label: 'Nope' } })]),
+    ).rejects.toMatchObject({ status: 422, code: 'validation' });
+  });
+
+  it('shares one store with the schedule, the add-on options and the reservation list', async () => {
+    const client = createMockClient();
+    const [main, north, lake] = await client.locations.list();
+    await client.locations.save([
+      input({ ...main, name: 'The Clubhouse' }),
+      input({ id: 'new-1', name: 'Annex', area: main.area }),
+      input(lake),
+    ]);
+    const names = (list: { name: string }[]) => list.map((l) => l.name);
+    const schedule = await client.schedule.get({ startDate: '2026-10-01', days: 7 });
+    expect(names(schedule.locations)).toEqual(['The Clubhouse', 'Annex', 'Lakeside Cottages']);
+    // The removed location's rooms leave with it.
+    expect(schedule.rooms.some((r) => r.locationId === north.id)).toBe(false);
+    expect(schedule.rooms.some((r) => r.locationId === main.id)).toBe(true);
+    const options = await client.addOns.getOptions();
+    expect(options.locations.map((l) => l.label)).toEqual([
+      'The Clubhouse',
+      'Annex',
+      'Lakeside Cottages',
+    ]);
+    expect(names((await client.reservationList.getOptions()).locations)).toEqual([
+      'The Clubhouse',
+      'Annex',
+      'Lakeside Cottages',
+    ]);
   });
 });

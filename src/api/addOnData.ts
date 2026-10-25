@@ -9,11 +9,14 @@ export const MOCK_ADD_ON_SKUS: LookupRef[] = [
   { id: 'sku-welcome', label: 'Welcome package' },
 ];
 
-/** Locations come from the placeholder list the dashboard uses; room types from the live mock. */
-export function mockAddOnOptions(roomTypes: readonly LookupRef[]): AddOnOptions {
+/** Locations and room types come from the live mock stores. */
+export function mockAddOnOptions(
+  roomTypes: readonly LookupRef[],
+  locations: readonly { id: string; name: string }[],
+): AddOnOptions {
   return {
     skus: structuredClone(MOCK_ADD_ON_SKUS),
-    locations: PLACEHOLDER_LOCATIONS.map((l) => ({ id: l.id, label: l.name })),
+    locations: locations.map((l) => ({ id: l.id, label: l.name })),
     roomTypes: roomTypes.map((t) => ({ id: t.id, label: t.label })),
   };
 }

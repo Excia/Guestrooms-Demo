@@ -39,7 +39,9 @@ describe('http locations client', () => {
       { locations: [] },
     ];
     for (const body of bad) {
-      await expect(make(vi.fn().mockResolvedValue(json(body))).locations.list()).rejects.toMatchObject({
+      await expect(
+        make(vi.fn().mockResolvedValue(json(body))).locations.list(),
+      ).rejects.toMatchObject({
         status: 200,
         code: 'invalid-response',
       });

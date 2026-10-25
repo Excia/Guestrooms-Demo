@@ -38,8 +38,13 @@ Save, unsaved-changes prompt, view-only mode) and functional doc 3.3. The layout
 ## Placeholders and invented values
 
 - **P-182-1:** the three locations (ids and names reuse `PLACEHOLDER_LOCATIONS`), their areas, the five area names and each
-  location's usage by room types and rooms (`src/api/locationsData.ts`). North Lodge is unused, so removing it can be tried.
-  Changes saved on the Locations page do not reach the schedule or the other mock data yet (they keep their own lists).
+  location's usage by room types and rooms (`src/api/locationsData.ts`). Only Main Clubhouse counts as in use, so a tester can
+  remove North Lodge and Lakeside Cottages and reach the one-location rule.
+  The mock has one location store: what is saved on the Locations page also feeds the schedule (names, new locations; the rooms,
+  bookings and closures of a removed location are deleted with it), the Add-On options, the Reservation List options, the
+  dashboard New Reservation search and the search results caption. Not shared: the online booking demo page and the Room
+  Types / Rooms mock data keep their own lists.
+- **P-182-2:** the mock checks that the area exists (422) and that the caller holds `locations.edit` (403 `forbidden`).
 
 ## API, permissions, notes
 
@@ -48,4 +53,8 @@ Save, unsaved-changes prompt, view-only mode) and functional doc 3.3. The layout
   `locations.edit`; see `permissions.md`. Change Log page id `locations` added.
 - **Notes:** the migrated selectors are the Schedule filter group, the Reservation List Location select and column, the New
   Reservation search, the Schedule New Reservation and Add Room panels, the online booking widget and Adjust Search, and the
-  Add-On Items association tab. Room Types and Rooms have no location field in this build (Q-182-4).
+  Add-On Items association tab, and the Location filter of the Change Room dialog. Room Types and Rooms have no location field in
+  this build (Q-182-4). With one location Add-On Items hides its Locations tab and writes that location's id into every saved
+  add-on (Q-182-4). Reviewed and left as they are (they follow Q-182-3, or are demo only): room-picker group captions, the
+  schedule row header caption, the online booking demo page, the Components demo. A stale `?locations=` link on the Reservation
+  List and the Schedule is ignored. The New Reservation and Add Room panels keep a disabled Location select while their data loads.
