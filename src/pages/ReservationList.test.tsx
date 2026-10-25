@@ -163,6 +163,24 @@ describe('ReservationList', () => {
     expect(screen.queryByRole('combobox', { name: /Location/ })).toBeNull();
   });
 
+  it('does not send a stale location id, or any location for a one-location club', async () => {
+    const stale = spied();
+    setup('/reservations?locations=old-id', stale.client);
+    await bodyRows();
+    await waitFor(() => expect(stale.list.mock.calls.at(-1)?.[0]?.locationIds ?? []).toEqual([]));
+
+    const one = spied();
+    const getOptions = async () => {
+      const o = await one.client.reservationList.getOptions();
+      return { ...o, locations: o.locations.slice(0, 1) };
+    };
+    setup('/reservations?locations=lakeside', {
+      ...one.client,
+      reservationList: { ...one.client.reservationList, getOptions },
+    });
+    await waitFor(() => expect(one.list.mock.calls.at(-1)?.[0]?.locationIds ?? []).toEqual([]));
+  });
+
   it('picks one location from the single select', async () => {
     const user = userEvent.setup();
     setup();

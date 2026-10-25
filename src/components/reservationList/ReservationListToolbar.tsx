@@ -6,6 +6,7 @@ import Switch from '@mui/material/Switch';
 import type { Theme } from '@mui/material/styles';
 import type { ScheduleLocation } from '../../api';
 import { ALL_LOCATIONS_LABEL } from '../../app/locationSelection';
+import { showLocations } from '../../app/locations';
 import type { IsoDate } from '../../lib/dates';
 import { TOOLBAR_FIELD_SIZE, toolbarWidth } from '../shared/controlSizes';
 import DateField from '../shared/DateField';
@@ -99,7 +100,7 @@ export default function ReservationListToolbar({
           control={<Switch checked={unassignedOnly} onChange={(_, v) => onUnassignedOnly(v)} />}
         />
         {/* Single select, shown only when the property has more than one location (requirements doc 16.7). */}
-        {locations.length > 1 ? (
+        {showLocations(locations) ? (
           <Select
             label="Location"
             value={locationIds[0] ?? ALL_LOCATIONS_VALUE}

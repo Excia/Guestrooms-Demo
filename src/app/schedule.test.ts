@@ -15,7 +15,6 @@ import {
   scheduleDates,
   scheduleRangeEnd,
   shiftScheduleStart,
-  showLocationFilter,
   filterUnassigned,
   knownIds,
   visibleRowRange,
@@ -397,11 +396,6 @@ describe('housekeeping and feature filters', () => {
   it('knownIds drops ids that are not in the options', () => {
     expect(knownIds(['a', 'old', 'b'], [{ id: 'a' }, { id: 'b' }])).toEqual(['a', 'b']);
     expect(knownIds(['old'], [])).toEqual([]);
-  });
-  it('shows the location group only for two or more locations', () => {
-    expect(showLocationFilter([])).toBe(false);
-    expect(showLocationFilter([{}])).toBe(false);
-    expect(showLocationFilter([{}, {}])).toBe(true);
   });
 });
 

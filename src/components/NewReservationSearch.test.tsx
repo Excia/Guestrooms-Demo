@@ -24,6 +24,29 @@ async function fillDates(user: ReturnType<typeof userEvent.setup>, from: string,
 }
 
 describe('NewReservationSearch', () => {
+  it('hides the Location select for a one-location club and searches all locations', async () => {
+    const user = userEvent.setup();
+    const onSearch = vi.fn();
+    render(
+      <MemoryRouter>
+        <NewReservationSearch
+          today={TODAY}
+          onSearch={onSearch}
+          locations={[{ id: 'only', name: 'Only Place' }]}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('combobox', { name: /Location/ })).not.toBeInTheDocument();
+    await fillDates(user, '2026-10-22', '2026-10-25');
+    await user.click(cta());
+    expect(onSearch.mock.calls[0][0].location).toBe('all');
+  });
+
+  it('offers the Location select with two or more locations', () => {
+    renderSearch();
+    expect(screen.getByRole('combobox', { name: /Location/ })).toBeInTheDocument();
+  });
+
   it('disables the CTA until the dates are valid', async () => {
     const user = userEvent.setup();
     renderSearch();

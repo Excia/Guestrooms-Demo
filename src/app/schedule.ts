@@ -166,9 +166,6 @@ export const HOUSEKEEPING_FILTER_OPTIONS: readonly {
   name: string;
 }[] = HOUSEKEEPING_OPTIONS.map((o) => ({ id: o.value, name: o.label }));
 
-/** Whether the Locations group is offered: only when the club has two or more locations. */
-export const showLocationFilter = (locations: readonly unknown[]): boolean => locations.length >= 2;
-
 export interface ScheduleFilters {
   /** Absent: every location. An empty list ("Select None") matches nothing. */
   locationIds?: readonly string[];

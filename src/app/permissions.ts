@@ -23,8 +23,15 @@ export type ReservationPermission = 'reservation.edit';
 // date then needs an override code), never. Two grants express them; holding neither is "never".
 export type CheckInPermission =
   'reservation.check-in.any-time' | 'reservation.check-in.arrival-date';
+// `locations.edit` lets a user add, change and remove locations (ticket 182); without it the
+// Locations page is read-only (at some clubs only Clubessential changes locations).
+export type LocationsPermission = 'locations.edit';
 export type Permission =
-  PagePermission | AdminPermission | ReservationPermission | CheckInPermission;
+  | PagePermission
+  | AdminPermission
+  | ReservationPermission
+  | CheckInPermission
+  | LocationsPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 
@@ -36,8 +43,11 @@ export const CHECK_IN_ANY_TIME_PERMISSION: CheckInPermission = 'reservation.chec
 export const CHECK_IN_ARRIVAL_DATE_PERMISSION: CheckInPermission =
   'reservation.check-in.arrival-date';
 
+export const LOCATIONS_EDIT_PERMISSION: LocationsPermission = 'locations.edit';
+
 export const ALL_PERMISSIONS: readonly Permission[] = [
   ADMIN_PERMISSION,
+  LOCATIONS_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
   CHECK_IN_ANY_TIME_PERMISSION,
   CHECK_IN_ARRIVAL_DATE_PERMISSION,

@@ -1,13 +1,13 @@
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { useSearchParams } from 'react-router';
-import { PLACEHOLDER_LOCATIONS } from '../app/placeholderLocations';
 import { ALL_LOCATIONS_VALUE, fromSearchParams } from '../app/reservationSearch';
+import { useClubLocations } from '../app/useClubLocations';
 
 // `location` comes from the URL unvalidated: the real results page must check it against the known list.
-function locationName(id: string): string {
+function locationName(id: string, locations: readonly { id: string; name: string }[]): string {
   if (id === ALL_LOCATIONS_VALUE) return 'All Locations';
-  return PLACEHOLDER_LOCATIONS.find((l) => l.id === id)?.name ?? id;
+  return locations.find((l) => l.id === id)?.name ?? id;
 }
 
 /**
@@ -17,6 +17,7 @@ function locationName(id: string): string {
 export default function NewReservationResults() {
   const [params] = useSearchParams();
   const c = fromSearchParams(params);
+  const locations = useClubLocations() ?? [];
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>
@@ -31,7 +32,7 @@ export default function NewReservationResults() {
         <dt>Check Out</dt>
         <dd>{c.checkOut || 'Not set'}</dd>
         <dt>Location</dt>
-        <dd>{locationName(c.location)}</dd>
+        <dd>{locationName(c.location, locations)}</dd>
         {c.rooms.map((r, i) => (
           <div key={i}>
             <dt>Room {i + 1}</dt>

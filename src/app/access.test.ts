@@ -16,6 +16,7 @@ const ADMIN_IDS = [
   'add-on-items',
   'room-options',
   'notifications',
+  'locations',
 ] as const;
 
 const admin = createMockPermissions();

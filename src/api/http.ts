@@ -53,6 +53,8 @@ import type {
   RoomTypeSetup,
   BookingRules,
   BookingRulesOptions,
+  LocationSetup,
+  LookupRef,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
@@ -795,6 +797,23 @@ const parseAddOnOptions = (body: unknown, status: number): AddOnOptions => {
     throw invalid(status, 'add-on options');
   }
   return body as unknown as AddOnOptions;
+};
+
+const isLocation = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  (v.area === null || isLookup(v.area)) &&
+  isObject(v.usage) &&
+  listOf(v.usage.roomTypes, isString) &&
+  isCount(v.usage.roomCount);
+const parseLocations = (body: unknown, status: number): LocationSetup[] => {
+  if (!Array.isArray(body) || !body.every(isLocation)) throw invalid(status, 'locations');
+  return body as unknown as LocationSetup[];
+};
+const parseLocationAreas = (body: unknown, status: number): LookupRef[] => {
+  if (!listOf(body, isLookup)) throw invalid(status, 'location areas');
+  return body as unknown as LookupRef[];
 };
 
 const parseKeys = (body: unknown, status: number): string[] => {
@@ -1621,6 +1640,12 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         }),
       getOptions: (o) =>
         request('/settings/booking-rules/options', {}, o, parseBookingRulesOptions),
+    },
+    locations: {
+      list: (o) => request('/locations', {}, o, parseLocations),
+      listAreas: (o) => request('/locations/areas', {}, o, parseLocationAreas),
+      save: (locations, o) =>
+        request('/locations', {}, o, parseLocations, { method: 'PUT', body: locations }),
     },
     systemSettings: {
       get: (o) => request('/settings/system', {}, o, parseSystemSettings),
