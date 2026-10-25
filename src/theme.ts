@@ -13,6 +13,14 @@ export interface ScheduleColors {
   /** Checked in and leaving today. */
   dueOut: string;
   closure: string;
+  /**
+   * Closure stripes, light to dark: legacy `repeating-linear-gradient(45deg, #eee, #ddd 3px, #ccc
+   * 3px, #bbb 6px)`, so a closure is never mistaken for the flat grey of a checked-out stay.
+   */
+  closureStripe1: string;
+  closureStripe2: string;
+  closureStripe3: string;
+  closureStripe4: string;
   /** Linked-room block (Figma "Linked Room" state). */
   linked: string;
   /** Housekeeping chip fills (Figma "Housekeeping Block"). */
@@ -179,6 +187,10 @@ const base = createTheme({
       // Figma "DueOut" state 15214:8379: orange at 40%.
       dueOut: 'rgba(228, 113, 0, 0.4)',
       closure: 'rgba(189, 189, 189, 0.8)',
+      closureStripe1: '#eeeeee',
+      closureStripe2: '#dddddd',
+      closureStripe3: '#cccccc',
+      closureStripe4: '#bbbbbb',
       linked: 'rgba(189, 189, 189, 0.8)',
       hkNotCheckedOut: 'rgba(66, 66, 66, 0.3)',
       hkNeedsCleaning: 'rgba(228, 113, 0, 0.8)',
