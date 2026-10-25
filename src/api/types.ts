@@ -1024,6 +1024,48 @@ export interface RoomSetupApi {
   deleteRoom(id: string, options?: RequestOptions): Promise<void>;
 }
 
+// ---- room options (Admin Setup, ticket LP-A.2 / 7.12) -----------------------------------------
+
+/** The club's Features and Bed Sizes: the one list Room Types, Rooms and the Schedule filter read. */
+export interface RoomOptions {
+  /** Opaque; changes with every save. Send it back with the next save. */
+  version: string;
+  features: LookupRef[];
+  bedSizes: LookupRef[];
+}
+
+/** An item of a save: no `id` means a new item. */
+export interface RoomOptionInput {
+  id?: string;
+  label: string;
+}
+
+/**
+ * Replaces both lists with these, in this order (a removed item is one that is no longer listed), if
+ * `version` is still current: otherwise 409 `stale` and nothing is saved, so a tab with old lists
+ * cannot delete what another tab added.
+ * Idempotent on `requestId` (body and `Idempotency-Key` header).
+ */
+export interface SaveRoomOptionsRequest {
+  requestId: string;
+  /** The `RoomOptions.version` the lists were edited from (body and `If-Match` header). */
+  version: string;
+  features: RoomOptionInput[];
+  bedSizes: RoomOptionInput[];
+}
+
+/**
+ * Errors: 422 `validation` (`details.features` / `details.bedSizes`: one message per refused item,
+ * which includes the same `id` listed twice; rules in `src/app/featureBedOptions.ts`); 404
+ * `not-found` (an `id` that is not in the lists); 409 `stale` (`version` is not current); 409
+ * `in-use` (a removed item is still used by a Room Type or Room; `details.features` /
+ * `details.bedSizes` list the ids); 409 `idempotency-conflict`. Nothing is saved on an error.
+ */
+export interface RoomOptionsApi {
+  get(options?: RequestOptions): Promise<RoomOptions>;
+  save(request: SaveRoomOptionsRequest, options?: RequestOptions): Promise<RoomOptions>;
+}
+
 // ---- add-on items (Admin Setup, ticket 7.4) ---------------------------------------------------
 
 /** "item" sells one SKU. "combo" is open (Q-73-1): it is stored and flagged but behaves like an item. */
@@ -1570,6 +1612,7 @@ export interface ApiClient {
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
   roomSetup: RoomSetupApi;
+  roomOptions: RoomOptionsApi;
   addOns: AddOnApi;
   keycards: KeycardApi;
   bookingRules: BookingRulesApi;

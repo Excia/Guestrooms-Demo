@@ -469,6 +469,22 @@ must be enforced again by the backend, which also answers 422 `validation` when 
 `roomTypeIds` entry is not in the options (the mock does the same). The page drops ids that no longer exist before it
 saves. Photo upload and storage are open (Q-72-1).
 
+## Room options (LP-A.2 / ticket 7.12, built on the mock)
+
+| Method and path     | Body / response                                                                                         | Errors                                                                      |
+| ------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET /room-options` | `RoomOptions { version, features, bedSizes }`, each list `{ id, label }` in display order                   | 5xx                                                                         |
+| `PUT /room-options` | `{ requestId, features, bedSizes }`, items `{ id?, label }`; replaces both lists; returns `RoomOptions` | 422 `validation`, 404 `not-found`, 409 `stale`, 409 `in-use`, 409 `idempotency-conflict` |
+
+`PUT` takes the `Idempotency-Key` header (= `requestId`) and `If-Match` (= `version`, also in the body); a repeat of a request id answers the first result. A `version` that is not the current one answers 409 `stale` and saves nothing, so a tab with old lists cannot silently delete what another tab added. The answer lists the items in the order sent (the UI keeps its field keys by position). The same `id` twice in one request is 422. An item without `id` is new
+(the server assigns the id); an item with an `id` keeps it (ids are stable: Room Types, Rooms and schedule filters refer to
+them); a saved item that is no longer listed is removed. Rules (`src/app/featureBedOptions.ts`, to be enforced again by
+the backend): label required after trimming, at most 50 characters, no two items of one list equal ignoring case. 409
+`in-use`: a removed Feature is in a `featureIds` list, or a removed Bed Size has a quantity above 0 in `bedTypes`, of any
+Room Type or Room; `details.features` / `details.bedSizes` list the ids; nothing is saved. When a Bed Size is removed the
+backend drops its key from the `bedTypes` of Room Types and Rooms. Saving a Room Type or Room (ticket 7.3) answers 422 `validation` when `details.featureIds` or the keys of `details.bedTypes` name a Feature or Bed Size that is not in this list (`details.featureIds` / `details.bedTypes` list the ids; a room that inherits is not checked). `GET /room-setup/options` (ticket 7.3) and
+`GET /schedule` (`features`) must answer from this same list.
+
 ## Keycard integration (ticket 7.6, built on the mock)
 
 | Method and path                    | Body / response                                                                       | Errors           |

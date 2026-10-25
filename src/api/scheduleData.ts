@@ -28,7 +28,7 @@ import type {
   UpdateClosureRequest,
 } from './types';
 import { ApiError } from './types';
-import { MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
+import { MOCK_ROOM_OPTIONS } from './roomOptionsData';
 
 // PLACEHOLDER: verify against Figma. The frames carry no location or room-type names; these match
 // the dashboard placeholders (PLACEHOLDER_LOCATIONS and the reservation room types).
@@ -47,7 +47,7 @@ export const SCHEDULE_ROOM_TYPES: ScheduleRoomType[] = [
 ];
 
 // PLACEHOLDER: the Room Options features, assigned to rooms by room type below.
-export const SCHEDULE_FEATURES: ScheduleFeature[] = MOCK_ROOM_SETUP_OPTIONS.features.map((f) => ({
+export const SCHEDULE_FEATURES: ScheduleFeature[] = MOCK_ROOM_OPTIONS.features.map((f) => ({
   id: f.id,
   name: f.label,
 }));
