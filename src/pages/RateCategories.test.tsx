@@ -101,7 +101,11 @@ describe('Rate Categories page', () => {
       'Child',
     ]);
     // Three seasons, three room types each.
-    expect(within(table).getAllByRole('rowheader')).toHaveLength(9);
+    expect(
+      within(table)
+        .getAllByRole('rowheader')
+        .filter((h) => h.getAttribute('scope') === 'row'),
+    ).toHaveLength(9);
     expect(
       within(table).getByText(/If no other seasons or special rates apply/),
     ).toBeInTheDocument();

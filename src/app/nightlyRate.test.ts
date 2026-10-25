@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { RateAmounts, RateSeason } from '../api/types';
-import { baseKindFor, nightlyRate, stayRate, type AlternativeBaseRates } from './nightlyRate';
+import {
+  MAX_PRICED_NIGHTS,
+  baseKindFor,
+  nightlyRate,
+  stayRate,
+  type AlternativeBaseRates,
+} from './nightlyRate';
 import { blankAmounts } from './rateCategories';
 
 const amounts = (a: Partial<RateAmounts>): RateAmounts => ({ ...blankAmounts(), ...a });
@@ -125,7 +131,42 @@ describe('nightlyRate', () => {
     });
   });
 
+  it('treats NaN or infinite guest counts as 0, and adults 0 with children still charges the child', () => {
+    expect(run([rate], { guests: { adults: NaN, children: NaN } }).total).toBe(1250);
+    expect(run([rate], { guests: { adults: Infinity, children: 0 } }).total).toBe(1250);
+    expect(run([rate], { guests: { adults: 0, children: 2 } }).total).toBe(1250 + 100);
+  });
+
+  it('prices an unset alternative base as 0 (legacy would fall back to the standard base)', () => {
+    const alt1: AlternativeBaseRates = {
+      ...none,
+      alternativeBaseRate1: { enabled: true, minNights: 7 },
+    };
+    const unset = defaultSeason({ rt: amounts({ standardBase: 1000, monday: 250 }) });
+    expect(run([unset], { alternativeBaseRates: alt1, stayNights: 7 })).toMatchObject({
+      baseKind: 'altBase1',
+      base: 0,
+      total: 250,
+    });
+  });
+
+  it('uses alt 2 even when alt 1 is set, and alt 2 prices 0 while it is untouched', () => {
+    const both: AlternativeBaseRates = {
+      alternativeBaseRate1: { enabled: true, minNights: 7 },
+      alternativeBaseRate2: { enabled: true, minNights: 30 },
+    };
+    const alt1Only = defaultSeason({ rt: amounts({ standardBase: 1000, altBase1: 800 }) });
+    expect(run([alt1Only], { alternativeBaseRates: both, stayNights: 30 }).base).toBe(0);
+    expect(run([alt1Only], { alternativeBaseRates: both, stayNights: 10 }).base).toBe(800);
+  });
+
   describe('seasons', () => {
+    it('uses the first default season when there are two', () => {
+      const first = defaultSeason({ rt: amounts({ standardBase: 111 }) });
+      const second = { ...defaultSeason({ rt: amounts({ standardBase: 222 }) }), id: 'default-2' };
+      expect(run([first, second]).base).toBe(111);
+    });
+
     const summer = season({
       id: 'summer',
       startDate: '2026-10-26',
@@ -206,6 +247,15 @@ describe('stayRate', () => {
       departure: '2026-10-28',
     });
     expect(stay.nights.map((n) => n.base)).toEqual([800, 2500]);
+  });
+
+  it('does not price an absurdly long stay', () => {
+    expect(stayRate({ ...base, arrival: MON, departure: '2054-03-12' })).toEqual({
+      nights: [],
+      total: 0,
+    });
+    const max = stayRate({ ...base, arrival: MON, departure: '2027-10-27' });
+    expect(max.nights).toHaveLength(MAX_PRICED_NIGHTS);
   });
 
   it('is empty for no nights or invalid dates', () => {

@@ -68,8 +68,6 @@ export type RateColumnGroupKey = 'base' | 'weekday' | 'guest';
 export interface RateColumnGroup {
   key: RateColumnGroupKey;
   title: string;
-  /** Plain-language help, also the group header's tooltip text. */
-  help: string;
   /** Short line under the title (none for the base rate). */
   note?: string;
   /** Number of the visible columns in the group. */
@@ -93,20 +91,17 @@ const GROUP_OF: Record<RateColumnKey, RateColumnGroupKey> = {
   child: 'guest',
 };
 
-const GROUP_TEXT: Record<RateColumnGroupKey, Pick<RateColumnGroup, 'title' | 'help' | 'note'>> = {
+const GROUP_TEXT: Record<RateColumnGroupKey, Pick<RateColumnGroup, 'title' | 'note'>> = {
   base: {
     title: 'Base rate',
-    help: 'Price per night. An alternative base replaces it on long stays.',
   },
   weekday: {
     title: 'Weekday add-on',
     note: 'added to the base rate; 0 = no extra charge',
-    help: 'Added to the base rate for a night on that day. 0 = no extra charge.',
   },
   guest: {
     title: 'Guest add-on',
     note: 'added per night; 0 = no extra charge',
-    help: 'Added per night on top of the base rate (Guest 4+ and Child: for each). 0 = no extra charge.',
   },
 };
 

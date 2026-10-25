@@ -130,7 +130,7 @@ export default function RateTable({
         <TableHead>
           <TableRow>
             <TableCell
-              aria-hidden
+              component="td"
               colSpan={2}
               sx={(t) => ({
                 ...stickyFirst(t),
@@ -145,7 +145,6 @@ export default function RateTable({
                 colSpan={g.span}
                 scope="colgroup"
                 align="center"
-                title={g.help}
                 sx={(t) => ({
                   fontSize: t.typography.pxToRem(RATE_TABLE.headerFontPx),
                   fontWeight: 'bold',
@@ -156,7 +155,7 @@ export default function RateTable({
                   whiteSpace: 'normal',
                 })}
               >
-                {g.title}
+                <span>{g.title}</span>
                 {g.note ? (
                   <Typography
                     component="span"
@@ -229,6 +228,15 @@ export default function RateTable({
               key={season.id}
               data-season={season.id}
               data-tone={toneIndex === null ? 'neutral' : String(toneIndex)}
+              sx={(t) => ({
+                // One white separator between the season cards, painted on every cell of the first row.
+                '& > tr:first-of-type > *': {
+                  borderTop:
+                    seasonIndex === 0
+                      ? undefined
+                      : `${t.spacing(1)} solid ${t.palette.background.paper}`,
+                },
+              })}
             >
               {(roomTypes.length === 0 ? [null] : roomTypes).map((roomType, rowIndex) => {
                 const amounts = roomType ? amountsFor(season, roomType.id) : null;
@@ -236,6 +244,8 @@ export default function RateTable({
                   <TableRow key={roomType?.id ?? 'none'}>
                     {rowIndex === 0 ? (
                       <TableCell
+                        component="th"
+                        scope="rowgroup"
                         rowSpan={Math.max(1, roomTypes.length)}
                         sx={(t) => ({
                           ...stickyFirst(t),
@@ -247,10 +257,6 @@ export default function RateTable({
                           maxWidth: tablePx(t, RATE_TABLE.seasonColPx),
                           fontWeight: 'normal',
                           boxShadow: `inset ${tablePx(t, RATE_TABLE.accentPx)} 0 0 ${toneOf(t, seasons, season).accent}`,
-                          borderTop:
-                            seasonIndex === 0
-                              ? undefined
-                              : `8px solid ${t.palette.background.paper}`,
                         })}
                       >
                         <SeasonCell
@@ -268,10 +274,6 @@ export default function RateTable({
                         colSpan={span}
                         sx={(t) => ({
                           bgcolor: toneOf(t, seasons, season).row,
-                          borderTop:
-                            seasonIndex === 0
-                              ? undefined
-                              : `8px solid ${t.palette.background.paper}`,
                         })}
                       >
                         No room types selected
@@ -294,10 +296,6 @@ export default function RateTable({
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
-                              borderTop:
-                                seasonIndex === 0 || rowIndex > 0
-                                  ? undefined
-                                  : `8px solid ${t.palette.background.paper}`,
                             };
                           }}
                         >
@@ -363,7 +361,10 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
     >
       {season.isDefault ? (
         <Box>
-          <Typography component="h3" sx={{ fontWeight: 'bold', typography: 'body2' }}>
+          <Typography
+            component="span"
+            sx={{ display: 'block', fontWeight: 'bold', typography: 'body2' }}
+          >
             Default
           </Typography>
           <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
@@ -372,12 +373,29 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
         </Box>
       ) : (
         <>
-          <Typography component="h3" sx={{ fontWeight: 'bold', typography: 'body2' }}>
-            Season / Special Rates
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Typography
+              aria-hidden
+              component="span"
+              sx={{ fontWeight: 'bold', typography: 'body2' }}
+            >
+              Season / Special Rates
+            </Typography>
             <Box component="span" sx={visuallyHidden}>
-              {`: ${name}`}
+              {name}
             </Box>
-          </Typography>
+            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label={`Duplicate season ${name}`}
+                onClick={onDuplicate}
+              >
+                <ContentCopy fontSize="small" />
+              </IconButton>
+              <RemoveIconButton size="small" label={`season ${name}`} onClick={onRemove} />
+            </Box>
+          </Box>
           <TextField
             id={seasonDomId(season.id, 'name')}
             label="Season name"
@@ -390,30 +408,38 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
             required
             sx={{ bgcolor: 'background.paper' }}
           />
-          <Box id={seasonDomId(season.id, 'startDate')} sx={{ bgcolor: 'background.paper' }}>
-            <DateField
-              fullWidth
-              size="small"
-              label="Start date"
-              ariaLabel={`${name} start date`}
-              value={season.startDate}
-              onChange={(startDate) => onChange({ startDate })}
-              error={Boolean(e.startDate)}
-              helperText={e.startDate}
-            />
-          </Box>
-          <Box id={seasonDomId(season.id, 'endDate')} sx={{ bgcolor: 'background.paper' }}>
-            <DateField
-              fullWidth
-              size="small"
-              label="End date"
-              ariaLabel={`${name} end date`}
-              value={season.endDate}
-              min={season.startDate || undefined}
-              onChange={(endDate) => onChange({ endDate })}
-              error={Boolean(e.endDate)}
-              helperText={e.endDate}
-            />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box
+              id={seasonDomId(season.id, 'startDate')}
+              sx={{ flex: 1, minWidth: 0, bgcolor: 'background.paper' }}
+            >
+              <DateField
+                fullWidth
+                size="small"
+                label="Start date"
+                ariaLabel={`${name} start date`}
+                value={season.startDate}
+                onChange={(startDate) => onChange({ startDate })}
+                error={Boolean(e.startDate)}
+                helperText={e.startDate}
+              />
+            </Box>
+            <Box
+              id={seasonDomId(season.id, 'endDate')}
+              sx={{ flex: 1, minWidth: 0, bgcolor: 'background.paper' }}
+            >
+              <DateField
+                fullWidth
+                size="small"
+                label="End date"
+                ariaLabel={`${name} end date`}
+                value={season.endDate}
+                min={season.startDate || undefined}
+                onChange={(endDate) => onChange({ endDate })}
+                error={Boolean(e.endDate)}
+                helperText={e.endDate}
+              />
+            </Box>
           </Box>
           <FormControl>
             <FormLabel id={kindLabelId} sx={{ typography: 'caption', color: 'text.primary' }}>
@@ -450,17 +476,6 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
               onChange={(sku) => onChange({ sku })}
               error={e.sku}
             />
-          </Box>
-          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-            <IconButton
-              size="small"
-              color="primary"
-              aria-label={`Duplicate season ${name}`}
-              onClick={onDuplicate}
-            >
-              <ContentCopy fontSize="small" />
-            </IconButton>
-            <RemoveIconButton size="small" label={`season ${name}`} onClick={onRemove} />
           </Box>
         </>
       )}
