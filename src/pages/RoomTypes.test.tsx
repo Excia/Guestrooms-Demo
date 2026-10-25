@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import RoomTypes from './RoomTypes';
 
 function renderPage(client: ApiClient = createMockClient()) {
@@ -38,6 +38,42 @@ describe('Room Types page', () => {
     expect(screen.getByLabelText(/Room Type Name/)).toHaveValue('Double Queen Room');
     expect(screen.getByRole('group', { name: 'Max Occupancy' })).toHaveTextContent('4');
     expect(screen.getByRole('group', { name: 'Queen' })).toHaveTextContent('2');
+  });
+
+  it('offers Save on a new, untouched room type', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'New Room Type' }));
+    expect(screen.getByRole('button', { name: 'Save Room Type' })).not.toHaveAttribute(
+      'aria-disabled',
+    );
+  });
+
+  it('returns to Save after a failed save, with the edits kept', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    vi.spyOn(client.roomSetup, 'saveRoomType').mockRejectedValueOnce(new Error('offline'));
+    renderPage(client);
+    await loaded();
+    await user.type(screen.getByLabelText(/Room Type Name/), ' II');
+    await user.click(screen.getByRole('button', { name: 'Save Room Type' }));
+    expect(await screen.findByText(/could not be saved/)).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: saveButtonName('Room Type') });
+    expect(button).toHaveAccessibleName('Save Room Type');
+    expect(button).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('reads Saved when nothing changed, Save Room Type after an edit, and Saved again after saving', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    const clean = screen.getByRole('button', { name: 'Saved, Room Type' });
+    expect(clean).toHaveTextContent('Saved');
+    expect(clean).toHaveAttribute('aria-disabled', 'true');
+    await user.type(screen.getByLabelText(/Room Type Name/), ' II');
+    await user.click(screen.getByRole('button', { name: 'Save Room Type' }));
+    expect(await screen.findByRole('button', { name: 'Saved, Room Type' })).toBeInTheDocument();
   });
 
   it('shows the end date only when "Configure active end date?" is checked', async () => {

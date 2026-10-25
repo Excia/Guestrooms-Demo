@@ -31,6 +31,7 @@ import SettingsTab from '../components/admin/systemSettings/SettingsTab';
 import TrainingModeToggle from '../components/admin/systemSettings/TrainingModeToggle';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
+import SaveButton from '../components/shared/SaveButton';
 import { settingsTextSx } from '../components/admin/systemSettings/settingsText';
 
 type TabId = 'settings' | 'folio' | 'registration' | 'online';
@@ -143,14 +144,14 @@ export default function SystemSettings({ readOnly = false }: { readOnly?: boolea
   }, [api, apply, draft, tab]);
 
   const saveButton = (
-    <Button
-      variant="contained"
-      size="large"
+    <SaveButton
+      dirty={dirty}
+      saving={saving}
+      noun="System Settings"
       onClick={() => void save()}
-      disabled={readOnly || !dirty || saving}
-    >
-      Save System Settings
-    </Button>
+      disabled={readOnly}
+      disabledReason="You have view-only access"
+    />
   );
 
   let body;

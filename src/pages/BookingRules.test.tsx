@@ -4,7 +4,7 @@ import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
-import { GrantedAccess } from '../app/testing';
+import { GrantedAccess, saveButtonName } from '../app/testing';
 import BookingRules from './BookingRules';
 
 function renderPage(client: ApiClient = createMockClient()) {
@@ -38,7 +38,10 @@ describe('BookingRules page', () => {
       'aria-current',
       'page',
     );
-    expect(screen.getByRole('button', { name: 'Save Booking Rules' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: saveButtonName('Booking Rules') })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('shows N/A cells for rules that do not apply', async () => {
@@ -110,7 +113,7 @@ describe('BookingRules page', () => {
     expect(amount).toHaveValue('99');
     await user.clear(amount);
     expect(screen.getByText(/Enter a deposit from \$0.01/)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     expect(save).not.toHaveBeenCalled();
     expect(amount).toHaveFocus();
   });
@@ -130,7 +133,7 @@ describe('BookingRules page', () => {
         name: 'Amount, Payment Method at Booking, Member Online Booking',
       }),
     ).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     const saved = save.mock.calls[0][0];
     expect(saved.member).toMatchObject({
       payment: 'optional',
@@ -162,7 +165,7 @@ describe('BookingRules page', () => {
     await user.clear(percent);
     await user.type(percent, '12.5');
     expect(screen.queryByText(/Enter a percentage/)).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     expect(save.mock.calls[0][0].member).toMatchObject({
       payment: 'deposit',
       depositType: 'percent',
@@ -182,7 +185,7 @@ describe('BookingRules page', () => {
     await user.clear(amount);
     await user.type(amount, '12.50');
     expect(amount).toHaveValue('12.50');
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     expect(save.mock.calls[0][0].member).toMatchObject({
       depositType: 'amount',
       depositValue: 1250,
@@ -192,7 +195,7 @@ describe('BookingRules page', () => {
     expect(amount).toHaveValue('1.05');
     await user.type(amount, '9');
     expect(amount).toHaveValue('1.05');
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     expect(save.mock.calls[1][0].member).toMatchObject({ depositValue: 105 });
   });
 
@@ -242,11 +245,14 @@ describe('BookingRules page', () => {
     renderPage(client);
     await loaded();
     await user.click(nonMemberOnline());
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0].nonMember).toBeNull();
     expect((await screen.findAllByText('Booking Rules Saved')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Save Booking Rules' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: saveButtonName('Booking Rules') })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
   });
 
   it('asks before leaving with unsaved changes', async () => {
@@ -273,7 +279,7 @@ describe('BookingRules page', () => {
     renderPage(client);
     await loaded();
     await user.click(nonMemberOnline());
-    await user.click(screen.getByRole('button', { name: 'Save Booking Rules' }));
+    await user.click(screen.getByRole('button', { name: saveButtonName('Booking Rules') }));
     expect(
       await screen.findByText('Booking Rules could not be saved. Try again.'),
     ).toBeInTheDocument();

@@ -23,6 +23,8 @@ export function useSetupEditor<T extends { id: string }, D>({
   const [fresh, setFresh] = useState<D | null>(null);
   const [edits, setEdits] = useState<D | null>(null);
   const [attempted, setAttempted] = useState(false);
+  // Edits the draft cannot hold (text in a money cell that does not parse) still count as unsaved.
+  const [external, setExternal] = useState(false);
   const [pending, setPending] = useState<(() => void) | null>(null);
   const initialBlank = useState(blank)[0];
 
@@ -34,7 +36,7 @@ export function useSetupEditor<T extends { id: string }, D>({
     [selected, toDraft, fresh, initialBlank],
   );
   const draft = edits ?? baseline;
-  const dirty = edits !== null && JSON.stringify(edits) !== JSON.stringify(baseline);
+  const dirty = external || (edits !== null && JSON.stringify(edits) !== JSON.stringify(baseline));
   const guard = useLeaveGuard(dirty);
 
   const reset = useCallback((next: string | null | undefined, base: D | null = null) => {
@@ -58,6 +60,8 @@ export function useSetupEditor<T extends { id: string }, D>({
     attempted,
     setAttempted,
     setDraft: setEdits as (draft: D) => void,
+    /** Marks edits held outside the draft as unsaved changes (or clears the mark). */
+    setExternalDirty: setExternal,
     select: (id: string) => guarded(() => reset(id)),
     startNew: () => guarded(() => reset(null)),
     /** A new, unsaved item with the saved values of the selected one (PDF 8.8). */

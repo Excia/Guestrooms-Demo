@@ -10,7 +10,7 @@ import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { AddOnKind, RateCategoryInput, RateCategorySetup } from '../api/types';
 import {
@@ -120,6 +120,8 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   // Rate cells holding text that is not money; Save waits until they are corrected.
   const [badAmounts, setBadAmounts] = useState<ReadonlySet<string>>(new Set());
+  const { setExternalDirty } = editor;
+  useEffect(() => setExternalDirty(badAmounts.size > 0), [badAmounts, setExternalDirty]);
   const onAmountInvalid = useCallback((cell: string, invalid: boolean) => {
     setBadAmounts((prev) => {
       if (prev.has(cell) === invalid) return prev;
@@ -277,8 +279,9 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       actions={
         <SetupActions
           noun="rate category"
-          saveLabel="Save Rate Category"
+          saveNoun="Rate Category"
           creating={editor.creating}
+          dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
           onDelete={() => {

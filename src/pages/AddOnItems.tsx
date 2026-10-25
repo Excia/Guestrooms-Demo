@@ -195,8 +195,9 @@ function AddOnEditor({ data }: { data: AddOnData }) {
       actions={
         <SetupActions
           noun="add-on"
-          saveLabel="Save Add-On"
+          saveNoun="Add-On"
           creating={editor.creating}
+          dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
           onDelete={() => {
