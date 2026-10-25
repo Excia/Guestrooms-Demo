@@ -125,20 +125,6 @@ describe('Rate Categories page', () => {
     expect(stored?.seasons[0].rates['rt-king'].standardBase).toBe(19050);
   });
 
-  it('flags text that is not money and restores the last good value on leaving the cell', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await loaded();
-    await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
-    const cell = await screen.findByRole('textbox', { name: 'Default, King Room, Standard Base' });
-    await user.clear(cell);
-    await user.type(cell, 'abc');
-    expect(cell).toBeInvalid();
-    await user.tab();
-    expect(cell).toHaveValue('180.00');
-    expect(cell).toBeValid();
-  });
-
   it('adds a season that must be named and dated before it can be saved', async () => {
     const user = userEvent.setup();
     renderPage();

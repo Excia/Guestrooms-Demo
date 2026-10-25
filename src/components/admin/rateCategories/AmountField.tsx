@@ -1,6 +1,6 @@
 import InputAdornment from '@mui/material/InputAdornment';
 import TextField from '@mui/material/TextField';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { Cents } from '../../../api/types';
 import { formatDollars, MAX_RATE_CENTS, parseDollars } from '../../../app/rateCategories';
 
@@ -32,10 +32,18 @@ export default function AmountField({ label, cents, onChange, onInvalidChange }:
     if (valid(text) !== cents) setText(formatDollars(cents));
   }
   const invalid = valid(text) === null;
+  // The callback is read through a ref, so a new function each render cannot re-run the effects.
+  const notify = useRef(onInvalidChange);
   useEffect(() => {
-    onInvalidChange?.(invalid);
-    return () => onInvalidChange?.(false);
-  }, [invalid, onInvalidChange]);
+    notify.current = onInvalidChange;
+  });
+  useEffect(() => {
+    notify.current?.(invalid);
+  }, [invalid]);
+  useEffect(() => {
+    const current = notify;
+    return () => current.current?.(false);
+  }, []);
   return (
     <TextField
       size="small"
