@@ -11,6 +11,7 @@ Vue app (read only, nothing copied).
 | D-AP-1 | 2026-10-25 | Removing a row or item in admin setup uses ONE control, `RemoveIconButton` (`src/components/shared/`): the filled trash can (MUI `Delete`, the icon Keycard Integration used first) in the theme error colour (`tone="danger"`, the default). Accessible name "Remove <label>", tooltip, 24px minimum target, focus ring, disabled state with a reason (tooltip + description) | Many different remove controls; owner wants one standard | owner  | provisional |
 | D-AP-2 | 2026-10-25 | The admin side-nav active bar follows the legacy `SideBarControl`: 5px wide, pinned to the panel edge, 15px from the active tab, rounded 4px on the left. Spacing units: 0.625 (5px), 1.875 (15px), 0.5 (4px)                                                                                                                                                                  | Bar was pressed against the tab and cut off at the card  | owner  | provisional |
 | D-AP-3 | 2026-10-25 | The Change Log is a normal modal dialog (not full screen), 85vw by 80vh like the legacy reservation hub change log modal; below 600px it fills the width with 16px margins. The table scrolls under a sticky header, pagination sits in a footer, the "Search descriptions" field is in the header. Supersedes D-97-4                                                          | A full-screen overlay read like a new page               | owner  | provisional |
+| D-AP-4 | 2026-10-25 | The Admin Setup shell does not scroll the page from 1200px (lg) up: it fills the viewport below the app bar (`100dvh` minus the app bar and its own margins), the left navigation column stays in view (it scrolls inside itself only if taller than the window), the page header row (title, Change Log, Save, divider) is fixed at the top of the content panel, and only the body below it scrolls (`region` "Page content", focusable, `scroll-padding` so focused fields clear the edge). Done once in `AdminShell`; pages keep passing `title`, `actions` and `changeLog`. Below 1200px the layout stacks as before and the page scrolls normally | Owner: only the inner content scrolls; menu and header must always be visible | owner | provisional |
 
 ## D-AP-1 audit
 
@@ -64,3 +65,12 @@ The title reads "[Page]: Change Log" (colon) on every page. The search icon in "
 ## Not verified
 
 Layout and spacing were not checked in a real browser (jsdom tests only).
+
+## D-AP-4 scroll regions
+
+- Header outside the scroll container, so it can never cover a focused field; `element.focus()` and
+  `scrollIntoView` scroll the nearest scrollable ancestor, which is the inner body.
+- The body has `tabIndex 0` so keyboard users can scroll it with arrow and page keys even when the content
+  has no focusable control (loading, error). Its focus ring is inset.
+- Below lg nothing is clipped: normal document scroll, navigation stacked above the panel.
+- Not verified in a real browser (jsdom has no layout); covered by structure and style tests.

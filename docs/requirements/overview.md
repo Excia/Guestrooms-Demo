@@ -29,7 +29,7 @@ embedded in the club's main site ("Axis") as a widget and opens results in a new
 | Administrator ("Admin")        | May open every Admin Setup page; grant `permissions: 'all'`                                              | Excia/Guestrooms-Demo#9, `src/api/mockUsers.ts`    |
 | Non-admin staff                | Reservation Management pages only; the menu shows one column and "Return to Site"                        | Excia/Guestrooms-Demo#8                            |
 | Partial admin                  | Some Admin Setup pages only (mock: Rooms and Room Types)                                                 | Excia/Guestrooms-Demo#9                            |
-| Employee                       | Staff who book in the admin UI; the "Employee Booking" column of Booking Rules; hold audience `employee` | Excia/Guestrooms-Demo#74                           |
+| Employee                       | Staff who book in the admin UI; the "Admin Booking" column of Booking Rules; hold audience `employee` | Excia/Guestrooms-Demo#74                           |
 | Employee roles (notifications) | Admin, Management, Staff; recipients can be chosen per role                                              | Excia/Guestrooms-Demo#80                           |
 | Member                         | Club member; online booking with member rates and rules; owns a member number                            | Excia/Guestrooms-Demo#34, Excia/Guestrooms-Demo#74 |
 | Non-member (guest)             | Booker without a member account; non-member rates and rules; signs in through "Core"                     | Excia/Guestrooms-Demo#99                           |

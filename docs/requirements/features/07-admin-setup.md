@@ -12,6 +12,9 @@ Admin Setup entries (Primary Setup, Rate Categories, Room Types, Rooms, Add-On I
 the routes `/admin/primary-setup`, `/admin/rate-categories`, `/admin/room-types`, `/admin/rooms`,
 `/admin/add-on-items`, `/admin/notifications` (all placeholder pages today). Booking Rules, Keycard
 Integration and Migration Tool have **no route yet**. Responsive: desktop-first, stack below 1200px (D-010).
+**Scrolling (D-AP-4):** from 1200px up the page itself does not scroll: `AdminShell` fills the viewport below the
+app bar, the left navigation and the page header row stay fixed, and only the content body scrolls. Below
+1200px it stacks and scrolls normally.
 All tickets are **not started**.
 
 ## 7.1 Primary Setup / System Settings
@@ -197,14 +200,14 @@ Excia/Guestrooms-Demo#123, built as Legacy Port #182. No Figma frame; behavior p
 
 Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.
 
-- **Requirements:** a table with columns **Employee Booking** (always enabled), **Member Online Booking**
+- **Requirements:** a table with columns **Admin Booking** (always enabled; the stored id stays `employee`), **Member Online Booking**
   (enable toggle plus a "Unique Member Type Rules" checkbox) and **Non-Member Online Booking** (enable
   toggle), rows: Require Member Reserver (checkbox); Required Named Occupants (All occupants / Lead
   occupant only / None); Require Contact Information (Email only / Phone only / Email AND phone / Email OR
   phone); Booking Opens and Booking Closes (time prior to check in; Employee can be N/A for closes);
   **Cancellation Period** (time prior to check in; D-007); **Reservation Hold** (minutes, max 99; D-006);
-  Payment Method at Booking (Payment on File Required / Deposit Required with Amount / Prepayment
-  Required); Room Selection (Room Optional / Room Only / Room Type Only); Excluded Room Types (multi-select
+  Payment Method at Booking (Optional / Payment on File Required / Deposit Required with a `$ / %` toggle and
+  an amount or percentage / Prepayment Required); Room Selection (Room Optional / Room Only / Room Type Only); Excluded Room Types (multi-select
   chips); Max. Rooms per Reservation; Display Add-On Popup (online only). Second table **Unique Member Type
   Rules**: Member Type, Exclude from Online Booking, Excluded Room Types, Booking Opens, Booking Closes, row
   delete, ADD MEMBER TYPE; unique rules take precedence over the member default. SAVE BOOKING RULES.
@@ -213,7 +216,7 @@ Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.
   column and online booking is for logged-in members only (non-member rules are the default for all
   non-members); with non-member online **enabled**, "Require Member Reserver" is disabled and N/A (gray).
   The label of the member-type checkbox anchors to its table. Validation: opens later than closes, hold 1 to
-  99, deposit amount required when Deposit is selected. The rules are exposed as a typed object consumed by
+  99, deposit required when Deposit is selected (dollars above 0, or a percentage of the stay from 0.01 to 100 with at most 2 decimals). The rules are exposed as a typed object consumed by
   Epic 5 and the admin New Reservation search.
 - **Existing groundwork:** `GET /settings/booking-hold` and `BookingHold { employee, member, nonMember }`
   (1 to 99 minutes) on `main` (PR Excia/Guestrooms-Demo#119); the New Reservation panel uses the employee value (placeholder 15 minutes).
@@ -226,12 +229,12 @@ Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.
   while member online is off), `validateBookingRules`, `effectiveRules` (what Epic 5 and the admin New
   Reservation search call: the member type rule overrides the member default, an excluded member type or a
   switched-off column means no online booking) and `holdFromRules`. A cleared column is `null` in the data. An
-  N/A cell is a gray cell (employee excluded room types and add-on popup; the non-member member reserver).
+  N/A cell is a gray cell (admin excluded room types and add-on popup; the non-member member reserver).
   Validation: booking opens earlier than it closes (compared in days, a month counts 30), hold 1 to 99, deposit
-  amount required for Deposit, rooms per reservation 1 to 99, a member type chosen once per row. One Save
+  value required for Deposit (dollars or percent), rooms per reservation 1 to 99, a member type chosen once per row. One Save
   button, enabled while dirty; Confirm Leaving; a refused save focuses the first invalid cell.
   The mock's `GET /settings/booking-hold` now reads the Reservation Hold row.
-  - **Built defaults:** time units are days, weeks and months, amounts 1 to 99 (Q-74-1); Employee Booking has no
+  - **Built defaults:** time units are days, weeks and months, amounts 1 to 99 (Q-74-1); Admin Booking has no
     Excluded Room Types (N/A, as drawn; Q-74-2); the "Maximum reservations / time" hint Figma shows under Room
     Selection looks pasted from another row and is not shown; the member-type label is a link to its table and
     the checkbox beside it toggles the rows; switching a column back on gives it default values.
@@ -240,7 +243,10 @@ Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.
     (decision D-007).
   - **Backend:** `GET` and `PUT /settings/booking-rules`, `GET /settings/booking-rules/options` (see
     [api-contract.md](../api-contract.md)).
-- **Open questions:** Q-74-1, Q-74-2.
+- **Polish (2026-10-25):** the audience is labelled Admin Booking; Payment Method at Booking gains Optional; a
+  deposit is a dollar amount or a percentage of the stay (`depositType`, `depositValue`) with `depositDueCents` in
+  `src/app/bookingRules.ts`. Details: [entries/booking-rules-polish.md](entries/booking-rules-polish.md).
+- **Open questions:** Q-74-1, Q-74-2, Q-bkr-1 to Q-bkr-3.
 
 ## 7.6 Keycard Integration settings
 
