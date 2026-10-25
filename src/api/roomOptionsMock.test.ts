@@ -1,8 +1,9 @@
 import { createMockClient } from './mock';
-import { MOCK_ROOM_OPTIONS } from './roomOptionsData';
+import { MOCK_ROOM_OPTIONS, mockRoomOptions } from './roomOptionsData';
 import { toRequest, draftFromOptions } from '../app/featureBedOptions';
 
-const base = () => ({
+const base = (version = 'ro-1') => ({
+  version,
   features: MOCK_ROOM_OPTIONS.features.map(({ id, label }) => ({ id, label })),
   bedSizes: MOCK_ROOM_OPTIONS.bedSizes.map(({ id, label }) => ({ id, label })),
 });
@@ -23,6 +24,7 @@ describe('mock room options API', () => {
     const api = createMockClient().roomOptions;
     const saved = await api.save({
       requestId: 'r1',
+      version: 'ro-1',
       features: [
         ...base().features.filter((f) => f.id !== 'feature-tub'),
         { label: '  Fireplace  ' },
@@ -75,6 +77,7 @@ describe('mock room options API', () => {
     await expect(
       api.save({
         requestId: 'inuse',
+        version: 'ro-1',
         features: base().features.filter((f) => f.id !== 'feature-fridge'),
         bedSizes: base().bedSizes.filter((b) => b.id !== 'bed-twin'),
       }),
@@ -103,6 +106,7 @@ describe('one source of truth', () => {
     const features = base().features.filter((f) => f.id !== 'feature-tub');
     await client.roomOptions.save({
       requestId: 's',
+      version: 'ro-1',
       features: [...features, { label: 'Fireplace' }],
       bedSizes: [...base().bedSizes, { label: 'Cot' }],
     });
@@ -120,6 +124,7 @@ describe('one source of truth', () => {
     const client = createMockClient();
     await client.roomOptions.save({
       requestId: 'b',
+      version: 'ro-1',
       features: base().features,
       bedSizes: base().bedSizes.filter((b) => b.id !== 'bed-twin'),
     });
@@ -128,7 +133,90 @@ describe('one source of truth', () => {
   });
 
   it('round-trips a draft through toRequest', () => {
-    const draft = draftFromOptions(MOCK_ROOM_OPTIONS);
-    expect(toRequest(draft, 'q').features).toEqual(base().features);
+    const draft = draftFromOptions(mockRoomOptions());
+    expect(toRequest(draft, 'q', 'ro-1').features).toEqual(base().features);
+  });
+});
+
+describe('versioning and write validation', () => {
+  it('returns a new version after each save and refuses an old one with 409 stale', async () => {
+    const api = createMockClient().roomOptions;
+    const first = await api.get();
+    const saved = await api.save({
+      requestId: 'v1',
+      ...base(first.version),
+      features: [...base().features, { label: 'Sauna' }],
+    });
+    expect(saved.version).not.toBe(first.version);
+    await expect(
+      api.save({ requestId: 'v2', ...base(first.version), features: base().features.slice(0, 2) }),
+    ).rejects.toMatchObject({ status: 409, code: 'stale' });
+    expect((await api.get()).features).toHaveLength(6);
+  });
+
+  it('replays a saved request even though its version is now old', async () => {
+    const api = createMockClient().roomOptions;
+    const request = {
+      requestId: 'again',
+      ...base(),
+      features: [...base().features, { label: 'Sauna' }],
+    };
+    const first = await api.save(request);
+    expect(await api.save(request)).toEqual(first);
+  });
+
+  it('refuses the same id twice with 422', async () => {
+    const api = createMockClient().roomOptions;
+    await expect(
+      api.save({
+        requestId: 'dup',
+        ...base(),
+        features: [
+          { id: 'feature-fridge', label: 'A' },
+          { id: 'feature-fridge', label: 'B' },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+  });
+
+  it('refuses a room type or room that uses a feature or bed size that is not in the lists', async () => {
+    const client = createMockClient();
+    const [type] = await client.roomSetup.listRoomTypes();
+    const { id: _id, ...input } = type;
+    void _id;
+    for (const details of [
+      { ...type.details, featureIds: ['feature-gone'] },
+      { ...type.details, bedTypes: { ...type.details.bedTypes, 'bed-gone': 1 } },
+    ]) {
+      await expect(
+        client.roomSetup.saveRoomType({ ...input, id: type.id, details }),
+      ).rejects.toMatchObject({
+        status: 422,
+      });
+    }
+    const [room] = await client.roomSetup.listRooms();
+    await expect(
+      client.roomSetup.saveRoom({
+        ...room,
+        inheritDetails: false,
+        details: { ...room.details, featureIds: ['feature-gone'] },
+      }),
+    ).rejects.toMatchObject({ status: 422 });
+    // A feature added in Room Options is accepted at once.
+    const options = await client.roomOptions.get();
+    await client.roomOptions.save({
+      requestId: 'add',
+      version: options.version,
+      features: [...options.features, { label: 'Sauna' }],
+      bedSizes: options.bedSizes,
+    });
+    const added = (await client.roomOptions.get()).features.at(-1)?.id as string;
+    await expect(
+      client.roomSetup.saveRoomType({
+        ...input,
+        id: type.id,
+        details: { ...type.details, featureIds: [added] },
+      }),
+    ).resolves.toBeTruthy();
   });
 });

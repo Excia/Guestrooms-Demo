@@ -1,5 +1,6 @@
 import { createHttpClient } from './http';
-import { MOCK_ROOM_OPTIONS } from './roomOptionsData';
+import { mockRoomOptions } from './roomOptionsData';
+const MOCK_ROOM_OPTIONS = mockRoomOptions();
 import { ApiError } from './types';
 
 const json = (body: unknown, init?: ResponseInit) =>
@@ -18,21 +19,29 @@ describe('http room options API', () => {
     const fetchMock = vi.fn().mockResolvedValue(json(MOCK_ROOM_OPTIONS));
     await make(fetchMock).roomOptions.save({
       requestId: 'abc',
+      version: 'ro-1',
       features: [{ label: 'Sauna' }],
       bedSizes: [],
     });
     const init = fetchMock.mock.calls[0][1];
     expect(init).toMatchObject({ method: 'PUT' });
     expect(new Headers(init.headers).get('Idempotency-Key')).toBe('abc');
+    expect(new Headers(init.headers).get('If-Match')).toBe('ro-1');
     expect(JSON.parse(init.body)).toEqual({
       requestId: 'abc',
+      version: 'ro-1',
       features: [{ label: 'Sauna' }],
       bedSizes: [],
     });
   });
 
   it('rejects a body that is not two lists of labelled items', async () => {
-    for (const bad of [[], { features: [] }, { features: [{ id: 'x' }], bedSizes: [] }]) {
+    for (const bad of [
+      [],
+      { features: [] },
+      { features: [], bedSizes: [] },
+      { version: 'v', features: [{ id: 'x' }], bedSizes: [] },
+    ]) {
       const fetchMock = vi.fn().mockResolvedValue(json(bad));
       await expect(make(fetchMock).roomOptions.get()).rejects.toBeInstanceOf(ApiError);
     }
@@ -48,7 +57,12 @@ describe('http room options API', () => {
         ),
       );
     await expect(
-      make(fetchMock).roomOptions.save({ requestId: 'r', features: [], bedSizes: [] }),
+      make(fetchMock).roomOptions.save({
+        requestId: 'r',
+        version: 'ro-1',
+        features: [],
+        bedSizes: [],
+      }),
     ).rejects.toMatchObject({
       status: 409,
       code: 'in-use',

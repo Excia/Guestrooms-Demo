@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
-import { MOCK_ROOM_OPTIONS } from '../api/roomOptionsData';
+import { mockRoomOptions } from '../api/roomOptionsData';
+
+const MOCK_ROOM_OPTIONS = mockRoomOptions();
 import { ApiError, type ApiClient } from '../api/types';
 import { GrantedAccess } from '../app/testing';
 import RoomOptions from './RoomOptions';
@@ -47,7 +49,7 @@ describe('Room Options page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('tab', { name: 'Bed Sizes' }));
+    await user.click(screen.getByRole('tab', { name: /^Bed Sizes/ }));
     expect(screen.getAllByRole('textbox', { name: /^Bed Size \d+$/ })).toHaveLength(4);
     expect(screen.getByRole('button', { name: 'Add Bed Size' })).toBeInTheDocument();
   });
@@ -70,7 +72,10 @@ describe('Room Options page', () => {
     const client = createMockClient();
     renderPage({
       ...client,
-      roomOptions: { ...client.roomOptions, get: async () => ({ features: [], bedSizes: [] }) },
+      roomOptions: {
+        ...client.roomOptions,
+        get: async () => ({ version: 'v', features: [], bedSizes: [] }),
+      },
     });
     expect(await screen.findByText(/No features yet/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add Feature' })).toBeInTheDocument();
@@ -127,13 +132,16 @@ describe('Room Options page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('tab', { name: 'Bed Sizes' }));
+    await user.click(screen.getByRole('tab', { name: /^Bed Sizes/ }));
     await user.click(screen.getByRole('button', { name: 'Add Bed Size' }));
     await user.click(screen.getByRole('tab', { name: 'Features' }));
     await user.click(screen.getByRole('button', { name: 'Remove Soaking tub' }));
     await user.click(saveButton());
     expect(await screen.findByText('Bed Size must have a name.')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Bed Sizes' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: /^Bed Sizes/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
   });
 
   it('removes an unused item and later ones move up', async () => {
@@ -156,7 +164,7 @@ describe('Room Options page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('tab', { name: 'Bed Sizes' }));
+    await user.click(screen.getByRole('tab', { name: /^Bed Sizes/ }));
     await user.click(screen.getByRole('button', { name: 'Remove Queen' }));
     expect(screen.getByRole('alert')).toHaveTextContent(/Queen cannot be removed/);
     expect(withLabel('Queen')).toBeInTheDocument();
@@ -164,18 +172,104 @@ describe('Room Options page', () => {
     expect(screen.queryByDisplayValue('Twin')).not.toBeInTheDocument();
   });
 
-  it('shows the server refusal when a removal is still in use there', async () => {
+  it('names the refused items, puts them back and keeps the other edits', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
     const save = vi
       .fn()
-      .mockRejectedValue(new ApiError(409, 'in use', { code: 'in-use', details: {} }));
+      .mockRejectedValue(
+        new ApiError(409, 'in use', { code: 'in-use', details: { features: ['feature-tub'] } }),
+      );
+    const listRooms = vi.spyOn(client.roomSetup, 'listRooms');
     renderPage({ ...client, roomOptions: { ...client.roomOptions, save } });
     await loaded();
-    await user.type(withLabel('Soaking tub'), '2');
+    await user.click(screen.getByRole('button', { name: 'Remove Soaking tub' }));
+    await user.type(withLabel('Balcony'), '!');
+    const before = listRooms.mock.calls.length;
     await user.click(saveButton());
-    expect(await screen.findByText(/still used by a Room Type or Room/)).toBeInTheDocument();
-    expect(saveButton()).toBeEnabled();
+    const alert = await screen.findByText(/Soaking tub could not be removed/);
+    expect(alert).toHaveTextContent(/put back in the list; your other changes are kept/);
+    expect(screen.getByDisplayValue('Soaking tub')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Balcony!')).toBeInTheDocument();
+    // The usage the Remove check reads is refreshed after the refusal.
+    await waitFor(() => expect(listRooms.mock.calls.length).toBeGreaterThan(before));
+  });
+
+  it('keeps the draft and offers Reload when the lists changed elsewhere', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    // Another tab adds a feature and removes Soaking tub.
+    const other = await client.roomOptions.get();
+    await client.roomOptions.save({
+      requestId: 'other',
+      version: other.version,
+      features: [...other.features.filter((f) => f.id !== 'feature-tub'), { label: 'Sauna' }],
+      bedSizes: other.bedSizes,
+    });
+    await user.type(withLabel('Mini fridge'), ' XL');
+    await user.click(saveButton());
+    expect(await screen.findByText(/The lists changed elsewhere. Reload./)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Mini fridge XL')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reload' }));
+    await waitFor(() => expect(screen.queryByText(/changed elsewhere/)).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue('Mini fridge XL')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Sauna')).toBeInTheDocument();
+    expect(screen.queryByDisplayValue('Soaking tub')).not.toBeInTheDocument();
+    await user.click(saveButton());
+    await screen.findAllByText('Room Options Saved');
+    const now = (await client.roomOptions.get()).features.map((f) => f.label);
+    expect(now).toContain('Mini fridge XL');
+    expect(now).toContain('Sauna');
+  });
+
+  it('keeps the fields mounted and focus inside the page after a save', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Feature' }));
+    const field = screen.getAllByRole('textbox', { name: /^Feature \d+$/ }).at(-1) as HTMLElement;
+    await user.type(field, 'Fireplace');
+    await user.click(saveButton());
+    await screen.findAllByText('Room Options Saved');
+    // The same element survives the save (its key did not change).
+    expect(field.isConnected).toBe(true);
+    expect(field).toHaveValue('Fireplace');
+    await waitFor(() => expect(screen.getByRole('tabpanel', { name: 'Features' })).toHaveFocus());
+  });
+
+  it('moves focus to the neighbouring item after a removal', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Remove Soaking tub' }));
+    await waitFor(() => expect(withLabel('Golf course view')).toHaveFocus());
+  });
+
+  it('marks the other tab when it also has errors', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Feature' }));
+    await user.click(screen.getByRole('tab', { name: /^Bed Sizes/ }));
+    await user.click(screen.getByRole('button', { name: 'Add Bed Size' }));
+    await user.click(saveButton());
+    expect(await screen.findByRole('tab', { name: 'Features (1 to fix)' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Bed Sizes (1 to fix)' })).toBeInTheDocument();
+    expect(
+      screen.getByText(/Some names need fixing on: Features and Bed Sizes/),
+    ).toBeInTheDocument();
+  });
+
+  it('keeps the character counter visible next to an error', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Feature' }));
+    await user.click(saveButton());
+    expect(await screen.findByText('Feature must have a name.')).toBeInTheDocument();
+    expect(screen.getByText('0/50')).toBeInTheDocument();
   });
 
   it('reuses the request id when the same payload is retried', async () => {
@@ -225,6 +319,7 @@ describe('consumers read the shared list', () => {
   async function saveFireplace(client: ApiClient) {
     await client.roomOptions.save({
       requestId: 'c',
+      version: 'ro-1',
       features: [...MOCK_ROOM_OPTIONS.features, { label: 'Fireplace' }],
       bedSizes: [...MOCK_ROOM_OPTIONS.bedSizes, { label: 'Cot' }],
     });

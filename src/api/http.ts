@@ -725,7 +725,12 @@ const parseRoomSetupOptions = (body: unknown, status: number): RoomSetupOptions 
 };
 
 const parseRoomOptions = (body: unknown, status: number): RoomOptions => {
-  if (!isObject(body) || !listOf(body.features, isLookup) || !listOf(body.bedSizes, isLookup)) {
+  if (
+    !isObject(body) ||
+    !isString(body.version) ||
+    !listOf(body.features, isLookup) ||
+    !listOf(body.bedSizes, isLookup)
+  ) {
     throw invalid(status, 'room options');
   }
   return body as unknown as RoomOptions;
@@ -1654,7 +1659,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         request('/room-options', {}, o, parseRoomOptions, {
           method: 'PUT',
           body: r,
-          headers: { 'Idempotency-Key': r.requestId },
+          headers: { 'Idempotency-Key': r.requestId, 'If-Match': r.version },
         }),
     },
     addOns: {

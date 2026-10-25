@@ -40,8 +40,13 @@ export const draftFromOptions = (options: RoomOptions): RoomOptionsDraft => ({
 export const toInputs = (items: readonly RoomOptionDraft[]): RoomOptionInput[] =>
   items.map((i) => (i.id ? { id: i.id, label: i.label } : { label: i.label }));
 
-export const toRequest = (draft: RoomOptionsDraft, requestId: string): SaveRoomOptionsRequest => ({
+export const toRequest = (
+  draft: RoomOptionsDraft,
+  requestId: string,
+  version: string,
+): SaveRoomOptionsRequest => ({
   requestId,
+  version,
   features: toInputs(draft.features),
   bedSizes: toInputs(draft.bedSizes),
 });
@@ -73,18 +78,27 @@ export function validateOptionLabels(
 export type RoomOptionErrors = Record<RoomOptionKind, (string | undefined)[]>;
 
 export function validateRoomOptions(input: {
-  features: readonly { label: string }[];
-  bedSizes: readonly { label: string }[];
+  features: readonly { id?: string; label: string }[];
+  bedSizes: readonly { id?: string; label: string }[];
 }): RoomOptionErrors {
+  const check = (items: readonly { id?: string; label: string }[], kind: RoomOptionKind) => {
+    const errors = validateOptionLabels(
+      items.map((i) => i.label),
+      kind,
+    );
+    // The same saved item twice in one request is a malformed request.
+    return errors.map(
+      (e, index) =>
+        e ??
+        (items[index].id !== undefined &&
+        items.some((o, n) => n !== index && o.id === items[index].id)
+          ? `${ROOM_OPTION_COPY[kind].singular} "${items[index].label.trim()}" is listed twice.`
+          : undefined),
+    );
+  };
   return {
-    features: validateOptionLabels(
-      input.features.map((i) => i.label),
-      'features',
-    ),
-    bedSizes: validateOptionLabels(
-      input.bedSizes.map((i) => i.label),
-      'bedSizes',
-    ),
+    features: check(input.features, 'features'),
+    bedSizes: check(input.bedSizes, 'bedSizes'),
   };
 }
 
@@ -97,7 +111,7 @@ export const normalizeLabel = (label: string): string => label.trim();
 /** Whether the draft differs from the saved lists (order, names, additions, removals). */
 export function isOptionsDirty(saved: RoomOptions, draft: RoomOptionsDraft): boolean {
   const same = (a: readonly LookupRef[], b: readonly RoomOptionDraft[]) =>
-    a.length === b.length && a.every((x, i) => x.id === b[i].id && x.label === b[i].label);
+    a.length === b.length && a.every((x, i) => x.id === b[i].id && x.label === b[i].label.trim());
   return !same(saved.features, draft.features) || !same(saved.bedSizes, draft.bedSizes);
 }
 
@@ -153,3 +167,76 @@ export const removedIds = (
   saved: readonly LookupRef[],
   next: readonly RoomOptionInput[],
 ): string[] => saved.filter((s) => !next.some((n) => n.id === s.id)).map((s) => s.id);
+
+/**
+ * The draft after a successful save: ids and names from the answer, keys kept from the draft so no
+ * field remounts. The server answers in the order sent.
+ */
+export function adoptSaved(draft: RoomOptionsDraft, stored: RoomOptions): RoomOptionsDraft {
+  const adopt = (items: readonly RoomOptionDraft[], saved: readonly LookupRef[]) =>
+    saved.map((s, i) => ({ key: items[i]?.key ?? s.id, id: s.id, label: s.label }));
+  return {
+    features: adopt(draft.features, stored.features),
+    bedSizes: adopt(draft.bedSizes, stored.bedSizes),
+  };
+}
+
+/**
+ * Re-bases a draft on lists that changed elsewhere. `base` is what the draft started from, `latest`
+ * what the server has now. The result follows `latest`; the admin's edits stay where the item
+ * still exists: a changed name wins, a removal stays removed, new items are appended.
+ */
+export function rebaseDraft(
+  base: RoomOptions,
+  draft: RoomOptionsDraft,
+  latest: RoomOptions,
+): RoomOptionsDraft {
+  const one = (
+    was: readonly LookupRef[],
+    mine: readonly RoomOptionDraft[],
+    now: readonly LookupRef[],
+  ): RoomOptionDraft[] => {
+    const kept = now
+      .filter((n) => !was.some((w) => w.id === n.id) || mine.some((m) => m.id === n.id))
+      .map((n) => {
+        const edited = mine.find((m) => m.id === n.id);
+        const original = was.find((w) => w.id === n.id);
+        const label =
+          edited && original && edited.label !== original.label ? edited.label : n.label;
+        return { key: edited?.key ?? n.id, id: n.id, label };
+      });
+    return [...kept, ...mine.filter((m) => m.id === undefined)];
+  };
+  return {
+    features: one(base.features, draft.features, latest.features),
+    bedSizes: one(base.bedSizes, draft.bedSizes, latest.bedSizes),
+  };
+}
+
+/** Puts refused (in-use) saved items back into a draft at their saved position. */
+export function restoreItems(
+  draft: readonly RoomOptionDraft[],
+  saved: readonly LookupRef[],
+  ids: readonly string[],
+): RoomOptionDraft[] {
+  const out = [...draft];
+  saved.forEach((s, index) => {
+    if (ids.includes(s.id) && !out.some((d) => d.id === s.id)) {
+      out.splice(Math.min(index, out.length), 0, { key: s.id, id: s.id, label: s.label });
+    }
+  });
+  return out;
+}
+
+/** Feature and bed size ids of room details that are not in the current lists. */
+export function unknownOptionIds(
+  details: { featureIds: readonly string[]; bedTypes: Record<string, number> },
+  options: { features: readonly LookupRef[]; bedSizes: readonly LookupRef[] },
+): { features: string[]; bedSizes: string[] } {
+  return {
+    features: details.featureIds.filter((id) => !options.features.some((f) => f.id === id)),
+    bedSizes: Object.keys(details.bedTypes).filter(
+      (id) => !options.bedSizes.some((b) => b.id === id),
+    ),
+  };
+}

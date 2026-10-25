@@ -1,11 +1,16 @@
-import { MOCK_ROOM_OPTIONS } from '../api/roomOptionsData';
+import { mockRoomOptions } from '../api/roomOptionsData';
+const MOCK_ROOM_OPTIONS = mockRoomOptions();
 import { mockRoomTypes, mockRooms } from '../api/roomSetupData';
 import {
+  adoptSaved,
   checkRemoveOption,
   draftFromOptions,
   hasOptionErrors,
   isOptionsDirty,
   optionUsage,
+  rebaseDraft,
+  restoreItems,
+  unknownOptionIds,
   removedIds,
   ROOM_OPTION_MAX,
   toRequest,
@@ -91,9 +96,11 @@ describe('draft helpers', () => {
         bedSizes: [{ key: 'b', label: 'Cot' }],
       },
       'req-1',
+      'v7',
     );
     expect(request).toEqual({
       requestId: 'req-1',
+      version: 'v7',
       features: [{ id: 'feature-fridge', label: 'Fridge' }],
       bedSizes: [{ label: 'Cot' }],
     });
@@ -148,5 +155,127 @@ describe('optionUsage and checkRemoveOption', () => {
   it('shortens a long list of users', () => {
     const check = checkRemoveOption('X', { roomTypes: ['A', 'B', 'C', 'D'], rooms: ['1'] });
     expect(check.kind === 'blocked' && check.message).toContain('A, B, C, and 2 more');
+  });
+});
+
+describe('duplicate ids and trimmed comparison', () => {
+  it('refuses the same id twice in one request', () => {
+    const errors = validateRoomOptions({
+      features: [
+        { id: 'feature-fridge', label: 'A' },
+        { id: 'feature-fridge', label: 'B' },
+      ],
+      bedSizes: [],
+    });
+    expect(errors.features).toEqual([
+      expect.stringMatching(/listed twice/),
+      expect.stringMatching(/listed twice/),
+    ]);
+    expect(hasOptionErrors(errors)).toBe(true);
+  });
+
+  it('does not count a name typed with trailing spaces as a change once saved trimmed', () => {
+    const draft = draftFromOptions(MOCK_ROOM_OPTIONS);
+    draft.features[0].label = 'Mini fridge  ';
+    expect(isOptionsDirty(MOCK_ROOM_OPTIONS, draft)).toBe(false);
+  });
+});
+
+describe('adoptSaved', () => {
+  it('keeps the keys of the draft and takes the ids and names of the answer', () => {
+    const draft = {
+      features: [
+        { key: 'k1', id: 'feature-fridge', label: 'Mini fridge' },
+        { key: 'k2', label: 'Sauna' },
+      ],
+      bedSizes: [],
+    };
+    const stored = {
+      version: 'ro-9',
+      features: [
+        { id: 'feature-fridge', label: 'Mini fridge' },
+        { id: 'feature-new-1', label: 'Sauna' },
+      ],
+      bedSizes: [],
+    };
+    expect(adoptSaved(draft, stored).features).toEqual([
+      { key: 'k1', id: 'feature-fridge', label: 'Mini fridge' },
+      { key: 'k2', id: 'feature-new-1', label: 'Sauna' },
+    ]);
+  });
+});
+
+describe('rebaseDraft', () => {
+  const base = {
+    version: 'a',
+    features: [
+      { id: 'f1', label: 'One' },
+      { id: 'f2', label: 'Two' },
+      { id: 'f3', label: 'Three' },
+    ],
+    bedSizes: [],
+  };
+
+  it('keeps my rename, my removal and my new item; adds what others added; drops what others removed', () => {
+    const draft = {
+      features: [
+        { key: 'f1', id: 'f1', label: 'One!' },
+        { key: 'f3', id: 'f3', label: 'Three' },
+        { key: 'n', label: 'Mine' },
+      ],
+      bedSizes: [],
+    };
+    const latest = {
+      version: 'b',
+      features: [
+        { id: 'f1', label: 'One' },
+        { id: 'f2', label: 'Two' },
+        { id: 'f4', label: 'Four' },
+      ],
+      bedSizes: [],
+    };
+    expect(rebaseDraft(base, draft, latest).features).toEqual([
+      { key: 'f1', id: 'f1', label: 'One!' },
+      { key: 'f4', id: 'f4', label: 'Four' },
+      { key: 'n', label: 'Mine' },
+    ]);
+  });
+
+  it("takes someone else's rename when I did not touch the item", () => {
+    const draft = {
+      features: base.features.map((f) => ({ key: f.id, ...f })),
+      bedSizes: [],
+    };
+    const latest = {
+      ...base,
+      version: 'b',
+      features: [{ id: 'f1', label: 'Uno' }, ...base.features.slice(1)],
+    };
+    expect(rebaseDraft(base, draft, latest).features[0].label).toBe('Uno');
+  });
+});
+
+describe('restoreItems and unknownOptionIds', () => {
+  it('puts refused items back at their saved position', () => {
+    const draft = [
+      { key: 'a', id: 'a', label: 'A' },
+      { key: 'c', id: 'c', label: 'C' },
+    ];
+    const saved = [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B' },
+      { id: 'c', label: 'C' },
+    ];
+    expect(restoreItems(draft, saved, ['b']).map((i) => i.id)).toEqual(['a', 'b', 'c']);
+    expect(restoreItems(draft, saved, ['a']).map((i) => i.id)).toEqual(['a', 'c']);
+  });
+
+  it('finds feature and bed size ids that are not in the lists', () => {
+    expect(
+      unknownOptionIds(
+        { featureIds: ['feature-fridge', 'gone'], bedTypes: { 'bed-king': 1, 'bed-x': 0 } },
+        MOCK_ROOM_OPTIONS,
+      ),
+    ).toEqual({ features: ['gone'], bedSizes: ['bed-x'] });
   });
 });

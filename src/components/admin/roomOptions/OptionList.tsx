@@ -56,7 +56,16 @@ export default function OptionList({
                   value={item.label}
                   onChange={(e) => onChange(item.key, e.target.value)}
                   error={Boolean(error)}
-                  helperText={error ?? `${item.label.length}/${ROOM_OPTION_MAX}`}
+                  helperText={
+                    <>
+                      {error ? (
+                        <Box component="span" sx={{ display: 'block' }}>
+                          {error}
+                        </Box>
+                      ) : null}
+                      <span>{`${item.label.length}/${ROOM_OPTION_MAX}`}</span>
+                    </>
+                  }
                   slotProps={{ htmlInput: { maxLength: ROOM_OPTION_MAX } }}
                   sx={(t) => ({ width: '100%', maxWidth: t.spacing(75) })}
                 />

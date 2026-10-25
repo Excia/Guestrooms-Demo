@@ -8,12 +8,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { RoomOptions as RoomOptionsValues, RoomSetup, RoomTypeSetup } from '../api/types';
 import {
+  adoptSaved,
   checkRemoveOption,
   draftFromOptions,
   hasOptionErrors,
   isOptionsDirty,
   normalizeLabel,
   optionUsage,
+  rebaseDraft,
+  restoreItems,
   ROOM_OPTION_COPY,
   toRequest,
   validateRoomOptions,
@@ -52,17 +55,38 @@ export default function RoomOptions() {
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // The lists changed elsewhere (stale version or an item that no longer exists).
+  const [conflict, setConflict] = useState(false);
   const [toast, setToast] = useState<{ open: boolean; id: number }>({ open: false, id: 0 });
   const focusAfterTab = useRef<string | null>(null);
   // The same payload keeps its request id, so a retry after a lost answer cannot save twice.
   const lastRequest = useRef<{ fingerprint: string; requestId: string } | null>(null);
+  const alive = useRef(true);
   const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const refreshUsage = useCallback(
+    (signal?: AbortSignal) =>
+      Promise.all([api.roomSetup.listRoomTypes({ signal }), api.roomSetup.listRooms({ signal })])
+        .then(([roomTypes, rooms]) => {
+          if (alive.current && !signal?.aborted) setUsage({ roomTypes, rooms });
+        })
+        .catch(() => {
+          if (alive.current && !signal?.aborted) setUsage(null);
+        }),
+    [api],
+  );
+
+  useEffect(() => {
     const controller = new AbortController();
-    const signal = { signal: controller.signal };
     api.roomOptions
-      .get(signal)
+      .get({ signal: controller.signal })
       .then((options) => {
         setSaved(options);
         setDraft(draftFromOptions(options));
@@ -71,11 +95,9 @@ export default function RoomOptions() {
       .catch(() => {
         if (!controller.signal.aborted) setStatus('error');
       });
-    Promise.all([api.roomSetup.listRoomTypes(signal), api.roomSetup.listRooms(signal)])
-      .then(([roomTypes, rooms]) => setUsage({ roomTypes, rooms }))
-      .catch(() => setUsage(null));
+    void refreshUsage(controller.signal);
     return () => controller.abort();
-  }, [api, reloadCount]);
+  }, [api, refreshUsage, reloadCount]);
 
   const errors = useMemo(() => (draft ? validateRoomOptions(draft) : null), [draft]);
   const dirty = Boolean(saved && draft && isOptionsDirty(saved, draft));
@@ -103,6 +125,7 @@ export default function RoomOptions() {
   };
 
   const removeItem = (kind: RoomOptionKind, item: RoomOptionDraft) => {
+    if (!draft) return;
     if (item.id && usage) {
       const check = checkRemoveOption(
         item.label,
@@ -114,13 +137,34 @@ export default function RoomOptions() {
       }
     }
     setNotice(null);
-    // Later items move up; focus goes to the Add button, which never moves away.
-    edit(kind, (items) => items.filter((i) => i.key !== item.key));
-    requestAnimationFrame(() => document.getElementById(addButtonId(kind))?.focus());
+    // Later items move up; focus goes to the item now in this place (or the one before it).
+    const items = draft[kind];
+    const index = items.findIndex((i) => i.key === item.key);
+    const rest = items.filter((i) => i.key !== item.key);
+    const next = rest[index] ?? rest[index - 1];
+    edit(kind, () => rest);
+    const target = next ? optionFieldId(kind, next.key) : addButtonId(kind);
+    requestAnimationFrame(() => document.getElementById(target)?.focus());
+  };
+
+  // Takes the lists as they are now and re-bases the draft on them, keeping the admin's edits.
+  const reload = async () => {
+    if (!saved || !draft) return;
+    try {
+      const latest = await api.roomOptions.get();
+      setDraft(rebaseDraft(saved, draft, latest));
+      setSaved(latest);
+      setConflict(false);
+      setSaveError(null);
+      setNotice(null);
+      void refreshUsage();
+    } catch {
+      setSaveError('Room Options could not be reloaded. Try again.');
+    }
   };
 
   const save = useCallback(async (): Promise<boolean> => {
-    if (!draft) return false;
+    if (!draft || !saved) return false;
     setAttempted(true);
     const found = validateRoomOptions(draft);
     if (hasOptionErrors(found)) {
@@ -140,34 +184,57 @@ export default function RoomOptions() {
     setSaving(true);
     setSaveError(null);
     setNotice(null);
+    const trimmed: RoomOptionsDraft = {
+      features: draft.features.map((i) => ({ ...i, label: normalizeLabel(i.label) })),
+      bedSizes: draft.bedSizes.map((i) => ({ ...i, label: normalizeLabel(i.label) })),
+    };
     try {
-      const trimmed: RoomOptionsDraft = {
-        features: draft.features.map((i) => ({ ...i, label: normalizeLabel(i.label) })),
-        bedSizes: draft.bedSizes.map((i) => ({ ...i, label: normalizeLabel(i.label) })),
-      };
-      const fingerprint = JSON.stringify(toRequest(trimmed, ''));
+      const fingerprint = JSON.stringify(toRequest(trimmed, '', saved.version));
       if (lastRequest.current?.fingerprint !== fingerprint) {
         lastRequest.current = { fingerprint, requestId: newRequestId() };
       }
-      const stored = await api.roomOptions.save(toRequest(trimmed, lastRequest.current.requestId));
+      const stored = await api.roomOptions.save(
+        toRequest(trimmed, lastRequest.current.requestId, saved.version),
+      );
       setSaved(stored);
-      setDraft(draftFromOptions(stored));
+      // Keys stay, so no field remounts and the focus is not lost with them.
+      setDraft(adoptSaved(trimmed, stored));
       setAttempted(false);
+      setConflict(false);
       setToast((t) => ({ open: true, id: t.id + 1 }));
+      void refreshUsage();
+      // The Save button disables itself now; keep the keyboard in the page.
+      requestAnimationFrame(() => document.getElementById(panelId(tab))?.focus());
       return true;
     } catch (error) {
-      setSaveError(
-        error instanceof ApiError && error.code === 'in-use'
-          ? 'A Feature or Bed Size you removed is still used by a Room Type or Room. Reload the page, then remove it from them first.'
-          : error instanceof ApiError && error.status === 422
+      if (error instanceof ApiError && (error.code === 'stale' || error.status === 404)) {
+        setConflict(true);
+      } else if (error instanceof ApiError && error.code === 'in-use') {
+        // Put the refused items back so nothing the server keeps disappears from the draft.
+        const labels: string[] = [];
+        const back = { features: draft.features, bedSizes: draft.bedSizes };
+        for (const kind of KINDS) {
+          const ids = error.details?.[kind] ?? [];
+          back[kind] = restoreItems(draft[kind], saved[kind], ids);
+          saved[kind].filter((s) => ids.includes(s.id)).forEach((s) => labels.push(s.label));
+        }
+        setDraft(back);
+        setSaveError(
+          `${labels.length > 0 ? labels.join(', ') : 'An item'} could not be removed because a Room Type or Room still uses ${labels.length === 1 ? 'it' : 'them'}. ${labels.length === 1 ? 'It was' : 'They were'} put back in the list; your other changes are kept.`,
+        );
+        void refreshUsage();
+      } else {
+        setSaveError(
+          error instanceof ApiError && error.status === 422
             ? 'Some names are not valid. Check the highlighted fields.'
             : 'Room Options could not be saved. Try again.',
-      );
+        );
+      }
       return false;
     } finally {
       setSaving(false);
     }
-  }, [api, draft, tab]);
+  }, [api, draft, refreshUsage, saved, tab]);
 
   const saveButton = (
     <Button
@@ -208,6 +275,9 @@ export default function RoomOptions() {
       </Box>
     );
   } else {
+    const errorCount = (kind: RoomOptionKind) =>
+      attempted ? errors[kind].filter((e) => e !== undefined).length : 0;
+    const badTabs = KINDS.filter((k) => errorCount(k) > 0).map((k) => ROOM_OPTION_COPY[k].title);
     body = (
       <>
         <Tabs
@@ -223,12 +293,30 @@ export default function RoomOptions() {
             <Tab
               key={kind}
               value={kind}
-              label={ROOM_OPTION_COPY[kind].title}
+              label={`${ROOM_OPTION_COPY[kind].title}${errorCount(kind) > 0 ? ` (${errorCount(kind)} to fix)` : ''}`}
               id={tabId(kind)}
               aria-controls={panelId(kind)}
             />
           ))}
         </Tabs>
+        {conflict ? (
+          <Alert
+            severity="warning"
+            sx={{ mb: 3 }}
+            action={
+              <Button color="inherit" size="small" onClick={() => void reload()}>
+                Reload
+              </Button>
+            }
+          >
+            The lists changed elsewhere. Reload. Your edits are kept where the item still exists.
+          </Alert>
+        ) : null}
+        {badTabs.length > 0 ? (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            Some names need fixing on: {badTabs.join(' and ')}.
+          </Alert>
+        ) : null}
         {saveError ? (
           <Alert severity="error" sx={{ mb: 3 }}>
             {saveError}
@@ -239,24 +327,28 @@ export default function RoomOptions() {
             {notice}
           </Alert>
         ) : null}
-        <Box
-          role="tabpanel"
-          id={panelId(tab)}
-          aria-labelledby={tabId(tab)}
-          tabIndex={-1}
-          sx={{ outline: 'none' }}
-        >
-          <OptionList
-            kind={tab}
-            items={draft[tab]}
-            errors={attempted ? errors[tab] : []}
-            onChange={(key, label) =>
-              edit(tab, (items) => items.map((i) => (i.key === key ? { ...i, label } : i)))
-            }
-            onRemove={(item) => removeItem(tab, item)}
-            onAdd={() => addItem(tab)}
-          />
-        </Box>
+        {KINDS.map((kind) => (
+          <Box
+            key={kind}
+            role="tabpanel"
+            id={panelId(kind)}
+            aria-labelledby={tabId(kind)}
+            hidden={tab !== kind}
+            tabIndex={-1}
+            sx={{ outline: 'none' }}
+          >
+            <OptionList
+              kind={kind}
+              items={draft[kind]}
+              errors={attempted ? errors[kind] : []}
+              onChange={(key, label) =>
+                edit(kind, (items) => items.map((i) => (i.key === key ? { ...i, label } : i)))
+              }
+              onRemove={(item) => removeItem(kind, item)}
+              onAdd={() => addItem(kind)}
+            />
+          </Box>
+        ))}
       </>
     );
   }

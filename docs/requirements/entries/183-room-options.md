@@ -42,6 +42,9 @@ the legacy page (`RoomOptionsEdit`, `FeaturesEdit`, `BedSizesEdit`, read only) o
 | D-183-5 | 2026-10-25 | Items are labelled "Feature 1", "Bed Size 2"... (position) so each field has a distinct accessible name            | Screen readers need to tell the fields apart; legacy has no label on existing rows | agent  | open   |
 | D-183-6 | 2026-10-25 | "Add" appends a blank row in the draft (focus moves to it); there is no separate row-level Save / cancel           | One draft and Save covers it; Remove deletes a blank row                           | agent  | open   |
 | D-183-7 | 2026-10-25 | Permissions: the existing admin page permission `page.room-options` (new route id); no view-only mode              | The Permissions page design is pending (D-009); `can()` gates the route only       | agent  | open   |
+| D-183-8  | 2026-10-25 | The lists carry a `version`; Save sends it and a stale one is refused (409 `stale`). The page keeps the draft and offers Reload, which re-bases the draft (my renames, removals and new items stay where the item still exists) | A tab with old lists must not silently delete items added elsewhere | review | open   |
+| D-183-9  | 2026-10-25 | After a refused in-use removal the page names the items, puts them back in the draft, keeps other edits and refreshes the usage it checks against (also after every save) | The user should not have to reload and lose the draft | review | open   |
+| D-183-10 | 2026-10-25 | The API rejects the same `id` twice in one request (422); the mock rejects a Room Type or Room (not one that inherits) naming a Feature or Bed Size that is not in the lists (422) | Keeps the one list authoritative | review | open   |
 
 ## Placeholders and invented values
 
