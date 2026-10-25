@@ -57,6 +57,9 @@ export default function NightsStepper({
           justifyContent: 'center',
           minWidth: t.spacing(5.5),
           color: 'primary.main',
+          // ButtonGroup hides the minus button's right border, so this left border is the divider
+          // that shows where the minus control ends (the plus button keeps its own left border).
+          borderLeft: `1px solid ${t.palette.primary.outlinedBorder}`,
           borderTop: `1px solid ${t.palette.primary.outlinedBorder}`,
           borderBottom: `1px solid ${t.palette.primary.outlinedBorder}`,
           opacity: disabled ? 0.5 : 1,
