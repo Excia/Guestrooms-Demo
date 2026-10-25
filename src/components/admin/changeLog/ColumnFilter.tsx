@@ -22,6 +22,7 @@ import type {
 } from '../../../api/changeLogTypes';
 import { rangeProblem, type ChangeLogFilters } from '../../../app/changeLog';
 import DateField from '../../shared/DateField';
+import TimeField from '../../shared/TimeField';
 
 export interface ColumnFilterProps {
   field: ChangeLogSortField;
@@ -179,21 +180,17 @@ function FilterForm({
       ) : null}
       {field === 'time' ? (
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <TextField
+          <TimeField
             label="From time"
-            type="time"
             value={draft.timeFrom ?? ''}
-            onChange={(e) => set({ timeFrom: e.target.value || undefined })}
-            slotProps={{ inputLabel: { shrink: true } }}
-            fullWidth
+            onChange={(v) => set({ timeFrom: v || undefined })}
+            sx={{ flex: 1 }}
           />
-          <TextField
+          <TimeField
             label="To time"
-            type="time"
             value={draft.timeTo ?? ''}
-            onChange={(e) => set({ timeTo: e.target.value || undefined })}
-            slotProps={{ inputLabel: { shrink: true } }}
-            fullWidth
+            onChange={(v) => set({ timeTo: v || undefined })}
+            sx={{ flex: 1 }}
           />
         </Box>
       ) : null}

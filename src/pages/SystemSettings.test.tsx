@@ -37,11 +37,9 @@ describe('SystemSettings page', () => {
     renderPage();
     await loaded();
     expect(screen.getByRole('heading', { level: 1, name: 'System Settings' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Check In Time')).toHaveValue('16:00');
-    expect(screen.getByLabelText('Checkout Time')).toHaveValue('12:00');
-    expect(screen.getByRole('combobox', { name: 'Late Checkout Time' })).toHaveTextContent(
-      '3:00 PM',
-    );
+    expect(screen.getByLabelText('Check In Time')).toHaveValue('04:00 PM');
+    expect(screen.getByLabelText('Checkout Time')).toHaveValue('12:00 PM');
+    expect(screen.getByLabelText('Late Checkout Time')).toHaveValue('03:00 PM');
     expect(screen.getByRole('radio', { name: 'Run Manually' })).toBeChecked();
     expect(screen.getByLabelText('Label')).toHaveValue('Service Charge');
     expect(screen.getByText('14 / 15')).toBeInTheDocument();
@@ -55,10 +53,34 @@ describe('SystemSettings page', () => {
     );
   });
 
-  it('uses 5-minute steps on the time fields', async () => {
+  it('offers 5-minute steps on the clock of the time fields', async () => {
+    const user = userEvent.setup();
     renderPage();
     await loaded();
-    expect(screen.getByLabelText('Check In Time')).toHaveAttribute('step', '300');
+    await user.click(screen.getByRole('button', { name: 'Choose check in time' }));
+    await user.click(await screen.findByRole('button', { name: /^Minutes/ }));
+    expect(screen.getByRole('slider', { name: 'Minutes' })).toHaveAttribute('aria-valuemax', '55');
+  });
+
+  it('disables every clock button in a view-only page', async () => {
+    renderPage(createMockClient(), true);
+    await loaded();
+    expect(screen.getByRole('button', { name: 'Choose check in time' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Choose checkout time' })).toBeDisabled();
+    expect(screen.getByLabelText('Check In Time')).toBeDisabled();
+  });
+
+  it('explains and turns off the late checkout clock when check in is not after checkout', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    const checkIn = screen.getByLabelText('Check In Time');
+    await user.clear(checkIn);
+    await user.type(checkIn, '11:00 AM');
+    expect(screen.getByRole('button', { name: 'Choose late checkout time' })).toBeDisabled();
+    expect(
+      screen.getByText(/Set a check-in time later than the checkout time/),
+    ).toBeInTheDocument();
   });
 
   it('hides the late checkout field while early check in and late check out is off', async () => {
@@ -68,11 +90,11 @@ describe('SystemSettings page', () => {
     await user.click(
       screen.getByRole('switch', { name: 'Enable Early Check In and Late Check Out' }),
     );
-    expect(screen.queryByRole('combobox', { name: 'Late Checkout Time' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Late Checkout Time')).not.toBeInTheDocument();
     await user.click(
       screen.getByRole('switch', { name: 'Enable Early Check In and Late Check Out' }),
     );
-    expect(screen.getByRole('combobox', { name: 'Late Checkout Time' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Late Checkout Time')).toBeInTheDocument();
   });
 
   it('shows both Close Settled Folios errors inline and refuses to save', async () => {
@@ -236,7 +258,7 @@ describe('SystemSettings page', () => {
     await loaded();
     expect(screen.queryByLabelText('Daily Run Time')).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Run Automatically' }));
-    expect(screen.getByLabelText('Daily Run Time')).toHaveValue('02:00');
+    expect(screen.getByLabelText('Daily Run Time')).toHaveValue('02:00 AM');
   });
 
   it('offers hours or days for the duration settings', async () => {

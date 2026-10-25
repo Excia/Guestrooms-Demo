@@ -104,8 +104,8 @@ describe('ChangeLogOverlay', () => {
     renderOverlay();
     await loaded();
     await user.click(screen.getByRole('button', { name: 'Sort and filter Time' }));
-    await user.type(screen.getByLabelText('From time'), '1000AM');
-    await user.type(screen.getByLabelText('To time'), '0900AM');
+    await user.type(screen.getByLabelText('From time'), '10:00 AM');
+    await user.type(screen.getByLabelText('To time'), '09:00 AM');
     expect(await screen.findByRole('alert')).toHaveTextContent(/must not be before/);
     expect(screen.getByRole('button', { name: 'Apply' })).toBeDisabled();
   });
