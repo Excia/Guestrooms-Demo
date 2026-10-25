@@ -1,6 +1,7 @@
 import { alpha, createTheme, lighten } from '@mui/material/styles';
 import type { CSSProperties } from 'react';
 import { menuFontPx } from './app/layout';
+import { FIELD_HEIGHT_PX } from './components/shared/controlSizes';
 
 // Tokens from the CE Guest Rooms Figma variables (dashboard frame 69:3712). Light mode only.
 /** Schedule grid block colors (Figma "Schedule Blocks" 15963:188278). Fills are translucent. */
@@ -360,6 +361,18 @@ export const theme = createTheme(base, {
     MuiOutlinedInput: {
       styleOverrides: {
         notchedOutline: { borderColor: alpha(base.palette.text.primary, 0.23) },
+        // Explicit heights (controlSizes.ts) so a Select (24px line) and a date input (23px) end up
+        // identical instead of differing by MUI's line-height arithmetic.
+        root: {
+          '&.MuiInputBase-sizeSmall:not(.MuiInputBase-multiline)': {
+            height: FIELD_HEIGHT_PX.small,
+            '& .MuiSelect-select': { lineHeight: '1.4375em', minHeight: 0 },
+          },
+          '&:not(.MuiInputBase-sizeSmall):not(.MuiInputBase-multiline)': {
+            height: FIELD_HEIGHT_PX.medium,
+            '& .MuiSelect-select': { lineHeight: '1.4375em', minHeight: 0 },
+          },
+        },
       },
     },
   },

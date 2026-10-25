@@ -6,7 +6,10 @@ import ReservationListToolbar from '../reservationList/ReservationListToolbar';
 import ScheduleControls from '../schedule/ScheduleControls';
 import { theme } from '../../theme';
 import { FIELD_HEIGHT_PX, TOOLBAR_FIELD_SIZE, TOOLBAR_FIELD_WIDTH } from './controlSizes';
+import DateField from './DateField';
 import NightAuditButton from './NightAuditButton';
+import Pagination from './Pagination';
+import Select from './Select';
 
 const TODAY = '2026-10-16';
 const wrap = (ui: ReactNode) =>
@@ -102,5 +105,42 @@ describe('toolbar control sizing standard', () => {
   it('records one scale: small 40px for toolbars, medium 56px for forms', () => {
     expect(TOOLBAR_FIELD_SIZE).toBe('small');
     expect(FIELD_HEIGHT_PX).toEqual({ small: 40, medium: 56 });
+  });
+});
+
+describe('equal field heights', () => {
+  const rootOf = (el: HTMLElement) => el.closest('.MuiInputBase-root') as HTMLElement;
+
+  it('Select and DateField at size small are both exactly the small height', () => {
+    schedule();
+    const view = rootOf(screen.getByRole('combobox', { name: 'View' }));
+    expect(view).toHaveStyle({ height: `${FIELD_HEIGHT_PX.small}px` });
+    list();
+    for (const name of ['Check in From', 'Check in to', 'Location']) {
+      const el = screen.getByLabelText(name, { selector: 'input,[role=combobox]' });
+      expect(rootOf(el)).toHaveStyle({ height: `${FIELD_HEIGHT_PX.small}px` });
+    }
+  });
+
+  it('medium outlined fields are exactly the medium height', () => {
+    wrap(
+      <>
+        <Select label="Pick" value="a" options={[{ value: 'a', label: 'A' }]} onChange={() => {}} />
+        <DateField label="Day" value="" today={TODAY} />
+      </>,
+    );
+    expect(rootOf(screen.getByRole('combobox', { name: 'Pick' }))).toHaveStyle({
+      height: `${FIELD_HEIGHT_PX.medium}px`,
+    });
+    expect(rootOf(screen.getByLabelText('Day'))).toHaveStyle({
+      height: `${FIELD_HEIGHT_PX.medium}px`,
+    });
+  });
+
+  it('keeps the filled rows-per-page select of the pager (Figma 20:2576) out of the standard', () => {
+    wrap(<Pagination page={1} rowsPerPage={10} total={50} onChange={() => {}} />);
+    const root = rootOf(screen.getByRole('combobox', { name: /rows per page/i }));
+    expect(root).toHaveClass('MuiFilledInput-root');
+    expect(root).not.toHaveStyle({ height: `${FIELD_HEIGHT_PX.small}px` });
   });
 });
