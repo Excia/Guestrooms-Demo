@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
@@ -7,6 +8,7 @@ import type { ApiClient } from '../api/types';
 import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
 import { GrantedAccess } from '../app/testing';
 import { blankRateCategory } from '../app/rateCategories';
+import { theme } from '../theme';
 import RateCategories from './RateCategories';
 
 function renderPage(client: ApiClient = createMockClient(), withSettings = false) {
@@ -16,11 +18,13 @@ function renderPage(client: ApiClient = createMockClient(), withSettings = false
     </MemoryRouter>
   );
   return render(
-    <ApiProvider client={client}>
-      <GrantedAccess>
-        {withSettings ? <SystemSettingsProvider>{page}</SystemSettingsProvider> : page}
-      </GrantedAccess>
-    </ApiProvider>,
+    <ThemeProvider theme={theme}>
+      <ApiProvider client={client}>
+        <GrantedAccess>
+          {withSettings ? <SystemSettingsProvider>{page}</SystemSettingsProvider> : page}
+        </GrantedAccess>
+      </ApiProvider>
+    </ThemeProvider>,
   );
 }
 
@@ -44,6 +48,7 @@ describe('Rate Categories page', () => {
         .getAllByRole('listitem')
         .map((li) => li.textContent),
     ).toEqual([
+      'New Rate Category',
       'Comp Rate',
       'Member Rate',
       'Non-Member Rate',
@@ -72,7 +77,6 @@ describe('Rate Categories page', () => {
         .getAllByRole('columnheader')
         .map((h) => h.textContent),
     ).toEqual([
-      'Season / Special Rates',
       'Room Type',
       'Standard Base',
       'Mon',
@@ -412,5 +416,119 @@ describe('Rate Categories page', () => {
     expect(await within(dialog).findByText(/already in use/)).toBeInTheDocument();
     await user.type(within(dialog).getByRole('textbox'), '2');
     expect(within(dialog).queryByText(/already in use/)).not.toBeInTheDocument();
+  });
+});
+
+describe('Rate Categories layout (legacy match)', () => {
+  const addRow = () => within(list()).getAllByRole('listitem')[0];
+
+  it('puts the add action and the new category on ONE line', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    const rows = within(list()).getAllByRole('listitem');
+    // The add row first, then the four categories.
+    expect(rows).toHaveLength(5);
+    expect(within(addRow()).getByRole('button', { name: 'New Rate Category' })).not.toHaveAttribute(
+      'aria-current',
+    );
+    await user.click(within(addRow()).getByRole('button', { name: 'New Rate Category' }));
+    // Still five rows: the add row itself is now the selected new category, not a second row.
+    expect(within(list()).getAllByRole('listitem')).toHaveLength(5);
+    expect(within(list()).getAllByRole('button', { name: 'New Rate Category' })).toHaveLength(1);
+    expect(within(addRow()).getByRole('button', { name: 'New Rate Category' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'New Rate Category' }),
+    ).toBeInTheDocument();
+  });
+
+  it('gives the list rows the height of the Admin Setup navigation rows (59px)', async () => {
+    renderPage();
+    await loaded();
+    const add = within(addRow()).getByRole('button', { name: 'New Rate Category' });
+    const category = within(list()).getByRole('button', { name: 'Member Rate' });
+    for (const button of [add, category]) {
+      expect(getComputedStyle(button).minHeight).toBe(theme.spacing(7.375));
+    }
+    expect(theme.spacing(7.375)).toBe('59px');
+  });
+
+  it('shows the Item and Combo choice with a visible label next to the SKU lookup', async () => {
+    renderPage();
+    await loaded();
+    const group = screen.getByRole('radiogroup', { name: 'SKU Type' });
+    expect(within(group).getByRole('radio', { name: 'Item' })).toBeChecked();
+    expect(within(group).getByRole('radio', { name: 'Combo' })).not.toBeChecked();
+    expect(screen.getByText('SKU Type')).toBeVisible();
+    expect(screen.getByRole('combobox', { name: 'SKU' })).toBeVisible();
+  });
+
+  it('draws Add Season as the green primary call to action with a plus icon', async () => {
+    renderPage();
+    await loaded();
+    const add = screen.getByRole('button', { name: 'Add Season' });
+    expect(add).toHaveClass('MuiButton-contained', 'MuiButton-colorPrimary');
+    expect(add.querySelector('svg[data-testid="AddIcon"]')).not.toBeNull();
+    expect(theme.palette.primary.main).toBe('#2e7d32');
+  });
+
+  it('colours each season by its place: neutral default, then the tones in order', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
+    const table = await screen.findByRole('table', { name: 'Rates by season and room type' });
+    const bodies = [...table.querySelectorAll('tbody[data-season]')];
+    expect(bodies.map((b) => b.getAttribute('data-tone'))).toEqual(['neutral', '0', '1']);
+    const bands = bodies.map((b) => getComputedStyle(b.querySelector('td')!).backgroundColor);
+    expect(new Set(bands).size).toBe(3);
+    // Not colour alone: each card also shows its name and dates.
+    expect(screen.getAllByRole('textbox', { name: 'Season name' })).toHaveLength(2);
+    expect(screen.getByLabelText('Summer start date')).toHaveValue('2026-06-01');
+    expect(screen.getByLabelText('Holidays end date')).toHaveValue('2027-01-02');
+  });
+
+  it('gives each season its own SKU lookup (not the default season) and saves it', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
+    await screen.findByRole('table', { name: 'Rates by season and room type' });
+    expect(screen.getAllByRole('combobox', { name: /^SKU \(/ })).toHaveLength(2);
+    expect(screen.queryByRole('combobox', { name: 'SKU (Default)' })).not.toBeInTheDocument();
+    // Same Item/Combo rule as the category: the lookup lists SKUs of the chosen kind only.
+    const kind = screen.getByRole('radiogroup', { name: 'SKU type (Summer)' });
+    await user.click(within(kind).getByRole('radio', { name: 'Combo' }));
+    await user.click(screen.getByRole('combobox', { name: 'SKU (Summer)' }));
+    expect(screen.queryByRole('option', { name: 'Room night, member' })).not.toBeInTheDocument();
+    await user.click(await screen.findByRole('option', { name: 'Stay and play package' }));
+    await user.click(screen.getByRole('button', { name: 'Save Rate Category' }));
+    expect((await screen.findAllByText('Rate Category Saved')).length).toBeGreaterThan(0);
+    const stored = (await client.rateCategories.list()).find((c) => c.id === 'rc-member');
+    const summer = stored?.seasons.find((x) => x.name === 'Summer');
+    expect(summer).toMatchObject({ skuKind: 'combo', sku: { id: 'sku-package' } });
+    // The other season and the category keep theirs.
+    expect(stored?.seasons.find((x) => x.name === 'Holidays')?.sku ?? null).toBeNull();
+    expect(stored?.sku?.id).toBe('sku-room-member');
+  });
+
+  it('switching a season SKU kind clears a SKU of the other kind', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(within(list()).getByRole('button', { name: 'Member Rate' }));
+    await screen.findByRole('table', { name: 'Rates by season and room type' });
+    await user.click(screen.getByRole('combobox', { name: 'SKU (Summer)' }));
+    await user.click(await screen.findByRole('option', { name: 'Room night, member' }));
+    expect(screen.getByRole('combobox', { name: 'SKU (Summer)' })).toHaveValue(
+      'Room night, member',
+    );
+    const kind = screen.getByRole('radiogroup', { name: 'SKU type (Summer)' });
+    await user.click(within(kind).getByRole('radio', { name: 'Combo' }));
+    expect(screen.getByRole('combobox', { name: 'SKU (Summer)' })).toHaveValue('');
   });
 });

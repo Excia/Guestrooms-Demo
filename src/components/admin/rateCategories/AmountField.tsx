@@ -3,6 +3,7 @@ import TextField from '@mui/material/TextField';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Cents } from '../../../api/types';
 import { formatDollars, MAX_RATE_CENTS, parseDollars } from '../../../app/rateCategories';
+import { RATE_TABLE, tablePx } from './rateTableSizes';
 
 export interface AmountFieldProps {
   /** Accessible name, e.g. "Summer, King Room, Fri". */
@@ -65,10 +66,27 @@ export default function AmountField({ label, cents, onChange, onInvalidChange }:
           'aria-invalid': invalid,
           'aria-describedby': invalid ? `${hintId}-helper` : undefined,
         },
-        input: { startAdornment: <InputAdornment position="start">$</InputAdornment> },
+        input: {
+          startAdornment: (
+            <InputAdornment position="start" sx={{ mr: 0.25, '& p': { fontSize: 'inherit' } }}>
+              $
+            </InputAdornment>
+          ),
+        },
         formHelperText: { id: `${hintId}-helper` },
       }}
-      sx={(t) => ({ width: t.spacing(14) })}
+      // Compact (rateTableSizes.ts): smaller text and height than the form fields, same hit size.
+      sx={(t) => ({
+        width: tablePx(t, RATE_TABLE.amountWidthPx),
+        '& .MuiOutlinedInput-root.MuiInputBase-sizeSmall': {
+          height: tablePx(t, RATE_TABLE.amountHeightPx),
+          fontSize: t.typography.pxToRem(RATE_TABLE.fontPx),
+          pl: 0.75,
+          pr: 0.25,
+        },
+        '& .MuiOutlinedInput-input': { py: 0, pl: 0, pr: 0 },
+        '& .MuiFormHelperText-root': { mx: 0, fontSize: t.typography.pxToRem(11) },
+      })}
     />
   );
 }

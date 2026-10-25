@@ -22,6 +22,8 @@ interface BaseProps {
   describedBy?: string;
   /** Shown when nothing matches. */
   noOptionsText?: string;
+  /** Field height: "small" (40px) for dense rows; the default is the form size. */
+  size?: 'small' | 'medium';
 }
 
 export type LookupFieldProps = BaseProps &
@@ -57,6 +59,7 @@ export default function LookupField({
   required,
   describedBy,
   noOptionsText = 'No results',
+  size,
   options,
   search,
 }: LookupFieldProps) {
@@ -112,6 +115,7 @@ export default function LookupField({
       <Autocomplete<LookupRef>
         id={id}
         disabled={disabled}
+        size={size}
         value={value}
         options={search ? found : (options as LookupRef[])}
         onChange={(_, next) => onChange(next)}

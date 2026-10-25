@@ -110,6 +110,13 @@ Rates (7.1) depend on them.
   `duplicate`, `delete`) with a mock (seeded with the four categories, usage counts, idempotent create and
   duplicate) and an http client with response guards; see [api-contract.md](../api-contract.md). Quick Stats (mock)
   now reads the live category list.
+- **Layout polish (2026-10-25, [rate-categories-polish.md](../entries/rate-categories-polish.md)):** the left list
+  has the add action and the new category on ONE row and the Admin Setup navigation geometry; the Item / Combo
+  group is labelled "SKU Type"; "Add Season" is the green primary button; each season is a colour-coded card
+  (theme tokens `palette.season`) with its title row (name, dates, SKU lookup, duplicate, red remove); a
+  non-default season has an optional SKU of its own (owner request; legacy has one SKU per category only); the
+  rate table is compact (13px text, 66px by 28px amount fields, sticky room type column). Decisions D-RCP-1 to
+  D-RCP-6, questions Q-RCP-1 to Q-RCP-3.
 - **Not built:** the "Default Rate Categories" tab in System Settings (separate ticket), pricing a night from the
   rates, rates for a new room type, per-room overrides (see the entry).
 - **Open questions:** Q-71-1 (design), Q-184-1 to Q-184-7.

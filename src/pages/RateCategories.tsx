@@ -1,3 +1,4 @@
+import Add from '@mui/icons-material/Add';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -9,7 +10,6 @@ import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { visuallyHidden } from '@mui/utils';
 import { useCallback, useMemo, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import type { AddOnKind, RateCategoryInput, RateCategorySetup } from '../api/types';
@@ -40,8 +40,8 @@ import ActiveDatesFields from '../components/admin/roomSetup/ActiveDatesFields';
 import AssociationsPanel from '../components/admin/roomSetup/AssociationsPanel';
 import DeleteSetupDialog from '../components/admin/roomSetup/DeleteSetupDialog';
 import SetupActions from '../components/admin/roomSetup/SetupActions';
-import SetupList from '../components/admin/roomSetup/SetupList';
 import { focusField, useSetupEditor } from '../components/admin/roomSetup/useSetupEditor';
+import RateCategoryList from '../components/admin/rateCategories/RateCategoryList';
 import RateTable, { seasonDomId } from '../components/admin/rateCategories/RateTable';
 import {
   useRateCategoryData,
@@ -153,7 +153,15 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       else if (!found.roomTypes) {
         const season = draft.seasons.find((s) => found.seasons[s.id]);
         const e = season ? found.seasons[season.id] : undefined;
-        const f = e?.name ? 'name' : e?.startDate ? 'startDate' : e?.endDate ? 'endDate' : null;
+        const f = e?.name
+          ? 'name'
+          : e?.startDate
+            ? 'startDate'
+            : e?.endDate
+              ? 'endDate'
+              : e?.sku
+                ? 'sku'
+                : null;
         if (season && f) focusField(seasonDomId(season.id, f));
       }
       return false;
@@ -260,7 +268,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
       changeLog="rate-categories"
       sidebarLabel="Rate Categories"
       sidebar={
-        <SetupList
+        <RateCategoryList
           items={sorted.map((c) => ({
             id: c.id,
             label: c.name,
@@ -269,7 +277,6 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
           selectedId={editor.selectedId}
           creating={editor.creating}
           newLabel="New Rate Category"
-          newTitle="New Rate Category"
           onSelect={editor.select}
           onNew={editor.startNew}
         />
@@ -331,8 +338,13 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
             endError={errors?.endDate}
           />
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <FormControl sx={{ alignSelf: 'flex-end' }}>
-              <FormLabel id="rate-category-kind-label" sx={visuallyHidden}>
+            {/* Legacy shows the Item and Combo radios above the SKU lookup; the label is visible so
+                the pair is never mistaken for a stray control. */}
+            <FormControl>
+              <FormLabel
+                id="rate-category-kind-label"
+                sx={{ typography: 'body2', fontWeight: 'bold', color: 'text.primary' }}
+              >
                 SKU Type
               </FormLabel>
               <RadioGroup
@@ -398,6 +410,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
           <RateTable
             seasons={draft.seasons}
             roomTypes={associated}
+            skus={options.skus}
             columns={columns}
             errors={errors?.seasons ?? {}}
             onSeasonChange={(id, change) =>
@@ -417,7 +430,9 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
           />
           <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
             <Button
-              variant="outlined"
+              variant="contained"
+              color="primary"
+              startIcon={<Add />}
               disabled={associated.length === 0}
               onClick={() =>
                 setDraft({ ...draft, seasons: addSeason(draft.seasons, newRequestId()) })

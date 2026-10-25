@@ -492,7 +492,7 @@ saves. Photo upload and storage are open (Q-72-1).
 `RateCategorySetup`: `id`, `name` (1 to 25, unique ignoring case), `startDate`, `endDate | null` (after the start),
 `kind` (`item` or `combo`) and `sku` (required), `roomTypeIds` (at least one; the rate rows), `seasons`, and the
 read-only `reservationCount` and `settingNames` (the settings that name the category, e.g. a default rate category
-of the Default Rate Categories tab). A season is `{ id, name, isDefault, startDate, endDate, rates }`: exactly one
+of the Default Rate Categories tab). A season is `{ id, name, isDefault, startDate, endDate, sku?, skuKind?, rates }` (`sku` and `skuKind` are optional and only on non-default seasons: the item or combo SKU of that season, null or missing meaning the category SKU; when set it must be in `options.skus` and of the given `skuKind`, else 422; owner extension, D-RCP-4): exactly one
 default season (no name or dates), the others with a name (1 to 25), `startDate` and `endDate` (end not before
 start, inclusive, no two seasons sharing a day); `rates` is keyed by room type id with one `RateAmounts` per
 associated room type: `standardBase`, `altBase1`, `altBase2`, `monday` to `sunday`, `guest2`, `guest3`,
