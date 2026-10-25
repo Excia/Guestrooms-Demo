@@ -175,6 +175,24 @@ Excia/Guestrooms-Demo#73. Figma: Add-Ons 13533:74182; reservation side is ticket
   - **Status:** in review, 2026-10-24.
 - **Open questions:** Q-73-1 (Combo is also on the owner's list of answers still needed), Q-73-2, Q-73-3.
 
+## 7.11 Locations
+
+Excia/Guestrooms-Demo#123, built as Legacy Port #182. No Figma frame; behavior ported from the legacy Locations screen.
+
+- **Requirements:** each location has a Location Name (50 characters) and a Location Area (type-ahead over areas; the area
+  routes revenue to the right GL); one row by default, Add Location, Remove; with one location every location selector,
+  dropdown, field and column is hidden; read-only mode; Save checks errors, success flag 10 s, Save/Discard prompt on leaving.
+- **Implemented (in review):** `src/pages/Locations.tsx` at `/admin/locations` in the Admin Setup shell (nav item enabled,
+  Change Log button). Pure rules in `src/app/locations.ts` (the single-location rule `showLocations`, validation, dirty check,
+  removal check), unit-tested. The rule is used by the Schedule filter, Reservation List (select and column), New Reservation
+  search, the New Reservation and Add Room panels, the online booking widget and Adjust Search, and Add-On Items. Typed API
+  `locations` (`list`, `listAreas`, `save`) with a mock and http guards; read-only without `locations.edit`.
+  - **Built defaults (open questions):** Q-182-1 to Q-182-7 in [entries/182-locations.md](entries/182-locations.md).
+  - **Not built:** the online booking demo and the Room Types / Rooms mock data do not follow locations saved here (the schedule, add-ons, reservation list and dashboard search do); the "Location | Room type" captions
+    still show the location name for a one-location club.
+  - **Status:** in review, 2026-10-25.
+- **Open questions:** Q-182-1 to Q-182-7.
+
 ## 7.5 Booking Rules
 
 Excia/Guestrooms-Demo#74. Figma: Booking Rules 15957:84601.

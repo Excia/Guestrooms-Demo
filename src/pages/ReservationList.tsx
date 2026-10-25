@@ -9,6 +9,7 @@ import { visuallyHidden } from '@mui/utils';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
 import type { ReservationListRow } from '../api';
+import { showLocations, usableLocationIds } from '../app/locations';
 import { applyPanel } from '../app/panelUrl';
 import { selectedRows, toggleAllRows, toggleRow } from '../app/reservationList';
 import { useSystemSettings } from '../app/useSystemSettings';
@@ -71,14 +72,21 @@ export default function ReservationList({
     [todayProp, clubSettings],
   );
   const [params, setParams] = useSearchParams();
-  const view = useMemo(() => parseReservationListView(params, today), [params, today]);
   const navigate = useNavigate();
+  const optionsState = useReservationListOptions();
+  const options = optionsState.status === 'success' ? optionsState.options : NO_OPTIONS;
+  // Only what the toolbar offers counts: no location filter for a one-location club, and no ids
+  // that do not exist (a stale ?locations= link). Until the options load the URL is taken as is.
+  const view = useMemo(() => {
+    const parsed = parseReservationListView(params, today);
+    return optionsState.status === 'success'
+      ? { ...parsed, locationIds: usableLocationIds(parsed.locationIds, options.locations) }
+      : parsed;
+  }, [params, today, optionsState.status, options.locations]);
   const query = useMemo(() => toListQuery(view), [view]);
   const queryKey = JSON.stringify(query);
   const bulk = useBulkCheckIn();
   const list = useReservationList(query, queryKey, bulk.reloadToken);
-  const optionsState = useReservationListOptions();
-  const options = optionsState.status === 'success' ? optionsState.options : NO_OPTIONS;
 
   // Two quick changes must both count: each builds on the latest URL state.
   const latest = useRef(params);
@@ -247,7 +255,7 @@ export default function ReservationList({
           onToggleRow={(id) => setSelected(toggleRow(selected, id))}
           onToggleAll={() => setSelected(toggleAllRows(rows, selected, selectionToday))}
           today={selectionToday}
-          showLocation={optionsState.status !== 'success' || options.locations.length > 1}
+          showLocation={optionsState.status !== 'success' || showLocations(options.locations)}
           onOpen={(row) => void navigate(reservationHubPath(row.id))}
           message={message}
         />

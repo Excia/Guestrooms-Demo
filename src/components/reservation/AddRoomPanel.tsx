@@ -23,6 +23,7 @@ import {
   validateAddRoom,
   type AddRoomForm,
 } from '../../app/addRoom';
+import { showLocations } from '../../app/locations';
 import { checkInText, checkOutText, reservationTitle } from '../../app/reservationPanel';
 import { formatMoney } from '../../app/quickStats';
 import { buildRoomOptions } from '../../app/roomOptions';
@@ -363,15 +364,19 @@ export default function AddRoomPanel({
             Room Details
           </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
-            <Select
-              label="Location"
-              placeholder="Unassigned"
-              size="small"
-              fullWidth
-              value={form.locationId}
-              options={locationOptions}
-              onChange={(v) => pick(selectLocation(free, selection, v))}
-            />
+            {/* Space is kept while the locations load; a one-location club then loses the select. */}
+            {!inventory || showLocations(inventory.locations) ? (
+              <Select
+                label="Location"
+                disabled={!inventory}
+                placeholder="Unassigned"
+                size="small"
+                fullWidth
+                value={form.locationId}
+                options={locationOptions}
+                onChange={(v) => pick(selectLocation(free, selection, v))}
+              />
+            ) : null}
             <Select
               label="Room Type"
               placeholder="Unassigned"

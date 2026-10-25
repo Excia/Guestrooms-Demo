@@ -7,7 +7,8 @@ import Popover from '@mui/material/Popover';
 import Typography from '@mui/material/Typography';
 import { useId } from 'react';
 import type { SettableHousekeepingStatus } from '../../api';
-import { HOUSEKEEPING_FILTER_OPTIONS, showLocationFilter } from '../../app/schedule';
+import { showLocations } from '../../app/locations';
+import { HOUSEKEEPING_FILTER_OPTIONS } from '../../app/schedule';
 import { toggleFilterId } from '../../app/scheduleUrl';
 
 const btnSx = { minWidth: 0, px: 1, whiteSpace: 'nowrap', color: 'primary.dark' } as const;
@@ -150,7 +151,7 @@ export default function ScheduleFilterPanel({
         },
       }}
     >
-      {showLocationFilter(locations) ? (
+      {showLocations(locations) ? (
         <>
           <Section
             title="Locations"

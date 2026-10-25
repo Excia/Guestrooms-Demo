@@ -264,4 +264,27 @@ describe('Add-On Items page', () => {
     expect(sku).toBeInvalid();
     expect(sku).toHaveAccessibleDescription('Select a SKU.');
   });
+
+  it('hides the Locations tab for a one-location club and saves with that location', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const options = await client.addOns.getOptions();
+    const only = options.locations.slice(0, 1);
+    const save = vi.spyOn(client.addOns, 'save');
+    renderPage({
+      ...client,
+      addOns: {
+        ...client.addOns,
+        getOptions: async () => ({ ...options, locations: only }),
+        save: client.addOns.save,
+      },
+    });
+    await loaded();
+    expect(screen.queryByRole('tab', { name: /^Locations/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^Room Types/ })).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/Add-On Name/), ' II');
+    await user.click(screen.getByRole('button', { name: 'Save Add-On' }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(save.mock.calls[0][0].locationIds).toEqual([only[0].id]);
+  });
 });

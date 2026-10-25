@@ -1,20 +1,24 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { ApiProvider } from '../api';
+import { createMockClient } from '../api/mock';
 import NewReservationResults from './NewReservationResults';
 
 describe('NewReservationResults (stub)', () => {
-  it('echoes the criteria parsed from the URL', () => {
+  it('echoes the criteria parsed from the URL', async () => {
     render(
-      <MemoryRouter
-        initialEntries={[
-          '/reservations/new/results?checkIn=2026-10-22&checkOut=2026-10-25&location=lakeside&rooms=2.0,1.3',
-        ]}
-      >
-        <NewReservationResults />
-      </MemoryRouter>,
+      <ApiProvider client={createMockClient()}>
+        <MemoryRouter
+          initialEntries={[
+            '/reservations/new/results?checkIn=2026-10-22&checkOut=2026-10-25&location=lakeside&rooms=2.0,1.3',
+          ]}
+        >
+          <NewReservationResults />
+        </MemoryRouter>
+      </ApiProvider>,
     );
     expect(screen.getByText('2026-10-22')).toBeInTheDocument();
-    expect(screen.getByText('Lakeside Cottages')).toBeInTheDocument();
+    expect(await screen.findByText('Lakeside Cottages')).toBeInTheDocument();
     expect(screen.getByText('Room 2')).toBeInTheDocument();
     expect(screen.getByText('1 adults, 3 children')).toBeInTheDocument();
   });

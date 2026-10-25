@@ -248,6 +248,15 @@ describe('the nights', () => {
     expect(names.some((t) => t.startsWith('Room 301'))).toBe(true);
   });
 
+  it('hides the Location filter when the club has one location', async () => {
+    const client = createMockClient({ today: TODAY });
+    const [main] = await client.locations.list();
+    await client.locations.save([{ id: main.id, name: main.name, area: main.area }]);
+    const { dlg } = await openChangeRoom(client);
+    expect(within(dlg).queryByRole('combobox', { name: 'Location' })).not.toBeInTheDocument();
+    expect(within(dlg).getByRole('combobox', { name: 'Room type' })).toBeInTheDocument();
+  });
+
   it('Continue is disabled with a reason until a night changes, and again when it is put back', async () => {
     const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }));
     const next = within(dlg).getByRole('button', { name: 'Continue' });

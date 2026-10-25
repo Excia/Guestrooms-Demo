@@ -9,7 +9,11 @@ import {
   mockStats,
   noGrant,
 } from './mockData';
-import { checkInLevel, RESERVATION_EDIT_PERMISSION } from '../app/permissions';
+import {
+  checkInLevel,
+  LOCATIONS_EDIT_PERMISSION,
+  RESERVATION_EDIT_PERMISSION,
+} from '../app/permissions';
 import { clubClock } from '../lib/clubTime';
 import { permissionsFromGrant } from './grant';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
@@ -17,6 +21,7 @@ import { previewRegistrationCardUrl } from './registrationCardData';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
+import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
 import { mockSystemSettings, MOCK_SYSTEM_SETTINGS_OPTIONS } from './systemSettingsData';
 import { mockRoomTypes, mockRooms, MOCK_ROOM_SETUP_OPTIONS } from './roomSetupData';
 import { mockRoomOptions } from './roomOptionsData';
@@ -74,6 +79,7 @@ import { validateEncoderKeys } from '../app/keycards';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
+import { checkRemoveLocation, validateLocations } from '../app/locations';
 import {
   unknownOptionIds,
   normalizeLabel,
@@ -192,6 +198,7 @@ export function createMockClient({
   let rateCategories = mockRateCategories();
   let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
+  let locations = mockLocations();
   const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
   const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
@@ -828,6 +835,61 @@ export function createMockClient({
           o,
         ),
     },
+    locations: {
+      list: (o) =>
+        respond(
+          () => structuredClone(locations),
+          () => [],
+          o,
+        ),
+      listAreas: (o) =>
+        respond(
+          () => structuredClone(MOCK_LOCATION_AREAS),
+          () => [],
+          o,
+        ),
+      save: (rows, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(grant).can(LOCATIONS_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change locations', { code: 'forbidden' });
+            }
+            // Like the backend: the area has to exist, not only be present.
+            if (
+              rows.length === 0 ||
+              Object.keys(validateLocations(rows)).length > 0 ||
+              rows.some((r) => !MOCK_LOCATION_AREAS.some((a) => a.id === r.area?.id))
+            ) {
+              throw new ApiError(422, 'Locations are not valid', { code: 'validation' });
+            }
+            const kept = new Set(rows.map((r) => r.id));
+            if (locations.some((l) => !kept.has(l.id) && !checkRemoveLocation(l.usage).allowed)) {
+              throw new ApiError(409, 'A location in use cannot be removed', {
+                code: 'location-in-use',
+              });
+            }
+            // A replace of the whole list: saving the same list again changes nothing.
+            const before = locations;
+            locations = rows.map((r) => ({
+              id: r.id,
+              name: r.name.trim(),
+              area: r.area,
+              usage: before.find((l) => l.id === r.id)?.usage ?? { roomTypes: [], roomCount: 0 },
+            }));
+            // One store for the whole mock: the schedule follows (names, new locations, and the
+            // rooms and bookings of a removed location go with it).
+            const remaining = new Set(locations.map((l) => l.id));
+            schedule.locations = locations.map((l) => ({ id: l.id, name: l.name }));
+            schedule.rooms = schedule.rooms.filter((r) => remaining.has(r.locationId));
+            const roomIds = new Set(schedule.rooms.map((r) => r.id));
+            schedule.blocks = schedule.blocks.filter((b) => roomIds.has(b.roomId));
+            schedule.closures = schedule.closures.filter((c) => roomIds.has(c.roomId));
+            return structuredClone(locations);
+          },
+          () => rows.map((r) => ({ ...r, usage: { roomTypes: [], roomCount: 0 } })),
+          o,
+        ),
+    },
     systemSettings: {
       get: (o) =>
         respond(
@@ -1088,8 +1150,12 @@ export function createMockClient({
     addOns: {
       getOptions: (o) =>
         respond(
-          () => mockAddOnOptions(roomTypes.map((t) => ({ id: t.id, label: t.name }))),
-          () => mockAddOnOptions([]),
+          () =>
+            mockAddOnOptions(
+              roomTypes.map((t) => ({ id: t.id, label: t.name })),
+              locations,
+            ),
+          () => mockAddOnOptions([], locations),
           o,
         ),
       list: (o) =>
@@ -1105,7 +1171,10 @@ export function createMockClient({
               throw new ApiError(422, 'Add-on is not valid', { code: 'validation' });
             }
             // Like the backend: the SKU and every association must exist in the options.
-            const known = mockAddOnOptions(roomTypes.map((t) => ({ id: t.id, label: t.name })));
+            const known = mockAddOnOptions(
+              roomTypes.map((t) => ({ id: t.id, label: t.name })),
+              locations,
+            );
             if (
               (input.sku && !known.skus.some((k) => k.id === input.sku?.id)) ||
               input.locationIds.some((id) => !known.locations.some((k) => k.id === id)) ||
