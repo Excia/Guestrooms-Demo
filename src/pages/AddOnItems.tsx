@@ -192,28 +192,30 @@ function AddOnEditor({ data }: { data: AddOnData }) {
           newTitle="New Add-On"
           onSelect={editor.select}
           onNew={editor.startNew}
+          more={{
+            noun: 'Add-On',
+            changeLogPage: 'add-on-items',
+            onDelete: () => {
+              setDeleteError(null);
+              if (editor.selected) setDeleteCheck(checkDeleteAddOn(editor.selected));
+            },
+            onCopy: () =>
+              editor.duplicate((saved) => ({
+                ...structuredClone(saved),
+                id: undefined,
+                name: duplicateName(saved.name),
+                photos: saved.photos.map((p) => ({ ...p, id: newRequestId() })),
+              })),
+          }}
         />
       }
       actions={
         <SetupActions
-          noun="add-on"
           saveNoun="Add-On"
           creating={editor.creating}
           dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
-          onDelete={() => {
-            setDeleteError(null);
-            if (editor.selected) setDeleteCheck(checkDeleteAddOn(editor.selected));
-          }}
-          onDuplicate={() =>
-            editor.duplicate((saved) => ({
-              ...structuredClone(saved),
-              id: undefined,
-              name: duplicateName(saved.name),
-              photos: saved.photos.map((p) => ({ ...p, id: newRequestId() })),
-            }))
-          }
           onCancel={editor.cancelNew}
         />
       }

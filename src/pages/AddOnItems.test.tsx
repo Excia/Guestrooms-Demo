@@ -6,6 +6,7 @@ import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { GrantedAccess } from '../app/testing';
 import AddOnItems from './AddOnItems';
+import { clickMoreMenuItem } from './moreMenuTestHelpers';
 
 function renderPage(client: ApiClient = createMockClient()) {
   return render(
@@ -145,7 +146,7 @@ describe('Add-On Items page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Duplicate add-on' }));
+    await clickMoreMenuItem(user, 'Copy Add-On');
     expect(screen.getByRole('heading', { level: 1, name: 'New Add-On' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Add-On Name/)).toHaveValue('Copy of Crib');
     expect(screen.getByRole('group', { name: 'Nightly Qty.' })).toHaveTextContent('2');
@@ -170,7 +171,7 @@ describe('Add-On Items page', () => {
     const client = createMockClient();
     renderPage(client);
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Delete add-on' }));
+    await clickMoreMenuItem(user, 'Delete Add-On');
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('Delete Crib?');
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
@@ -185,7 +186,7 @@ describe('Add-On Items page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Delete add-on' }));
+    await clickMoreMenuItem(user, 'Delete Add-On');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -226,7 +227,7 @@ describe('Add-On Items page', () => {
     renderPage(client);
     await loaded();
     listSpy.mockRejectedValueOnce(new Error('offline'));
-    await user.click(screen.getByRole('button', { name: 'Delete add-on' }));
+    await clickMoreMenuItem(user, 'Delete Add-On');
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
     await waitFor(() =>
       expect(within(list()).queryByRole('button', { name: 'Crib' })).not.toBeInTheDocument(),

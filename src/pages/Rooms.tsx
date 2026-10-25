@@ -16,6 +16,8 @@ import {
   effectiveDetails,
   NAME_MAX,
   setInheritDetails,
+  activeFirst,
+  isActiveOn,
   sortSetupItems,
   toSetupListEntries,
   validateRoom,
@@ -31,6 +33,7 @@ import DeleteSetupDialog from '../components/admin/roomSetup/DeleteSetupDialog';
 import DetailsFields from '../components/admin/roomSetup/DetailsFields';
 import PhotosField from '../components/admin/roomSetup/PhotosField';
 import SetupActions from '../components/admin/roomSetup/SetupActions';
+import RoomOrderPanel from '../components/admin/roomSetup/RoomOrderPanel';
 import SetupList from '../components/admin/roomSetup/SetupList';
 import {
   useRoomSetupData,
@@ -80,7 +83,9 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const ownerEnabled = settings?.roomOwnerFieldEnabled === true;
   const options = data.options as NonNullable<RoomSetupData['options']>;
   const today = useClubToday();
-  const sorted = useMemo(() => sortSetupItems(data.rooms, today), [data.rooms, today]);
+  // Rooms keep the saved display order (Reorder), inactive ones last; Room Types, Add-Ons and Rate
+  // Categories have no reorder, so they sort alphabetically.
+  const sorted = useMemo(() => activeFirst(data.rooms, today), [data.rooms, today]);
   const listEntries = useMemo(() => toSetupListEntries(sorted, today), [sorted, today]);
   const sortedTypes = useMemo(() => sortSetupItems(data.roomTypes, today), [data.roomTypes, today]);
   const typeOptions = useMemo(
@@ -96,10 +101,17 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const errors = editor.attempted ? validateRoom(draft) : {};
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [toast, setToast] = useState({ open: false, id: 0 });
+  const [toast, setToast] = useState({ open: false, id: 0, message: 'Room Saved' });
   const [deleteCheck, setDeleteCheck] = useState<DeleteCheck | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
+  const orderItems = useMemo(
+    () => sorted.filter((r) => isActiveOn(r, today)).map((r) => ({ id: r.id, label: r.name })),
+    [sorted, today],
+  );
 
   const inheriting = draft.inheritDetails;
   // While inheriting, the fields show the room type's current values.
@@ -124,7 +136,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       });
       await data.refresh();
       editor.afterSave(stored.id);
-      setToast((t) => ({ open: true, id: t.id + 1 }));
+      setToast((t) => ({ open: true, id: t.id + 1, message: 'Room Saved' }));
       return true;
     } catch (error) {
       setSaveError(
@@ -154,6 +166,31 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
     }
   };
 
+  const saveOrder = async (ids: string[]) => {
+    setOrderSaving(true);
+    setOrderError(null);
+    try {
+      await api.roomSetup.saveRoomOrder(ids);
+      await data.refresh();
+      setReordering(false);
+      setToast((t) => ({ open: true, id: t.id + 1, message: 'Room Order Saved' }));
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 404 || error.status === 422)) {
+        // A room was deleted elsewhere, or the order is not valid: show the current rooms.
+        setOrderError(
+          error.status === 404
+            ? 'A room in this list no longer exists. The list was refreshed; check the order and save again.'
+            : 'The room order is not valid. The list was refreshed; check the order and save again.',
+        );
+        await data.refresh().catch(() => undefined);
+      } else {
+        setOrderError('The room order could not be saved. Try again.');
+      }
+    } finally {
+      setOrderSaving(false);
+    }
+  };
+
   const title = editor.selected?.name ?? 'New Room';
   return (
     <AdminShell
@@ -162,38 +199,59 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
       changeLog="rooms"
       sidebarLabel="Rooms"
       sidebar={
-        <SetupList
-          items={listEntries}
-          selectedId={editor.selectedId}
-          creating={editor.creating}
-          newLabel="New Room"
-          newTitle="New Room"
-          onSelect={editor.select}
-          onNew={editor.startNew}
-        />
+        reordering ? (
+          <RoomOrderPanel
+            items={orderItems}
+            saving={orderSaving}
+            error={orderError}
+            onSave={(ids) => void saveOrder(ids)}
+            onClose={() => {
+              setOrderError(null);
+              setReordering(false);
+            }}
+          />
+        ) : (
+          <SetupList
+            reorder={{
+              label: 'Reorder rooms',
+              onClick: () => editor.leaveEdit(() => setReordering(true)),
+            }}
+            items={listEntries}
+            selectedId={editor.selectedId}
+            creating={editor.creating}
+            newLabel="New Room"
+            newTitle="New Room"
+            onSelect={editor.select}
+            onNew={editor.startNew}
+            more={{
+              noun: 'Room',
+              changeLogPage: 'rooms',
+              onDelete: () => {
+                setDeleteError(null);
+                if (editor.selected) setDeleteCheck(checkDeleteRoom(editor.selected));
+              },
+              onCopy: () =>
+                editor.duplicate((saved) => ({
+                  ...structuredClone(saved),
+                  id: undefined,
+                  upcomingReservations: undefined,
+                  name: duplicateName(saved.name),
+                  // Links belong to the original room; the copy starts unlinked.
+                  linkedRoomIds: [],
+                })),
+            }}
+          />
+        )
       }
       actions={
         <SetupActions
-          noun="room"
           saveNoun="Room"
           creating={editor.creating}
           dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
-          onDelete={() => {
-            setDeleteError(null);
-            if (editor.selected) setDeleteCheck(checkDeleteRoom(editor.selected));
-          }}
-          onDuplicate={() =>
-            editor.duplicate((saved) => ({
-              ...structuredClone(saved),
-              id: undefined,
-              upcomingReservations: undefined,
-              name: duplicateName(saved.name),
-              // Links belong to the original room; the copy starts unlinked.
-              linkedRoomIds: [],
-            }))
-          }
+          disabled={reordering}
+          disabledReason="Close the room order to save the room."
           onCancel={editor.cancelNew}
         />
       }
@@ -203,167 +261,173 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
           {saveError}
         </Alert>
       ) : null}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
-          columnGap: 7,
-          rowGap: 5,
-          alignItems: 'start',
-        }}
-      >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Box sx={{ flex: '1 1 0', minWidth: 200 }}>
-              <TextField
-                id={fieldDomId('name')}
-                label="Room Name"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-                error={Boolean(errors.name)}
-                helperText={errors.name}
-                slotProps={{ htmlInput: { maxLength: NAME_MAX } }}
-                required
-                fullWidth
-              />
-            </Box>
-            {ownerEnabled ? (
+      {/* Locked (inert, so unfocusable and unclickable) while the room order is open: a stale
+          form could rename, retire or delete a room the order view lists. */}
+      <Box inert={reordering} sx={{ opacity: reordering ? 0.6 : 1 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, minmax(0, 1fr))' },
+            columnGap: 7,
+            rowGap: 5,
+            alignItems: 'start',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: '1 1 0', minWidth: 200 }}>
-                {/* Not inherited from the room type, and enabled even while details are inherited. */}
-                <LookupField
-                  id="room-owner"
-                  label="Room Owner"
-                  value={draft.owner}
-                  options={options.members}
-                  onChange={(owner) => setDraft({ ...draft, owner })}
+                <TextField
+                  id={fieldDomId('name')}
+                  label="Room Name"
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                  error={Boolean(errors.name)}
+                  helperText={errors.name}
+                  slotProps={{ htmlInput: { maxLength: NAME_MAX } }}
+                  required
+                  fullWidth
                 />
               </Box>
-            ) : null}
-          </Box>
-          <ActiveDatesFields
-            idPrefix="room"
-            startDate={draft.startDate}
-            endDate={draft.endDate}
-            onChange={(v) => setDraft({ ...draft, ...v })}
-            startError={errors.startDate}
-            endError={errors.endDate}
-          />
-          <Box id={fieldDomId('roomTypeId')}>
-            <LookupField
-              id="room-type-select"
-              label="Room Type"
-              value={typeOptions.find((t) => t.id === draft.roomTypeId) ?? null}
-              options={typeOptions}
-              onChange={(next) => setDraft(changeRoomType(draft, next?.id ?? '', data.roomTypes))}
+              {ownerEnabled ? (
+                <Box sx={{ flex: '1 1 0', minWidth: 200 }}>
+                  {/* Not inherited from the room type, and enabled even while details are inherited. */}
+                  <LookupField
+                    id="room-owner"
+                    label="Room Owner"
+                    value={draft.owner}
+                    options={options.members}
+                    onChange={(owner) => setDraft({ ...draft, owner })}
+                  />
+                </Box>
+              ) : null}
+            </Box>
+            <ActiveDatesFields
+              idPrefix="room"
+              startDate={draft.startDate}
+              endDate={draft.endDate}
+              onChange={(v) => setDraft({ ...draft, ...v })}
+              startError={errors.startDate}
+              endError={errors.endDate}
             />
-            {errors.roomTypeId ? (
-              <Typography variant="caption" sx={{ color: 'error.main' }} role="alert">
-                {errors.roomTypeId}
-              </Typography>
-            ) : null}
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <ToggleRow
-              label="Inherit Details from Room Type"
-              checked={draft.inheritDetails}
-              onChange={(on) => setDraft(setInheritDetails(draft, on, data.roomTypes))}
+            <Box id={fieldDomId('roomTypeId')}>
+              <LookupField
+                id="room-type-select"
+                label="Room Type"
+                value={typeOptions.find((t) => t.id === draft.roomTypeId) ?? null}
+                options={typeOptions}
+                onChange={(next) => setDraft(changeRoomType(draft, next?.id ?? '', data.roomTypes))}
+              />
+              {errors.roomTypeId ? (
+                <Typography variant="caption" sx={{ color: 'error.main' }} role="alert">
+                  {errors.roomTypeId}
+                </Typography>
+              ) : null}
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <ToggleRow
+                label="Inherit Details from Room Type"
+                checked={draft.inheritDetails}
+                onChange={(on) => setDraft(setInheritDetails(draft, on, data.roomTypes))}
+              />
+              <ToggleRow
+                label="Inherit Rates from Room Type"
+                checked={draft.inheritRates}
+                onChange={(inheritRates) => setDraft({ ...draft, inheritRates })}
+                description={
+                  draft.inheritRates
+                    ? undefined
+                    : 'Room-specific rates are set with the Rate Categories (ticket 7.2); that table arrives with it.'
+                }
+              />
+              <ToggleRow
+                label="Display in Online Booking"
+                checked={draft.onlineBooking}
+                onChange={(onlineBooking) => setDraft({ ...draft, onlineBooking })}
+              />
+            </Box>
+            <DetailsFields
+              details={details}
+              bedSizes={options.bedSizes}
+              onChange={setDetails}
+              disabled={inheriting}
+              bathLabels={{ full: 'Full Bathrooms', half: 'Half Bathrooms' }}
             />
-            <ToggleRow
-              label="Inherit Rates from Room Type"
-              checked={draft.inheritRates}
-              onChange={(inheritRates) => setDraft({ ...draft, inheritRates })}
-              description={
-                draft.inheritRates
-                  ? undefined
-                  : 'Room-specific rates are set with the Rate Categories (ticket 7.2); that table arrives with it.'
+          </Box>
+          <Box>
+            <Typography sx={{ mb: 2 }}>
+              <strong>Associations</strong>{' '}
+              <em>(Note: Changes made will be reflected on associated items.)</em>
+            </Typography>
+            <AssociationsPanel
+              tabs={[
+                {
+                  id: 'linked',
+                  label: 'Linked Rooms',
+                  heading: 'Linked Rooms',
+                  // Rows are the other rooms; a link is two-way, so each side shows the other.
+                  items: sorted
+                    .filter((r) => r.id !== editor.selected?.id)
+                    .map((r) => ({ id: r.id, label: r.name })),
+                  selected: draft.linkedRoomIds,
+                  onChange: (linkedRoomIds) => setDraft({ ...draft, linkedRoomIds }),
+                  note: 'If “Required” switch is active, service cannot be booked without one available resource.',
+                  columns: 2,
+                },
+                {
+                  id: 'features',
+                  label: 'Features',
+                  heading: 'Features',
+                  items: options.features,
+                  selected: details.featureIds,
+                  onChange: (featureIds) => setDetails({ ...details, featureIds }),
+                  disabled: inheriting,
+                },
+                {
+                  id: 'add-ons',
+                  label: 'Add-Ons',
+                  heading: 'Add-Ons',
+                  items: options.addOns,
+                  selected: details.addOnIds,
+                  onChange: (addOnIds) => setDetails({ ...details, addOnIds }),
+                  disabled: inheriting,
+                },
+              ]}
+            />
+          </Box>
+          <Box>
+            <Typography
+              variant="body2"
+              component="h3"
+              sx={{
+                fontWeight: 'bold',
+                color: inheriting ? 'text.disabled' : 'text.secondary',
+                mb: 2,
+              }}
+            >
+              Room Description
+            </Typography>
+            <TextField
+              id={fieldDomId('description')}
+              label="Description (optional)"
+              value={details.description}
+              onChange={(e) => setDetails({ ...details, description: e.target.value })}
+              error={Boolean(errors.description)}
+              helperText={
+                errors.description ?? `${details.description.length} / ${DESCRIPTION_MAX}`
               }
-            />
-            <ToggleRow
-              label="Display in Online Booking"
-              checked={draft.onlineBooking}
-              onChange={(onlineBooking) => setDraft({ ...draft, onlineBooking })}
+              slotProps={{ htmlInput: { maxLength: DESCRIPTION_MAX } }}
+              disabled={inheriting}
+              multiline
+              minRows={6}
+              fullWidth
             />
           </Box>
-          <DetailsFields
-            details={details}
-            bedSizes={options.bedSizes}
-            onChange={setDetails}
+          <PhotosField
+            photos={details.photos}
+            onChange={(photos) => setDetails({ ...details, photos })}
             disabled={inheriting}
-            bathLabels={{ full: 'Full Bathrooms', half: 'Half Bathrooms' }}
           />
         </Box>
-        <Box>
-          <Typography sx={{ mb: 2 }}>
-            <strong>Associations</strong>{' '}
-            <em>(Note: Changes made will be reflected on associated items.)</em>
-          </Typography>
-          <AssociationsPanel
-            tabs={[
-              {
-                id: 'linked',
-                label: 'Linked Rooms',
-                heading: 'Linked Rooms',
-                // Rows are the other rooms; a link is two-way, so each side shows the other.
-                items: sorted
-                  .filter((r) => r.id !== editor.selected?.id)
-                  .map((r) => ({ id: r.id, label: r.name })),
-                selected: draft.linkedRoomIds,
-                onChange: (linkedRoomIds) => setDraft({ ...draft, linkedRoomIds }),
-                note: 'If “Required” switch is active, service cannot be booked without one available resource.',
-                columns: 2,
-              },
-              {
-                id: 'features',
-                label: 'Features',
-                heading: 'Features',
-                items: options.features,
-                selected: details.featureIds,
-                onChange: (featureIds) => setDetails({ ...details, featureIds }),
-                disabled: inheriting,
-              },
-              {
-                id: 'add-ons',
-                label: 'Add-Ons',
-                heading: 'Add-Ons',
-                items: options.addOns,
-                selected: details.addOnIds,
-                onChange: (addOnIds) => setDetails({ ...details, addOnIds }),
-                disabled: inheriting,
-              },
-            ]}
-          />
-        </Box>
-        <Box>
-          <Typography
-            variant="body2"
-            component="h3"
-            sx={{
-              fontWeight: 'bold',
-              color: inheriting ? 'text.disabled' : 'text.secondary',
-              mb: 2,
-            }}
-          >
-            Room Description
-          </Typography>
-          <TextField
-            id={fieldDomId('description')}
-            label="Description (optional)"
-            value={details.description}
-            onChange={(e) => setDetails({ ...details, description: e.target.value })}
-            error={Boolean(errors.description)}
-            helperText={errors.description ?? `${details.description.length} / ${DESCRIPTION_MAX}`}
-            slotProps={{ htmlInput: { maxLength: DESCRIPTION_MAX } }}
-            disabled={inheriting}
-            multiline
-            minRows={6}
-            fullWidth
-          />
-        </Box>
-        <PhotosField
-          photos={details.photos}
-          onChange={(photos) => setDetails({ ...details, photos })}
-          disabled={inheriting}
-        />
       </Box>
       <DeleteSetupDialog
         check={deleteCheck}
@@ -378,7 +442,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
         open={toast.open}
         saveId={toast.id}
         onClose={() => setToast((t) => ({ ...t, open: false }))}
-        message="Room Saved"
+        message={toast.message}
       />
     </AdminShell>
   );

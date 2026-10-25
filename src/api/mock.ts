@@ -82,6 +82,7 @@ import {
   validateRateCategory,
 } from '../app/rateCategories';
 import { validateEncoderKeys } from '../app/keycards';
+import { applyRoomOrder, orderScheduleRooms } from '../app/roomOrder';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
@@ -124,6 +125,7 @@ import {
   assertQuickStatsQuery,
   assertReservationListQuery,
   assertResourceId,
+  assertRoomOrder,
   assertScheduleQuery,
 } from './validation';
 import { assertCancelReservationRequest, assertUndoCheckInRequest } from './reservationMenuApi';
@@ -630,6 +632,11 @@ export function createMockClient({
           () => {
             assertScheduleQuery(query);
             const data = queryScheduleData(schedule, query);
+            // The saved room order (Rooms setup) decides the order of the rows.
+            data.rooms = orderScheduleRooms(
+              data.rooms,
+              rooms.map((r) => r.name),
+            );
             const featureIds = new Set(roomOptions.features.map((f) => f.id));
             return structuredClone({
               ...data,
@@ -1072,6 +1079,20 @@ export function createMockClient({
             rooms = withoutRoom(rooms, id);
           },
           () => undefined,
+          o,
+        ),
+      saveRoomOrder: (roomIds, o) =>
+        respond(
+          () => {
+            assertRoomOrder(roomIds);
+            const unknown = roomIds.find((id) => !rooms.some((r) => r.id === id));
+            if (unknown !== undefined) {
+              throw new ApiError(404, 'Room not found', { code: 'not-found' });
+            }
+            rooms = applyRoomOrder(rooms, roomIds);
+            return structuredClone(rooms);
+          },
+          () => [],
           o,
         ),
     },

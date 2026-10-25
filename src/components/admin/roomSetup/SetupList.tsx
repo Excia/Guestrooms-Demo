@@ -1,8 +1,22 @@
 import Add from '@mui/icons-material/Add';
+import ContentCopy from '@mui/icons-material/ContentCopyOutlined';
+import Delete from '@mui/icons-material/Delete';
+import History from '@mui/icons-material/History';
+import MoreHoriz from '@mui/icons-material/MoreHoriz';
+import SwapVert from '@mui/icons-material/SwapVert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
+import IconButton from '@mui/material/IconButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import { visuallyHidden } from '@mui/utils';
+import { useRef, useState } from 'react';
+import type { ChangeLogPageId } from '../../../api/changeLogTypes';
+import { setupMoreMenuLabels, showsMoreMenu } from '../../../app/setupMoreMenu';
+import ChangeLogOverlay from '../changeLog/ChangeLogOverlay';
 
 // A save can re-sort the list; keep the selected row in view without moving the page.
 function scrollSelectedIntoView(el: HTMLElement | null) {
@@ -14,6 +28,14 @@ export interface SetupListItem {
   label: string;
   /** Outside its active dates: listed last with an inactive indicator (PDF 9.4.2.4). */
   inactive?: boolean;
+}
+
+export interface SetupMoreMenu {
+  /** Title-case item name: "Room", "Room Type", "Add-On", "Rate Category". */
+  noun: string;
+  changeLogPage: ChangeLogPageId;
+  onCopy: () => void;
+  onDelete: () => void;
 }
 
 export interface SetupListProps {
@@ -33,6 +55,10 @@ export interface SetupListProps {
    * selected row does nothing. Off by default: Room Types, Rooms and Add-Ons keep the separate button.
    */
   singleNewRow?: boolean;
+  /** The three-dot menu (Change Log, Copy, Delete) of the selected active row. */
+  more?: SetupMoreMenu;
+  /** An icon button next to the New button (Rooms: reorder). */
+  reorder?: { label: string; onClick: () => void };
 }
 
 // Left list of Room Types, Rooms, Add-Ons and Rate Categories (Figma 11964:24902): the NEW button,
@@ -48,13 +74,28 @@ export default function SetupList({
   onSelect,
   onNew,
   singleNewRow = false,
+  more,
+  reorder,
 }: SetupListProps) {
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  // A new key on every opening gives the dialog fresh sort, filters, page and rows (D-97-5).
+  const [logSession, setLogSession] = useState(0);
+  const closeMenu = () => setMenuAnchor(null);
+  // Copy and Delete open a dialog (or switch the selection). They run after the menu has finished
+  // closing, so the menu hands focus back to its button first and the dialog returns focus there.
+  const afterMenu = useRef<(() => void) | null>(null);
+  const chooseAfterClose = (action: () => void) => {
+    afterMenu.current = action;
+    closeMenu();
+  };
   const row = (
     key: string,
     label: string,
     selected: boolean,
     onClick?: () => void,
     inactive?: boolean,
+    isNew?: boolean,
   ) => (
     <Box
       component="li"
@@ -75,7 +116,8 @@ export default function SetupList({
           minHeight: t.spacing(7.375),
           // Active items read in the primary text colour, inactive ones are greyed (still AA).
           color: selected ? undefined : inactive ? 'text.secondary' : 'text.primary',
-          fontStyle: inactive ? 'italic' : undefined,
+          // Room for the three-dot button on the selected row.
+          ...(more && showsMoreMenu({ selected, inactive, isNew }) ? { pr: t.spacing(6) } : {}),
           [t.breakpoints.up('lg')]: { mr: t.spacing(1.875) },
         })}
       >
@@ -91,17 +133,18 @@ export default function SetupList({
             <Chip
               component="span"
               size="small"
-              variant="outlined"
+              variant={selected ? 'filled' : 'outlined'}
               color="error"
               label="Inactive"
               sx={(t) => ({
                 ml: 'auto',
                 textTransform: 'none',
                 flexShrink: 0,
-                fontStyle: 'normal',
                 fontWeight: 'bold',
-                // Opaque, so the red text stays AA on the selected (green) item too.
+                // Unselected: red outline on white. Selected (green row): a white chip with dark
+                // text, which keeps AA contrast where red on green does not.
                 bgcolor: 'background.paper',
+                ...(selected ? { color: 'text.primary', borderColor: 'background.paper' } : {}),
                 pointerEvents: 'none',
                 height: t.spacing(2.75),
                 '& .MuiChip-label': { px: 1 },
@@ -110,6 +153,28 @@ export default function SetupList({
           </>
         ) : null}
       </Button>
+      {more && showsMoreMenu({ selected, inactive, isNew }) ? (
+        <IconButton
+          aria-label={setupMoreMenuLabels(more.noun, label).button}
+          aria-haspopup="menu"
+          aria-expanded={menuAnchor ? 'true' : undefined}
+          onClick={(e) => setMenuAnchor(e.currentTarget)}
+          sx={(t) => ({
+            position: 'absolute',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            right: t.spacing(0.5),
+            color: 'primary.contrastText',
+            '&.Mui-focusVisible': {
+              outline: `2px solid ${t.palette.primary.contrastText}`,
+              outlineOffset: -2,
+            },
+            [t.breakpoints.up('lg')]: { right: t.spacing(2.375) },
+          })}
+        >
+          <MoreHoriz />
+        </IconButton>
+      ) : null}
       {selected ? (
         <Box
           aria-hidden
@@ -131,7 +196,7 @@ export default function SetupList({
   // The add action as the first row of the list (singleNewRow): outlined until the new item is edited.
   const addRow = () =>
     creating ? (
-      row('new', newTitle, true)
+      row('new', newTitle, true, undefined, false, true)
     ) : (
       <Box component="li" key="new" sx={{ display: 'flex' }}>
         <Button
@@ -157,21 +222,44 @@ export default function SetupList({
   return (
     <Box>
       {singleNewRow ? null : (
-        <Button
-          fullWidth
-          variant="outlined"
-          size="large"
-          startIcon={<Add />}
-          onClick={onNew}
+        <Box
           sx={(t) => ({
+            display: 'flex',
+            gap: 1,
             mb: 1.25,
-            minHeight: t.spacing(7.375),
-            borderColor: 'primary.outlinedBorder',
-            [t.breakpoints.up('lg')]: { width: `calc(100% - ${t.spacing(1.875)})` },
+            [t.breakpoints.up('lg')]: { mr: t.spacing(1.875) },
           })}
         >
-          {newLabel}
-        </Button>
+          <Button
+            fullWidth
+            variant="outlined"
+            size="large"
+            startIcon={<Add />}
+            onClick={onNew}
+            sx={(t) => ({
+              minHeight: t.spacing(7.375),
+              borderColor: 'primary.outlinedBorder',
+              minWidth: 0,
+            })}
+          >
+            {newLabel}
+          </Button>
+          {reorder ? (
+            <IconButton
+              aria-label={reorder.label}
+              onClick={reorder.onClick}
+              color="primary"
+              sx={(t) => ({
+                flexShrink: 0,
+                width: t.spacing(7.375),
+                borderRadius: 1,
+                border: `1px solid ${t.palette.primary.outlinedBorder}`,
+              })}
+            >
+              <SwapVert />
+            </IconButton>
+          ) : null}
+        </Box>
       )}
       <Box
         component="ul"
@@ -185,7 +273,11 @@ export default function SetupList({
           [t.breakpoints.up('lg')]: { flexDirection: 'column', flexWrap: 'nowrap' },
         })}
       >
-        {singleNewRow ? addRow() : creating ? row('new', newTitle, true) : null}
+        {singleNewRow
+          ? addRow()
+          : creating
+            ? row('new', newTitle, true, undefined, false, true)
+            : null}
         {items.map((item) =>
           row(
             item.id,
@@ -196,6 +288,66 @@ export default function SetupList({
           ),
         )}
       </Box>
+      {more ? (
+        <>
+          <Menu
+            anchorEl={menuAnchor}
+            open={menuAnchor !== null}
+            onClose={closeMenu}
+            slotProps={{
+              transition: {
+                onExited: () => {
+                  const action = afterMenu.current;
+                  afterMenu.current = null;
+                  action?.();
+                },
+              },
+              list: { 'aria-label': setupMoreMenuLabels(more.noun, '').menu },
+            }}
+          >
+            <MenuItem
+              onClick={() => {
+                chooseAfterClose(() => {
+                  setLogSession((n) => n + 1);
+                  setLogOpen(true);
+                });
+              }}
+            >
+              <ListItemIcon>
+                <History />
+              </ListItemIcon>
+              <ListItemText>{setupMoreMenuLabels(more.noun, '').changeLog}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                chooseAfterClose(more.onCopy);
+              }}
+            >
+              <ListItemIcon>
+                <ContentCopy color="primary" />
+              </ListItemIcon>
+              <ListItemText>{setupMoreMenuLabels(more.noun, '').copy}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                chooseAfterClose(more.onDelete);
+              }}
+              sx={{ color: 'error.main' }}
+            >
+              <ListItemIcon>
+                <Delete color="error" />
+              </ListItemIcon>
+              <ListItemText>{setupMoreMenuLabels(more.noun, '').delete}</ListItemText>
+            </MenuItem>
+          </Menu>
+          <ChangeLogOverlay
+            key={logSession}
+            page={more.changeLogPage}
+            open={logOpen}
+            onClose={() => setLogOpen(false)}
+          />
+        </>
+      ) : null}
     </Box>
   );
 }

@@ -157,29 +157,31 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
           newTitle="New Room Type"
           onSelect={editor.select}
           onNew={editor.startNew}
+          more={{
+            noun: 'Room Type',
+            changeLogPage: 'room-types',
+            onDelete: () => {
+              setDeleteError(null);
+              if (editor.selected) {
+                setDeleteCheck(checkDeleteRoomType(editor.selected, data.rooms));
+              }
+            },
+            onCopy: () =>
+              editor.duplicate((saved) => ({
+                ...structuredClone(saved),
+                id: undefined,
+                name: duplicateName(saved.name),
+              })),
+          }}
         />
       }
       actions={
         <SetupActions
-          noun="room type"
           saveNoun="Room Type"
           creating={editor.creating}
           dirty={editor.dirty}
           saving={saving}
           onSave={() => void save()}
-          onDelete={() => {
-            setDeleteError(null);
-            if (editor.selected) {
-              setDeleteCheck(checkDeleteRoomType(editor.selected, data.rooms));
-            }
-          }}
-          onDuplicate={() =>
-            editor.duplicate((saved) => ({
-              ...structuredClone(saved),
-              id: undefined,
-              name: duplicateName(saved.name),
-            }))
-          }
           onCancel={editor.cancelNew}
         />
       }

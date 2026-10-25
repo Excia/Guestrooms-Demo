@@ -6,6 +6,7 @@ import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { GrantedAccess, saveButtonName } from '../app/testing';
 import RoomTypes from './RoomTypes';
+import { clickMoreMenuItem } from './moreMenuTestHelpers';
 
 function renderPage(client: ApiClient = createMockClient()) {
   return render(
@@ -163,7 +164,7 @@ describe('Room Types page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Duplicate room type' }));
+    await clickMoreMenuItem(user, 'Copy Room Type');
     expect(screen.getByRole('heading', { level: 1, name: 'New Room Type' })).toBeInTheDocument();
     expect(screen.getByLabelText(/Room Type Name/)).toHaveValue('Copy of Double Queen Room');
     expect(screen.getByRole('group', { name: 'Queen' })).toHaveTextContent('2');
@@ -187,24 +188,34 @@ describe('Room Types page', () => {
     const user = userEvent.setup();
     renderPage();
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'Delete room type' }));
+    await clickMoreMenuItem(user, 'Delete Room Type');
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('2 rooms use it');
+    expect(dialog).toHaveTextContent('4 rooms use it');
     expect(within(dialog).queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
+  async function clientWithLoft() {
+    const client = createMockClient();
+    const [first] = await client.roomSetup.listRoomTypes();
+    await client.roomSetup.saveRoomType({ ...first, id: undefined, name: 'Loft' });
+    return client;
+  }
+  const openLoft = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderPage(await clientWithLoft());
+    await loaded();
+    await user.click(within(list()).getByRole('button', { name: 'Loft' }));
+  };
+
   it('deletes an unused room type after confirmation and selects the next one', async () => {
     const user = userEvent.setup();
-    renderPage();
-    await loaded();
-    await user.click(within(list()).getByRole('button', { name: /Cottage/ }));
-    await user.click(screen.getByRole('button', { name: 'Delete room type' }));
+    await openLoft(user);
+    await clickMoreMenuItem(user, 'Delete Room Type');
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
     await waitFor(() =>
-      expect(within(list()).queryByRole('button', { name: /Cottage/ })).not.toBeInTheDocument(),
+      expect(within(list()).queryByRole('button', { name: 'Loft' })).not.toBeInTheDocument(),
     );
     expect(
       screen.getByRole('heading', { level: 1, name: 'Double Queen Room' }),
@@ -213,12 +224,18 @@ describe('Room Types page', () => {
 
   it('keeps the cancel button focused in the delete dialog so Enter never deletes', async () => {
     const user = userEvent.setup();
+    await openLoft(user);
+    await clickMoreMenuItem(user, 'Delete Room Type');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+  });
+
+  it('has no more-options button on an inactive room type', async () => {
+    const user = userEvent.setup();
     renderPage();
     await loaded();
     await user.click(within(list()).getByRole('button', { name: /Cottage/ }));
-    await user.click(screen.getByRole('button', { name: 'Delete room type' }));
-    const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /more options$/ })).not.toBeInTheDocument();
   });
 
   it('offers a retry when loading fails', async () => {

@@ -311,3 +311,17 @@ export function toSetupListEntries<
     inactive: !isActiveOn(i, today),
   }));
 }
+
+/**
+ * Inactive items go to the bottom, each group keeping the order it came in. Rooms use it: their
+ * order is the saved one (Reorder), not alphabetical.
+ */
+export function activeFirst<T extends { startDate: string; endDate: string | null }>(
+  items: readonly T[],
+  today: string,
+): T[] {
+  return [
+    ...items.filter((i) => isActiveOn(i, today)),
+    ...items.filter((i) => !isActiveOn(i, today)),
+  ];
+}

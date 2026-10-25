@@ -1,13 +1,8 @@
-import ContentCopy from '@mui/icons-material/ContentCopyOutlined';
-import Delete from '@mui/icons-material/Delete';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
-import IconButton from '@mui/material/IconButton';
 import SaveButton from '../../shared/SaveButton';
 
 export interface SetupActionsProps {
-  /** "room type" or "room". */
-  noun: string;
   /** What Save saves, e.g. "Room Type": the button reads "Save Room Type" or "Saved". */
   saveNoun: string;
   /** A new, unsaved item: delete and duplicate do not apply, Cancel does (PDF 8.5.5). */
@@ -16,21 +11,22 @@ export interface SetupActionsProps {
   dirty: boolean;
   saving: boolean;
   onSave: () => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
+  /** Blocks saving (the form is locked while reordering). */
+  disabled?: boolean;
+  disabledReason?: string;
   onCancel: () => void;
 }
 
-// Header actions (Figma 11964:13723): delete (red), duplicate, then the primary save button.
+// Header actions: Cancel on a new item, then the primary save button. Copy and Delete moved into the
+// three-dot menu of the selected list row (SetupList).
 export default function SetupActions({
-  noun,
   saveNoun,
   creating,
   dirty,
   saving,
   onSave,
-  onDelete,
-  onDuplicate,
+  disabled,
+  disabledReason,
   onCancel,
 }: SetupActionsProps) {
   return (
@@ -39,17 +35,15 @@ export default function SetupActions({
         <Button variant="text" color="inherit" onClick={onCancel}>
           Cancel
         </Button>
-      ) : (
-        <>
-          <IconButton aria-label={`Delete ${noun}`} color="error" onClick={onDelete}>
-            <Delete />
-          </IconButton>
-          <IconButton aria-label={`Duplicate ${noun}`} color="primary" onClick={onDuplicate}>
-            <ContentCopy />
-          </IconButton>
-        </>
-      )}
-      <SaveButton dirty={dirty || creating} saving={saving} noun={saveNoun} onClick={onSave} />
+      ) : null}
+      <SaveButton
+        dirty={dirty || creating}
+        saving={saving}
+        noun={saveNoun}
+        onClick={onSave}
+        disabled={disabled}
+        disabledReason={disabledReason}
+      />
     </Box>
   );
 }
