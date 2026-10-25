@@ -211,7 +211,11 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
               input: {
                 startAdornment: (
                   <InputAdornment position="start">
-                    {active.has('search') ? <ManageSearch aria-hidden /> : <Search aria-hidden />}
+                    {active.has('search') ? (
+                      <ManageSearch color="primary" aria-hidden />
+                    ) : (
+                      <Search color="primary" aria-hidden />
+                    )}
                   </InputAdornment>
                 ),
               },
