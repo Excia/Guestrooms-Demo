@@ -211,7 +211,7 @@ Issue Excia/Guestrooms-Demo#69. Epic status: **not started**. Details: [features
 | ------------------------ | ----------------------------------------------------------------------------- | -------------------------- | --- |
 | Excia/Guestrooms-Demo#70 | [7.1] Primary Setup / System Settings                                         | not started                |     |
 | Excia/Guestrooms-Demo#71 | [7.2] Rate Categories                                                         | not started (needs design) |     |
-| Excia/Guestrooms-Demo#72 | [7.3] Room Types and Rooms (associations, quantity picker, image placeholder) | in review                  |     |
+| Excia/Guestrooms-Demo#72 | [7.3] Room Types and Rooms (associations, quantity picker, image placeholder) | in review                |     |
 | Excia/Guestrooms-Demo#73 | [7.4] Add-On Items                                                            | not started                |     |
 | Excia/Guestrooms-Demo#74 | [7.5] Booking Rules                                                           | not started                |     |
 | Excia/Guestrooms-Demo#75 | [7.6] Keycard Integration settings                                            | not started                |     |

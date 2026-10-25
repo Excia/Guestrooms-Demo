@@ -5,21 +5,21 @@ Ticket Excia/Guestrooms-Demo#<issue>; PR Excia/Guestrooms-Demo#<pr>. Figma: <fra
 
 ## Figma deviations
 
-| ID    | Area | Figma | Built | Why | Choice (owner, ticket, agent, forced) |
-| ----- | ---- | ----- | ----- | --- | ------------------------------------- |
-| F-X-1 |      |       |       |     |                                       |
+| ID      | Area | Figma | Built | Why | Choice (owner, ticket, agent, forced) |
+| ------- | ---- | ----- | ----- | --- | ------------------------------------- |
+| F-X-1   |      |       |       |     |                                       |
 
 ## Open questions
 
-| ID    | Question | Blocks | Default used | Who answers | Status (open, answered + date + answer) |
-| ----- | -------- | ------ | ------------ | ----------- | --------------------------------------- |
-| Q-X-1 |          |        |              |             | open                                    |
+| ID      | Question | Blocks | Default used | Who answers | Status (open, answered + date + answer) |
+| ------- | -------- | ------ | ------------ | ----------- | --------------------------------------- |
+| Q-X-1   |          |        |              |             | open                                    |
 
 ## Decisions
 
-| ID    | Date | Decision | Why | Source | Status |
-| ----- | ---- | -------- | --- | ------ | ------ |
-| D-X-1 |      |          |     |        |        |
+| ID      | Date | Decision | Why | Source | Status |
+| ------- | ---- | -------- | --- | ------ | ------ |
+| D-X-1   |      |          |     |        |        |
 
 ## Placeholders and invented values
 
