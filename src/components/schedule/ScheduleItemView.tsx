@@ -11,7 +11,12 @@ import type { HousekeepingStatus, ScheduleBlock } from '../../api';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { anyTruncated } from '../../app/overflow';
 import { housekeepingStatusOf } from '../../app/housekeepingBlocks';
-import { blockFillToken, housekeepingFillToken } from '../../app/scheduleColors';
+import {
+  blockFillToken,
+  closureStripes,
+  EDGE_TAB_SPACING,
+  housekeepingFillToken,
+} from '../../app/scheduleColors';
 import { blockContent, blockTooltipLines } from '../../app/scheduleBlockContent';
 import { blockOpacityToken } from '../../app/scheduleBlockState';
 import { blockMarkers, blockSpan, housekeepingChip } from '../../app/scheduleGrid';
@@ -174,16 +179,20 @@ export default memo(function ScheduleItemView({
   const closureText =
     item.kind === 'closure' ? closureBlockText(item.reason, item.startDate, item.endDate) : '';
   const closureCut = item.kind === 'closure' && closureText !== closureFullText(item.reason);
+  // Drawn over the block's edge (a sibling of the body, so its border, shadow and overflow clip
+  // cannot hide it). Figma draws 3px; that was invisible in the app, so it is 6px (F-EM-3).
   const marker = (side: 'left' | 'right') => (
     <Box
       aria-hidden
       data-marker={side}
+      title={side === 'left' ? 'Early check in' : 'Late check out'}
       sx={(t) => ({
         position: 'absolute',
         top: 0,
         bottom: 0,
         [side]: 0,
-        width: t.spacing(0.375),
+        zIndex: 1,
+        width: t.spacing(EDGE_TAB_SPACING),
         bgcolor: 'warning.main',
         borderRadius:
           side === 'left'
@@ -257,6 +266,9 @@ export default memo(function ScheduleItemView({
           right: 0,
           boxSizing: 'border-box',
           px: 0.75,
+          // Keep the text clear of an edge tab.
+          pl: markers.left ? 0.75 + EDGE_TAB_SPACING : 0.75,
+          pr: markers.right ? 0.75 + EDGE_TAB_SPACING : 0.75,
           py: 0.25,
           display: 'flex',
           flexDirection: 'column',
@@ -264,6 +276,7 @@ export default memo(function ScheduleItemView({
           gap: 0.25,
           overflow: 'hidden',
           bgcolor: fill(item, today, t),
+          backgroundImage: isClosure ? closureStripes(t.palette.schedule) : undefined,
           border:
             isClosure || settled || linked
               ? 'none'
@@ -309,9 +322,6 @@ export default memo(function ScheduleItemView({
           )}
         </>
       )}
-      {/* Early Check In / Late Check Out edge markers at a real arrival / departure edge. */}
-      {markers.left ? marker('left') : null}
-      {markers.right ? marker('right') : null}
     </Box>
   );
   return (
@@ -409,6 +419,9 @@ export default memo(function ScheduleItemView({
       ) : (
         bodyBox
       )}
+      {/* Early Check In / Late Check Out tabs at a real arrival / departure edge. */}
+      {markers.left ? marker('left') : null}
+      {markers.right ? marker('right') : null}
       {hk && hkStatus ? (
         <HousekeepingChip
           block={block}

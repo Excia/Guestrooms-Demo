@@ -963,8 +963,8 @@ describe('early and late markers on the grid', () => {
     await user.keyboard('{Escape}');
     await panelGone();
     const henry = block('Henry Lowell');
-    expect(henry.querySelector('[data-body] > [data-marker="left"]')).not.toBeNull();
-    expect(henry.querySelector('[data-body] > [data-marker="right"]')).not.toBeNull();
+    expect(henry.querySelector('[data-marker="left"]')).not.toBeNull();
+    expect(henry.querySelector('[data-marker="right"]')).not.toBeNull();
   });
 });
 

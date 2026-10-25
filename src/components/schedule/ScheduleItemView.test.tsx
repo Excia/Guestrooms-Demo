@@ -202,6 +202,16 @@ describe('ScheduleItemView closure tooltip', () => {
     expect(container.querySelector('[data-marker]')).toBeNull();
   });
 
+  it('is filled with the legacy grey stripes, not a flat grey', () => {
+    const { container } = view(closure);
+    const body = container.querySelector('[data-body]') as HTMLElement;
+    const image = getComputedStyle(body).backgroundImage;
+    expect(image).toContain('repeating-linear-gradient');
+    expect(image).toContain('45deg');
+    expect(image).toContain('rgb(238, 238, 238)');
+    expect(image).toContain('rgb(187, 187, 187)');
+  });
+
   it('has no tooltip on hover while its text fits', async () => {
     view(closure, { tip: closure.reason });
     await userEvent.hover(screen.getByRole('gridcell'));
