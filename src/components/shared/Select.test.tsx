@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ThemeProvider } from '@mui/material/styles';
+import { theme } from '../../theme';
 import Select from './Select';
 
 const OPTIONS = [
@@ -50,5 +52,24 @@ describe('Select', () => {
   it('can be disabled', () => {
     render(<Select label="Room type" value="a" options={OPTIONS} onChange={vi.fn()} disabled />);
     expect(screen.getByRole('combobox')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('shows the selected option in green and bold, in the original order', async () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <Select label="Room type" value="b" options={OPTIONS} onChange={vi.fn()} />
+      </ThemeProvider>,
+    );
+    await userEvent.click(screen.getByRole('combobox'));
+    const options = await screen.findAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['Alpha', 'Beta']);
+    const selected = screen.getByRole('option', { name: 'Beta' });
+    expect(selected).toHaveAttribute('aria-selected', 'true');
+    const style = getComputedStyle(selected);
+    expect(style.color).toBe('rgb(32, 87, 35)');
+    expect(style.fontWeight).toBe('700');
+    expect(getComputedStyle(screen.getByRole('option', { name: 'Alpha' })).color).not.toBe(
+      style.color,
+    );
   });
 });

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { ThemeProvider } from '@mui/material/styles';
+import { getContrastRatio, ThemeProvider } from '@mui/material/styles';
 import { theme } from './theme';
 
 describe('theme tokens (Figma variables)', () => {
@@ -165,7 +165,23 @@ describe('hover tint', () => {
     expect(styles[keys]).toEqual({ backgroundColor: tint });
     expect(keys).toContain('&.Mui-focusVisible');
     expect(keys).toContain('&.Mui-selected:hover');
-    expect(styles['&.Mui-selected']).toMatchObject({ fontWeight: 700 });
+    expect(styles['&.Mui-selected']).toMatchObject({
+      fontWeight: 700,
+      color: theme.palette.primary.dark,
+    });
+  });
+
+  it('keeps the selected option text AA on the tint and on white', () => {
+    const text = theme.palette.primary.dark;
+    expect(getContrastRatio(text, tint!)).toBeGreaterThanOrEqual(4.5);
+    expect(getContrastRatio(text, '#ffffff')).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('tints hovered table rows (the Change Log)', () => {
+    const o = theme.components?.MuiTableRow?.styleOverrides as {
+      root: (a: object) => Record<string, unknown>;
+    };
+    expect(o.root({ theme })['&.MuiTableRow-hover:hover']).toEqual({ backgroundColor: tint });
   });
 
   it('has a button_small typography token (Figma button/small)', () => {

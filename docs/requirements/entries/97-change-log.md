@@ -42,3 +42,4 @@ reference table next to it in the System Settings section was not read (an image
 - **API:** `GET /change-log?page=&sort=&dateFrom=&dateTo=&timeFrom=&timeTo=&changeTypes=&actionBy=&search=&pageNumber=&limit=` answers `Page<ChangeLogEntry>` (`{items, total}`); `GET /change-log/event-types` answers `[{id, label}]`. See the section "Change Log (ticket 7.10)" in `api-contract.md`.
 - **Permissions:** none new (admin routes only, ticket 0.8).
 - **Notes:** since 2026-10-25 the log opens as a normal modal dialog (85vw by 80vh, D-AP-3 in `admin-polish.md`); the component keeps the name `ChangeLogOverlay`. The page ids are in `CHANGE_LOG_PAGES` (`src/api/changeLogTypes.ts`).
+- **Polish 2026-10-25 (D-AP-4):** the title is "[Page]: Change Log"; the search icon is green; hovered rows use the theme tint.

@@ -675,6 +675,7 @@ function Loaded({
           // The safe choice is the focused primary action; splitting is the explicit secondary one.
           confirmLabel={splitInfo.keepLabel}
           discardLabel={splitInfo.confirmLabel}
+          stacked
           onClose={flow.close}
           onConfirm={flow.close}
           onDiscard={() => void flow.splitRoom()}

@@ -450,7 +450,7 @@ describe('SystemSettings page', () => {
     const open = screen.getByRole('button', { name: 'Change Log' });
     await user.click(open);
     expect(
-      await screen.findByRole('dialog', { name: 'System Settings Change Log' }),
+      await screen.findByRole('dialog', { name: 'System Settings: Change Log' }),
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Close Change Log' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
