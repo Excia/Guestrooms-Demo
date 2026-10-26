@@ -26,12 +26,16 @@ export type CheckInPermission =
 // `locations.edit` lets a user add, change and remove locations (ticket 182); without it the
 // Locations page is read-only (at some clubs only Clubessential changes locations).
 export type LocationsPermission = 'locations.edit';
+// `employees.edit` lets a user add, change, deactivate and remove employees (ticket 185); without it
+// the Employees page is read-only.
+export type EmployeesPermission = 'employees.edit';
 export type Permission =
   | PagePermission
   | AdminPermission
   | ReservationPermission
   | CheckInPermission
-  | LocationsPermission;
+  | LocationsPermission
+  | EmployeesPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 
@@ -45,9 +49,12 @@ export const CHECK_IN_ARRIVAL_DATE_PERMISSION: CheckInPermission =
 
 export const LOCATIONS_EDIT_PERMISSION: LocationsPermission = 'locations.edit';
 
+export const EMPLOYEES_EDIT_PERMISSION: EmployeesPermission = 'employees.edit';
+
 export const ALL_PERMISSIONS: readonly Permission[] = [
   ADMIN_PERMISSION,
   LOCATIONS_EDIT_PERMISSION,
+  EMPLOYEES_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
   CHECK_IN_ANY_TIME_PERMISSION,
   CHECK_IN_ARRIVAL_DATE_PERMISSION,

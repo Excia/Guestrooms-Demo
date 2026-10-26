@@ -11,6 +11,7 @@ import {
 } from './mockData';
 import {
   checkInLevel,
+  EMPLOYEES_EDIT_PERMISSION,
   LOCATIONS_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
 } from '../app/permissions';
@@ -22,6 +23,7 @@ import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
 import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
+import { mockEmployeeCandidates, mockEmployees, MOCK_PERMISSION_SETS } from './employeesData';
 import {
   mockSystemSettings,
   MOCK_HOUSE_ACCOUNTS,
@@ -87,6 +89,7 @@ import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
 import { checkRemoveLocation, validateLocations } from '../app/locations';
+import { isEmployeeRole, lastAdministratorProblem, needsPermissionSet } from '../app/employees';
 import {
   unknownOptionIds,
   normalizeLabel,
@@ -207,6 +210,12 @@ export function createMockClient({
   let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
   let locations = mockLocations();
+  let employees = mockEmployees();
+  // The club directory: people with access and people without (the add type-ahead source).
+  const directory = [
+    ...employees.map((e) => ({ id: e.id, label: e.name })),
+    ...mockEmployeeCandidates(),
+  ];
   const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
   const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
@@ -845,6 +854,82 @@ export function createMockClient({
         respond(
           () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
           () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
+          o,
+        ),
+    },
+    employees: {
+      list: (o) =>
+        respond(
+          () => structuredClone(employees),
+          () => [],
+          o,
+        ),
+      listCandidates: (o) =>
+        respond(
+          () =>
+            directory.filter((p) => !employees.some((e) => e.id === p.id)).map((p) => ({ ...p })),
+          () => [],
+          o,
+        ),
+      listPermissionSets: (o) =>
+        respond(
+          () => structuredClone(MOCK_PERMISSION_SETS),
+          () => [],
+          o,
+        ),
+      save: (input, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(grant).can(EMPLOYEES_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            }
+            const person = directory.find((p) => p.id === input.id);
+            const setOk =
+              input.permissionSetId === null
+                ? !needsPermissionSet(input.role)
+                : needsPermissionSet(input.role) &&
+                  MOCK_PERMISSION_SETS.some((s) => s.id === input.permissionSetId);
+            if (!person || !isEmployeeRole(input.role) || !setOk) {
+              throw new ApiError(422, 'Employee is not valid', { code: 'validation' });
+            }
+            if (lastAdministratorProblem(employees, input.id, input)) {
+              throw new ApiError(409, 'The club needs an active administrator', {
+                code: 'last-administrator',
+              });
+            }
+            const stored = {
+              id: person.id,
+              name: person.label,
+              role: input.role,
+              permissionSetId: input.permissionSetId,
+              active: input.active,
+            };
+            // A replace of this person's assignment: repeating the save changes nothing.
+            employees = employees.some((e) => e.id === input.id)
+              ? employees.map((e) => (e.id === input.id ? stored : e))
+              : [...employees, stored];
+            return { ...stored };
+          },
+          () => ({ name: '', ...input }),
+          o,
+        ),
+      remove: (id, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(grant).can(EMPLOYEES_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            }
+            if (!employees.some((e) => e.id === id)) {
+              throw new ApiError(404, 'Employee not found', { code: 'not-found' });
+            }
+            if (lastAdministratorProblem(employees, id, null)) {
+              throw new ApiError(409, 'The club needs an active administrator', {
+                code: 'last-administrator',
+              });
+            }
+            employees = employees.filter((e) => e.id !== id);
+          },
+          () => undefined,
           o,
         ),
     },

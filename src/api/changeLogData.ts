@@ -14,6 +14,7 @@ import {
   type ChangeLogQuery,
   type ChangeLogSortField,
 } from './changeLogTypes';
+import { mockEmployees } from './employeesData';
 import { mockAddOns } from './addOnData';
 import { mockRateCategories } from './rateCategoryData';
 import { mockRoomTypes, mockRooms } from './roomSetupData';
@@ -87,6 +88,12 @@ const DESCRIPTIONS: Record<ChangeLogPageId, readonly [string, string][]> = {
     ['updated', 'Location "Main Clubhouse" area changed to Guest Rooms'],
     ['deleted', 'Location "Pool House" removed'],
   ],
+  employees: [
+    ['created', 'Employee "Dana Whitfield" added as Staff'],
+    ['updated', 'Employee "Marcus Bell" permission set changed to Front Desk'],
+    ['updated', 'Employee "Priya Nair" deactivated'],
+    ['deleted', 'Employee "Tom Hale" removed'],
+  ],
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -131,6 +138,7 @@ function addRecordEntries(out: Record<ChangeLogPageId, ChangeLogEntry[]>, today:
     ['room-types', 'Room Type', types],
     ['add-on-items', 'Add-On', mockAddOns()],
     ['rate-categories', 'Rate Category', mockRateCategories()],
+    ['employees', 'Employee', mockEmployees()],
   ];
   const steps: [string, (noun: string, name: string) => string][] = [
     ['created', (noun, name) => `${noun} "${name}" created`],

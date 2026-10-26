@@ -548,6 +548,22 @@ backend's concern (Q-75-3).
   (409 `location-in-use`). Needs `locations.edit` (403 otherwise). The change is recorded in the Change Log page `locations`.
 - Revenue of a location goes to the GL account of its area.
 
+## Employees (LP-A.4 / ticket 185, built on the mock)
+
+- `GET /employees` (`employees.list`): employees who have access, `[{ id, name, role, permissionSetId, active }]`. `id` is the
+  person's id in the club directory; `role` is `administrator`, `manager` or `staff`; `permissionSetId` is null for an
+  administrator only.
+- `GET /employees/candidates` (`employees.listCandidates`): directory people without access, `[{ id, label }]`. The UI filters
+  them as the user types.
+- `GET /employees/permission-sets` (`employees.listPermissionSets`): the sets an employee can be given, `[{ id, label }]`.
+  Minimal and read-only; the Permissions page (ticket 186) owns the sets.
+- `PUT /employees/{id}` (`employees.save`) with `{ id, role, permissionSetId, active }`: creates or replaces the assignment and
+  answers the stored employee. The id comes from the directory, so repeating the PUT changes nothing. The backend re-checks:
+  person exists; role is valid; a manager or staff needs an existing permission set, an administrator none (422 `validation`);
+  the change must leave at least one active administrator (409 `last-administrator`). Needs `employees.edit` (403).
+- `DELETE /employees/{id}` (`employees.remove`): removes the access (legacy "Unassigned"); the person returns to the candidates.
+  404 `not-found`; 409 `last-administrator`; needs `employees.edit`. The changes are recorded in the Change Log page `employees`.
+
 ## Room closures (ticket 149)
 
 - `SaveClosureRequest {roomId, startDate, endDate, description, requestId}`; dates are half-open like
