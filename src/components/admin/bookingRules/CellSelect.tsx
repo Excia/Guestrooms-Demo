@@ -1,3 +1,4 @@
+import { useDisabled } from '../../../app/readOnlyContext';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import MenuItem from '@mui/material/MenuItem';
@@ -48,7 +49,7 @@ export default function CellSelect<T extends string | number>({
       variant="standard"
       size="small"
       fullWidth={fullWidth}
-      disabled={disabled}
+      disabled={useDisabled(disabled)}
       error={error}
       sx={sx}
     >

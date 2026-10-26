@@ -1,4 +1,10 @@
-import { adminPages, canAccessPage, guardDecision, summarizeAccess } from './access';
+import {
+  adminPageLevel,
+  adminPages,
+  canAccessPage,
+  guardDecision,
+  summarizeAccess,
+} from './access';
 import {
   createMockPermissions,
   noPermissions,
@@ -17,6 +23,7 @@ const ADMIN_IDS = [
   'room-options',
   'notifications',
   'locations',
+  'permissions',
   'employees',
 ] as const;
 
@@ -96,5 +103,26 @@ describe('guardDecision', () => {
   });
   it('fails closed on error', () => {
     expect(guardDecision('error', true)).toBe('deny');
+  });
+});
+
+describe('adminPageLevel', () => {
+  it('is edit for an administrator and for a user with the edit permission', () => {
+    expect(adminPageLevel(admin.can, 'rooms')).toBe('edit');
+    const editor = createMockPermissions([pagePermission('rooms'), 'rooms.edit']);
+    expect(adminPageLevel(editor.can, 'rooms')).toBe('edit');
+  });
+  it('is view with the page permission alone, none without it', () => {
+    const viewer = createMockPermissions([pagePermission('rooms')]);
+    expect(adminPageLevel(viewer.can, 'rooms')).toBe('view');
+    expect(adminPageLevel(viewer.can, 'locations')).toBe('none');
+  });
+  it('edit permission without the page permission does not open the page', () => {
+    expect(adminPageLevel(createMockPermissions(['rooms.edit']).can, 'rooms')).toBe('none');
+  });
+  it('has no View-only mode for pages outside Admin Setup', () => {
+    const schedule = createMockPermissions([pagePermission('schedule')]);
+    expect(adminPageLevel(schedule.can, 'schedule')).toBe('edit');
+    expect(adminPageLevel(admin.can, 'nope')).toBe('none');
   });
 });

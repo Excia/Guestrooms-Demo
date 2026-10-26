@@ -6,6 +6,7 @@ import { createMockClient } from '../api/mock';
 import { ApiError, type ApiClient } from '../api/types';
 import type { Permission } from '../app/permissions';
 import { GrantedAccess, saveButtonName } from '../app/testing';
+import RequireAccess from '../components/RequireAccess';
 import Employees from './Employees';
 
 function renderPage(client: ApiClient = createMockClient(), granted?: readonly Permission[]) {
@@ -13,7 +14,13 @@ function renderPage(client: ApiClient = createMockClient(), granted?: readonly P
     <ApiProvider client={client}>
       <GrantedAccess granted={granted}>
         <MemoryRouter initialEntries={['/admin/employees']}>
-          <Employees />
+          {granted ? (
+            <RequireAccess pageId="employees">
+              <Employees />
+            </RequireAccess>
+          ) : (
+            <Employees />
+          )}
         </MemoryRouter>
       </GrantedAccess>
     </ApiProvider>,
@@ -81,13 +88,13 @@ describe('Employees page', () => {
 
     await user.type(person, 'sam');
     await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
-    await pick(user, /Permission Set/, 'Front Desk');
+    await pick(user, /Permission Set/, 'Staff');
     await user.click(save());
     expect((await screen.findAllByText('Employee Saved')).length).toBeGreaterThan(0);
     expect(saveSpy.mock.calls[0][0]).toEqual({
       id: 'dir-1',
       role: 'staff',
-      permissionSetId: 'set-front-desk',
+      permissionSetId: 'staff',
       active: true,
     });
     expect(screen.getByRole('heading', { level: 1, name: 'Sam Rivera' })).toBeInTheDocument();
@@ -114,12 +121,12 @@ describe('Employees page', () => {
     const nav = await loaded();
     await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
     await pick(user, /Employee Type/, 'Manager');
-    await pick(user, /Permission Set/, 'Accounting');
+    await pick(user, /Permission Set/, 'Management');
     await user.click(save());
     expect((await screen.findAllByText('Employee Saved')).length).toBeGreaterThan(0);
     expect((await client.employees.list()).find((e) => e.id === 'emp-3')).toMatchObject({
       role: 'manager',
-      permissionSetId: 'set-accounting',
+      permissionSetId: 'management',
     });
   });
 
@@ -151,9 +158,9 @@ describe('Employees page', () => {
     renderPage();
     const nav = await loaded();
     await user.click(within(nav).getByRole('button', { name: 'Marcus Bell' }));
-    expect(screen.getByText('Manager, Reservations Manager')).toBeInTheDocument();
+    expect(screen.getByText('Manager, Management')).toBeInTheDocument();
     await user.click(within(nav).getByRole('button', { name: /Tom Hale/ }));
-    expect(screen.getByText('Staff, Front Desk, Inactive')).toBeInTheDocument();
+    expect(screen.getByText('Staff, Staff, Inactive')).toBeInTheDocument();
   });
 
   it('clears a save error when another employee is selected', async () => {
@@ -184,7 +191,7 @@ describe('Employees page', () => {
     await user.click(screen.getByRole('button', { name: 'New Employee' }));
     await user.type(screen.getByRole('combobox', { name: /^Employee( \*)?$/ }), 'sam');
     await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
-    await pick(user, /Permission Set/, 'Front Desk');
+    await pick(user, /Permission Set/, 'Staff');
     await user.click(save());
     await screen.findAllByText('Employee Saved');
     await user.click(screen.getByRole('button', { name: 'New Employee' }));
@@ -252,10 +259,14 @@ describe('Employees page', () => {
   it('is view-only without employees.edit: no New, Save, menu, and fields are disabled', async () => {
     renderPage(createMockClient(), ['page.employees']);
     await loaded();
-    expect(screen.getByText('Employees are view-only for your account.')).toBeInTheDocument();
+    expect(screen.getByTestId('read-only-note')).toHaveTextContent('View only');
     expect(screen.queryByRole('button', { name: 'New Employee' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /more options/ })).not.toBeInTheDocument();
+    // The three-dot menu keeps only the Change Log: no Remove, no Copy.
+    await userEvent.click(screen.getByRole('button', { name: /more options/ }));
+    expect(screen.getByRole('menuitem', { name: 'Change Log' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Remove Employee' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
     expect(screen.getByRole('combobox', { name: /Employee Type/ })).toHaveAttribute(
       'aria-disabled',
       'true',

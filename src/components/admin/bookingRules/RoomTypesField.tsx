@@ -1,3 +1,4 @@
+import { useDisabled } from '../../../app/readOnlyContext';
 import Autocomplete from '@mui/material/Autocomplete';
 import Chip from '@mui/material/Chip';
 import TextField from '@mui/material/TextField';
@@ -27,7 +28,7 @@ export default function RoomTypesField({
       multiple
       id={id}
       size="small"
-      disabled={disabled}
+      disabled={useDisabled(disabled)}
       options={options as LookupRef[]}
       value={disabled ? [] : selected}
       onChange={(_, next) => onChange(next.map((o) => o.id))}

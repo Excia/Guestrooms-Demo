@@ -20,8 +20,7 @@ import {
   withRole,
   type EmployeeField,
 } from '../app/employees';
-import { EMPLOYEES_EDIT_PERMISSION } from '../app/permissions';
-import { useAccess } from '../app/useAccess';
+import { useReadOnly } from '../app/readOnlyContext';
 import AdminShell from '../components/admin/AdminShell';
 import RemoveEmployeeDialog from '../components/admin/employees/RemoveEmployeeDialog';
 import {
@@ -74,8 +73,8 @@ export default function Employees() {
 
 function EmployeesEditor({ data }: { data: EmployeesData }) {
   const api = useApi();
-  const { can } = useAccess();
-  const readOnly = !can(EMPLOYEES_EDIT_PERMISSION);
+  const readOnly = useReadOnly();
+  // View-only comes from the route (ReadOnlyProvider, ticket 186): no New, Save, Remove or Copy.
   const { permissionSets } = data;
   const sorted = useMemo(() => sortEmployees(data.employees), [data.employees]);
   const listEntries = useMemo(
@@ -99,6 +98,8 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const save = async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateEmployee(draft, { creating, permissionSets });
     const first = EMPLOYEE_FIELD_ORDER.find((f) => found[f]);
     const input = toEmployeeInput(draft);
@@ -205,40 +206,28 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
           newTitle="New Employee"
           onSelect={editor.select}
           onNew={editor.startNew}
-          canCreate={!readOnly}
-          more={
-            readOnly
-              ? undefined
-              : {
-                  noun: 'Employee',
-                  changeLogPage: 'employees',
-                  deleteLabel: 'Remove Employee',
-                  onDelete: () => {
-                    setRemoveError(null);
-                    setRemoving(true);
-                  },
-                }
-          }
+          more={{
+            noun: 'Employee',
+            changeLogPage: 'employees',
+            deleteLabel: 'Remove Employee',
+            onDelete: () => {
+              setRemoveError(null);
+              setRemoving(true);
+            },
+          }}
         />
       }
       actions={
-        readOnly ? undefined : (
-          <SetupActions
-            saveNoun="Employee"
-            creating={editor.creating}
-            dirty={editor.dirty}
-            saving={saving}
-            onSave={() => void save()}
-            onCancel={editor.cancelNew}
-          />
-        )
+        <SetupActions
+          saveNoun="Employee"
+          creating={editor.creating}
+          dirty={editor.dirty}
+          saving={saving}
+          onSave={() => void save()}
+          onCancel={editor.cancelNew}
+        />
       }
     >
-      {readOnly ? (
-        <Alert severity="info" sx={{ mb: 3 }}>
-          Employees are view-only for your account.
-        </Alert>
-      ) : null}
       {saveError ? (
         <Alert severity="error" sx={{ mb: 3 }}>
           {saveError}

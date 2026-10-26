@@ -90,7 +90,7 @@ const DESCRIPTIONS: Record<ChangeLogPageId, readonly [string, string][]> = {
   ],
   employees: [
     ['created', 'Employee "Dana Whitfield" added as Staff'],
-    ['updated', 'Employee "Marcus Bell" permission set changed to Front Desk'],
+    ['updated', 'Employee "Marcus Bell" permission set changed to Staff'],
     ['updated', 'Employee "Priya Nair" deactivated'],
     ['deleted', 'Employee "Tom Hale" removed'],
   ],

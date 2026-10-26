@@ -1,3 +1,4 @@
+import { EditableIsland } from '../ReadOnlyProvider';
 import Close from '@mui/icons-material/Close';
 import ManageSearch from '@mui/icons-material/ManageSearch';
 import Search from '@mui/icons-material/Search';
@@ -62,7 +63,16 @@ const COLUMNS: { field: ChangeLogSortField | 'description'; label: string; width
 // Change Log dialog (Figma 16718:6217, decision D-AP-3): a page-specific log in a modal dialog, newest
 // first, with sort and filter on date, time, change type and action by. The X closes it; so do Escape
 // and a click on the backdrop. The table scrolls under a sticky header; the search sits in the header.
-export default function ChangeLogOverlay({ page, record, open, onClose }: ChangeLogOverlayProps) {
+// The log is for looking things up: its filters stay usable on a View-only page (ticket 186).
+export default function ChangeLogOverlay(props: ChangeLogOverlayProps) {
+  return (
+    <EditableIsland>
+      <ChangeLogDialog {...props} />
+    </EditableIsland>
+  );
+}
+
+function ChangeLogDialog({ page, record, open, onClose }: ChangeLogOverlayProps) {
   const api = useApi();
   const titleId = useId();
   const [sort, setSort] = useState<ChangeLogSort>(DEFAULT_CHANGE_LOG_SORT);

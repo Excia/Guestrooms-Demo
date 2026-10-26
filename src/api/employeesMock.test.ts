@@ -3,7 +3,7 @@ import { ApiError, type EmployeeInput } from './types';
 
 const input = (over: Partial<EmployeeInput> & { id: string }): EmployeeInput => ({
   role: 'staff',
-  permissionSetId: 'set-front-desk',
+  permissionSetId: 'staff',
   active: true,
   ...over,
 });
@@ -17,7 +17,6 @@ describe('mock employees API', () => {
     const candidates = await api.listCandidates();
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.some((c) => list.some((e) => e.id === c.id))).toBe(false);
-    expect((await api.listPermissionSets()).length).toBeGreaterThan(1);
   });
 
   it('adds a candidate and takes them off the candidate list', async () => {
@@ -41,11 +40,11 @@ describe('mock employees API', () => {
   it('edits and deactivates an employee', async () => {
     const api = createMockClient().employees;
     const saved = await api.save(
-      input({ id: 'emp-3', role: 'manager', permissionSetId: 'set-accounting', active: false }),
+      input({ id: 'emp-3', role: 'manager', permissionSetId: 'management', active: false }),
     );
     expect(saved).toMatchObject({
       role: 'manager',
-      permissionSetId: 'set-accounting',
+      permissionSetId: 'management',
       active: false,
     });
     expect((await api.list()).find((e) => e.id === 'emp-3')).toEqual(saved);

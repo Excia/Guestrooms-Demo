@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../../app/readOnlyContext';
 import { useCallback, useMemo, useState } from 'react';
 import type { ConfirmDialogProps } from '../../shared/ConfirmDialog';
 import { useLeaveGuard } from '../../../app/useLeaveGuard';
@@ -36,7 +37,10 @@ export function useSetupEditor<T extends { id: string }, D>({
     [selected, toDraft, fresh, initialBlank],
   );
   const draft = edits ?? baseline;
-  const dirty = external || (edits !== null && JSON.stringify(edits) !== JSON.stringify(baseline));
+  // View-only mode (ticket 186) never has unsaved changes: nothing can be edited.
+  const readOnly = useReadOnly();
+  const dirty =
+    !readOnly && (external || (edits !== null && JSON.stringify(edits) !== JSON.stringify(baseline)));
   const guard = useLeaveGuard(dirty);
 
   const reset = useCallback((next: string | null | undefined, base: D | null = null) => {

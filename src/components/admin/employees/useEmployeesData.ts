@@ -33,10 +33,18 @@ export function useEmployeesData(): EmployeesData {
     Promise.all([
       api.employees.list(signal),
       api.employees.listCandidates(signal),
-      api.employees.listPermissionSets(signal),
+      api.permissions.listPermissionSets(signal),
     ])
       .then(([employees, candidates, permissionSets]) =>
-        setState({ status: 'ready', employees, candidates, permissionSets }),
+        setState({
+          status: 'ready',
+          employees,
+          candidates,
+          // The sets an employee can be given: the editable ones (Administrators hold everything).
+          permissionSets: permissionSets
+            .filter((s) => s.editable)
+            .map((s) => ({ id: s.id, label: s.name })),
+        }),
       )
       .catch(() => {
         if (!controller.signal.aborted) setState((s) => ({ ...s, status: 'error' }));

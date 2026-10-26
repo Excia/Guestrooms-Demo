@@ -10,6 +10,10 @@ import {
   noGrant,
 } from './mockData';
 import {
+  ADMIN_PERMISSION,
+  adminEditPermission,
+  type AdminPageId,
+  type Permissions,
   CHECK_IN_ANY_TIME_PERMISSION,
   checkInLevel,
   EMPLOYEES_EDIT_PERMISSION,
@@ -18,13 +22,21 @@ import {
 } from '../app/permissions';
 import { clubClock } from '../lib/clubTime';
 import { permissionsFromGrant } from './grant';
+import { mockPermissionSets } from './permissionSetsData';
+import {
+  grantFromSet,
+  normalizeSet,
+  summarizeSets,
+  validateSets,
+  type PermissionSet,
+} from '../app/permissionSets';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
 import { previewRegistrationCardUrl } from './registrationCardData';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
 import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
-import { mockEmployeeCandidates, mockEmployees, MOCK_PERMISSION_SETS } from './employeesData';
+import { mockEmployeeCandidates, mockEmployees } from './employeesData';
 import {
   mockSystemSettings,
   MOCK_HOUSE_ACCOUNTS,
@@ -143,6 +155,16 @@ export interface MockOptions {
   pageSize?: number;
   /** What `permissions.getGrant` returns in the normal scenario; defaults to an unrestricted user. */
   grant?: PermissionGrant;
+  /**
+   * The permission set the signed-in user belongs to (`management`, `staff`). When given, the grant
+   * is derived from the saved set on every call, so editing the set changes `can()` after a reload.
+   */
+  permissionSetId?: string;
+  /** Keeps the edited sets between page loads (the dev app uses localStorage; tests pass nothing). */
+  permissionSetsStore?: {
+    load(): readonly PermissionSet[] | null;
+    save(sets: PermissionSet[]): void;
+  };
   /** The schedule's "today": data is laid out around it and arrivals before it are the past. */
   today?: IsoDate;
   /** Schedule inventory: `default` (about 30 rooms) or `large` (200 rooms, for performance). */
@@ -179,7 +201,9 @@ export function createMockClient({
   scenario = 'normal',
   latencyMs = 0,
   pageSize = MOCK_PAGE_SIZE,
-  grant = fullGrant,
+  grant: staticGrant = fullGrant,
+  permissionSetId,
+  permissionSetsStore,
   today = MOCK_TODAY,
   scheduleSize = 'default',
   roomChangeRule = MOCK_ROOM_CHANGE_RULE,
@@ -214,7 +238,16 @@ export function createMockClient({
   ];
   const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
-  const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
+  let permissionSets = (permissionSetsStore?.load() ?? mockPermissionSets()).map((s) =>
+    normalizeSet(s),
+  );
+  // The signed-in user's grant: derived from their (saved) permission set, else the fixed one.
+  const currentGrant = (): PermissionGrant => {
+    const set = permissionSetId ? permissionSets.find((s) => s.id === permissionSetId) : undefined;
+    return set ? { role: set.name, permissions: grantFromSet(set) } : staticGrant;
+  };
+  const canEditReservations = () =>
+    permissionsFromGrant(currentGrant()).can(RESERVATION_EDIT_PERMISSION);
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {
@@ -289,17 +322,28 @@ export function createMockClient({
     };
   }
   // One caller in the mock, so one rate limit and lockout for every PIN test.
-  const pinGuard = createPinGuard(MOCK_PIN_HOLDERS, now);
+  const pinGuard = createPinGuard(
+    MOCK_PIN_HOLDERS,
+    now,
+    undefined,
+    // A holder in a permission set counts only while the saved set allows PIN override and grants the
+    // permission (ticket 186); the Administrator (no set) always counts.
+    (holder) => {
+      if (!holder.permissionSetId) return holder.grant;
+      const set = permissionSets.find((s) => s.id === holder.permissionSetId);
+      return set?.pinOverride ? { role: set.name, permissions: grantFromSet(set) } : null;
+    },
+  );
   const checkInEnv = () => ({
     now: now(),
     // The mock's "today" is configured; only the time of day follows the club's real clock.
     clock: { date: schedule.today, time: clubClock(systemSettings.timeZone, now()).time },
     checkOutTime: systemSettings.checkOutTime,
-    level: checkInLevel(permissionsFromGrant(grant).can),
+    level: checkInLevel(permissionsFromGrant(currentGrant()).can),
     checkPin: (pin: string) => pinGuard.check(CHECK_IN_ANY_TIME_PERMISSION, pin),
   });
 
-  return {
+  const client: ApiClient = {
     dashboard: {
       getStats: (o) =>
         respond(
@@ -392,7 +436,7 @@ export function createMockClient({
         respond(
           () => {
             assertChangeRoomRequest(request);
-            if (!permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION)) {
+            if (!permissionsFromGrant(currentGrant()).can(RESERVATION_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
             }
             return replayable(request, () =>
@@ -854,16 +898,10 @@ export function createMockClient({
           () => [],
           o,
         ),
-      listPermissionSets: (o) =>
-        respond(
-          () => structuredClone(MOCK_PERMISSION_SETS),
-          () => [],
-          o,
-        ),
       save: (input, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(grant).can(EMPLOYEES_EDIT_PERMISSION)) {
+            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
             }
             const person = directory.find((p) => p.id === input.id);
@@ -871,7 +909,7 @@ export function createMockClient({
               input.permissionSetId === null
                 ? !needsPermissionSet(input.role)
                 : needsPermissionSet(input.role) &&
-                  MOCK_PERMISSION_SETS.some((s) => s.id === input.permissionSetId);
+                  permissionSets.some((s) => s.id === input.permissionSetId);
             if (!person || !isEmployeeRole(input.role) || !setOk) {
               throw new ApiError(422, 'Employee is not valid', { code: 'validation' });
             }
@@ -899,7 +937,7 @@ export function createMockClient({
       remove: (id, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(grant).can(EMPLOYEES_EDIT_PERMISSION)) {
+            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
             }
             if (!employees.some((e) => e.id === id)) {
@@ -932,7 +970,7 @@ export function createMockClient({
       save: (rows, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(grant).can(LOCATIONS_EDIT_PERMISSION)) {
+            if (!permissionsFromGrant(currentGrant()).can(LOCATIONS_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change locations', { code: 'forbidden' });
             }
             // Like the backend: the area has to exist, not only be present.
@@ -1473,10 +1511,92 @@ export function createMockClient({
     permissions: {
       getGrant: (o) =>
         respond(
-          () => structuredClone(grant),
+          () => structuredClone(currentGrant()),
           () => structuredClone(noGrant),
+          o,
+        ),
+      listPermissionSets: (o) =>
+        respond(
+          () => {
+            // Employees needs the list without `permissions.edit`: any user who may open Employees
+            // or Permissions (or an administrator) may read it.
+            const can = permissionsFromGrant(currentGrant()).can;
+            if (!can(ADMIN_PERMISSION) && !can('page.employees') && !can('page.permissions')) {
+              throw new ApiError(403, 'You may not read permission sets', { code: 'forbidden' });
+            }
+            return summarizeSets(permissionSets);
+          },
+          () => summarizeSets([]),
+          o,
+        ),
+      getPermissionSets: (o) =>
+        respond(
+          () => {
+            const can = permissionsFromGrant(currentGrant()).can;
+            if (!can(ADMIN_PERMISSION) && !can('page.permissions')) {
+              throw new ApiError(403, 'You may not read permissions', { code: 'forbidden' });
+            }
+            return structuredClone(permissionSets);
+          },
+          () => [],
+          o,
+        ),
+      savePermissionSets: (sets, o) =>
+        respond(
+          () => {
+            // Only an administrator changes permissions: a set can never grant more than its editor holds.
+            if (!permissionsFromGrant(currentGrant()).can(ADMIN_PERMISSION)) {
+              throw new ApiError(403, 'You may not change permissions', { code: 'forbidden' });
+            }
+            // Like the backend: only the existing editable sets, each valid.
+            if (
+              validateSets(sets).length > 0 ||
+              sets.some((s) => !permissionSets.some((p) => p.id === s.id))
+            ) {
+              throw new ApiError(422, 'Permission sets are not valid', { code: 'validation' });
+            }
+            // A replace: the stored list is exactly what was sent (the names stay as they were).
+            permissionSets = sets.map((next) =>
+              normalizeSet({
+                ...next,
+                name: permissionSets.find((p) => p.id === next.id)?.name ?? next.name,
+              }),
+            );
+            permissionSetsStore?.save(structuredClone(permissionSets));
+            return structuredClone(permissionSets);
+          },
+          () => [],
           o,
         ),
     },
   };
+  return guardAdminWrites(client, () => permissionsFromGrant(currentGrant()).can);
+}
+
+// The Admin Setup writes a View-only user must be refused (ticket 186): like the backend, each needs
+// `admin` or `<page>.edit`. Locations and Employees check inside their own methods.
+const ADMIN_WRITES: readonly [keyof ApiClient, readonly string[], AdminPageId][] = [
+  ['roomSetup', ['saveRoomType', 'deleteRoomType'], 'room-types'],
+  ['roomSetup', ['saveRoom', 'deleteRoom', 'saveRoomOrder'], 'rooms'],
+  ['roomOptions', ['save'], 'room-options'],
+  ['addOns', ['save', 'delete'], 'add-on-items'],
+  ['rateCategories', ['save', 'duplicate', 'delete'], 'rate-categories'],
+  ['bookingRules', ['save'], 'booking-rules'],
+  ['systemSettings', ['save'], 'primary-setup'],
+  ['keycards', ['saveEncoders', 'retrieveEncoders'], 'keycard-integration'],
+];
+
+function guardAdminWrites(client: ApiClient, can: () => Permissions['can']): ApiClient {
+  for (const [area, methods, page] of ADMIN_WRITES) {
+    const target = client[area] as unknown as Record<string, (...args: unknown[]) => unknown>;
+    for (const name of methods) {
+      const original = target[name];
+      if (!original) continue;
+      target[name] = (...args: unknown[]) =>
+        can()(ADMIN_PERMISSION) || can()(adminEditPermission(page))
+          ? original(...args)
+          : Promise.reject(new ApiError(403, `You may not change ${page}`, { code: 'forbidden' }));
+    }
+  }
+  return client;
 }

@@ -1,3 +1,5 @@
+import { useReadOnly } from '../app/readOnlyContext';
+import EditOnly from '../components/admin/EditOnly';
 import AddCircle from '@mui/icons-material/AddCircle';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 import Alert from '@mui/material/Alert';
@@ -103,7 +105,8 @@ export default function KeycardIntegration() {
   });
 
   const errors = useMemo(() => validateEncoderRows(rows), [rows]);
-  const dirty = status === 'ready' && encodersChanged(saved, rows);
+  const readOnly = useReadOnly();
+  const dirty = !readOnly && status === 'ready' && encodersChanged(saved, rows);
   const guard = useLeaveGuard(dirty);
 
   const showToast = (message: string, severity: Toast['severity'] = 'success') =>
@@ -159,6 +162,8 @@ export default function KeycardIntegration() {
   };
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateEncoderRows(rows);
     const first = rows.find((r) => found[r.id]);
     if (first) {
@@ -187,7 +192,7 @@ export default function KeycardIntegration() {
     } finally {
       setSaving(false);
     }
-  }, [api, rows]);
+  }, [api, rows, readOnly]);
 
   const saveButton = (
     <SaveButton dirty={dirty} saving={saving} noun="Encoder Keys" onClick={() => void save()} />
@@ -242,18 +247,20 @@ export default function KeycardIntegration() {
             <Typography id="encoder-key-heading" variant="subtitle2" component="h2">
               Encoder Key
             </Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => void retrieve()}
-              // aria-disabled, not disabled: a disabled button drops keyboard focus.
-              className={retrieving ? 'Mui-disabled' : undefined}
-              aria-disabled={retrieving}
-              aria-busy={retrieving}
-              startIcon={retrieving ? <CircularProgress size={16} color="inherit" /> : undefined}
-            >
-              {retrieving ? 'Retrieving' : 'Retrieve Encoder'}
-            </Button>
+            <EditOnly>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => void retrieve()}
+                // aria-disabled, not disabled: a disabled button drops keyboard focus.
+                className={retrieving ? 'Mui-disabled' : undefined}
+                aria-disabled={retrieving}
+                aria-busy={retrieving}
+                startIcon={retrieving ? <CircularProgress size={16} color="inherit" /> : undefined}
+              >
+                {retrieving ? 'Retrieving' : 'Retrieve Encoder'}
+              </Button>
+            </EditOnly>
           </Box>
           {rows.length === 0 ? (
             <Typography color="text.secondary" sx={{ p: 2 }}>
@@ -312,17 +319,19 @@ export default function KeycardIntegration() {
           )}
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-          <Button id={ADD_BUTTON_ID} startIcon={<AddCircle />} onClick={addRow}>
-            Add Encoder
-          </Button>
-          <Button
-            color="error"
-            startIcon={<DeleteOutlined />}
-            disabled={rows.length === 0}
-            onClick={() => setConfirmRemoveAll(true)}
-          >
-            Remove All
-          </Button>
+          <EditOnly>
+            <Button id={ADD_BUTTON_ID} startIcon={<AddCircle />} onClick={addRow}>
+              Add Encoder
+            </Button>
+            <Button
+              color="error"
+              startIcon={<DeleteOutlined />}
+              disabled={rows.length === 0}
+              onClick={() => setConfirmRemoveAll(true)}
+            >
+              Remove All
+            </Button>
+          </EditOnly>
         </Box>
       </Box>
     );

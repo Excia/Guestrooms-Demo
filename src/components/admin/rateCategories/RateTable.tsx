@@ -1,3 +1,4 @@
+import EditOnly from '../EditOnly';
 import ContentCopy from '@mui/icons-material/ContentCopyOutlined';
 import Box from '@mui/material/Box';
 import FormControl from '@mui/material/FormControl';
@@ -451,14 +452,16 @@ function SeasonTitle({
             </Box>
           </Box>
           <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5, alignItems: 'center', pt: 0.5 }}>
-            <IconButton
-              size="small"
-              color="primary"
-              aria-label={`Duplicate season ${name}`}
-              onClick={onDuplicate}
-            >
-              <ContentCopy fontSize="small" />
-            </IconButton>
+            <EditOnly>
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label={`Duplicate season ${name}`}
+                onClick={onDuplicate}
+              >
+                <ContentCopy fontSize="small" />
+              </IconButton>
+            </EditOnly>
             <RemoveIconButton size="small" label={`season ${name}`} onClick={onRemove} />
           </Box>
         </>

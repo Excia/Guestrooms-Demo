@@ -1,3 +1,4 @@
+import EditOnly from '../EditOnly';
 import AddCircle from '@mui/icons-material/AddCircle';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -172,18 +173,20 @@ export default function MemberTypeRulesTable({
           })}
         </TableBody>
       </Table>
-      <Button
-        startIcon={<AddCircle />}
-        onClick={() =>
-          onChange({
-            ...rules,
-            memberTypeRules: [...rules.memberTypeRules, newMemberTypeRule(nextId())],
-          })
-        }
-        sx={{ mt: 1 }}
-      >
-        Add Member Type
-      </Button>
+      <EditOnly>
+        <Button
+          startIcon={<AddCircle />}
+          onClick={() =>
+            onChange({
+              ...rules,
+              memberTypeRules: [...rules.memberTypeRules, newMemberTypeRule(nextId())],
+            })
+          }
+          sx={{ mt: 1 }}
+        >
+          Add Member Type
+        </Button>
+      </EditOnly>
     </Box>
   );
 }

@@ -1,3 +1,4 @@
+import { useDisabled } from '../../app/readOnlyContext';
 import FormControl from '@mui/material/FormControl';
 import FormHelperText from '@mui/material/FormHelperText';
 import InputLabel from '@mui/material/InputLabel';
@@ -90,7 +91,7 @@ export default function Select<T extends string | number = string>({
       size={size}
       fullWidth={fullWidth}
       error={error}
-      disabled={disabled}
+      disabled={useDisabled(disabled)}
       required={required}
       sx={sx}
       {...dataAttributes}

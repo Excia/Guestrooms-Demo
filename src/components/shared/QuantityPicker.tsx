@@ -1,3 +1,4 @@
+import { useDisabled } from '../../app/readOnlyContext';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
@@ -26,8 +27,9 @@ export default function QuantityPicker({
   min = 0,
   max,
   onChange,
-  disabled = false,
+  disabled: disabledProp = false,
 }: QuantityPickerProps) {
+  const disabled = useDisabled(disabledProp) ?? false;
   const labelId = useId();
   const atMin = value <= min;
   const atMax = value >= max;

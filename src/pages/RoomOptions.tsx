@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -101,7 +102,8 @@ export default function RoomOptions() {
   }, [api, refreshUsage, reloadCount]);
 
   const errors = useMemo(() => (draft ? validateRoomOptions(draft) : null), [draft]);
-  const dirty = Boolean(saved && draft && isOptionsDirty(saved, draft));
+  const readOnly = useReadOnly();
+  const dirty = !readOnly && Boolean(saved && draft && isOptionsDirty(saved, draft));
   const guard = useLeaveGuard(dirty);
 
   // A refused save on the other tab moves there; focus follows once that tab has rendered.
@@ -165,6 +167,8 @@ export default function RoomOptions() {
   };
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     if (!draft || !saved) return false;
     setAttempted(true);
     const found = validateRoomOptions(draft);
@@ -235,7 +239,7 @@ export default function RoomOptions() {
     } finally {
       setSaving(false);
     }
-  }, [api, draft, refreshUsage, saved, tab]);
+  }, [api, draft, refreshUsage, saved, tab, readOnly]);
 
   const saveButton = (
     <SaveButton dirty={dirty} saving={saving} noun="Room Options" onClick={() => void save()} />

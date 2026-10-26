@@ -4,6 +4,7 @@ import { createHttpClient } from './http';
 import { createLazyClient } from './lazy';
 import { DEMO_MOCK_USER, MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
 import { todayIso } from '../lib/dates';
+import { parseStoredSets, type PermissionSet } from '../app/permissionSets';
 import { createUnavailableClient } from './unavailable';
 import type { ApiClient } from './types';
 import { ApiError } from './types';
@@ -14,6 +15,28 @@ export { ApiProvider, useApi } from './ApiProvider';
 export { permissionsFromGrant } from './grant';
 
 const MOCK_LATENCY_MS = 300;
+
+/** Dev only: the edited permission sets survive a reload, so a mock user can be switched to see them. */
+export const MOCK_PERMISSION_SETS_KEY = 'gr.mockPermissionSets';
+function browserSetsStore() {
+  return {
+    load: () => {
+      try {
+        const raw = globalThis.localStorage?.getItem(MOCK_PERMISSION_SETS_KEY);
+        return raw ? parseStoredSets(JSON.parse(raw)) : null;
+      } catch {
+        return null;
+      }
+    },
+    save: (sets: PermissionSet[]) => {
+      try {
+        globalThis.localStorage?.setItem(MOCK_PERMISSION_SETS_KEY, JSON.stringify(sets));
+      } catch {
+        /* storage unavailable: the edit lasts for this page load */
+      }
+    },
+  };
+}
 
 type Log = Pick<Console, 'warn' | 'error' | 'info'>;
 
@@ -42,12 +65,14 @@ export function createApiClient(
   if (config.source === 'mock') {
     log.info(`[api] using the mock client (scenario: ${config.scenario}).`);
     const { scenario } = config;
-    const { grant } = config.demo ? DEMO_MOCK_USER : resolveMockUser(mockUser);
+    const { grant, permissionSetId } = config.demo ? DEMO_MOCK_USER : resolveMockUser(mockUser);
     const client = createLazyClient(async () =>
       (await import('./mock')).createMockClient({
         scenario,
         latencyMs: MOCK_LATENCY_MS,
         grant,
+        permissionSetId,
+        permissionSetsStore: browserSetsStore(),
         // The schedule's demo data is laid out around the real current date, not the fixed MOCK_TODAY.
         today: todayIso(),
         scheduleSize: config.scheduleSize,

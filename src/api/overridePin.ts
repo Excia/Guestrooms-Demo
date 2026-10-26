@@ -14,6 +14,11 @@ export interface PinHolder {
   /** PLACEHOLDER (P-187-1): a real backend stores only a hash and never returns it. */
   pin: string;
   grant: PermissionGrant;
+  /**
+   * The permission set the holder belongs to (Permissions page, ticket 186). When the guard is given a
+   * resolver, the holder counts only if the saved set has PIN override on and grants the permission.
+   */
+  permissionSetId?: string;
 }
 
 const grantOf = (id: 'admin' | 'non-admin' | 'partial') =>
@@ -26,8 +31,20 @@ const grantOf = (id: 'admin' | 'non-admin' | 'partial') =>
  */
 export const MOCK_PIN_HOLDERS: readonly PinHolder[] = [
   { id: 'emp-1', name: 'Morgan Reyes', pin: '4821', grant: grantOf('admin') },
-  { id: 'emp-2', name: 'Jordan Lee', pin: '1357', grant: grantOf('partial') },
-  { id: 'emp-3', name: 'Sam Okafor', pin: '2468', grant: grantOf('non-admin') },
+  {
+    id: 'emp-2',
+    name: 'Jordan Lee',
+    pin: '1357',
+    grant: grantOf('partial'),
+    permissionSetId: 'management',
+  },
+  {
+    id: 'emp-3',
+    name: 'Sam Okafor',
+    pin: '2468',
+    grant: grantOf('non-admin'),
+    permissionSetId: 'staff',
+  },
 ];
 
 /** Convenience for tests and docs: a PIN whose holder may override, and one whose holder may not. */
@@ -57,6 +74,8 @@ export function createPinGuard(
     maxFailed: MAX_FAILED_PINS,
     lockoutSeconds: PIN_LOCKOUT_SECONDS,
   },
+  /** The grant a holder has now, or null when their PIN does not count (default: the fixed grant). */
+  grantOfHolder: (holder: PinHolder) => PermissionGrant | null = (h) => h.grant,
 ): PinGuard {
   let failures = 0;
   let lockedUntil = 0;
@@ -66,9 +85,10 @@ export function createPinGuard(
       if (at < lockedUntil) {
         return { kind: 'locked', retryAfterSeconds: Math.ceil((lockedUntil - at) / 1000) };
       }
-      const holder = holders.find(
-        (h) => h.pin === pin && permissionsFromGrant(h.grant).can(permission),
-      );
+      const holder = holders.find((h) => {
+        const grant = h.pin === pin ? grantOfHolder(h) : null;
+        return grant !== null && permissionsFromGrant(grant).can(permission);
+      });
       if (holder) {
         failures = 0;
         return { kind: 'valid', holder };

@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../../app/readOnlyContext';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
@@ -35,9 +36,11 @@ export interface AssociationsPanelProps {
 export default function AssociationsPanel({ tabs }: AssociationsPanelProps) {
   const [active, setActive] = useState(tabs[0]?.id ?? '');
   const base = useId();
+  const readOnly = useReadOnly();
   const tab = tabs.find((t) => t.id === active) ?? tabs[0];
   if (!tab) return null;
   const ids = (id: string) => `${base}-${id}`;
+  const frozen = tab.disabled || readOnly;
   return (
     <Box>
       <Tabs
@@ -71,19 +74,23 @@ export default function AssociationsPanel({ tabs }: AssociationsPanelProps) {
         </Typography>
         {tab.note ? <Hint>{tab.note}</Hint> : null}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, my: 1 }}>
-          <Button
-            size="small"
-            disabled={tab.disabled}
-            onClick={() => tab.onChange(selectAllIds(tab.items))}
-          >
-            Select all
-          </Button>
-          <Typography aria-hidden color="text.secondary">
-            |
-          </Typography>
-          <Button size="small" disabled={tab.disabled} onClick={() => tab.onChange([])}>
-            Select none
-          </Button>
+          {readOnly ? null : (
+            <>
+              <Button
+                size="small"
+                disabled={tab.disabled}
+                onClick={() => tab.onChange(selectAllIds(tab.items))}
+              >
+                Select all
+              </Button>
+              <Typography aria-hidden color="text.secondary">
+                |
+              </Typography>
+              <Button size="small" disabled={tab.disabled} onClick={() => tab.onChange([])}>
+                Select none
+              </Button>
+            </>
+          )}
         </Box>
         {tab.items.length === 0 ? (
           <Hint>Nothing to select yet.</Hint>
@@ -104,7 +111,7 @@ export default function AssociationsPanel({ tabs }: AssociationsPanelProps) {
                 control={
                   <Checkbox
                     checked={tab.selected.includes(item.id)}
-                    disabled={tab.disabled}
+                    disabled={frozen}
                     onChange={(e) =>
                       tab.onChange(toggleId(tab.selected, item.id, e.target.checked))
                     }

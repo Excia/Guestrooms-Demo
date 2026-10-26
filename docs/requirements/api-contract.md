@@ -555,7 +555,7 @@ backend's concern (Q-75-3).
   administrator only.
 - `GET /employees/candidates` (`employees.listCandidates`): directory people without access, `[{ id, label }]`. The UI filters
   them as the user types.
-- `GET /employees/permission-sets` (`employees.listPermissionSets`): the sets an employee can be given, `[{ id, label }]`.
+- The sets an employee can be given come from `permissions.listPermissionSets` (section "Permission sets", ticket 186); the earlier `GET /employees/permission-sets` is gone. An employee's `permissionSetId` is `management` or `staff` (null for an administrator).
   Minimal and read-only; the Permissions page (ticket 186) owns the sets.
 - `PUT /employees/{id}` (`employees.save`) with `{ id, role, permissionSetId, active }`: creates or replaces the assignment and
   answers the stored employee. The id comes from the directory, so repeating the PUT changes nothing. The backend re-checks:
@@ -690,3 +690,36 @@ hides; it never decides a conflict. The mock (`src/api/holdData.ts`) behaves lik
   room list built from it). In the mock the two room lists are separate placeholders, so a Schedule room is matched to a setup room by
   room number = room name; matched rooms fill their own row positions in the saved order and unmatched rooms keep theirs. The real
   backend has one room table and orders by the saved position.
+
+## Permission sets (ticket 186, built on the mock)
+
+The Permissions page edits what Management and Staff may do; `GET /permissions/me` returns the grant of the signed-in user, which the
+backend derives from the set the user is assigned to. Administrators hold every permission and are not an editable set.
+
+| #   | Endpoint                | Request                                  | Success                                                  | Errors                                               |
+| --- | ----------------------- | ---------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
+| 1   | `GET /permission-sets`  | none                                     | `PermissionSet[]` (the editable sets, in full)           | 401, 403 `forbidden` without `page.permissions`/`admin` |
+| 2   | `GET /permission-sets?fields=summary` | none                       | `{ id, name, editable }[]`, Administrator first          | 401, 403 `forbidden` without `page.employees`, `page.permissions` or `admin` |
+| 3   | `PUT /permission-sets`  | `PermissionSet[]` (replaces the list)    | `PermissionSet[]` as stored                              | 401, 403 `forbidden` unless the caller is an administrator, 422 |
+
+**Who may write (privilege escalation):** only an administrator saves. A set can never grant more than its editor holds, and the Permissions page offers a non-admin
+set only View or No Access on each Admin Setup page (as legacy), so editing a set cannot raise anyone above an administrator's own decision. **Replace semantics:** `PUT` stores exactly the
+sets sent and must include `management` and `staff` (422 otherwise); names are kept as stored. The client lists sets for Employees with `fields=summary` so Employees needs no
+`permissions.edit`.
+
+`PermissionSet { id, name, setup: { <admin page id>: 'none' | 'view' | 'edit' }, access: { <area>: 'none' | 'view' | 'edit' | 'create-edit' },
+functions: { <key>: boolean }, checkIn: 'any-time' | 'arrival-date' | 'never', pinOverride: boolean }`. The client method
+`listPermissionSets()` (used by Employees) is `GET /permission-sets` reduced to `{ id, name, editable }[]` plus the Administrator
+entry (`{ id: 'admin', name: 'Administrator', editable: false }`); it is `GET /permission-sets?fields=summary` (row 2). A backend that ignores `fields=summary` and returns full sets is tolerated: the client reduces them to summaries (`editable` is derived as `id !== 'admin'` when absent).
+The client normalizes sets before `PUT` (hidden N/A rows are sent as off), and the server must ignore or zero hidden N/A rows anyway.
+
+- **Rules the backend repeats:** a missing page or area is the lowest level (a page key the client does not know is kept); a level the area does not offer is lowered; a function or the
+  check-in setting whose area does not allow it is off, and Reservation Events functions and check in need Edit or Create + Edit (View forces them off, check in Never). The client only rejects a structurally wrong body; unknown levels are repaired. `id` must be an existing editable set; the Administrator set cannot be changed
+  (422). Repeating a save changes nothing. Names are not editable.
+- **Grant mapping (`GET /permissions/me`):** `page.<id>` for View, plus `<id>.edit` for Edit (Admin Setup pages); `reservation.edit`
+  for Reservation Events Edit or better; the two check-in grants from `checkIn`; `page.night-audit-history` for Night Audit View and
+  `night-audit.run` for Edit; `function.<key>` for each function that is on. Details in [permissions.md](permissions.md).
+- **Enforcement:** the UI only hides and disables. The backend must refuse every write to an Admin Setup resource without `<id>.edit`
+  (or `admin`) and every read without `page.<id>`, and must refuse a night audit run without `night-audit.run`.
+- **PIN override:** `pinOverride` says whether the set may authorize another employee's override with its PIN. The PIN prompt (ticket
+  187) reads it; its endpoints are not part of this section.

@@ -111,7 +111,7 @@ export function lastAdministratorProblem(
     : 'This is the only active administrator. Make another employee an administrator before changing this one.';
 }
 
-/** The summary line under the title, e.g. "Manager, Reservations Manager". */
+/** The summary line under the title, e.g. "Manager, Management". */
 export function employeeSummary(e: EmployeeSetup, permissionSets: readonly LookupRef[]): string {
   const set = permissionSets.find((s) => s.id === e.permissionSetId)?.label;
   return set ? `${roleLabel(e.role)}, ${set}` : roleLabel(e.role);

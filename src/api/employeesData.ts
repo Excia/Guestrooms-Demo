@@ -1,13 +1,7 @@
 import type { EmployeeSetup, LookupRef } from './types';
 
-// PLACEHOLDER sample data until the backend exists (see entries/185-employees.md). The permission
-// sets are illustrative: the Permissions page (ticket 186) owns the real ones.
-export const MOCK_PERMISSION_SETS: LookupRef[] = [
-  { id: 'set-front-desk', label: 'Front Desk' },
-  { id: 'set-reservations', label: 'Reservations Manager' },
-  { id: 'set-housekeeping', label: 'Housekeeping' },
-  { id: 'set-accounting', label: 'Accounting' },
-];
+// PLACEHOLDER sample data until the backend exists (see entries/185-employees.md). The permission set
+// ids are the real ones from the Permissions page (ticket 186): `management` and `staff`.
 
 export function mockEmployees(): EmployeeSetup[] {
   return [
@@ -22,35 +16,35 @@ export function mockEmployees(): EmployeeSetup[] {
       id: 'emp-2',
       name: 'Marcus Bell',
       role: 'manager',
-      permissionSetId: 'set-reservations',
+      permissionSetId: 'management',
       active: true,
     },
     {
       id: 'emp-3',
       name: 'Dana Whitfield',
       role: 'staff',
-      permissionSetId: 'set-front-desk',
+      permissionSetId: 'staff',
       active: true,
     },
     {
       id: 'emp-4',
       name: 'Priya Nair',
       role: 'staff',
-      permissionSetId: 'set-housekeeping',
+      permissionSetId: 'staff',
       active: true,
     },
     {
       id: 'emp-5',
       name: 'Tom Hale',
       role: 'staff',
-      permissionSetId: 'set-front-desk',
+      permissionSetId: 'staff',
       active: false,
     },
     {
       id: 'emp-6',
       name: 'Grace Okafor',
       role: 'manager',
-      permissionSetId: 'set-accounting',
+      permissionSetId: 'management',
       active: true,
     },
   ];

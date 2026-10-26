@@ -26,7 +26,7 @@ ticket #186; this page only assigns one of their permission sets.
 | Q-185-3 | Where do the people come from (the club directory), and can this page create a person?                                 | Add            | A fixed list of directory people without access (`employees.listCandidates`); the page never creates a person                                       | Owner / backend | open   |
 | Q-185-4 | Are the employee types fixed (Administrator, Manager, Staff, as legacy) once permission sets exist?                    | Employee Type  | Fixed, as legacy; the set carries the finer access                                                                                                  | Owner           | open   |
 | Q-185-5 | May an inactive employee be removed? The three-dot menu is only on active rows (shared list rule)                      | Remove         | No, by design: inactive rows have no three-dot menu (owner confirmed this for all setup lists), so reactivate first, then remove                    | Owner           | open   |
-| Q-185-6 | What are the real permission sets? The mock has Front Desk, Reservations Manager, Housekeeping and Accounting          | Permission Set | Placeholders (`P-185-1`); the list comes from `employees.listPermissionSets` until the Permissions page (#186) lands                                | Owner           | open   |
+| Q-185-6 | What are the real permission sets? (Answered by #186: Management and Staff, from `permissions.listPermissionSets`; owner to confirm)          | Permission Set | Placeholders (`P-185-1`); the list comes from `employees.listPermissionSets` until the Permissions page (#186) lands                                | Owner           | open   |
 
 ## Decisions
 

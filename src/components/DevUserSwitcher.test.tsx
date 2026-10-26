@@ -12,7 +12,7 @@ describe('DevUserSwitcher', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('is a labelled select with the three mock users, defaulting to non-admin', () => {
+  it('is a labelled select with the mock users, defaulting to non-admin', () => {
     render(<DevUserSwitcher />);
     const select = screen.getByLabelText('Mock user (dev)');
     expect(select).toHaveValue('non-admin');
@@ -20,6 +20,7 @@ describe('DevUserSwitcher', () => {
       'admin',
       'non-admin',
       'partial',
+      'view-only',
     ]);
   });
 

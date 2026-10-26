@@ -1,3 +1,4 @@
+import { useDisabled } from '../../../app/readOnlyContext';
 import Search from '@mui/icons-material/Search';
 import Autocomplete from '@mui/material/Autocomplete';
 import TextField from '@mui/material/TextField';
@@ -114,7 +115,7 @@ export default function LookupField({
     <>
       <Autocomplete<LookupRef>
         id={id}
-        disabled={disabled}
+        disabled={useDisabled(disabled)}
         size={size}
         value={value}
         options={search ? found : (options as LookupRef[])}

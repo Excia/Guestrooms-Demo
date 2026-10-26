@@ -1,5 +1,5 @@
 import { createHttpClient } from './http';
-import { mockEmployees, MOCK_PERMISSION_SETS } from './employeesData';
+import { mockEmployeeCandidates, mockEmployees } from './employeesData';
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 const make = (fetchMock: typeof fetch) =>
@@ -12,14 +12,12 @@ describe('http employees client', () => {
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://api.example.com/v1/employees');
   });
 
-  it('lists candidates and permission sets', async () => {
-    const fetchMock = vi.fn().mockImplementation(async () => json(MOCK_PERMISSION_SETS));
+  it('lists candidates', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => json(mockEmployeeCandidates()));
     const client = make(fetchMock);
-    expect(await client.employees.listCandidates()).toHaveLength(MOCK_PERMISSION_SETS.length);
-    expect(await client.employees.listPermissionSets()).toHaveLength(MOCK_PERMISSION_SETS.length);
+    expect(await client.employees.listCandidates()).toHaveLength(mockEmployeeCandidates().length);
     expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([
       'https://api.example.com/v1/employees/candidates',
-      'https://api.example.com/v1/employees/permission-sets',
     ]);
   });
 

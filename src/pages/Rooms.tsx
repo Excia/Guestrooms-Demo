@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -114,11 +115,14 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   );
 
   const inheriting = draft.inheritDetails;
+  const readOnly = useReadOnly();
   // While inheriting, the fields show the room type's current values.
   const details = effectiveDetails(draft, data.roomTypes);
   const setDetails = (next: RoomInput['details']) => setDraft({ ...draft, details: next });
 
   const save = async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateRoom(draft);
     const first = FIELD_ORDER.find((f) => found[f]);
     if (first) {
@@ -416,7 +420,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
                 errors.description ?? `${details.description.length} / ${DESCRIPTION_MAX}`
               }
               slotProps={{ htmlInput: { maxLength: DESCRIPTION_MAX } }}
-              disabled={inheriting}
+              disabled={inheriting || readOnly}
               multiline
               minRows={6}
               fullWidth

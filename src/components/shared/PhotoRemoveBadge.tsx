@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../app/readOnlyContext';
 import Close from '@mui/icons-material/Close';
 import Box from '@mui/material/Box';
 import ButtonBase, { type ButtonBaseProps } from '@mui/material/ButtonBase';
@@ -15,6 +16,8 @@ export interface PhotoRemoveBadgeProps {
 // white X and a white halo, pinned to the photo's corner by the parent (it is `position: absolute`,
 // the parent sets the corner). The circle is 20px; the button around it is 24px, the minimum target.
 export default function PhotoRemoveBadge({ label, onClick, disabled, sx }: PhotoRemoveBadgeProps) {
+  // View-only mode removes nothing, so the control is not there.
+  if (useReadOnly()) return null;
   return (
     <ButtonBase
       aria-label={label}

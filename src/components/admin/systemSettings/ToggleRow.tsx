@@ -1,3 +1,4 @@
+import { useDisabled } from '../../../app/readOnlyContext';
 import Box from '@mui/material/Box';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
@@ -31,7 +32,7 @@ export default function ToggleRow({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
       <FormControlLabel
         label={label}
-        disabled={disabled}
+        disabled={useDisabled(disabled)}
         control={
           <Switch
             id={id}

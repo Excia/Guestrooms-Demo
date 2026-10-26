@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -115,7 +116,10 @@ function AddOnEditor({ data }: { data: AddOnData }) {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const readOnly = useReadOnly();
   const save = async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateAddOn(draft);
     const first = FIELD_ORDER.find((f) => found[f]);
     if (first) {

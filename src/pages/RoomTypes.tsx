@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -93,7 +94,10 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
 
   const setDetails = (details: RoomTypeInput['details']) => setDraft({ ...draft, details });
 
+  const readOnly = useReadOnly();
   const save = async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateRoomType(draft);
     const first = FIELD_ORDER.find((f) => found[f]);
     if (first) {

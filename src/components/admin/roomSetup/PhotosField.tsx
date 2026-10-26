@@ -1,3 +1,4 @@
+import { useDisabled, useReadOnly } from '../../../app/readOnlyContext';
 import AddPhotoAlternate from '@mui/icons-material/AddPhotoAlternateOutlined';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -25,7 +26,15 @@ const previewUrl = (file: File) =>
 // "Photos" with ADD PHOTOS and removable thumbnails (Figma 11964:28502 and Image Placeholder
 // 11964:13054). Files are previewed locally; where they are stored is open (Q-72-1). A photo
 // without a preview shows the striped placeholder.
-export default function PhotosField({ photos, onChange, disabled, error, id }: PhotosFieldProps) {
+export default function PhotosField({
+  photos,
+  onChange,
+  disabled: disabledProp,
+  error,
+  id,
+}: PhotosFieldProps) {
+  const disabled = useDisabled(disabledProp);
+  const readOnly = useReadOnly();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const errorId = useId();
@@ -56,26 +65,30 @@ export default function PhotosField({ photos, onChange, disabled, error, id }: P
         >
           Photos
         </Typography>
-        <Button
-          id={id}
-          variant="outlined"
-          startIcon={<AddPhotoAlternate />}
-          disabled={disabled || photos.length >= MAX_PHOTOS}
-          onClick={() => inputRef.current?.click()}
-          aria-describedby={error ? errorId : undefined}
-        >
-          Add photos
-        </Button>
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={PHOTO_TYPES.join(',')}
-          hidden
-          aria-label="Photo files"
-          tabIndex={-1}
-          onChange={(e) => onFiles(e.target.files)}
-        />
+        {readOnly ? null : (
+          <Button
+            id={id}
+            variant="outlined"
+            startIcon={<AddPhotoAlternate />}
+            disabled={disabled || photos.length >= MAX_PHOTOS}
+            onClick={() => inputRef.current?.click()}
+            aria-describedby={error ? errorId : undefined}
+          >
+            Add photos
+          </Button>
+        )}
+        {readOnly ? null : (
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={PHOTO_TYPES.join(',')}
+            hidden
+            aria-label="Photo files"
+            tabIndex={-1}
+            onChange={(e) => onFiles(e.target.files)}
+          />
+        )}
       </Box>
       <ErrorLines id={errorId} messages={error ? [error] : undefined} />
       <ErrorLines id={`${errorId}-upload`} messages={uploadErrors} />

@@ -110,6 +110,12 @@ import {
   assertUpdateNotesRequest,
 } from './reservationEditApi';
 import { parseIsoDate } from '../lib/dates';
+import {
+  isPermissionSetShape,
+  normalizeSet,
+  type PermissionSet,
+  type PermissionSetSummary,
+} from '../app/permissionSets';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -170,6 +176,29 @@ function parseGrant(body: unknown, status: number): PermissionGrant {
     throw invalid(status, 'permissions');
   }
   return body as unknown as PermissionGrant;
+}
+
+function parsePermissionSetSummaries(body: unknown, status: number): PermissionSetSummary[] {
+  if (
+    !Array.isArray(body) ||
+    !body.every((v) => isObject(v) && isString(v.id) && isString(v.name))
+  ) {
+    throw invalid(status, 'permission sets');
+  }
+  // Full sets (a backend that ignores ?fields=summary) are reduced; a missing `editable` is derived.
+  return (body as { id: string; name: string; editable?: unknown }[]).map((v) => ({
+    id: v.id,
+    name: v.name,
+    editable: typeof v.editable === 'boolean' ? v.editable : v.id !== 'admin',
+  }));
+}
+
+function parsePermissionSets(body: unknown, status: number): PermissionSet[] {
+  if (!Array.isArray(body) || !body.every(isPermissionSetShape)) {
+    throw invalid(status, 'permission sets');
+  }
+  // Only a structurally wrong body is refused; `normalizeSet` repairs unknown levels, so a newer backend cannot break the editor.
+  return body.map((s) => normalizeSet(s));
 }
 
 function parsePage(body: unknown, status: number): Page<Reservation> {
@@ -1782,7 +1811,6 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     employees: {
       list: (o) => request('/employees', {}, o, parseEmployees),
       listCandidates: (o) => request('/employees/candidates', {}, o, parseEmployeeLookups),
-      listPermissionSets: (o) => request('/employees/permission-sets', {}, o, parseEmployeeLookups),
       save: (input, o) =>
         request(`/employees/${encodeURIComponent(input.id)}`, {}, o, parseEmployee, {
           method: 'PUT',
@@ -1908,7 +1936,14 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           });
         }),
     },
-    permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
+    permissions: {
+      getGrant: (o) => request('/permissions/me', {}, o, parseGrant),
+      getPermissionSets: (o) => request('/permission-sets', {}, o, parsePermissionSets),
+      listPermissionSets: (o) =>
+        request('/permission-sets', { fields: 'summary' }, o, parsePermissionSetSummaries),
+      savePermissionSets: (sets, o) =>
+        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets.map((s) => normalizeSet(s)) }),
+    },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
     registrationCard: {
       requestPreview: (body, o) =>
