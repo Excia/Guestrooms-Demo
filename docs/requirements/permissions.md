@@ -115,11 +115,11 @@ Check in has three levels. Two grants express them (`checkInLevel(can)` in `src/
 
 Unrestricted users (`'all'`) hold the highest level. Mock users: Administrator = any time; Non-admin = arrival date only
 (shows the override code); Partial = any time. The names are provisional until the Permissions page design (Q-G-1). The override
-code is a mock until ticket 127 builds the PIN prompt. Whether the automatic check out needs its own permission is an open question
+PIN is checked by the mock against a small employee table (ticket 187). Whether the automatic check out needs its own permission is an open question
 (Q-163-1): until then it follows these levels.
 
-**Override codes (what the backend must do):** the code is a manager's PIN; the permission whose holder's PIN is accepted is
+**Override PINs (what the backend must do):** the code is a manager's PIN; the permission whose holder's PIN is accepted is
 `reservation.check-in.any-time`. Rate limit and lock out wrong codes, audit every override (who, whose code, when, what), never log or store
 the code (hash only), treat "verify" as advisory and re-validate on check in. Details in
-[api-contract.md](api-contract.md) ("Override codes"). The mock accepts one fixed code and only for a user holding a check-in grant.
+[api-contract.md](api-contract.md) ("Override PINs"). The mock accepts the PIN of an employee who holds `reservation.check-in.any-time` (the mock Administrator and Partial users' PINs; the Staff employee's PIN is refused), locks out after 5 wrong PINs for 5 minutes, and answers verify only for a user holding a check-in grant. The PIN prompt is the shared `OverridePinDialog`; any flow that needs an override passes its permission.
 

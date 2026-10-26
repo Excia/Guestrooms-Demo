@@ -10,6 +10,7 @@ import {
   noGrant,
 } from './mockData';
 import {
+  CHECK_IN_ANY_TIME_PERMISSION,
   checkInLevel,
   LOCATIONS_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
@@ -48,13 +49,8 @@ import {
   undoCheckIn,
   type CancelledStore,
 } from './reservationMenuData';
-import {
-  addPaymentMethod,
-  checkInReservation,
-  isMockOverrideCode,
-  paymentOnFile,
-  splitRoom,
-} from './checkInData';
+import { addPaymentMethod, checkInReservation, paymentOnFile, splitRoom } from './checkInData';
+import { createPinGuard, MOCK_PIN_HOLDERS } from './overridePin';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
@@ -133,7 +129,7 @@ import {
   assertAddPaymentMethodRequest,
   assertCheckInReservationRequest,
   assertSplitRoomRequest,
-  assertVerifyOverrideCodeRequest,
+  assertVerifyOverridePinRequest,
 } from './checkInApi';
 
 export interface MockOptions {
@@ -283,12 +279,15 @@ export function createMockClient({
       })),
     };
   }
+  // One caller in the mock, so one rate limit and lockout for every PIN test.
+  const pinGuard = createPinGuard(MOCK_PIN_HOLDERS, now);
   const checkInEnv = () => ({
     now: now(),
     // The mock's "today" is configured; only the time of day follows the club's real clock.
     clock: { date: schedule.today, time: clubClock(systemSettings.timeZone, now()).time },
     checkOutTime: systemSettings.checkOutTime,
     level: checkInLevel(permissionsFromGrant(grant).can),
+    checkPin: (pin: string) => pinGuard.check(CHECK_IN_ANY_TIME_PERMISSION, pin),
   });
 
   return {
@@ -447,22 +446,6 @@ export function createMockClient({
           () => {
             assertCheckInReservationRequest(request);
             throw notFound();
-          },
-          o,
-        ),
-      verifyOverrideCode: (request, o) =>
-        respond(
-          () => {
-            assertVerifyOverrideCodeRequest(request);
-            // Only a signed-in user holding a check-in grant may probe codes.
-            if (checkInEnv().level === 'never') {
-              throw new ApiError(403, 'You may not check in', { code: 'forbidden' });
-            }
-            return { valid: isMockOverrideCode(request.code) };
-          },
-          () => {
-            assertVerifyOverrideCodeRequest(request);
-            return { valid: false };
           },
           o,
         ),
@@ -1377,6 +1360,28 @@ export function createMockClient({
         respond(
           () => [...MOCK_RETRIEVED_ENCODERS],
           () => [],
+          o,
+        ),
+    },
+    overrides: {
+      verifyPin: (request, o) =>
+        respond(
+          () => {
+            assertVerifyOverridePinRequest(request);
+            // Only a signed-in user holding a check-in grant may probe PINs.
+            if (checkInEnv().level === 'never') {
+              throw new ApiError(403, 'You may not check in', { code: 'forbidden' });
+            }
+            const check = pinGuard.check(request.permission, request.pin);
+            if (check.kind === 'locked') {
+              return { valid: false, lockedForSeconds: check.retryAfterSeconds };
+            }
+            return { valid: check.kind === 'valid' };
+          },
+          () => {
+            assertVerifyOverridePinRequest(request);
+            return { valid: false };
+          },
           o,
         ),
     },
