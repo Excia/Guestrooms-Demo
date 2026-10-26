@@ -62,6 +62,28 @@ describe('SetupList', () => {
     expect(getComputedStyle(chip).color).toBe('rgba(0, 0, 0, 0.87)');
   });
 
+  it('keeps New on one line with the reorder button next to it', () => {
+    render(
+      <ThemeProvider theme={theme}>
+        <SetupList
+          items={items}
+          selectedId="a"
+          creating={false}
+          newLabel="New Room"
+          newTitle="New Room"
+          onSelect={vi.fn()}
+          onNew={vi.fn()}
+          reorder={{ label: 'Reorder rooms', onClick: vi.fn() }}
+        />
+      </ThemeProvider>,
+    );
+    const add = screen.getByRole('button', { name: 'New Room' });
+    expect(getComputedStyle(add).whiteSpace).toBe('nowrap');
+    expect(screen.getByRole('button', { name: 'Reorder rooms' }).parentElement).toBe(
+      add.parentElement,
+    );
+  });
+
   it('stays selectable', async () => {
     const user = userEvent.setup();
     const { onSelect } = renderList();

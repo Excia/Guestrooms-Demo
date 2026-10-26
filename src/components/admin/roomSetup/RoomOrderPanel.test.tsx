@@ -53,4 +53,20 @@ describe('RoomOrderPanel', () => {
     await user.click(screen.getByRole('button', { name: 'Move Room a down' }));
     expect(() => unmount()).not.toThrow();
   });
+
+  it('puts Close next to Save Order in one row, like New Room and the reorder button', () => {
+    render(ui(['a', 'b']));
+    const save = screen.getByRole('button', { name: 'Save Order' });
+    const close = screen.getByRole('button', { name: 'Close room order' });
+    expect(close.parentElement).toBe(save.parentElement);
+    expect(getComputedStyle(save).minHeight).toBe('59px');
+    expect(getComputedStyle(close).width).toBe('59px');
+  });
+
+  it('draws each drag handle with the green reorder icon', () => {
+    render(ui(['a']));
+    const handle = screen.getByTestId('drag-handle-a');
+    expect(getComputedStyle(handle).color).toBe('rgb(46, 125, 50)');
+    expect(handle.querySelector('[data-testid="SwapVertIcon"]')).not.toBeNull();
+  });
 });
