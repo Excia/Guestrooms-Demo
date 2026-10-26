@@ -665,6 +665,7 @@ function Loaded({
           title={OVERRIDE_TITLE}
           confirmLabel="Override and check in"
           permission="reservation.check-in.any-time"
+          lockedForSeconds={step.lockedForSeconds}
           onAuthorized={flow.authorizeOverride}
           onCancel={flow.cancelOverride}
         />

@@ -448,6 +448,43 @@ describe('http client', () => {
       }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
+
+  it('refuses a locked-out answer that also says valid', async () => {
+    vi.stubGlobal('fetch', respond({ valid: true, lockedForSeconds: 30 }));
+    const http = createHttpClient('https://api.example.test');
+    await expect(
+      http.overrides.verifyPin({ permission: 'reservation.check-in.any-time', pin: '1' }),
+    ).rejects.toMatchObject({ code: 'invalid-response' });
+  });
+
+  it('reads an HTTP 429 (body or Retry-After) as locked out', async () => {
+    const http = createHttpClient('https://api.example.test');
+    const ask = () =>
+      http.overrides.verifyPin({ permission: 'reservation.check-in.any-time', pin: '1' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 429, headers: { 'Retry-After': '120' } })),
+    );
+    await expect(ask()).resolves.toEqual({ valid: false, lockedForSeconds: 120 });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ details: { retryAfterSeconds: ['45'] } }), { status: 429 }),
+      ),
+    );
+    await expect(ask()).resolves.toEqual({ valid: false, lockedForSeconds: 45 });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 429 })),
+    );
+    await expect(ask()).resolves.toEqual({ valid: false, lockedForSeconds: 60 });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('{}', { status: 500 })),
+    );
+    await expect(ask()).rejects.toMatchObject({ status: 500 });
+  });
 });
 
 // D-HK-4: the stored housekeeping state follows the stay's check-in status.

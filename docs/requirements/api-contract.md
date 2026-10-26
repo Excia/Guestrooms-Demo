@@ -566,7 +566,7 @@ backend's concern (Q-75-3).
 | Method and path                           | Body / response                                                                                                                                    | Errors                                                                                                                                           |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `POST /reservations/{id}/check-in`        | `CheckInReservationRequest { requestId, reservationId, version, reservationRoomIds[], pastDateConfirmed, overrideCode?, checkOutAfter }` returns `CheckInReservationResult { reservation, rooms[], autoCheckedOut, nightsPosted, integrationErrors[] }` | 400 `invalid-id`/`invalid-query`; 403 `forbidden`, `override-required`, `override-invalid`; 404; 409 `stale`, `future-arrival`, `past-date-unconfirmed`, `idempotency-conflict` |
-| `POST /overrides/verify-pin` | `VerifyOverridePinRequest { permission: 'reservation.check-in.any-time', pin }` returns `{ valid, lockedForSeconds? }` (a wrong PIN is a normal answer; `lockedForSeconds` means locked out, see below) | 400; 403 `forbidden` |
+| `POST /overrides/verify-pin`              | `VerifyOverridePinRequest { permission: 'reservation.check-in.any-time', pin }` returns `{ valid, lockedForSeconds? }` (a wrong PIN is a normal answer; `lockedForSeconds` means locked out, see below) | 400; 403 `forbidden`                                                                                                                             |
 | `POST /reservation-rooms/{id}/split`      | `SplitRoomRequest { requestId, reservationId, reservationRoomId, version }` returns the **new** `ReservationDetail`                                 | 400; 403 `forbidden`; 404; 409 `stale`, `not-splittable` (one room), `idempotency-conflict`                                                      |
 | `POST /reservations/{id}/payment-methods` | PLACEHOLDER (ticket 3.9): puts a mock card on file; returns the `ReservationDetail`                                                                | 400; 404                                                                                                                                         |
 
@@ -605,7 +605,13 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   `PIN_LOCKOUT_SECONDS` in `src/api/overridePin.ts`). While locked no PIN is tested, not even a right one. Verify then answers
   `{ valid: false, lockedForSeconds }` (a normal answer, so the dialog can show the wait); the check in answers **429
   `override-locked`** with `details.retryAfterSeconds`. A right PIN resets the count. The count and the lock are shared by both
-  endpoints. The real backend also limits per club and answers HTTP 429 with `Retry-After` if it prefers; the UI reads `lockedForSeconds`.
+  endpoints. **Forms the UI accepts for "locked out" on verify:** `200 { valid: false, lockedForSeconds }` or `HTTP 429` with the wait in
+  the `Retry-After` header (whole seconds) or in `details.retryAfterSeconds: ['<seconds>']` (a 429 with neither is shown as 60 seconds).
+  `{ valid: true, lockedForSeconds }` is contradictory and the client rejects it as `invalid-response`. On the check in the form is
+  `429 override-locked` with `details.retryAfterSeconds` (or `Retry-After`); the dialog reopens already locked for that long.
+- **The real backend should not copy the mock's reset-on-success.** Count failures per target (the employee whose PIN is guessed) and
+  per club, and do not reset the count when a different PIN succeeds: otherwise a caller who owns a valid PIN can alternate it with
+  guesses and never lock out. The mock resets on a right PIN only because it has a single caller.
 - The older name `POST /override-codes/verify` with `{ permission, code }` and `reservations.verifyOverrideCode` no longer exist.
 - **Audit record** for every override: who entered the code, whose code it was, which reservation and rooms, the permission and the time, also for refused attempts.
 - **Never log the code** (request bodies of these two endpoints must be excluded from access logs and traces) and never store it in

@@ -206,7 +206,7 @@ describe('permission levels', () => {
     expect(field).toHaveAttribute('type', 'password');
     await user.type(field, '0000');
     await user.click(within(code).getByRole('button', { name: 'Override and check in' }));
-    expect(await within(code).findByText('That override code is not valid.')).toBeInTheDocument();
+    expect(await within(code).findAllByText('That override code is not valid.')).toHaveLength(2);
     expect(field).toBeInvalid();
     expect((await client.reservations.getDetail('rs-31')).rooms[0].status).toBe('nyci');
     await user.clear(field);
@@ -452,6 +452,28 @@ describe('results and failures', () => {
     expect(
       await dialog('Enter override code to check in after the check-in date'),
     ).toBeInTheDocument();
+  });
+
+  it('reopens the PIN dialog already locked when the check in answers override-locked', async () => {
+    const base = createMockClient({ today: TODAY });
+    const client = wrap(async () => {
+      throw new ApiError(429, 'locked', {
+        code: 'override-locked',
+        details: { retryAfterSeconds: ['300'] },
+      });
+    });
+    client.overrides = base.overrides;
+    const { user } = await open('rs-31', { client, granted: ARRIVAL_ONLY });
+    await user.click(await screen.findByRole('button', { name: 'Check In' }));
+    await user.click(await screen.findByRole('button', { name: 'Override and check in' }));
+    await user.type(await screen.findByLabelText('Override code'), `${MOCK_MANAGER_PIN}{Enter}`);
+    await user.click(await screen.findByRole('button', { name: 'Complete check in' }));
+    const prompt = await dialog('Enter override code to check in after the check-in date');
+    expect(
+      within(prompt).getAllByText('Too many incorrect codes. Try again in 5 minutes.').length,
+    ).toBeGreaterThan(0);
+    await user.type(within(prompt).getByLabelText('Override code'), '1234');
+    expect(within(prompt).getByRole('button', { name: 'Override and check in' })).toBeDisabled();
   });
 });
 

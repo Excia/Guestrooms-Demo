@@ -173,20 +173,20 @@ describe('inheriting from the room type', () => {
     expect(next.details.bedTypes['bed-king']).toBe(1);
   });
   it('changing the room type keeps edited details while Inherit Details is off', () => {
-    const edited = { ...(rooms().find((r) => r.id === 'room-200') as RoomSetup) };
+    const edited = { ...rooms().find((r) => r.id === 'room-200') as RoomSetup };
     const next = changeRoomType(edited, 'rt-double-queen', types());
     expect(next.inheritDetails).toBe(false);
     expect(next.details.maxOccupancy).toBe(3);
   });
   it('turning Inherit Details on re-reads the room type; off keeps the values', () => {
-    const edited = { ...(rooms().find((r) => r.id === 'room-200') as RoomSetup) };
+    const edited = { ...rooms().find((r) => r.id === 'room-200') as RoomSetup };
     expect(setInheritDetails(edited, true, types()).details.maxOccupancy).toBe(2);
     const off = setInheritDetails(rooms()[0], false, types());
     expect(off.inheritDetails).toBe(false);
     expect(off.details.maxOccupancy).toBe(4);
   });
   it('never touches the owner', () => {
-    const room = { ...(rooms().find((r) => r.id === 'room-200') as RoomSetup) };
+    const room = { ...rooms().find((r) => r.id === 'room-200') as RoomSetup };
     expect(changeRoomType(room, 'rt-double-queen', types()).owner).toEqual(room.owner);
     expect(setInheritDetails(room, true, types()).owner).toEqual(room.owner);
   });

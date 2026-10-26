@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { ApiProvider } from '../../api/ApiProvider';
@@ -13,14 +13,18 @@ const ARRIVAL = {
   permissions: ['reservation.edit', 'reservation.check-in.arrival-date'],
 } as PermissionGrant;
 
-function setup(client: ApiClient = createMockClient({ grant: ARRIVAL })) {
+function setup(
+  client: ApiClient = createMockClient({ grant: ARRIVAL }),
+  extra: { lockedForSeconds?: number; open?: boolean } = {},
+) {
   const onAuthorized = vi.fn();
   const onCancel = vi.fn();
-  render(
+  const ui = (open: boolean) => (
     <ThemeProvider theme={theme}>
       <ApiProvider client={client}>
         <OverridePinDialog
-          open
+          open={open}
+          lockedForSeconds={extra.lockedForSeconds}
           title="Enter override code"
           message="A manager must authorize this."
           confirmLabel="Authorize"
@@ -29,9 +33,15 @@ function setup(client: ApiClient = createMockClient({ grant: ARRIVAL })) {
           onCancel={onCancel}
         />
       </ApiProvider>
-    </ThemeProvider>,
+    </ThemeProvider>
   );
-  return { user: userEvent.setup(), onAuthorized, onCancel };
+  const view = render(ui(extra.open ?? true));
+  return {
+    user: userEvent.setup(),
+    onAuthorized,
+    onCancel,
+    setOpen: (open: boolean) => view.rerender(ui(open)),
+  };
 }
 
 const field = () => screen.getByLabelText('Override code');
@@ -57,7 +67,8 @@ describe('OverridePinDialog', () => {
     const { user, onAuthorized } = setup();
     await user.type(field(), MOCK_STAFF_PIN);
     await user.click(screen.getByRole('button', { name: 'Authorize' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('That override code is not valid.');
+    expect(await screen.findAllByText('That override code is not valid.')).toHaveLength(2);
+    expect(screen.getByRole('status')).toHaveTextContent('That override code is not valid.');
     expect(field()).toBeInvalid();
     expect(field()).toHaveValue('');
     expect(field()).toHaveFocus();
@@ -70,7 +81,7 @@ describe('OverridePinDialog', () => {
       await user.type(field(), '0000{Enter}');
       await waitFor(() => expect(field()).toHaveValue(''));
     }
-    expect(await screen.findByRole('alert')).toHaveTextContent(
+    expect(await screen.findByRole('status')).toHaveTextContent(
       'Too many incorrect codes. Try again in 5 minutes.',
     );
     await user.type(field(), MOCK_MANAGER_PIN);
@@ -86,8 +97,10 @@ describe('OverridePinDialog', () => {
     };
     const { user } = setup(client);
     await user.type(field(), `${MOCK_MANAGER_PIN}{Enter}`);
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The override code could not be checked. Try again.',
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'The override code could not be checked. Try again.',
+      ),
     );
   });
 
@@ -110,5 +123,55 @@ describe('OverridePinDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Close' }));
     await user.keyboard('{Escape}');
     expect(onCancel).toHaveBeenCalledTimes(3);
+  });
+
+  it('ignores a check that finishes after the dialog was closed', async () => {
+    let resolve: (r: VerifyOverridePinResult) => void = () => {};
+    let signal: AbortSignal | undefined;
+    const client = createMockClient({ grant: ARRIVAL });
+    client.overrides = {
+      verifyPin: (_r, o) => {
+        signal = o?.signal;
+        return new Promise<VerifyOverridePinResult>((r) => (resolve = r));
+      },
+    };
+    const { user, onAuthorized, setOpen } = setup(client);
+    await user.type(field(), '1234{Enter}');
+    setOpen(false);
+    expect(signal?.aborted).toBe(true);
+    resolve({ valid: true });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onAuthorized).not.toHaveBeenCalled();
+  });
+
+  it('starts locked when the caller is already locked out', async () => {
+    const { user, onAuthorized } = setup(undefined, { lockedForSeconds: 90 });
+    expect(screen.getAllByText('Too many incorrect codes. Try again in 2 minutes.')).toHaveLength(
+      2,
+    );
+    await user.type(field(), MOCK_MANAGER_PIN);
+    expect(screen.getByRole('button', { name: 'Authorize' })).toBeDisabled();
+    expect(onAuthorized).not.toHaveBeenCalled();
+  });
+});
+
+describe('OverridePinDialog lockout countdown', () => {
+  beforeEach(() => vi.useFakeTimers({ shouldAdvanceTime: true }));
+  afterEach(() => vi.useRealTimers());
+
+  it('counts down quietly, announces the lock once and clears it when it ends', async () => {
+    setup(undefined, { lockedForSeconds: 3 });
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Try again in 3 seconds.');
+    await act(() => vi.advanceTimersByTimeAsync(2000));
+    expect(screen.getAllByText('Too many incorrect codes. Try again in 1 second.')).toHaveLength(1);
+    expect(status).toHaveTextContent('Try again in 3 seconds.');
+    await act(() => vi.advanceTimersByTimeAsync(2000));
+    expect(screen.queryByText(/Too many incorrect codes/)).not.toBeInTheDocument();
+    expect(status).toBeEmptyDOMElement();
+    expect(field()).toBeValid();
+    // No more ticks: a later wait would show nothing new.
+    await act(() => vi.advanceTimersByTimeAsync(5000));
+    expect(screen.queryByText(/Too many incorrect codes/)).not.toBeInTheDocument();
   });
 });

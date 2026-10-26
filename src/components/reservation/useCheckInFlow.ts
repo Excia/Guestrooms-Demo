@@ -26,10 +26,13 @@ export type CheckInStep =
   /** The "check-in date has passed" confirmation. */
   | { name: 'past-date'; decision: PastDate }
   /** The override code, asked for before continuing a past-date check in. */
-  | { name: 'override'; decision: PastDate }
+  | { name: 'override'; decision: PastDate; lockedForSeconds?: number }
   /** "Split this room from the reservation?" */
   | { name: 'split'; roomId: string }
-  /** The check in panel. `confirmed`: the prior-date prompt was accepted. */
+  /**
+   * The check in panel. `confirmed`: the prior-date prompt was accepted. `overrideCode` (the accepted
+   * PIN) lives only in this step: leaving it drops the PIN, and it is never stored elsewhere.
+   */
   | { name: 'panel'; decision: Startable; confirmed: boolean; overrideCode?: string }
   /** Successes and failures of a check in where at least one room failed. */
   | {
@@ -239,7 +242,9 @@ export function useCheckInFlow({
       setBusy(false);
       notify(failure.message, 'error');
       if (failure.askOverrideAgain && decision.kind === 'needsOverride') {
-        setStep({ name: 'override', decision });
+        // A new PIN is a new request: the old attempt's idempotency key must not be reused with it.
+        attempt.current = null;
+        setStep({ name: 'override', decision, lockedForSeconds: failure.lockedForSeconds });
       }
       if (failure.refetch) void reload();
       return;

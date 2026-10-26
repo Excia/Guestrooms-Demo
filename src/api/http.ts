@@ -77,6 +77,7 @@ import {
   assertSplitRoomRequest,
   assertVerifyOverridePinRequest,
 } from './checkInApi';
+import { retryAfterOf } from './retryAfter';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
   assertChangeRoomRequest,
@@ -532,11 +533,15 @@ const parseSplit =
     return withKnownAudit(body);
   };
 
+/** Wait shown when a 429 does not say how long. */
+const DEFAULT_LOCK_SECONDS = 60;
+
 const parseOverridePinCheck = (body: unknown, status: number): VerifyOverridePinResult => {
   if (!isObject(body) || !isFlag(body.valid)) throw invalid(status, 'override PIN check');
   const seconds = body.lockedForSeconds;
   if (seconds === undefined) return { valid: body.valid };
-  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+  // A locked-out answer never says valid.
+  if (body.valid || typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
     throw invalid(status, 'override PIN check');
   }
   return { valid: body.valid, lockedForSeconds: seconds };
@@ -1277,7 +1282,12 @@ const parseChangeRoom =
     return result;
   };
 
-function errorFromBody(status: number, statusText: string, text: string): ApiError {
+function errorFromBody(
+  status: number,
+  statusText: string,
+  text: string,
+  retryAfter?: string | null,
+): ApiError {
   let message = statusText || 'Request failed';
   let code: string | undefined;
   let details: Record<string, string[]> | undefined;
@@ -1292,6 +1302,10 @@ function errorFromBody(status: number, statusText: string, text: string): ApiErr
   } catch {
     // Not JSON (e.g. an HTML error page): keep the status text.
   }
+  // A 429 may carry its wait only in the Retry-After header (seconds); keep it where callers look.
+  const seconds = retryAfter && /^\d{1,6}$/.test(retryAfter.trim()) ? retryAfter.trim() : undefined;
+  if (seconds && !details?.retryAfterSeconds)
+    details = { ...details, retryAfterSeconds: [seconds] };
   return new ApiError(status, message, { code, details });
 }
 
@@ -1376,7 +1390,12 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
 
     if (!response.ok) {
       if (response.status === 401) options.onUnauthorized?.();
-      throw errorFromBody(response.status, response.statusText, text);
+      throw errorFromBody(
+        response.status,
+        response.statusText,
+        text,
+        response.headers.get('Retry-After'),
+      );
     }
 
     // 204 and empty bodies parse as `undefined`; each parser decides whether that is valid.
@@ -1843,6 +1862,15 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
           return request('/overrides/verify-pin', {}, o, parseOverridePinCheck, {
             method: 'POST',
             body: r,
+          }).catch((error: unknown): VerifyOverridePinResult => {
+            // HTTP 429 is the other way a backend may say "locked out".
+            if (error instanceof ApiError && error.status === 429) {
+              return {
+                valid: false,
+                lockedForSeconds: retryAfterOf(error) ?? DEFAULT_LOCK_SECONDS,
+              };
+            }
+            throw error;
           });
         }),
     },

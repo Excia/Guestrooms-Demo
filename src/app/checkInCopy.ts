@@ -2,6 +2,7 @@
 // wording is tested apart from the components.
 import type { CheckInPastDatePlan } from './checkInDecision';
 import type { CheckInLevel } from './permissions';
+import { retryAfterOf } from '../api/retryAfter';
 import { ApiError } from '../api/types';
 import type { CheckInFailureCode, CheckInReservationResult } from '../api/types';
 
@@ -133,6 +134,8 @@ export interface CheckInRequestFailure {
   refetch: boolean;
   /** Go back to the override code step. */
   askOverrideAgain?: boolean;
+  /** The caller is locked out of override PINs for this long (only with `askOverrideAgain`). */
+  lockedForSeconds?: number;
   /** The request may have been applied (no answer, 408, 5xx): a retry reuses its idempotency key. */
   outcomeUnknown?: boolean;
 }
@@ -153,6 +156,7 @@ export function checkInRequestFailure(error: unknown): CheckInRequestFailure {
       message: 'Too many incorrect override codes. Try again later.',
       refetch: false,
       askOverrideAgain: true,
+      lockedForSeconds: error instanceof ApiError ? retryAfterOf(error) : undefined,
     };
   }
   if (status === 403) return { message: 'You may not check in this reservation.', refetch: false };
