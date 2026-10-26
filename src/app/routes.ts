@@ -46,6 +46,8 @@ export const BOOKING_RULES_PATH = '/admin/booking-rules';
 export const KEYCARD_INTEGRATION_PATH = '/admin/keycard-integration';
 /** Locations (tickets 182 and 123); the Admin Setup navigation links to it, the menu does not. */
 export const LOCATIONS_PATH = '/admin/locations';
+/** Permissions (ticket 186): Access sets and Function sets; the Admin Setup navigation links to it, the menu does not. */
+export const PERMISSIONS_PATH = '/admin/permissions';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -147,6 +149,13 @@ export const routes = [
     title: 'Locations',
     section: 'admin',
     showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
+  },
+  {
+    id: 'permissions',
+    path: PERMISSIONS_PATH,
+    title: 'Permissions',
+    section: 'admin',
+    showInMenu: false, // The Admin Setup navigation has it; the menu cleanup is a separate ticket.
   },
 ] as const satisfies readonly RouteMeta[];
 

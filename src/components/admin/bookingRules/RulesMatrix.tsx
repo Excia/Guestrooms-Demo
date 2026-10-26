@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../../app/readOnlyContext';
 import Box from '@mui/material/Box';
 import Checkbox from '@mui/material/Checkbox';
 import FormControlLabel from '@mui/material/FormControlLabel';
@@ -78,6 +79,8 @@ interface Ctx {
   set: (patch: Partial<AudienceRules>) => void;
   errors: BookingRulesErrors;
   options: BookingRulesOptions;
+  /** View-only: every direct field is disabled, whatever the column state. */
+  readOnly: boolean;
 }
 
 type Cell = ReactNode | 'na';
@@ -116,6 +119,7 @@ function NumberCell({
 }) {
   const message = err(ctx, field);
   const id = cellId(ctx.audience, field);
+  const readOnly = useReadOnly();
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -125,7 +129,7 @@ function NumberCell({
           variant="standard"
           size="small"
           value={value ? String(value) : ''}
-          disabled={!ctx.col}
+          disabled={!ctx.col || readOnly}
           error={Boolean(message)}
           onChange={(e) => onChange(e.target.value === '' ? 0 : Number(e.target.value))}
           slotProps={{
@@ -228,7 +232,7 @@ const ROWS: RowDef[] = [
         <Checkbox
           id={cellId(ctx.audience, 'requireMemberReserver')}
           checked={Boolean(ctx.col?.requireMemberReserver)}
-          disabled={!ctx.col}
+          disabled={!ctx.col || ctx.readOnly}
           onChange={(e) => ctx.set({ requireMemberReserver: e.target.checked })}
           slotProps={{ input: { 'aria-label': name(ctx, row) } }}
         />
@@ -433,7 +437,7 @@ const ROWS: RowDef[] = [
         <Checkbox
           id={cellId(ctx.audience, 'addOnPopup')}
           checked={Boolean(ctx.col?.addOnPopup)}
-          disabled={!ctx.col}
+          disabled={!ctx.col || ctx.readOnly}
           onChange={(e) => ctx.set({ addOnPopup: e.target.checked })}
           slotProps={{ input: { 'aria-label': name(ctx, row) } }}
         />
@@ -464,6 +468,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
     if (current) onChange({ ...rules, [audience]: { ...current, ...patch } });
   };
   const memberOn = rules.member !== null;
+  const readOnly = useReadOnly();
   return (
     <Table
       aria-label="Booking rules"
@@ -500,7 +505,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
               <Checkbox
                 id="booking-rules-unique-toggle"
                 checked={memberOn && rules.uniqueMemberTypeRules}
-                disabled={!memberOn}
+                disabled={!memberOn || readOnly}
                 onChange={(e) => onChange(setUniqueMemberTypeRules(rules, e.target.checked))}
                 slotProps={{ input: { 'aria-label': 'Unique Member Type Rules' } }}
               />
@@ -520,7 +525,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
                 <Switch
                   id="booking-rules-nonmember-toggle"
                   checked={rules.nonMember !== null}
-                  disabled={!memberOn}
+                  disabled={!memberOn || readOnly}
                   onChange={(e) =>
                     onChange(toggleColumn(rules, 'nonMemberOnline', e.target.checked))
                   }
@@ -562,6 +567,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
                 set: (patch) => setColumn(audience, patch),
                 errors,
                 options,
+                readOnly,
               };
               const content = row.cell(ctx, row.label);
               return content === 'na' ? (

@@ -106,6 +106,7 @@ import {
   assertUpdateNotesRequest,
 } from './reservationEditApi';
 import { parseIsoDate } from '../lib/dates';
+import { normalizeSet, summarizeSets, type PermissionSet } from '../app/permissionSets';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -166,6 +167,32 @@ function parseGrant(body: unknown, status: number): PermissionGrant {
     throw invalid(status, 'permissions');
   }
   return body as unknown as PermissionGrant;
+}
+
+const isLevel = (v: unknown, allowed: readonly string[]) => isString(v) && allowed.includes(v);
+
+function isPermissionSet(v: unknown): v is PermissionSet {
+  return (
+    isObject(v) &&
+    isString(v.id) &&
+    isString(v.name) &&
+    isObject(v.setup) &&
+    Object.values(v.setup).every((l) => isLevel(l, ['none', 'view', 'edit'])) &&
+    isObject(v.access) &&
+    Object.values(v.access).every((l) => isLevel(l, ['none', 'view', 'edit', 'create-edit'])) &&
+    isObject(v.functions) &&
+    Object.values(v.functions).every((f) => typeof f === 'boolean') &&
+    isLevel(v.checkIn, ['any-time', 'arrival-date', 'never']) &&
+    typeof v.pinOverride === 'boolean'
+  );
+}
+
+function parsePermissionSets(body: unknown, status: number): PermissionSet[] {
+  if (!Array.isArray(body) || !body.every(isPermissionSet)) {
+    throw invalid(status, 'permission sets');
+  }
+  // Repair what is missing or out of range, so a newer backend cannot break the editor.
+  return body.map(normalizeSet);
 }
 
 function parsePage(body: unknown, status: number): Page<Reservation> {
@@ -1838,7 +1865,14 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       retrieveEncoders: (o) =>
         request('/keycards/encoders/retrieve', {}, o, parseKeys, { method: 'POST' }),
     },
-    permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
+    permissions: {
+      getGrant: (o) => request('/permissions/me', {}, o, parseGrant),
+      getPermissionSets: (o) => request('/permission-sets', {}, o, parsePermissionSets),
+      listPermissionSets: async (o) =>
+        summarizeSets(await request('/permission-sets', {}, o, parsePermissionSets)),
+      savePermissionSets: (sets, o) =>
+        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets }),
+    },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
     registrationCard: {
       requestPreview: (body, o) =>

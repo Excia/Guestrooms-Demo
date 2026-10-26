@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../../app/readOnlyContext';
 import FindInPage from '@mui/icons-material/FindInPage';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -45,6 +46,7 @@ export default function RegistrationCardTab({
   errors,
 }: RegistrationCardTabProps) {
   const api = useApi();
+  const readOnly = useReadOnly();
   const titleId = useId();
   const baseId = useId();
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -58,7 +60,7 @@ export default function RegistrationCardTab({
       <>
         <FormControlLabel
           label={ITEM_LABELS[id]}
-          disabled={!value.enabled || blocked}
+          disabled={!value.enabled || blocked || readOnly}
           control={
             <Checkbox
               checked={value.items[id]}
@@ -136,7 +138,7 @@ export default function RegistrationCardTab({
                         id={fieldId('registrationCard.customText')}
                         value={value.customText}
                         onChange={(e) => onChange({ ...value, customText: e.target.value })}
-                        disabled={!value.enabled}
+                        disabled={!value.enabled || readOnly}
                         error={Boolean(textError)}
                         multiline
                         minRows={5}

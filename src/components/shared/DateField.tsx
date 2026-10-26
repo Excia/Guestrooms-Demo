@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../app/readOnlyContext';
 import CalendarToday from '@mui/icons-material/CalendarToday';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -93,6 +94,7 @@ export default function DateField({
   sx,
 }: DateFieldProps) {
   const today = useClubToday(todayProp);
+  const viewOnly = useReadOnly();
   const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<RangeValue>({ from: '', to: '' });
@@ -214,6 +216,7 @@ export default function DateField({
                   size="small"
                   edge="end"
                   aria-label={`Open calendar for ${name}`}
+                  disabled={viewOnly}
                   aria-haspopup="dialog"
                   aria-expanded={open}
                   // Keeps focus (and "touched") in the input when the mouse presses the button.

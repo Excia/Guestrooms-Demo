@@ -2,9 +2,10 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import type { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router';
-import { guardDecision } from '../app/access';
+import { adminPageLevel, guardDecision } from '../app/access';
 import { DASHBOARD_PATH, type PageId } from '../app/routes';
 import { useAccess } from '../app/useAccess';
+import ReadOnlyProvider from './admin/ReadOnlyProvider';
 
 export type AccessDeniedReason = 'denied' | 'error' | 'unconfigured';
 
@@ -16,6 +17,7 @@ export interface AccessDeniedState {
 /**
  * Route guard: renders its children only when the user may open `pageId`. Otherwise redirects to
  * the dashboard (replace, so Back does not return to the denied URL) with an AccessDeniedState.
+ * An Admin Setup page with View access renders inside `ReadOnlyProvider` (View-only mode).
  * Waits while the grant loads, so a deep link is not lost on reload. The dashboard itself is the
  * redirect target and is never guarded here, which also rules out a redirect loop.
  */
@@ -26,7 +28,7 @@ export default function RequireAccess({
   pageId: PageId;
   children: ReactNode;
 }) {
-  const { status, canAccessPage } = useAccess();
+  const { status, canAccessPage, can } = useAccess();
   const { search } = useLocation();
   const decision = guardDecision(status, canAccessPage(pageId));
   if (decision === 'wait') {
@@ -44,5 +46,10 @@ export default function RequireAccess({
     };
     return <Navigate to={{ pathname: DASHBOARD_PATH, search }} state={state} replace />;
   }
-  return <>{children}</>;
+  // An Admin Setup page the user may only look at (View) renders in View-only mode.
+  return (
+    <ReadOnlyProvider readOnly={adminPageLevel(can, pageId) === 'view'}>
+      {children}
+    </ReadOnlyProvider>
+  );
 }

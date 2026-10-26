@@ -1,3 +1,4 @@
+import { useDisabled } from '../../app/readOnlyContext';
 import AccessTime from '@mui/icons-material/AccessTime';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -78,11 +79,12 @@ export default function TimeField({
   isAllowed = ALL,
   error,
   helperText,
-  disabled,
+  disabled: disabledProp,
   pickerDisabled,
   size = 'medium',
   sx,
 }: TimeFieldProps) {
+  const disabled = useDisabled(disabledProp);
   const [anchor, setAnchor] = useState<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   // Text being typed; null shows the formatted value.

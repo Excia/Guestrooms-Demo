@@ -18,7 +18,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { label: 'Booking Rules', path: path('booking-rules'), id: 'booking-rules' },
   { label: 'System Settings', path: path('primary-setup'), id: 'primary-setup' },
   { label: 'Employees' },
-  { label: 'Permissions' },
+  { label: 'Permissions', path: path('permissions'), id: 'permissions' },
   { label: 'Keycard Integration', path: path('keycard-integration'), id: 'keycard-integration' },
   { label: 'API Integrations' },
   { label: 'Migration Tool' },

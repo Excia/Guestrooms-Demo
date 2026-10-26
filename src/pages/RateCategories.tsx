@@ -1,3 +1,4 @@
+import EditOnly from '../components/admin/EditOnly';
 import Add from '@mui/icons-material/Add';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -436,19 +437,21 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
             onRemoveSeason={setSeasonToRemove}
           />
           <Box sx={{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<Add />}
-              disabled={associated.length === 0}
-              onClick={() => {
-                const id = newRequestId();
-                focusNewSeason.current = id;
-                setDraft({ ...draft, seasons: addSeason(draft.seasons, id) });
-              }}
-            >
-              Add Season
-            </Button>
+            <EditOnly>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<Add />}
+                disabled={associated.length === 0}
+                onClick={() => {
+                  const id = newRequestId();
+                  focusNewSeason.current = id;
+                  setDraft({ ...draft, seasons: addSeason(draft.seasons, id) });
+                }}
+              >
+                Add Season
+              </Button>
+            </EditOnly>
             <Hint>
               Alternative base rate columns appear while they are enabled in System Settings.
             </Hint>

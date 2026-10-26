@@ -66,12 +66,53 @@ no permission of their own yet.
 "You do not have permission to change this reservation."). No mock user lacks it, so that state is covered by
 tests only.
 
+## Permission sets and View-only admin (ticket 186)
+
+The Permissions page (`/admin/permissions`, Admin Setup) edits two sets, **Management** and **Staff**; Administrators always hold everything.
+Saved through `permissions.getPermissionSets` / `savePermissionSets` ([api-contract.md](api-contract.md#permission-sets-ticket-186-built-on-the-mock));
+`permissions.listPermissionSets()` returns `{ id, name, editable }[]` for the Employees page. Pure rules: `src/app/permissionSets.ts`.
+
+**Admin Setup levels (per page, owner decision 2026-10-25):** No Access (no permission), **View** (`page.<id>`), **Edit** (`page.<id>` and `<id>.edit`).
+`admin` still means Edit on every page. `adminPageLevel(can, id)` in `src/app/access.ts` gives the level; the route guard (`RequireAccess`)
+renders a View page inside `ReadOnlyProvider`. `locations.edit` is the same rule (`<id>.edit` for `locations`). The Admin Setup pages are the
+routes with `section: 'admin'`, so a new admin route gets a row on the Permissions page and a permission automatically.
+
+**Access sets** (legacy rows; levels in brackets): Closure Events + Details (Create + Edit, Edit, View, No Access), Reservation Events + Core Details
+(same), Reservation Full Details (Edit, View, No Access), Night Audit (same four as the first), Room Block (four), Reporting (Edit, No Access),
+Folio (Edit, View, No Access), Non-Members (four). **Function sets** (Yes/No): Change Reservation Room, Location, Room Type, Rate Category, Adjust Room Rate,
+Undo Check In, Check Out Reservation, View Private Notes, Operational Reports, Financial Reports, Add Manual Charge / Credit, Add Positive /
+Negative Deposit / Payment, Split Folio, Settle Folio, Manually Reopen / Close Folio; plus Check In Room (Any Time, On Check-In Date Only, Never).
+A function (or Check In Room) under an area set to No Access is N/A and off.
+
+**What a set grants today (`grantFromSet`):** the dashboard for everyone; Admin Setup pages as above; Reservation Events View gives the schedule,
+reservations, search results, waitlist, add-on countdown and member directory, Edit adds `reservation.edit`, and the check-in grants follow
+Check In Room; Night Audit View gives `page.night-audit-history`, Edit adds `night-audit.run` ("Edit" = history plus running the audit);
+Room Block, Reporting and Folio give their pages (Folio also Open Folios and Unassigned Charges); each function that is on gives
+`function.<key>`. **Stored but not read by any screen yet:** Closure Events, Reservation Full Details, Non-Members, and every `function.*`
+except check in (the screens pick them up as their tickets land).
+
+**View-only mode (`src/components/admin/ReadOnlyProvider.tsx`, `src/app/readOnlyContext.ts`):** one flag per page. Effects: every MUI field control below it is
+disabled by default (nested theme, `readOnlyTheme`) and the shared field components also read `useReadOnly()`/`useDisabled()`; `AdminShell` shows
+the note "View only. ..." and drops the page actions; `SaveButton`, `RemoveIconButton` and `PhotoRemoveBadge` render nothing; `SetupList` hides New,
+reorder, Copy and Delete (the three-dot menu keeps Change Log); `EditOnly` hides Add Season, Add Encoder, Remove All, Retrieve Encoder, Add Member
+Type, Add option and Duplicate season; Photos' Add and "Select all / none" are hidden. The Change Log overlay stays usable (`EditableIsland`).
+Tabs, list selection, links and Generate Preview stay usable. `src/pages/viewOnly.test.tsx` checks all ten Admin Setup pages.
+Hiding is not authorization: the backend must refuse the writes.
+
+**Mock:** default sets (P-186-1) in `src/api/permissionSetsData.ts`. Management: every setup page View except Permissions (No Access), all areas at
+the top level, Check In Any Time, PIN override on. Staff: no setup pages, what the earlier "Non-admin" user had (Reservation Events Edit, Night
+Audit View, Room Block View, Reporting Edit, Folio Edit, Check In On Check-In Date Only), PIN override off. In dev the edited sets persist under
+`localStorage['gr.mockPermissionSets']`; the mock users "Non-admin" (Staff set) and "View-only admin" (Management set) read the saved set, so
+edit a set as Administrator, switch user, and the change is live. "Partial" keeps its fixed grant (Rooms and Room Types, now with Edit). Demo builds
+always run as Administrator.
+
 ## Mock users (`src/api/mockUsers.ts`)
 
 | User id     | Label                       | Role string           | Grant                                                                                                                                                                                                                                            | Who gets it                                       |
 | ----------- | --------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | `admin`     | Administrator               | Administrator         | `'all'` (every known permission)                                                                                                                                                                                                                 | Demo builds always (D-033); dev choice            |
-| `non-admin` | Non-admin (no admin pages)  | Staff                 | the 13 non-admin `page.<id>` (dashboard, schedule, reservations, new-reservation-results, folio, open-folios, unassigned-charges, waitlist, night-audit-history, add-on-countdown, room-blocks, member-directory, reporting); `reservation.edit` | Dev fallback for a missing or corrupt stored user |
+| `view-only` | View-only admin (Management set) | Management | read from the saved Management set (ticket 186); every setup page View |
+| `non-admin` | Non-admin (Staff set)  | Staff                 | now read from the saved Staff set (ticket 186); by default the 13 non-admin `page.<id>` (dashboard, schedule, reservations, new-reservation-results, folio, open-folios, unassigned-charges, waitlist, night-audit-history, add-on-countdown, room-blocks, member-directory, reporting); `reservation.edit` | Dev fallback for a missing or corrupt stored user |
 | `partial`   | Partial (Rooms, Room Types) | Staff with some setup | the 13 above plus `page.rooms` and `page.room-types`; `reservation.edit`                                                                                                                                                                         | Dev choice                                        |
 
 Dev only: `localStorage gr.mockUser` selects the user, via the lazy-loaded dev user switcher (absent from

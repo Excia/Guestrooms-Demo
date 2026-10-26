@@ -3,6 +3,7 @@ import Box from '@mui/material/Box';
 import Button, { type ButtonProps } from '@mui/material/Button';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useReadOnly } from '../../app/readOnlyContext';
 import { saveButtonState, type SaveButtonState } from '../../app/saveButtonState';
 
 export interface SaveButtonProps {
@@ -34,6 +35,7 @@ export default function SaveButton({
   disabledReason,
   size = 'large',
 }: SaveButtonProps) {
+  const readOnly = useReadOnly();
   const state = saveButtonState({ dirty, saving, disabled });
   const reasonId = useId();
   const name = noun ? `Save ${noun}` : 'Save';
@@ -58,6 +60,8 @@ export default function SaveButton({
   const accessibleName =
     state === 'saved' ? `Saved${subject}` : state === 'saving' ? `Saving${subject}` : undefined;
 
+  // View-only mode has nothing to save: no button at all (the page says so).
+  if (readOnly) return null;
   return (
     <>
       <Button

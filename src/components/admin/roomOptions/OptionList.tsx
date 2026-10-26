@@ -1,3 +1,4 @@
+import EditOnly from '../EditOnly';
 import AddCircleOutlineOutlined from '@mui/icons-material/AddCircleOutlineOutlined';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -80,9 +81,11 @@ export default function OptionList({
           })}
         </Box>
       )}
-      <Button id={addButtonId(kind)} startIcon={<AddCircleOutlineOutlined />} onClick={onAdd}>
-        {copy.add}
-      </Button>
+      <EditOnly>
+        <Button id={addButtonId(kind)} startIcon={<AddCircleOutlineOutlined />} onClick={onAdd}>
+          {copy.add}
+        </Button>
+      </EditOnly>
     </Box>
   );
 }

@@ -1,3 +1,4 @@
+import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
@@ -6,6 +7,8 @@ import { Link as RouterLink } from 'react-router';
 import type { ChangeLogPageId } from '../../api/changeLogTypes';
 import { ADMIN_NAV } from '../../app/adminNav';
 import { HEADER_HEIGHT } from '../../app/layout';
+import { useReadOnly } from '../../app/readOnlyContext';
+import { READ_ONLY_NOTE } from '../../app/readOnlyText';
 import { useAccess } from '../../app/useAccess';
 import ChangeLogButton from './changeLog/ChangeLogButton';
 
@@ -46,6 +49,7 @@ export default function AdminShell({
   children,
 }: AdminShellProps) {
   const { canAccessPage } = useAccess();
+  const readOnly = useReadOnly();
   return (
     <Box
       sx={(t) => ({
@@ -179,10 +183,11 @@ export default function AdminShell({
             >
               {title}
             </Typography>
-            {changeLog || actions ? (
+            {changeLog || (actions && !readOnly) ? (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 {changeLog ? <ChangeLogButton page={changeLog} /> : null}
-                {actions}
+                {/* View-only: no Save, Cancel or other page action. */}
+                {readOnly ? null : actions}
               </Box>
             ) : null}
           </Box>
@@ -218,6 +223,11 @@ export default function AdminShell({
             },
           })}
         >
+          {readOnly ? (
+            <Alert severity="info" role="note" sx={{ mb: 3 }} data-testid="read-only-note">
+              {READ_ONLY_NOTE}
+            </Alert>
+          ) : null}
           {children}
         </Box>
       </Box>

@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import AddCircle from '@mui/icons-material/AddCircle';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
@@ -72,7 +73,9 @@ export default function Locations() {
 function LocationsEditor({ data }: { data: ReturnType<typeof useLocationsData> }) {
   const api = useApi();
   const { can } = useAccess();
-  const readOnly = !can(LOCATIONS_EDIT_PERMISSION);
+  // View-only from the route (ticket 186) or without `locations.edit` (ticket 182).
+  const viewOnly = useReadOnly();
+  const readOnly = viewOnly || !can(LOCATIONS_EDIT_PERMISSION);
   const saved = useMemo(() => data.locations.map(toLocationInput), [data.locations]);
   // A new club starts with one blank row.
   const [draft, setDraft] = useState<LocationInput[]>(() =>
@@ -153,7 +156,7 @@ function LocationsEditor({ data }: { data: ReturnType<typeof useLocationsData> }
 
   return (
     <AdminShell active="Locations" title="Locations" actions={saveButton} changeLog="locations">
-      {readOnly ? (
+      {readOnly && !viewOnly ? (
         <Alert severity="info" sx={{ mb: 3 }}>
           Locations are read-only. Contact Clubessential to change them.
         </Alert>

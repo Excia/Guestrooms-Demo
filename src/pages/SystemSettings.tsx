@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -39,8 +40,10 @@ const panelId = (id: string) => `system-settings-panel-${id}`;
 
 // System Settings (the menu's "Primary Setup"; Figma 11895:16081 and 11964:11725). One draft
 // for both tabs, one Save button, and Confirm Leaving while the draft differs from what is saved.
-// `readOnly` (View-only admin, Permissions ticket; false today) disables every control and Save.
-export default function SystemSettings({ readOnly = false }: { readOnly?: boolean }) {
+// View-only mode (ticket 186) comes from the route's ReadOnlyProvider; the `readOnly` prop forces it
+// (tests). It disables every control and removes Save.
+export default function SystemSettings({ readOnly: forced = false }: { readOnly?: boolean }) {
+  const readOnly = useReadOnly() || forced;
   const api = useApi();
   const { status, settings: saved, reload, apply } = useSystemSettings();
   const [options, setOptions] = useState<SystemSettingsOptions | null>(null);

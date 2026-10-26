@@ -1,5 +1,6 @@
 import type { RegistrationCardApi, RegistrationCardSettings } from './registrationCardTypes';
 import type { ChangeLogApi } from './changeLogTypes';
+import type { PermissionSet, PermissionSetSummary } from '../app/permissionSets';
 import type { ReservationListApi } from './reservationListTypes';
 
 /** ISO calendar date, `YYYY-MM-DD`. */
@@ -1388,6 +1389,18 @@ export interface PermissionGrant {
 
 export interface PermissionsApi {
   getGrant(options?: RequestOptions): Promise<PermissionGrant>;
+  /**
+   * The permission sets a user can be given (Administrator, Management, Staff): id, name and
+   * whether it is editable. Small and stable on purpose: the Employees page uses it to assign a set.
+   */
+  listPermissionSets(options?: RequestOptions): Promise<PermissionSetSummary[]>;
+  /** The editable sets in full (Access sets, Function sets, Admin Setup levels, PIN override). */
+  getPermissionSets(options?: RequestOptions): Promise<PermissionSet[]>;
+  /**
+   * Replaces the editable sets (repeating a save changes nothing). 403 without `permissions.edit`,
+   * 422 for an unknown or invalid set. A user's own grant changes on their next load.
+   */
+  savePermissionSets(sets: PermissionSet[], options?: RequestOptions): Promise<PermissionSet[]>;
 }
 
 // ---- schedule (rooms by dates grid) --------------------------------------------------------------

@@ -1,3 +1,4 @@
+import EditOnly from '../components/admin/EditOnly';
 import AddCircle from '@mui/icons-material/AddCircle';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
 import Alert from '@mui/material/Alert';
@@ -242,18 +243,20 @@ export default function KeycardIntegration() {
             <Typography id="encoder-key-heading" variant="subtitle2" component="h2">
               Encoder Key
             </Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => void retrieve()}
-              // aria-disabled, not disabled: a disabled button drops keyboard focus.
-              className={retrieving ? 'Mui-disabled' : undefined}
-              aria-disabled={retrieving}
-              aria-busy={retrieving}
-              startIcon={retrieving ? <CircularProgress size={16} color="inherit" /> : undefined}
-            >
-              {retrieving ? 'Retrieving' : 'Retrieve Encoder'}
-            </Button>
+            <EditOnly>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => void retrieve()}
+                // aria-disabled, not disabled: a disabled button drops keyboard focus.
+                className={retrieving ? 'Mui-disabled' : undefined}
+                aria-disabled={retrieving}
+                aria-busy={retrieving}
+                startIcon={retrieving ? <CircularProgress size={16} color="inherit" /> : undefined}
+              >
+                {retrieving ? 'Retrieving' : 'Retrieve Encoder'}
+              </Button>
+            </EditOnly>
           </Box>
           {rows.length === 0 ? (
             <Typography color="text.secondary" sx={{ p: 2 }}>
@@ -312,17 +315,19 @@ export default function KeycardIntegration() {
           )}
         </Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
-          <Button id={ADD_BUTTON_ID} startIcon={<AddCircle />} onClick={addRow}>
-            Add Encoder
-          </Button>
-          <Button
-            color="error"
-            startIcon={<DeleteOutlined />}
-            disabled={rows.length === 0}
-            onClick={() => setConfirmRemoveAll(true)}
-          >
-            Remove All
-          </Button>
+          <EditOnly>
+            <Button id={ADD_BUTTON_ID} startIcon={<AddCircle />} onClick={addRow}>
+              Add Encoder
+            </Button>
+            <Button
+              color="error"
+              startIcon={<DeleteOutlined />}
+              disabled={rows.length === 0}
+              onClick={() => setConfirmRemoveAll(true)}
+            >
+              Remove All
+            </Button>
+          </EditOnly>
         </Box>
       </Box>
     );

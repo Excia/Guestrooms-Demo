@@ -1,3 +1,4 @@
+import { useDisabled } from '../../../app/readOnlyContext';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import ButtonGroup from '@mui/material/ButtonGroup';
@@ -38,7 +39,7 @@ export default function NightsStepper({
       aria-label={label}
       variant="outlined"
       size="small"
-      disabled={disabled}
+      disabled={useDisabled(disabled)}
     >
       <Button
         aria-label={`Decrease ${label}`}

@@ -1,3 +1,4 @@
+import { EditableIsland } from '../ReadOnlyProvider';
 import Close from '@mui/icons-material/Close';
 import ManageSearch from '@mui/icons-material/ManageSearch';
 import Search from '@mui/icons-material/Search';
@@ -149,190 +150,192 @@ export default function ChangeLogOverlay({ page, record, open, onClose }: Change
   }
 
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      aria-labelledby={titleId}
-      maxWidth={false}
-      scroll="paper"
-      slotProps={{
-        paper: {
-          sx: (t) => ({
-            // Legacy hub change log modal: 85vw wide, 80vh tall. Below 600px it keeps 16px margins.
-            width: '85vw',
-            height: '80vh',
-            m: 4,
-            display: 'flex',
-            flexDirection: 'column',
-            [t.breakpoints.down('sm')]: {
-              width: '100%',
-              m: 2,
-              maxHeight: `calc(100% - ${t.spacing(4)})`,
-            },
-          }),
-        },
-      }}
-    >
-      <Box
-        sx={(t) => ({
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          gap: 2,
-          px: 2.5,
-          pt: 2,
-          pb: 1.5,
-          borderBottom: `1px solid ${t.palette.divider}`,
-        })}
-      >
-        <Typography
-          id={titleId}
-          variant="subtitle1"
-          component="h2"
-          sx={{ fontWeight: 'bold', flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
-        >
-          {changeLogTitle(page, record?.name)}
-        </Typography>
-        <Box
-          component="form"
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setFilters((f) => ({ ...f, search: searchDraft.trim() || undefined }));
-            setPageNumber(1);
-          }}
-          sx={(t) => ({ flex: '0 1 auto', width: { xs: '100%', sm: t.spacing(40) } })}
-        >
-          <TextField
-            label="Search descriptions"
-            size="small"
-            fullWidth
-            value={searchDraft}
-            onChange={(e) => setSearchDraft(e.target.value)}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    {active.has('search') ? (
-                      <ManageSearch color="primary" aria-hidden />
-                    ) : (
-                      <Search color="primary" aria-hidden />
-                    )}
-                  </InputAdornment>
-                ),
+    <EditableIsland>
+      <Dialog
+        open={open}
+        onClose={onClose}
+        aria-labelledby={titleId}
+        maxWidth={false}
+        scroll="paper"
+        slotProps={{
+          paper: {
+            sx: (t) => ({
+              // Legacy hub change log modal: 85vw wide, 80vh tall. Below 600px it keeps 16px margins.
+              width: '85vw',
+              height: '80vh',
+              m: 4,
+              display: 'flex',
+              flexDirection: 'column',
+              [t.breakpoints.down('sm')]: {
+                width: '100%',
+                m: 2,
+                maxHeight: `calc(100% - ${t.spacing(4)})`,
               },
-            }}
-          />
-        </Box>
-        <IconButton aria-label="Close Change Log" onClick={onClose} edge="end">
-          <Close />
-        </IconButton>
-      </Box>
-      <Box component="p" role="status" sx={{ ...visuallyHidden }}>
-        {status === 'loading'
-          ? 'Loading change log'
-          : status === 'ready'
-            ? `${total} ${total === 1 ? 'change' : 'changes'}`
-            : ''}
-      </Box>
-      {active.size > 0 ? (
-        <Box sx={{ px: 2.5, pt: 1 }}>
-          <Button onClick={clearAll}>Clear all filters</Button>
-        </Box>
-      ) : null}
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 2.5 }}>
-        <Table
-          stickyHeader
-          aria-labelledby={titleId}
-          aria-busy={status === 'loading'}
-          size="medium"
-          sx={{ opacity: reloading ? 0.5 : 1 }}
-        >
-          <TableHead>
-            <TableRow>
-              {COLUMNS.map((c) => (
-                <TableCell
-                  key={c.field}
-                  component="th"
-                  scope="col"
-                  aria-sort={c.field === 'description' ? undefined : ariaSortFor(sort, c.field)}
-                  sx={{ width: c.width, whiteSpace: 'nowrap' }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                    <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
-                      {c.label}
-                    </Typography>
-                    {c.field !== 'description' ? (
-                      <ColumnFilter
-                        field={c.field}
-                        label={c.label}
-                        sort={sort}
-                        onSort={(direction) => {
-                          setSort({ field: c.field as ChangeLogSortField, direction });
-                          setPageNumber(1);
-                        }}
-                        filters={filters}
-                        onApply={applyFilters}
-                        eventTypes={eventTypes}
-                        typesStatus={typesStatus}
-                        active={active.has(c.field)}
-                      />
-                    ) : null}
-                  </Box>
-                </TableCell>
-              ))}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {status === 'ready' && items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={COLUMNS.length}>
-                  <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
-                    {active.size > 0
-                      ? 'No changes match the filters.'
-                      : record
-                        ? 'No changes have been recorded for this item in the last year.'
-                        : 'No changes have been recorded for this page in the last year.'}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : null}
-            {items.map((entry) => (
-              <TableRow key={entry.id} hover>
-                <TableCell>{formatLogDate(entry.date)}</TableCell>
-                <TableCell>{formatLogTime(entry.time)}</TableCell>
-                <TableCell>{changeTypeLabel(entry.changeType, typeLabels) ?? '…'}</TableCell>
-                <TableCell>{entry.description}</TableCell>
-                <TableCell>{entry.actionBy}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {body ? <Box sx={{ mt: 2 }}>{body}</Box> : null}
-      </Box>
-      <Box
-        sx={(t) => ({
-          px: 2.5,
-          py: 1.5,
-          borderTop: `1px solid ${t.palette.divider}`,
-        })}
+            }),
+          },
+        }}
       >
-        {status !== 'error' ? (
-          <Pagination
-            label="Change Log pages"
-            page={pageNumber}
-            rowsPerPage={rowsPerPage}
-            total={status === 'ready' ? total : undefined}
-            onChange={(next) => {
-              setPageNumber(next.page);
-              setRowsPerPage(next.rowsPerPage);
+        <Box
+          sx={(t) => ({
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 2,
+            px: 2.5,
+            pt: 2,
+            pb: 1.5,
+            borderBottom: `1px solid ${t.palette.divider}`,
+          })}
+        >
+          <Typography
+            id={titleId}
+            variant="subtitle1"
+            component="h2"
+            sx={{ fontWeight: 'bold', flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
+          >
+            {changeLogTitle(page, record?.name)}
+          </Typography>
+          <Box
+            component="form"
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setFilters((f) => ({ ...f, search: searchDraft.trim() || undefined }));
+              setPageNumber(1);
             }}
-          />
+            sx={(t) => ({ flex: '0 1 auto', width: { xs: '100%', sm: t.spacing(40) } })}
+          >
+            <TextField
+              label="Search descriptions"
+              size="small"
+              fullWidth
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      {active.has('search') ? (
+                        <ManageSearch color="primary" aria-hidden />
+                      ) : (
+                        <Search color="primary" aria-hidden />
+                      )}
+                    </InputAdornment>
+                  ),
+                },
+              }}
+            />
+          </Box>
+          <IconButton aria-label="Close Change Log" onClick={onClose} edge="end">
+            <Close />
+          </IconButton>
+        </Box>
+        <Box component="p" role="status" sx={{ ...visuallyHidden }}>
+          {status === 'loading'
+            ? 'Loading change log'
+            : status === 'ready'
+              ? `${total} ${total === 1 ? 'change' : 'changes'}`
+              : ''}
+        </Box>
+        {active.size > 0 ? (
+          <Box sx={{ px: 2.5, pt: 1 }}>
+            <Button onClick={clearAll}>Clear all filters</Button>
+          </Box>
         ) : null}
-        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
-          Changes are kept for one year.
-        </Typography>
-      </Box>
-    </Dialog>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 2.5 }}>
+          <Table
+            stickyHeader
+            aria-labelledby={titleId}
+            aria-busy={status === 'loading'}
+            size="medium"
+            sx={{ opacity: reloading ? 0.5 : 1 }}
+          >
+            <TableHead>
+              <TableRow>
+                {COLUMNS.map((c) => (
+                  <TableCell
+                    key={c.field}
+                    component="th"
+                    scope="col"
+                    aria-sort={c.field === 'description' ? undefined : ariaSortFor(sort, c.field)}
+                    sx={{ width: c.width, whiteSpace: 'nowrap' }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Typography variant="body2" component="span" sx={{ fontWeight: 500 }}>
+                        {c.label}
+                      </Typography>
+                      {c.field !== 'description' ? (
+                        <ColumnFilter
+                          field={c.field}
+                          label={c.label}
+                          sort={sort}
+                          onSort={(direction) => {
+                            setSort({ field: c.field as ChangeLogSortField, direction });
+                            setPageNumber(1);
+                          }}
+                          filters={filters}
+                          onApply={applyFilters}
+                          eventTypes={eventTypes}
+                          typesStatus={typesStatus}
+                          active={active.has(c.field)}
+                        />
+                      ) : null}
+                    </Box>
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {status === 'ready' && items.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={COLUMNS.length}>
+                    <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
+                      {active.size > 0
+                        ? 'No changes match the filters.'
+                        : record
+                          ? 'No changes have been recorded for this item in the last year.'
+                          : 'No changes have been recorded for this page in the last year.'}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {items.map((entry) => (
+                <TableRow key={entry.id} hover>
+                  <TableCell>{formatLogDate(entry.date)}</TableCell>
+                  <TableCell>{formatLogTime(entry.time)}</TableCell>
+                  <TableCell>{changeTypeLabel(entry.changeType, typeLabels) ?? '…'}</TableCell>
+                  <TableCell>{entry.description}</TableCell>
+                  <TableCell>{entry.actionBy}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          {body ? <Box sx={{ mt: 2 }}>{body}</Box> : null}
+        </Box>
+        <Box
+          sx={(t) => ({
+            px: 2.5,
+            py: 1.5,
+            borderTop: `1px solid ${t.palette.divider}`,
+          })}
+        >
+          {status !== 'error' ? (
+            <Pagination
+              label="Change Log pages"
+              page={pageNumber}
+              rowsPerPage={rowsPerPage}
+              total={status === 'ready' ? total : undefined}
+              onChange={(next) => {
+                setPageNumber(next.page);
+                setRowsPerPage(next.rowsPerPage);
+              }}
+            />
+          ) : null}
+          <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }}>
+            Changes are kept for one year.
+          </Typography>
+        </Box>
+      </Dialog>
+    </EditableIsland>
   );
 }

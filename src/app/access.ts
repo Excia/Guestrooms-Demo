@@ -1,6 +1,8 @@
 import {
+  adminEditPermission,
   ADMIN_PERMISSION,
   pagePermission,
+  type AdminPageId,
   type PermissionPageId,
   type Permissions,
 } from './permissions';
@@ -49,4 +51,23 @@ export type GuardDecision = 'wait' | 'allow' | 'deny';
 export function guardDecision(status: AccessStatus, allowed: boolean): GuardDecision {
   if (status === 'loading') return 'wait';
   return status === 'ready' && allowed ? 'allow' : 'deny';
+}
+
+/** How far a user may go on a page: not at all, look only (View-only mode), or change it. */
+export type PageLevel = 'none' | 'view' | 'edit';
+
+/**
+ * The level on an Admin Setup page. `admin` and `<id>.edit` give Edit, `page.<id>` alone gives View.
+ * Any other page id (or an unknown one) has no View-only mode: it is Edit when it opens, else none.
+ */
+export function adminPageLevel(
+  can: Can,
+  id: string,
+  table: readonly RouteMeta[] = routes,
+): PageLevel {
+  if (!canAccessPage(can, id, table)) return 'none';
+  const route = table.find((r) => r.id === id);
+  if (route?.section !== 'admin' || id === ADMIN_LANDING_ID) return 'edit';
+  if (can(ADMIN_PERMISSION) || can(adminEditPermission(id as AdminPageId))) return 'edit';
+  return 'view';
 }

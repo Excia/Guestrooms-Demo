@@ -1,3 +1,4 @@
+import { useReadOnly } from '../../app/readOnlyContext';
 import Delete from '@mui/icons-material/Delete';
 import Box from '@mui/material/Box';
 import IconButton, { type IconButtonProps } from '@mui/material/IconButton';
@@ -30,6 +31,9 @@ export default function RemoveIconButton({
   sx,
 }: RemoveIconButtonProps) {
   const reasonId = useId();
+  // View-only mode removes nothing, so the control is not there.
+  const readOnly = useReadOnly();
+  if (readOnly) return null;
   const name = `Remove ${label}`;
   const reason = disabled ? disabledReason : undefined;
   return (

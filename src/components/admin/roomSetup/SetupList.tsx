@@ -15,6 +15,7 @@ import MenuItem from '@mui/material/MenuItem';
 import { visuallyHidden } from '@mui/utils';
 import { useRef, useState } from 'react';
 import type { ChangeLogPageId } from '../../../api/changeLogTypes';
+import { useReadOnly } from '../../../app/readOnlyContext';
 import { setupMoreMenuLabels, showsMoreMenu } from '../../../app/setupMoreMenu';
 import ChangeLogOverlay from '../changeLog/ChangeLogOverlay';
 
@@ -77,6 +78,8 @@ export default function SetupList({
   more,
   reorder,
 }: SetupListProps) {
+  // View-only: no New, no reorder, and the three-dot menu keeps only the Change Log.
+  const readOnly = useReadOnly();
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   // The item whose log is open, fixed when the menu item is chosen (the selection can change behind the dialog).
@@ -197,7 +200,7 @@ export default function SetupList({
   );
   // The add action as the first row of the list (singleNewRow): outlined until the new item is edited.
   const addRow = () =>
-    creating ? (
+    readOnly ? null : creating ? (
       row('new', newTitle, true, undefined, false, true)
     ) : (
       <Box component="li" key="new" sx={{ display: 'flex' }}>
@@ -223,7 +226,7 @@ export default function SetupList({
     );
   return (
     <Box>
-      {singleNewRow ? null : (
+      {singleNewRow || readOnly ? null : (
         <Box
           sx={(t) => ({
             display: 'flex',
@@ -331,27 +334,31 @@ export default function SetupList({
               </ListItemIcon>
               <ListItemText>{setupMoreMenuLabels(more.noun, '').changeLog}</ListItemText>
             </MenuItem>
-            <MenuItem
-              onClick={() => {
-                chooseAfterClose(more.onCopy);
-              }}
-            >
-              <ListItemIcon>
-                <ContentCopy color="primary" />
-              </ListItemIcon>
-              <ListItemText>{setupMoreMenuLabels(more.noun, '').copy}</ListItemText>
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                chooseAfterClose(more.onDelete);
-              }}
-              sx={{ color: 'error.main' }}
-            >
-              <ListItemIcon>
-                <Delete color="error" />
-              </ListItemIcon>
-              <ListItemText>{setupMoreMenuLabels(more.noun, '').delete}</ListItemText>
-            </MenuItem>
+            {readOnly ? null : (
+              <MenuItem
+                onClick={() => {
+                  chooseAfterClose(more.onCopy);
+                }}
+              >
+                <ListItemIcon>
+                  <ContentCopy color="primary" />
+                </ListItemIcon>
+                <ListItemText>{setupMoreMenuLabels(more.noun, '').copy}</ListItemText>
+              </MenuItem>
+            )}
+            {readOnly ? null : (
+              <MenuItem
+                onClick={() => {
+                  chooseAfterClose(more.onDelete);
+                }}
+                sx={{ color: 'error.main' }}
+              >
+                <ListItemIcon>
+                  <Delete color="error" />
+                </ListItemIcon>
+                <ListItemText>{setupMoreMenuLabels(more.noun, '').delete}</ListItemText>
+              </MenuItem>
+            )}
           </Menu>
           <ChangeLogOverlay
             key={logSession}

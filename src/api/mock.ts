@@ -10,12 +10,21 @@ import {
   noGrant,
 } from './mockData';
 import {
+  adminEditPermission,
   checkInLevel,
   LOCATIONS_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
 } from '../app/permissions';
 import { clubClock } from '../lib/clubTime';
 import { permissionsFromGrant } from './grant';
+import { mockPermissionSets } from './permissionSetsData';
+import {
+  grantFromSet,
+  normalizeSet,
+  summarizeSets,
+  validateSets,
+  type PermissionSet,
+} from '../app/permissionSets';
 import { mockBookingRules, MOCK_BOOKING_RULES_OPTIONS } from './bookingRulesData';
 import { previewRegistrationCardUrl } from './registrationCardData';
 import { assertChangeLogQuery } from './changeLogValidation';
@@ -144,6 +153,16 @@ export interface MockOptions {
   pageSize?: number;
   /** What `permissions.getGrant` returns in the normal scenario; defaults to an unrestricted user. */
   grant?: PermissionGrant;
+  /**
+   * The permission set the signed-in user belongs to (`management`, `staff`). When given, the grant
+   * is derived from the saved set on every call, so editing the set changes `can()` after a reload.
+   */
+  permissionSetId?: string;
+  /** Keeps the edited sets between page loads (the dev app uses localStorage; tests pass nothing). */
+  permissionSetsStore?: {
+    load(): readonly PermissionSet[] | null;
+    save(sets: PermissionSet[]): void;
+  };
   /** The schedule's "today": data is laid out around it and arrivals before it are the past. */
   today?: IsoDate;
   /** Schedule inventory: `default` (about 30 rooms) or `large` (200 rooms, for performance). */
@@ -180,7 +199,9 @@ export function createMockClient({
   scenario = 'normal',
   latencyMs = 0,
   pageSize = MOCK_PAGE_SIZE,
-  grant = fullGrant,
+  grant: staticGrant = fullGrant,
+  permissionSetId,
+  permissionSetsStore,
   today = MOCK_TODAY,
   scheduleSize = 'default',
   roomChangeRule = MOCK_ROOM_CHANGE_RULE,
@@ -209,7 +230,14 @@ export function createMockClient({
   let locations = mockLocations();
   const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
-  const canEditReservations = () => permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION);
+  let permissionSets = (permissionSetsStore?.load() ?? mockPermissionSets()).map(normalizeSet);
+  // The signed-in user's grant: derived from their (saved) permission set, else the fixed one.
+  const currentGrant = (): PermissionGrant => {
+    const set = permissionSetId ? permissionSets.find((s) => s.id === permissionSetId) : undefined;
+    return set ? { role: set.name, permissions: grantFromSet(set) } : staticGrant;
+  };
+  const canEditReservations = () =>
+    permissionsFromGrant(currentGrant()).can(RESERVATION_EDIT_PERMISSION);
   // Idempotency: the first result per `requestId`, replayed for a repeat of the same request.
   const replays = new Map<string, { fingerprint: string; result: unknown }>();
   function replayable<T>(request: { requestId: string }, apply: () => T): T {
@@ -288,7 +316,7 @@ export function createMockClient({
     // The mock's "today" is configured; only the time of day follows the club's real clock.
     clock: { date: schedule.today, time: clubClock(systemSettings.timeZone, now()).time },
     checkOutTime: systemSettings.checkOutTime,
-    level: checkInLevel(permissionsFromGrant(grant).can),
+    level: checkInLevel(permissionsFromGrant(currentGrant()).can),
   });
 
   return {
@@ -384,7 +412,7 @@ export function createMockClient({
         respond(
           () => {
             assertChangeRoomRequest(request);
-            if (!permissionsFromGrant(grant).can(RESERVATION_EDIT_PERMISSION)) {
+            if (!permissionsFromGrant(currentGrant()).can(RESERVATION_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
             }
             return replayable(request, () =>
@@ -864,7 +892,7 @@ export function createMockClient({
       save: (rows, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(grant).can(LOCATIONS_EDIT_PERMISSION)) {
+            if (!permissionsFromGrant(currentGrant()).can(LOCATIONS_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change locations', { code: 'forbidden' });
             }
             // Like the backend: the area has to exist, not only be present.
@@ -1383,8 +1411,43 @@ export function createMockClient({
     permissions: {
       getGrant: (o) =>
         respond(
-          () => structuredClone(grant),
+          () => structuredClone(currentGrant()),
           () => structuredClone(noGrant),
+          o,
+        ),
+      listPermissionSets: (o) =>
+        respond(
+          () => summarizeSets(permissionSets),
+          () => summarizeSets([]),
+          o,
+        ),
+      getPermissionSets: (o) =>
+        respond(
+          () => structuredClone(permissionSets),
+          () => [],
+          o,
+        ),
+      savePermissionSets: (sets, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(currentGrant()).can(adminEditPermission('permissions'))) {
+              throw new ApiError(403, 'You may not change permissions', { code: 'forbidden' });
+            }
+            // Like the backend: only the existing editable sets, each valid.
+            if (
+              validateSets(sets).length > 0 ||
+              sets.some((s) => !permissionSets.some((p) => p.id === s.id))
+            ) {
+              throw new ApiError(422, 'Permission sets are not valid', { code: 'validation' });
+            }
+            permissionSets = permissionSets.map((p) => {
+              const next = sets.find((s) => s.id === p.id);
+              return next ? normalizeSet({ ...next, name: p.name }) : p;
+            });
+            permissionSetsStore?.save(structuredClone(permissionSets));
+            return structuredClone(permissionSets);
+          },
+          () => [],
           o,
         ),
     },
