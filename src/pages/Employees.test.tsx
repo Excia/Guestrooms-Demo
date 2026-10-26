@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router';
+import { Link, MemoryRouter } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import { ApiError, type ApiClient } from '../api/types';
@@ -14,6 +14,7 @@ function renderPage(client: ApiClient = createMockClient(), granted?: readonly P
     <ApiProvider client={client}>
       <GrantedAccess granted={granted}>
         <MemoryRouter initialEntries={['/admin/employees']}>
+          <Link to="/schedule">Go to schedule</Link>
           {granted ? (
             <RequireAccess pageId="employees">
               <Employees />
@@ -27,31 +28,57 @@ function renderPage(client: ApiClient = createMockClient(), granted?: readonly P
   );
 }
 
-const loaded = () => screen.findByRole('navigation', { name: 'Employees' });
-const save = () => screen.getByRole('button', { name: saveButtonName('Employee') });
-const pick = async (user: ReturnType<typeof userEvent.setup>, field: RegExp, option: string) => {
-  await user.click(screen.getByRole('combobox', { name: field }));
+const loaded = () => screen.findByRole('list', { name: 'Employees' });
+const save = () => screen.getByRole('button', { name: saveButtonName('Employees') });
+const typeOf = (name: string) => screen.getByRole('combobox', { name: `Employee Type, ${name}` });
+const choose = async (
+  user: ReturnType<typeof userEvent.setup>,
+  field: HTMLElement,
+  option: string,
+) => {
+  await user.click(field);
   await user.click(await screen.findByRole('option', { name: option }));
 };
 
-describe('Employees page', () => {
-  it('lists active employees by name, inactive last, and shows the first one', async () => {
+describe('Employees page (legacy EmployeesEdit)', () => {
+  it('lists every employee as a read-only Name and an Employee Type, in the server order', async () => {
     renderPage();
-    const nav = await loaded();
-    const rows = within(nav).getAllByRole('listitem');
-    expect(rows[0]).toHaveTextContent('Alex Moreno');
-    expect(rows[rows.length - 1]).toHaveTextContent('Tom Hale');
-    expect(rows[rows.length - 1]).toHaveTextContent('Inactive');
-    expect(screen.getByRole('heading', { level: 1, name: 'Alex Moreno' })).toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Employee' })).toHaveAttribute('readonly');
-    expect(screen.getByRole('combobox', { name: /Employee Type/ })).toHaveTextContent(
-      'Administrator',
-    );
-    expect(screen.getByRole('button', { name: 'Change Log' })).toBeInTheDocument();
+    const list = await loaded();
+    const rows = within(list).getAllByRole('group');
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
+      'Alex Moreno',
+      'Marcus Bell',
+      'Dana Whitfield',
+      'Priya Nair',
+      'Tom Hale',
+      'Grace Okafor',
+    ]);
+    const name = within(rows[1]).getByRole('textbox', { name: 'Name' });
+    expect(name).toHaveValue('Marcus Bell');
+    expect(name).toHaveAttribute('readonly');
+    expect(typeOf('Marcus Bell')).toHaveTextContent('Manager');
+    expect(screen.getByRole('heading', { level: 1, name: 'Employees' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Employees' })).toHaveAttribute('aria-current', 'page');
+    // No permission set, Active switch or list of items on the legacy screen.
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Permission Set/)).not.toBeInTheDocument();
     expect(save()).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Add Employee' })).toBeInTheDocument();
   });
 
-  it('shows a loading indicator, then an error with Retry that reloads', async () => {
+  it('offers the three legacy types', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(typeOf('Marcus Bell'));
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Administrator',
+      'Manager',
+      'Staff',
+    ]);
+  });
+
+  it('shows loading, then an error with Retry that reloads', async () => {
     const client = createMockClient();
     const list = vi
       .fn()
@@ -64,256 +91,166 @@ describe('Employees page', () => {
     expect(await loaded()).toBeInTheDocument();
   });
 
-  it('shows the empty state with a new employee form', async () => {
+  it('shows only the Add Employee button when there are no employees', async () => {
     renderPage(createMockClient({ scenario: 'empty' }));
-    await loaded();
-    expect(screen.getByText(/No employees have access yet/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1, name: 'New Employee' })).toBeInTheDocument();
+    const list = await loaded();
+    expect(within(list).queryAllByRole('group')).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Add Employee' })).toBeInTheDocument();
   });
 
-  it('adds an employee from the directory with a type and permission set', async () => {
+  it('changes a type and saves it; Save reads Saved afterwards', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
-    const saveSpy = vi.spyOn(client.employees, 'save');
+    const spy = vi.spyOn(client.employees, 'saveRoles');
     renderPage(client);
     await loaded();
-    await user.click(screen.getByRole('button', { name: 'New Employee' }));
-    expect(screen.getByRole('heading', { level: 1, name: 'New Employee' })).toBeInTheDocument();
+    await choose(user, typeOf('Dana Whitfield'), 'Manager');
+    expect(save()).not.toHaveAttribute('aria-disabled');
     await user.click(save());
-    // Required fields: the first problem takes focus and is described.
-    const person = screen.getByRole('combobox', { name: /^Employee( \*)?$/ });
-    expect(person).toHaveFocus();
-    expect(person).toHaveAccessibleDescription('Select an employee.');
-    expect(saveSpy).not.toHaveBeenCalled();
-
-    await user.type(person, 'sam');
-    await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
-    await pick(user, /Permission Set/, 'Staff');
-    await user.click(save());
-    expect((await screen.findAllByText('Employee Saved')).length).toBeGreaterThan(0);
-    expect(saveSpy.mock.calls[0][0]).toEqual({
-      id: 'dir-1',
-      role: 'staff',
-      permissionSetId: 'staff',
-      active: true,
-    });
-    expect(screen.getByRole('heading', { level: 1, name: 'Sam Rivera' })).toBeInTheDocument();
+    expect((await screen.findAllByText('Employees Saved')).length).toBeGreaterThan(0);
+    expect(spy).toHaveBeenCalledWith([{ id: 'emp-3', role: 'manager' }]);
+    expect(typeOf('Dana Whitfield')).toHaveTextContent('Manager');
     expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('needs no permission set for an administrator', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await loaded();
-    await user.click(screen.getByRole('button', { name: 'New Employee' }));
-    await pick(user, /Employee Type/, 'Administrator');
-    expect(screen.getByRole('combobox', { name: /Permission Set/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(screen.getByText('Administrators have access to everything.')).toBeInTheDocument();
-  });
-
-  it('edits the type and permission set of an employee and saves', async () => {
+  it('adds an employee from the directory: lookup, type, one Save', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
+    const spy = vi.spyOn(client.employees, 'saveRoles');
     renderPage(client);
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await pick(user, /Employee Type/, 'Manager');
-    await pick(user, /Permission Set/, 'Management');
-    await user.click(save());
-    expect((await screen.findAllByText('Employee Saved')).length).toBeGreaterThan(0);
-    expect((await client.employees.list()).find((e) => e.id === 'emp-3')).toMatchObject({
-      role: 'manager',
-      permissionSetId: 'management',
-    });
-  });
-
-  it('deactivates an employee, who then moves to the end with the Inactive tag', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await user.click(screen.getByRole('switch', { name: 'Active' }));
-    await user.click(save());
-    await screen.findAllByText('Employee Saved');
-    const rows = within(nav).getAllByRole('listitem');
-    // Inactive employees are last, by name: Dana before Tom.
-    expect(rows[rows.length - 2]).toHaveTextContent('Dana Whitfield');
-    expect(rows[rows.length - 2]).toHaveTextContent('Inactive');
-  });
-
-  it('does not offer edits of the only active administrator, and says why', async () => {
-    renderPage();
     await loaded();
-    const type = screen.getByRole('combobox', { name: /Employee Type/ });
-    expect(type).toHaveAttribute('aria-disabled', 'true');
-    expect(type).toHaveAccessibleDescription(/only active administrator/);
-    expect(screen.getByRole('switch', { name: 'Active' })).toBeDisabled();
-  });
-
-  it('shows the type and permission set under the title', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Marcus Bell' }));
-    expect(screen.getByText('Manager, Management')).toBeInTheDocument();
-    await user.click(within(nav).getByRole('button', { name: /Tom Hale/ }));
-    expect(screen.getByText('Staff, Staff, Inactive')).toBeInTheDocument();
-  });
-
-  it('clears a save error when another employee is selected', async () => {
-    const user = userEvent.setup();
-    const client = createMockClient();
-    const failing = vi.fn().mockRejectedValue(new ApiError(500, 'boom'));
-    renderPage({ ...client, employees: { ...client.employees, save: failing } });
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await user.click(screen.getByRole('switch', { name: 'Active' }));
-    await user.click(save());
-    await screen.findByText('The employee could not be saved. Try again.');
-    await user.click(screen.getByRole('switch', { name: 'Active' }));
-    expect(
-      screen.queryByText('The employee could not be saved. Try again.'),
-    ).not.toBeInTheDocument();
-  });
-
-  it('does not offer a saved person again when the refresh after the save fails', async () => {
-    const user = userEvent.setup();
-    const client = createMockClient();
-    const list = vi
-      .fn()
-      .mockImplementationOnce(() => client.employees.list())
-      .mockRejectedValue(new ApiError(500, 'boom'));
-    renderPage({ ...client, employees: { ...client.employees, list } });
-    await loaded();
-    await user.click(screen.getByRole('button', { name: 'New Employee' }));
-    await user.type(screen.getByRole('combobox', { name: /^Employee( \*)?$/ }), 'sam');
+    await user.click(screen.getByRole('button', { name: 'Add Employee' }));
+    // Legacy: the add button is replaced by the new row; the lookup takes focus.
+    expect(screen.queryByRole('button', { name: 'Add Employee' })).not.toBeInTheDocument();
+    const lookup = screen.getByRole('combobox', { name: 'Add Employee' });
+    expect(lookup).toHaveFocus();
+    await user.type(lookup, 'sam');
     await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
-    await pick(user, /Permission Set/, 'Staff');
+    await choose(
+      user,
+      screen.getByRole('combobox', { name: 'Employee Type, new employee' }),
+      'Staff',
+    );
     await user.click(save());
-    await screen.findAllByText('Employee Saved');
-    await user.click(screen.getByRole('button', { name: 'New Employee' }));
-    await user.click(screen.getByRole('combobox', { name: /^Employee( \*)?$/ }));
-    expect(screen.queryByRole('option', { name: 'Sam Rivera' })).not.toBeInTheDocument();
-    expect(await screen.findByRole('option', { name: 'Lena Park' })).toBeInTheDocument();
+    expect((await screen.findAllByText('Employees Saved')).length).toBeGreaterThan(0);
+    expect(spy).toHaveBeenCalledWith([{ id: 'dir-1', role: 'staff' }]);
+    const list = screen.getByRole('list', { name: 'Employees' });
+    expect(within(list).getByRole('group', { name: 'Sam Rivera' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Employee' })).toBeInTheDocument();
   });
 
-  it('removes an employee from the three-dot menu after a confirmation', async () => {
+  it('refuses a new row without a type in the legacy validation dialog', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
+    const spy = vi.spyOn(client.employees, 'saveRoles');
     renderPage(client);
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await user.click(screen.getByRole('button', { name: 'Dana Whitfield more options' }));
-    expect(screen.queryByRole('menuitem', { name: /Copy/ })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('menuitem', { name: 'Remove Employee' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Remove this employee?' });
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Employee' }));
+    await user.type(screen.getByRole('combobox', { name: 'Add Employee' }), 'sam');
+    await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
+    await user.click(save());
+    const dialog = await screen.findByRole('dialog', { name: 'Validation Error(s)' });
+    expect(within(dialog).getByText('Please correct the following errors:')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Please select an employee and an employee type.'),
+    ).toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('cancels the new row with its remove button, and disables Remove on the others meanwhile', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Employee' }));
+    expect(screen.getByRole('button', { name: 'Remove Marcus Bell' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Remove new employee' }));
+    expect(screen.queryByRole('group', { name: 'New employee' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Employee' })).toHaveFocus();
+  });
+
+  it('does not offer Remove or a type change for the only administrator, until another is promoted', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    expect(screen.queryByRole('button', { name: 'Remove Alex Moreno' })).not.toBeInTheDocument();
+    expect(typeOf('Alex Moreno')).toHaveAttribute('aria-disabled', 'true');
+    expect(typeOf('Alex Moreno')).toHaveAccessibleDescription(/only administrator/);
+    await choose(user, typeOf('Marcus Bell'), 'Administrator');
+    expect(typeOf('Alex Moreno')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Remove Alex Moreno' })).toBeInTheDocument();
+  });
+
+  it('removes after the legacy confirmation at once, without Save; unsaved type edits stay', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const remove = vi.spyOn(client.employees, 'remove');
+    renderPage(client);
+    const list = await loaded();
+    await choose(user, typeOf('Dana Whitfield'), 'Manager');
+    await user.click(screen.getByRole('button', { name: 'Remove Priya Nair' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm' });
+    expect(
+      within(dialog).getByText('Are you sure you want to remove this Employee?'),
+    ).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toHaveFocus();
-    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    await user.click(within(dialog).getByRole('button', { name: 'OK' }));
     await waitFor(() =>
-      expect(within(nav).queryByRole('button', { name: 'Dana Whitfield' })).not.toBeInTheDocument(),
+      expect(within(list).queryByRole('group', { name: 'Priya Nair' })).not.toBeInTheDocument(),
     );
-    expect((await client.employees.list()).some((e) => e.id === 'emp-3')).toBe(false);
-  });
-
-  it('blocks removing the only active administrator', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await loaded();
-    await user.click(screen.getByRole('button', { name: 'Alex Moreno more options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Remove Employee' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Cannot remove this employee' });
-    expect(within(dialog).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
-    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
-  });
-
-  it('shows a message when the save fails and keeps the edits', async () => {
-    const user = userEvent.setup();
-    const client = createMockClient();
-    const failing = vi.fn().mockRejectedValue(new ApiError(500, 'boom'));
-    renderPage({ ...client, employees: { ...client.employees, save: failing } });
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await user.click(screen.getByRole('switch', { name: 'Active' }));
-    await user.click(save());
-    expect(
-      await screen.findByText('The employee could not be saved. Try again.'),
-    ).toBeInTheDocument();
+    expect(remove).toHaveBeenCalledWith('emp-4');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(typeOf('Dana Whitfield')).toHaveTextContent('Manager');
     expect(save()).not.toHaveAttribute('aria-disabled');
+    // The person can be added again.
+    expect((await client.employees.listCandidates()).some((c) => c.id === 'emp-4')).toBe(true);
   });
 
-  it('asks before switching employees with unsaved changes', async () => {
+  it('keeps the list when the confirmation is cancelled', async () => {
     const user = userEvent.setup();
-    renderPage();
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await user.click(screen.getByRole('switch', { name: 'Active' }));
-    await user.click(within(nav).getByRole('button', { name: 'Marcus Bell' }));
-    expect(
-      await screen.findByRole('dialog', { name: 'This employee has not been saved.' }),
-    ).toBeInTheDocument();
-  });
-
-  it('is view-only without employees.edit: no New, Save, menu, and fields are disabled', async () => {
-    renderPage(createMockClient(), ['page.employees']);
-    await loaded();
-    expect(screen.getByTestId('read-only-note')).toHaveTextContent('View only');
-    expect(screen.queryByRole('button', { name: 'New Employee' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
-    // The three-dot menu keeps only the Change Log: no Remove, no Copy.
-    await userEvent.click(screen.getByRole('button', { name: /more options/ }));
-    expect(screen.getByRole('menuitem', { name: 'Change Log' })).toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Remove Employee' })).not.toBeInTheDocument();
-    await userEvent.keyboard('{Escape}');
-    expect(screen.getByRole('combobox', { name: /Employee Type/ })).toHaveAttribute(
-      'aria-disabled',
-      'true',
-    );
-    expect(screen.getByRole('switch', { name: 'Active' })).toBeDisabled();
-  });
-
-  const removeVia = async (client: ApiClient) => {
-    const user = userEvent.setup();
-    renderPage(client);
-    const nav = await loaded();
-    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
-    await user.click(screen.getByRole('button', { name: 'Dana Whitfield more options' }));
-    await user.click(screen.getByRole('menuitem', { name: 'Remove Employee' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Remove this employee?' });
-    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    return { nav, dialog };
-  };
-  const failingRemove = (error: ApiError) => {
     const client = createMockClient();
-    return {
-      ...client,
-      employees: { ...client.employees, remove: vi.fn().mockRejectedValue(error) },
-    };
-  };
-
-  it('explains a 409 on remove inside the dialog', async () => {
-    const { dialog } = await removeVia(failingRemove(new ApiError(409, 'x')));
-    expect(
-      await within(dialog).findByText(/at least one active administrator/),
-    ).toBeInTheDocument();
+    const remove = vi.spyOn(client.employees, 'remove');
+    renderPage(client);
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Remove Priya Nair' }));
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(remove).not.toHaveBeenCalled();
   });
 
-  it('explains a 403 on remove inside the dialog', async () => {
-    const { dialog } = await removeVia(failingRemove(new ApiError(403, 'x')));
-    expect(await within(dialog).findByText('You may not remove employees.')).toBeInTheDocument();
+  it('explains a failed remove inside the dialog (409, 403, other)', async () => {
+    for (const [status, text] of [
+      [409, /at least one active administrator/],
+      [403, 'You may not remove employees.'],
+      [500, 'The employee could not be removed. Try again.'],
+    ] as const) {
+      const user = userEvent.setup();
+      const client = createMockClient();
+      const view = renderPage({
+        ...client,
+        employees: {
+          ...client.employees,
+          remove: vi.fn().mockRejectedValue(new ApiError(status, 'x')),
+        },
+      });
+      await loaded();
+      await user.click(screen.getByRole('button', { name: 'Remove Priya Nair' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Confirm' });
+      await user.click(within(dialog).getByRole('button', { name: 'OK' }));
+      expect(await within(dialog).findByText(text)).toBeInTheDocument();
+      view.unmount();
+    }
   });
 
-  it('treats a 404 on remove as already gone: refreshes and closes the dialog', async () => {
+  it('treats a 404 on remove as already gone', async () => {
+    const user = userEvent.setup();
     const client = createMockClient();
     const list = vi
       .fn()
       .mockImplementationOnce(() => client.employees.list())
       .mockImplementation(async () =>
-        (await client.employees.list()).filter((e) => e.id !== 'emp-3'),
+        (await client.employees.list()).filter((e) => e.id !== 'emp-4'),
       );
-    const { nav } = await removeVia({
+    renderPage({
       ...client,
       employees: {
         ...client.employees,
@@ -321,14 +258,67 @@ describe('Employees page', () => {
         remove: vi.fn().mockRejectedValue(new ApiError(404, 'gone')),
       },
     });
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Remove Priya Nair' }));
+    await user.click(
+      within(await screen.findByRole('dialog', { name: 'Confirm' })).getByRole('button', {
+        name: 'OK',
+      }),
+    );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(within(nav).queryByRole('button', { name: 'Dana Whitfield' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Priya Nair' })).not.toBeInTheDocument();
   });
 
-  it('says there are no employees (no blank form) for a view-only user with none', async () => {
+  it('shows a message when the save fails and keeps the edits', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage({
+      ...client,
+      employees: {
+        ...client.employees,
+        saveRoles: vi.fn().mockRejectedValue(new ApiError(500, 'boom')),
+      },
+    });
+    await loaded();
+    await choose(user, typeOf('Dana Whitfield'), 'Manager');
+    await user.click(save());
+    expect(await screen.findByText('Employees could not be saved. Try again.')).toBeInTheDocument();
+    expect(typeOf('Dana Whitfield')).toHaveTextContent('Manager');
+    expect(save()).not.toHaveAttribute('aria-disabled');
+  });
+
+  it('asks before leaving with unsaved changes (also with an empty add row)', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks before leaving when a row is being added', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Employee' }));
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Employees have not been saved.' }),
+    ).toBeInTheDocument();
+  });
+
+  it('is view-only without employees.edit: no Add, Save or Remove, fields disabled', async () => {
+    renderPage(createMockClient(), ['page.employees']);
+    await loaded();
+    expect(screen.getByTestId('read-only-note')).toHaveTextContent('View only');
+    expect(screen.queryByRole('button', { name: 'Add Employee' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(typeOf('Marcus Bell')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('says there are no employees for a view-only user with none', async () => {
     renderPage(createMockClient({ scenario: 'empty' }), ['page.employees']);
     await loaded();
     expect(screen.getByText('No employees.')).toBeInTheDocument();
-    expect(screen.queryByRole('form', { name: 'Employee' })).not.toBeInTheDocument();
   });
 });

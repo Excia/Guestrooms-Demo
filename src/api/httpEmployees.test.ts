@@ -64,4 +64,20 @@ describe('http employees client', () => {
       make(vi.fn().mockResolvedValue(json([{ id: 'a' }]))).employees.listCandidates(),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
+
+  it('saves the legacy way: PUT /employees with the changed rows, answering the list', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json(mockEmployees()));
+    const rows = [{ id: 'emp-3', role: 'manager' as const }];
+    expect(await make(fetchMock).employees.saveRoles(rows)).toHaveLength(mockEmployees().length);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('https://api.example.com/v1/employees');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string)).toEqual({ employees: rows });
+  });
+
+  it('accepts employees without the extended fields', async () => {
+    const plain = [{ id: 'a', name: 'A', role: 'staff' }];
+    const fetchMock = vi.fn().mockResolvedValue(json(plain));
+    expect(await make(fetchMock).employees.list()).toEqual(plain);
+  });
 });

@@ -561,6 +561,9 @@ backend's concern (Q-75-3).
   answers the stored employee. The id comes from the directory, so repeating the PUT changes nothing. The backend re-checks:
   person exists; role is valid; a manager or staff needs an existing permission set, an administrator none (422 `validation`);
   the change must leave at least one active administrator (409 `last-administrator`). Needs `employees.edit` (403).
+- `PUT /employees` (`employees.saveRoles`) with `{ employees: [{ id, role }] }` (legacy Employees screen): the changed
+  employees and the new one, all or nothing; answers the whole list. Same checks as the single save (422, 409
+  `last-administrator`, 403). `permissionSetId` and `active` are optional on every employee: a backend without them is fine.
 - `DELETE /employees/{id}` (`employees.remove`): removes the access (legacy "Unassigned"); the person returns to the candidates.
   404 `not-found`; 409 `last-administrator`; needs `employees.edit`. The changes are recorded in the Change Log page `employees`.
 

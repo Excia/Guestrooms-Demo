@@ -35,8 +35,8 @@ export const blankEmployee = (): EmployeeDraft => ({
 export const toEmployeeDraft = (e: EmployeeSetup): EmployeeDraft => ({
   person: { id: e.id, label: e.name },
   role: e.role,
-  permissionSetId: e.permissionSetId,
-  active: e.active,
+  permissionSetId: e.permissionSetId ?? null,
+  active: e.active ?? true,
 });
 
 /** An administrator has full access, so a permission set does not apply to the role. */
@@ -84,12 +84,12 @@ export function toEmployeeInput(draft: EmployeeDraft): EmployeeInput | null {
 export function sortEmployees(employees: readonly EmployeeSetup[]): EmployeeSetup[] {
   return [...employees].sort(
     (a, b) =>
-      Number(!a.active) - Number(!b.active) ||
+      Number(a.active === false) - Number(b.active === false) ||
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
   );
 }
 
-const isActiveAdmin = (e: EmployeeSetup) => e.active && e.role === 'administrator';
+const isActiveAdmin = (e: EmployeeSetup) => e.active !== false && e.role === 'administrator';
 
 /**
  * Legacy rule: the club always keeps one administrator. Returns the reason when applying `next`
@@ -102,7 +102,7 @@ export function lastAdministratorProblem(
 ): string | null {
   const current = employees.find((e) => e.id === id);
   if (!current || !isActiveAdmin(current)) return null;
-  const stays = next !== null && next.active && next.role === 'administrator';
+  const stays = next !== null && next.active !== false && next.role === 'administrator';
   if (stays) return null;
   const others = employees.filter((e) => e.id !== id && isActiveAdmin(e));
   if (others.length > 0) return null;

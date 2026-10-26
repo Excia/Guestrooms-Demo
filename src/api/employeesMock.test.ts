@@ -98,3 +98,66 @@ describe('mock employees API', () => {
     await expect(api.remove('emp-3')).rejects.toMatchObject({ status: 403 });
   });
 });
+
+describe('mock employees API: legacy save (saveRoles)', () => {
+  it('changes types and adds an employee in one call, answering with the whole list', async () => {
+    const api = createMockClient().employees;
+    const [candidate] = await api.listCandidates();
+    const list = await api.saveRoles([
+      { id: 'emp-3', role: 'manager' },
+      { id: candidate.id, role: 'staff' },
+    ]);
+    expect(list.find((e) => e.id === 'emp-3')?.role).toBe('manager');
+    expect(list.find((e) => e.id === candidate.id)).toMatchObject({
+      name: candidate.label,
+      role: 'staff',
+    });
+    expect((await api.listCandidates()).some((c) => c.id === candidate.id)).toBe(false);
+    expect(await api.list()).toEqual(list);
+  });
+
+  it('is all or nothing: an invalid row changes nothing (422)', async () => {
+    const api = createMockClient().employees;
+    const before = await api.list();
+    for (const body of [
+      [],
+      [
+        { id: 'emp-3', role: 'manager' as const },
+        { id: 'nobody', role: 'staff' as const },
+      ],
+      [{ id: 'emp-3', role: 'owner' as never }],
+      [
+        { id: 'emp-3', role: 'staff' as const },
+        { id: 'emp-3', role: 'manager' as const },
+      ],
+    ]) {
+      await expect(api.saveRoles(body)).rejects.toMatchObject({ status: 422 });
+    }
+    expect(await api.list()).toEqual(before);
+  });
+
+  it('keeps an active administrator (409), but allows swapping them in one save', async () => {
+    const api = createMockClient().employees;
+    await expect(api.saveRoles([{ id: 'emp-1', role: 'manager' }])).rejects.toMatchObject({
+      status: 409,
+      code: 'last-administrator',
+    });
+    const list = await api.saveRoles([
+      { id: 'emp-1', role: 'manager' },
+      { id: 'emp-2', role: 'administrator' },
+    ]);
+    expect(list.find((e) => e.id === 'emp-2')).toMatchObject({
+      role: 'administrator',
+      permissionSetId: null,
+    });
+  });
+
+  it('refuses without employees.edit (403)', async () => {
+    const api = createMockClient({
+      grant: { role: 'Staff', permissions: ['page.employees'] },
+    }).employees;
+    await expect(api.saveRoles([{ id: 'emp-3', role: 'manager' }])).rejects.toMatchObject({
+      status: 403,
+    });
+  });
+});
