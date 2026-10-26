@@ -57,12 +57,14 @@ import type {
   BookingRules,
   BookingRulesOptions,
   LocationSetup,
+  EmployeeSetup,
   LookupRef,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { normalizeAudienceRules } from '../app/bookingRules';
+import { isEmployeeRole } from '../app/employees';
 import { isStoredEncoderKey } from '../app/keycards';
 import { isSeasonSkuShapeValid, MAX_RATE_CENTS } from '../app/rateCategories';
 import { expectedLeadOccupantName } from './createRules';
@@ -920,6 +922,26 @@ const parseLocationAreas = (body: unknown, status: number): LookupRef[] => {
   return body as unknown as LookupRef[];
 };
 
+const isEmployee = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isEmployeeRole(v.role) &&
+  (v.permissionSetId === null || isString(v.permissionSetId)) &&
+  typeof v.active === 'boolean';
+const parseEmployees = (body: unknown, status: number): EmployeeSetup[] => {
+  if (!Array.isArray(body) || !body.every(isEmployee)) throw invalid(status, 'employees');
+  return body as unknown as EmployeeSetup[];
+};
+const parseEmployee = (body: unknown, status: number): EmployeeSetup => {
+  if (!isEmployee(body)) throw invalid(status, 'employee');
+  return body as unknown as EmployeeSetup;
+};
+const parseEmployeeLookups = (body: unknown, status: number): LookupRef[] => {
+  if (!listOf(body, isLookup)) throw invalid(status, 'employee options');
+  return body as unknown as LookupRef[];
+};
+
 const parseKeys = (body: unknown, status: number): string[] => {
   if (!Array.isArray(body) || !body.every((k) => isString(k) && isStoredEncoderKey(k))) {
     throw invalid(status, 'encoder keys');
@@ -1756,6 +1778,18 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       listAreas: (o) => request('/locations/areas', {}, o, parseLocationAreas),
       save: (locations, o) =>
         request('/locations', {}, o, parseLocations, { method: 'PUT', body: locations }),
+    },
+    employees: {
+      list: (o) => request('/employees', {}, o, parseEmployees),
+      listCandidates: (o) => request('/employees/candidates', {}, o, parseEmployeeLookups),
+      listPermissionSets: (o) => request('/employees/permission-sets', {}, o, parseEmployeeLookups),
+      save: (input, o) =>
+        request(`/employees/${encodeURIComponent(input.id)}`, {}, o, parseEmployee, {
+          method: 'PUT',
+          body: input,
+        }),
+      remove: (id, o) =>
+        request(`/employees/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
     },
     systemSettings: {
       get: (o) => request('/settings/system', {}, o, parseSystemSettings),
