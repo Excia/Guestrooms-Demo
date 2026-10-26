@@ -178,3 +178,24 @@ describe('mock employees API: legacy save (saveRoles)', () => {
     });
   });
 });
+
+describe('mock employees API: only administrators change employees', () => {
+  const nonAdmin = () =>
+    createMockClient({
+      grant: { role: 'Staff', permissions: ['page.employees', 'employees.edit'] },
+    }).employees;
+
+  it('refuses every write to a non-administrator, even one granted employees.edit (no self-service)', async () => {
+    const api = nonAdmin();
+    await expect(api.save(input({ id: 'emp-3', role: 'manager' }))).rejects.toMatchObject({
+      status: 403,
+      code: 'forbidden',
+    });
+    await expect(api.saveRoles([{ id: 'emp-3', role: 'administrator' }])).rejects.toMatchObject({
+      status: 403,
+    });
+    await expect(api.remove('emp-3')).rejects.toMatchObject({ status: 403 });
+    // Reading stays possible.
+    expect((await api.list()).length).toBeGreaterThan(0);
+  });
+});
