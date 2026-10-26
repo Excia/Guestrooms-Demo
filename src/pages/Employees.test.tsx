@@ -137,17 +137,60 @@ describe('Employees page', () => {
     expect(rows[rows.length - 2]).toHaveTextContent('Inactive');
   });
 
-  it('refuses to demote the only active administrator without calling the server', async () => {
+  it('does not offer edits of the only active administrator, and says why', async () => {
+    renderPage();
+    await loaded();
+    const type = screen.getByRole('combobox', { name: /Employee Type/ });
+    expect(type).toHaveAttribute('aria-disabled', 'true');
+    expect(type).toHaveAccessibleDescription(/only active administrator/);
+    expect(screen.getByRole('switch', { name: 'Active' })).toBeDisabled();
+  });
+
+  it('shows the type and permission set under the title', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    const nav = await loaded();
+    await user.click(within(nav).getByRole('button', { name: 'Marcus Bell' }));
+    expect(screen.getByText('Manager, Reservations Manager')).toBeInTheDocument();
+    await user.click(within(nav).getByRole('button', { name: /Tom Hale/ }));
+    expect(screen.getByText('Staff, Front Desk, Inactive')).toBeInTheDocument();
+  });
+
+  it('clears a save error when another employee is selected', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
-    const saveSpy = vi.spyOn(client.employees, 'save');
-    renderPage(client);
-    await loaded();
-    await pick(user, /Employee Type/, 'Manager');
-    await pick(user, /Permission Set/, 'Accounting');
+    const failing = vi.fn().mockRejectedValue(new ApiError(500, 'boom'));
+    renderPage({ ...client, employees: { ...client.employees, save: failing } });
+    const nav = await loaded();
+    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
+    await user.click(screen.getByRole('switch', { name: 'Active' }));
     await user.click(save());
-    expect(await screen.findByText(/only active administrator/)).toBeInTheDocument();
-    expect(saveSpy).not.toHaveBeenCalled();
+    await screen.findByText('The employee could not be saved. Try again.');
+    await user.click(screen.getByRole('switch', { name: 'Active' }));
+    expect(
+      screen.queryByText('The employee could not be saved. Try again.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not offer a saved person again when the refresh after the save fails', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const list = vi
+      .fn()
+      .mockImplementationOnce(() => client.employees.list())
+      .mockRejectedValue(new ApiError(500, 'boom'));
+    renderPage({ ...client, employees: { ...client.employees, list } });
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'New Employee' }));
+    await user.type(screen.getByRole('combobox', { name: /^Employee( \*)?$/ }), 'sam');
+    await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
+    await pick(user, /Permission Set/, 'Front Desk');
+    await user.click(save());
+    await screen.findAllByText('Employee Saved');
+    await user.click(screen.getByRole('button', { name: 'New Employee' }));
+    await user.click(screen.getByRole('combobox', { name: /^Employee( \*)?$/ }));
+    expect(screen.queryByRole('option', { name: 'Sam Rivera' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Lena Park' })).toBeInTheDocument();
   });
 
   it('removes an employee from the three-dot menu after a confirmation', async () => {
@@ -218,5 +261,63 @@ describe('Employees page', () => {
       'true',
     );
     expect(screen.getByRole('switch', { name: 'Active' })).toBeDisabled();
+  });
+
+  const removeVia = async (client: ApiClient) => {
+    const user = userEvent.setup();
+    renderPage(client);
+    const nav = await loaded();
+    await user.click(within(nav).getByRole('button', { name: 'Dana Whitfield' }));
+    await user.click(screen.getByRole('button', { name: 'Dana Whitfield more options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Remove Employee' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Remove this employee?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    return { nav, dialog };
+  };
+  const failingRemove = (error: ApiError) => {
+    const client = createMockClient();
+    return {
+      ...client,
+      employees: { ...client.employees, remove: vi.fn().mockRejectedValue(error) },
+    };
+  };
+
+  it('explains a 409 on remove inside the dialog', async () => {
+    const { dialog } = await removeVia(failingRemove(new ApiError(409, 'x')));
+    expect(
+      await within(dialog).findByText(/at least one active administrator/),
+    ).toBeInTheDocument();
+  });
+
+  it('explains a 403 on remove inside the dialog', async () => {
+    const { dialog } = await removeVia(failingRemove(new ApiError(403, 'x')));
+    expect(await within(dialog).findByText('You may not remove employees.')).toBeInTheDocument();
+  });
+
+  it('treats a 404 on remove as already gone: refreshes and closes the dialog', async () => {
+    const client = createMockClient();
+    const list = vi
+      .fn()
+      .mockImplementationOnce(() => client.employees.list())
+      .mockImplementation(async () =>
+        (await client.employees.list()).filter((e) => e.id !== 'emp-3'),
+      );
+    const { nav } = await removeVia({
+      ...client,
+      employees: {
+        ...client.employees,
+        list,
+        remove: vi.fn().mockRejectedValue(new ApiError(404, 'gone')),
+      },
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(within(nav).queryByRole('button', { name: 'Dana Whitfield' })).not.toBeInTheDocument();
+  });
+
+  it('says there are no employees (no blank form) for a view-only user with none', async () => {
+    renderPage(createMockClient({ scenario: 'empty' }), ['page.employees']);
+    await loaded();
+    expect(screen.getByText('No employees.')).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Employee' })).not.toBeInTheDocument();
   });
 });

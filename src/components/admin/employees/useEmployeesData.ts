@@ -57,8 +57,18 @@ export function useEmployeesData(): EmployeesData {
     setState((s) => ({ ...s, employees, candidates }));
   }, [api]);
 
+  // The candidates follow the employees, so a person who was just added is not offered again and a
+  // removed one can be added back, even when the refresh after the change failed.
   const patch = useCallback((change: (list: EmployeeSetup[]) => EmployeeSetup[]) => {
-    setState((s) => ({ ...s, employees: change(s.employees) }));
+    setState((s) => {
+      const employees = change(s.employees);
+      const added = new Set(employees.map((e) => e.id));
+      const back = s.employees
+        .filter((e) => !added.has(e.id) && !s.candidates.some((c) => c.id === e.id))
+        .map((e) => ({ id: e.id, label: e.name }));
+      const candidates = [...s.candidates.filter((c) => !added.has(c.id)), ...back];
+      return { ...s, employees, candidates };
+    });
   }, []);
 
   return { ...state, reload, refresh, patch };

@@ -4,10 +4,11 @@ import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import {
   blankEmployee,
+  employeeSummary,
   EMPLOYEE_FIELD_ORDER,
   EMPLOYEE_ROLES,
   lastAdministratorProblem,
@@ -35,6 +36,9 @@ import ToggleRow from '../components/admin/systemSettings/ToggleRow';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
 import Select from '../components/shared/Select';
+
+const SOLE_ADMIN_HINT =
+  'This is the only active administrator. Make another employee an administrator to change this.';
 
 const fieldDomId = (f: EmployeeField) => `employee-${f}`;
 
@@ -79,13 +83,19 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
     [sorted],
   );
   const editor = useSetupEditor({ items: sorted, toDraft: toEmployeeDraft, blank: blankEmployee });
-  const { draft, setDraft, creating } = editor;
+  const { draft, creating } = editor;
+  const setDraft = (next: typeof draft) => {
+    setSaveError(null);
+    editor.setDraft(next);
+  };
   const errors = editor.attempted ? validateEmployee(draft, { creating, permissionSets }) : {};
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [toast, setToast] = useState({ open: false, id: 0 });
   const [removing, setRemoving] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
+  // A message belongs to the item it was shown for: another selection, New or Cancel clears it.
+  useEffect(() => setSaveError(null), [editor.selectedId, editor.creating]);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
   const save = async (): Promise<boolean> => {
@@ -144,8 +154,24 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
     setRemoveError(null);
     try {
       await api.employees.remove(target.id);
-    } catch {
-      setRemoveError('The employee could not be removed. Try again.');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        // Already gone (another session removed it): refresh and close.
+        await data
+          .refresh()
+          .catch(() => data.patch((list) => list.filter((e) => e.id !== target.id)));
+        setRemoving(false);
+        setRemoveBusy(false);
+        editor.afterDelete();
+        return;
+      }
+      setRemoveError(
+        error instanceof ApiError && error.status === 409
+          ? 'The club needs at least one active administrator. Reload the page and try again.'
+          : error instanceof ApiError && error.status === 403
+            ? 'You may not remove employees.'
+            : 'The employee could not be removed. Try again.',
+      );
       setRemoveBusy(false);
       return;
     }
@@ -156,6 +182,13 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
   };
 
   const isAdministrator = !needsPermissionSet(draft.role);
+  // Legacy: the only active administrator cannot be changed, so the edit is not offered at all.
+  const soleAdmin =
+    editor.selected !== undefined &&
+    lastAdministratorProblem(data.employees, editor.selected.id, {
+      role: 'staff',
+      active: true,
+    }) !== null;
   const title = editor.selected?.name ?? 'New Employee';
   return (
     <AdminShell
@@ -211,79 +244,93 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
           {saveError}
         </Alert>
       ) : null}
-      {data.employees.length === 0 && !readOnly ? (
+      {data.employees.length === 0 ? (
         <Typography sx={{ mb: 3, color: 'text.secondary' }}>
-          No employees have access yet. Choose a person from the club directory to add one.
+          {readOnly
+            ? 'No employees.'
+            : 'No employees have access yet. Choose a person from the club directory to add one.'}
         </Typography>
       ) : null}
-      <Box
-        component="form"
-        noValidate
-        aria-label="Employee"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!readOnly) void save();
-        }}
-        sx={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 480 }}
-      >
-        <Box id={fieldDomId('person')}>
-          {creating ? (
-            <LookupField
-              id="employee-person-input"
-              label="Employee"
-              value={draft.person}
-              options={data.candidates}
-              onChange={(person) => setDraft({ ...draft, person })}
-              error={errors.person}
-              disabled={readOnly}
-              noOptionsText="No one else in the club directory"
-              required
-            />
-          ) : (
-            <TextField
-              label="Employee"
-              value={draft.person?.label ?? ''}
-              slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
-              fullWidth
-            />
-          )}
+      {editor.selected ? (
+        <Typography sx={{ mb: 3, color: 'text.secondary' }}>
+          {employeeSummary(editor.selected, permissionSets)}
+          {editor.selected.active ? '' : ', Inactive'}
+        </Typography>
+      ) : null}
+      {readOnly && data.employees.length === 0 ? null : (
+        <Box
+          component="form"
+          noValidate
+          aria-label="Employee"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!readOnly) void save();
+          }}
+          sx={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 480 }}
+        >
+          <Box id={fieldDomId('person')}>
+            {creating ? (
+              <LookupField
+                id="employee-person-input"
+                label="Employee"
+                value={draft.person}
+                options={data.candidates}
+                onChange={(person) => setDraft({ ...draft, person })}
+                error={errors.person}
+                disabled={readOnly}
+                noOptionsText="No one else in the club directory"
+                required
+              />
+            ) : (
+              <TextField
+                label="Employee"
+                value={draft.person?.label ?? ''}
+                slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
+                fullWidth
+              />
+            )}
+          </Box>
+          <Select
+            id={fieldDomId('role')}
+            label="Employee Type"
+            value={draft.role}
+            options={EMPLOYEE_ROLES.map((r) => ({ value: r.id, label: r.label }))}
+            onChange={(role) => setDraft(withRole(draft, role))}
+            error={Boolean(errors.role)}
+            helperText={errors.role ?? (soleAdmin ? SOLE_ADMIN_HINT : undefined)}
+            disabled={readOnly || soleAdmin}
+            required
+            fullWidth
+          />
+          <Select
+            id={fieldDomId('permissionSetId')}
+            label="Permission Set"
+            value={isAdministrator ? '' : (draft.permissionSetId ?? '')}
+            options={permissionSets.map((s) => ({ value: s.id, label: s.label }))}
+            onChange={(permissionSetId) => setDraft({ ...draft, permissionSetId })}
+            placeholder={isAdministrator ? 'Full access' : 'Select a permission set'}
+            helperText={
+              errors.permissionSetId ??
+              (isAdministrator ? 'Administrators have access to everything.' : undefined)
+            }
+            error={Boolean(errors.permissionSetId)}
+            disabled={readOnly || isAdministrator}
+            required={!isAdministrator}
+            fullWidth
+          />
+          <ToggleRow
+            label="Active"
+            checked={draft.active}
+            onChange={(active) => setDraft({ ...draft, active })}
+            description={
+              soleAdmin
+                ? SOLE_ADMIN_HINT
+                : 'An inactive employee keeps their settings but cannot sign in.'
+            }
+            disabled={readOnly || soleAdmin}
+          />
         </Box>
-        <Select
-          id={fieldDomId('role')}
-          label="Employee Type"
-          value={draft.role}
-          options={EMPLOYEE_ROLES.map((r) => ({ value: r.id, label: r.label }))}
-          onChange={(role) => setDraft(withRole(draft, role))}
-          error={Boolean(errors.role)}
-          helperText={errors.role}
-          disabled={readOnly}
-          required
-          fullWidth
-        />
-        <Select
-          id={fieldDomId('permissionSetId')}
-          label="Permission Set"
-          value={isAdministrator ? '' : (draft.permissionSetId ?? '')}
-          options={permissionSets.map((s) => ({ value: s.id, label: s.label }))}
-          onChange={(permissionSetId) => setDraft({ ...draft, permissionSetId })}
-          placeholder={isAdministrator ? 'Full access' : 'Select a permission set'}
-          helperText={
-            errors.permissionSetId ??
-            (isAdministrator ? 'Administrators have access to everything.' : undefined)
-          }
-          error={Boolean(errors.permissionSetId)}
-          disabled={readOnly || isAdministrator}
-          required={!isAdministrator}
-          fullWidth
-        />
-        <ToggleRow
-          label="Active"
-          checked={draft.active}
-          onChange={(active) => setDraft({ ...draft, active })}
-          description="An inactive employee keeps their settings but cannot sign in."
-          disabled={readOnly}
-        />
-      </Box>
+      )}
       <RemoveEmployeeDialog
         target={removing && editor.selected ? { name: editor.selected.name, blockedReason } : null}
         busy={removeBusy}
