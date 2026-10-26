@@ -43,6 +43,23 @@ export interface TimeFieldProps {
   sx?: SxProps<Theme>;
 }
 
+// Green picker toggles: unselected outlined with primary text, selected filled primary (AA text).
+const greenToggleSx: SxProps<Theme> = (t) => ({
+  '& .MuiToggleButton-root': {
+    color: t.palette.primary.main,
+    borderColor: t.palette.primary.outlinedBorder,
+    '&:hover': { backgroundColor: t.palette.primary.tint },
+    '&.Mui-selected': {
+      color: t.palette.primary.contrastText,
+      backgroundColor: t.palette.primary.main,
+      borderColor: t.palette.primary.main,
+      '&:hover': { backgroundColor: t.palette.primary.dark },
+    },
+    '&.Mui-disabled': { color: t.palette.action.disabled },
+    '&.Mui-focusVisible': { outline: `2px solid ${t.palette.primary.main}`, outlineOffset: 2 },
+  },
+});
+
 const ALL: IsAllowed = () => true;
 const NOON = 12 * 60;
 
@@ -219,6 +236,7 @@ export default function TimeField({
             value={mode}
             onChange={(_, next: ClockMode | null) => next && changeMode(next)}
             aria-label="Hours or minutes"
+            sx={greenToggleSx}
           >
             <ToggleButton value="hours" aria-label={`Hours ${String(parts.hour).padStart(2, '0')}`}>
               {String(parts.hour).padStart(2, '0')}
@@ -236,6 +254,7 @@ export default function TimeField({
             value={parts.pm ? 'PM' : 'AM'}
             onChange={(_, next: 'AM' | 'PM' | null) => next && setHalf(next === 'PM')}
             aria-label="AM or PM"
+            sx={greenToggleSx}
           >
             <ToggleButton value="AM" disabled={!halfDayHasAllowed(false, step, isAllowed)}>
               AM

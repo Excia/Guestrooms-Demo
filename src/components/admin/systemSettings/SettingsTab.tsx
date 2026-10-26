@@ -33,6 +33,7 @@ import { ErrorLines, fieldId, Hint, Section } from './fieldParts';
 import LookupField from './LookupField';
 import NightsStepper from './NightsStepper';
 import ToggleRow from './ToggleRow';
+import TrainingModeToggle from './TrainingModeToggle';
 
 export interface SettingsTabProps {
   value: SystemSettings;
@@ -204,7 +205,8 @@ export default function SettingsTab({
         [t.breakpoints.up('lg')]: { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
       })}
     >
-      <Box sx={column}>
+      {/* Top row: SSO Admin and Training Mode share one line (stacked below 1200px). */}
+      <Box sx={{ minWidth: 0 }}>
         <Section title="SSO Admin">
           <LookupField
             disabled
@@ -219,7 +221,16 @@ export default function SettingsTab({
             {SSO_ADMIN_NOTE}
           </Box>
         </Section>
+      </Box>
+      {/* The spacer is the SSO Admin heading's height and pt the field's label overhang, so the switch sits on the field's line. */}
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0, pt: 1.125 }}>
+        <Typography variant="settings_heading" aria-hidden="true" sx={{ visibility: 'hidden' }}>
+          &nbsp;
+        </Typography>
+        <TrainingModeToggle value={value} onChange={onChange} errors={errors} readOnly={readOnly} />
+      </Box>
 
+      <Box sx={column}>
         <Section title="Time Zone">
           <Select
             fullWidth
