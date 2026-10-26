@@ -78,7 +78,7 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
     setServerErrors({});
     setDraft(next);
   }, []);
-  const dirty = Boolean(saved && draft && isDirty(saved, draft));
+  const dirty = !readOnly && Boolean(saved && draft && isDirty(saved, draft));
   const guard = useLeaveGuard(dirty);
 
   // A refused save on the other tab moves there; focus follows once that tab has rendered.
@@ -153,8 +153,6 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
       saving={saving}
       noun="System Settings"
       onClick={() => void save()}
-      disabled={readOnly}
-      disabledReason="You have view-only access"
     />
   );
 

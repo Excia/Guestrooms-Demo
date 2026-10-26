@@ -222,6 +222,7 @@ describe('parseStoredSets', () => {
     expect(parseStoredSets(null)).toBeNull();
     expect(parseStoredSets('x')).toBeNull();
     expect(parseStoredSets([management])).toBeNull();
+    expect(parseStoredSets([management, staff, { ...staff, id: 'admin' }])).toBeNull();
     expect(parseStoredSets([management, { id: 'staff' }])).toBeNull();
     expect(parseStoredSets([management, { ...staff, access: 'all' }])).toBeNull();
   });

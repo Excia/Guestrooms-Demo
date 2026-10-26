@@ -64,6 +64,7 @@ export const CHECK_IN_ARRIVAL_DATE_PERMISSION: CheckInPermission =
   'reservation.check-in.arrival-date';
 
 export const LOCATIONS_EDIT_PERMISSION: LocationsPermission = 'locations.edit';
+export const EMPLOYEES_EDIT_PERMISSION: EmployeesPermission = 'employees.edit';
 
 export const NIGHT_AUDIT_RUN_PERMISSION: NightAuditPermission = 'night-audit.run';
 
@@ -74,7 +75,6 @@ export const functionPermission = (key: FunctionKey): FunctionPermission => `fun
 export const ADMIN_PAGE_IDS: readonly AdminPageId[] = routes
   .filter((r) => 'section' in r && r.section === 'admin')
   .map((r) => r.id as AdminPageId);
-export const EMPLOYEES_EDIT_PERMISSION: EmployeesPermission = 'employees.edit';
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
   NIGHT_AUDIT_RUN_PERMISSION,

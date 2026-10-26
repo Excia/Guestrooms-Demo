@@ -33,6 +33,7 @@ available** to the builder, so the layout follows the legacy `PermissionsEdit.vu
 | D-186-3 | 2026-10-26 | `can()` reads the saved sets because the mock derives the signed-in user's grant from the saved set on every `getGrant`                        | Matches the real backend (grant from the user's set)             | ticket | open   |
 | D-186-5 | 2026-10-26 | A View reservation set cannot check in or change reservations (legacy: View forces Check In to Never and the functions off); Edit switches them on again | Matches PermissionsEdit.vue | agent  | open   |
 | D-186-6 | 2026-10-26 | Only an administrator saves permission sets; a PUT replaces the list and needs `management` and `staff`; PIN holders count only while their set has `pinOverride` | Prevents escalation (review of #218) | agent | open   |
+| D-186-7 | 2026-10-26 | View-only fields are `disabled` (ticket: "all fields disabled"), not `readOnly`; revisit if screen-reader users need to focus values | Ticket wording; one mechanism (nested theme) | ticket | open   |
 | D-186-4 | 2026-10-26 | Saving replaces both sets (`PUT /permission-sets`); names cannot be edited; the Administrator set cannot be changed                            | Idempotent; matches the legacy two-set screen                    | agent  | open   |
 
 ## Placeholders and invented values

@@ -710,7 +710,8 @@ sets sent and must include `management` and `staff` (422 otherwise); names are k
 `PermissionSet { id, name, setup: { <admin page id>: 'none' | 'view' | 'edit' }, access: { <area>: 'none' | 'view' | 'edit' | 'create-edit' },
 functions: { <key>: boolean }, checkIn: 'any-time' | 'arrival-date' | 'never', pinOverride: boolean }`. The client method
 `listPermissionSets()` (used by Employees) is `GET /permission-sets` reduced to `{ id, name, editable }[]` plus the Administrator
-entry (`{ id: 'admin', name: 'Administrator', editable: false }`); it needs no endpoint of its own.
+entry (`{ id: 'admin', name: 'Administrator', editable: false }`); it is `GET /permission-sets?fields=summary` (row 2). A backend that ignores `fields=summary` and returns full sets is tolerated: the client reduces them to summaries (`editable` is derived as `id !== 'admin'` when absent).
+The client normalizes sets before `PUT` (hidden N/A rows are sent as off), and the server must ignore or zero hidden N/A rows anyway.
 
 - **Rules the backend repeats:** a missing page or area is the lowest level (a page key the client does not know is kept); a level the area does not offer is lowered; a function or the
   check-in setting whose area does not allow it is off, and Reservation Events functions and check in need Edit or Create + Edit (View forces them off, check in Never). The client only rejects a structurally wrong body; unknown levels are repaired. `id` must be an existing editable set; the Administrator set cannot be changed

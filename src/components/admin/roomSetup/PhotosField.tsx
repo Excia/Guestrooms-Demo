@@ -77,16 +77,18 @@ export default function PhotosField({
             Add photos
           </Button>
         )}
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={PHOTO_TYPES.join(',')}
-          hidden
-          aria-label="Photo files"
-          tabIndex={-1}
-          onChange={(e) => onFiles(e.target.files)}
-        />
+        {readOnly ? null : (
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            accept={PHOTO_TYPES.join(',')}
+            hidden
+            aria-label="Photo files"
+            tabIndex={-1}
+            onChange={(e) => onFiles(e.target.files)}
+          />
+        )}
       </Box>
       <ErrorLines id={errorId} messages={error ? [error] : undefined} />
       <ErrorLines id={`${errorId}-upload`} messages={uploadErrors} />

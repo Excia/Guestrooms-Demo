@@ -333,7 +333,11 @@ export function isPermissionSetShape(v: unknown): v is PermissionSet {
 export function parseStoredSets(raw: unknown): PermissionSet[] | null {
   if (!Array.isArray(raw) || !raw.every(isPermissionSetShape)) return null;
   const sets = raw.map((s) => normalizeSet(s));
-  return REQUIRED_SET_IDS.every((id) => sets.some((s) => s.id === id)) ? sets : null;
+  // Exactly the known sets: a missing one, an extra one (even `admin`) or a duplicate falls back.
+  const ids = sets.map((s) => s.id).sort();
+  return ids.length === REQUIRED_SET_IDS.length && REQUIRED_SET_IDS.every((id) => ids.includes(id))
+    ? sets
+    : null;
 }
 
 export interface SetProblem {

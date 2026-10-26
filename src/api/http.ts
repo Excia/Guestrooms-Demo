@@ -181,13 +181,16 @@ function parseGrant(body: unknown, status: number): PermissionGrant {
 function parsePermissionSetSummaries(body: unknown, status: number): PermissionSetSummary[] {
   if (
     !Array.isArray(body) ||
-    !body.every(
-      (v) => isObject(v) && isString(v.id) && isString(v.name) && typeof v.editable === 'boolean',
-    )
+    !body.every((v) => isObject(v) && isString(v.id) && isString(v.name))
   ) {
     throw invalid(status, 'permission sets');
   }
-  return body as unknown as PermissionSetSummary[];
+  // Full sets (a backend that ignores ?fields=summary) are reduced; a missing `editable` is derived.
+  return (body as { id: string; name: string; editable?: unknown }[]).map((v) => ({
+    id: v.id,
+    name: v.name,
+    editable: typeof v.editable === 'boolean' ? v.editable : v.id !== 'admin',
+  }));
 }
 
 function parsePermissionSets(body: unknown, status: number): PermissionSet[] {
@@ -1939,7 +1942,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       listPermissionSets: (o) =>
         request('/permission-sets', { fields: 'summary' }, o, parsePermissionSetSummaries),
       savePermissionSets: (sets, o) =>
-        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets }),
+        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets.map((s) => normalizeSet(s)) }),
     },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
     registrationCard: {

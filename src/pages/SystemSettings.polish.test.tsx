@@ -107,7 +107,7 @@ describe('Training Mode', () => {
     expect(screen.getByText(/was set to Run Manually/)).toBeInTheDocument();
   });
 
-  it('shows Save greyed and described when there are changes but access turns view-only', async () => {
+  it('stops offering to save (inert, nothing unsaved) when access turns view-only with changes', async () => {
     const user = userEvent.setup();
     const client = createMockClient();
     const tree = (readOnly: boolean) => (
@@ -125,9 +125,9 @@ describe('Training Mode', () => {
     await loaded();
     await user.click(screen.getByRole('switch', { name: 'Training Mode' }));
     rerender(tree(true));
-    const button = screen.getByRole('button', { name: 'Save System Settings' });
+    const button = screen.getByRole('button', { name: /^Saved, System Settings$/ });
     expect(button).toHaveAttribute('aria-disabled', 'true');
-    expect(button).toHaveAccessibleDescription('You have view-only access');
+    expect(screen.queryByRole('button', { name: 'Save System Settings' })).not.toBeInTheDocument();
   });
 
   it('counts as an unsaved change for Confirm Leaving (the Save button enables)', async () => {

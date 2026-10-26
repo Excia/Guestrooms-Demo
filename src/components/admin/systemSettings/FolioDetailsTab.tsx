@@ -1,3 +1,4 @@
+import EditOnly from '../EditOnly';
 import AddPhotoAlternate from '@mui/icons-material/AddPhotoAlternate';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -188,25 +189,27 @@ export default function FolioDetailsTab({ value, onChange, errors }: FolioDetail
                 />
               ) : null}
             </Box>
-            <Button
-              variant="outlined"
-              startIcon={<AddPhotoAlternate />}
-              onClick={() => fileInput.current?.click()}
-              sx={{ borderColor: 'primary.outlinedBorder' }}
-            >
-              Browse for Photo
-            </Button>
-            <input
-              ref={fileInput}
-              type="file"
-              hidden
-              accept="image/png,image/jpeg,image/svg+xml"
-              aria-label="Logo file"
-              onChange={(e) => {
-                void chooseLogo(e.target.files?.[0]);
-                e.target.value = '';
-              }}
-            />
+            <EditOnly>
+              <Button
+                variant="outlined"
+                startIcon={<AddPhotoAlternate />}
+                onClick={() => fileInput.current?.click()}
+                sx={{ borderColor: 'primary.outlinedBorder' }}
+              >
+                Browse for Photo
+              </Button>
+              <input
+                ref={fileInput}
+                type="file"
+                hidden
+                accept="image/png,image/jpeg,image/svg+xml"
+                aria-label="Logo file"
+                onChange={(e) => {
+                  void chooseLogo(e.target.files?.[0]);
+                  e.target.value = '';
+                }}
+              />
+            </EditOnly>
           </Box>
           {logoProblem ? (
             <FormHelperText error role="alert">

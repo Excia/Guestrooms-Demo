@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router';
 import { theme } from '../theme';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
+import type { ApiClient } from '../api/types';
 import { pagePermission, type PermissionPageId } from '../app/permissions';
 import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
 import { GrantedAccess } from '../app/testing';
@@ -41,12 +42,25 @@ const PAGES: readonly [PermissionPageId, ReactElement][] = [
 
 // Generate Preview (registration card) is read-only and stays (Q-186-5); Retry is an error action.
 const ACTION =
-  /^(save|saved|saving|add|new|remove|delete|copy|duplicate|select all|select none|clear|retrieve|cancel|reorder|upload|set)\b/i;
+  /^(save|saved|saving|add|new|remove|delete|copy|duplicate|select all|select none|clear|retrieve|cancel|reorder|upload|browse|set)\b/i;
 
-function renderViewOnly(id: PermissionPageId, page: ReactElement) {
+async function seededClient(id: PermissionPageId) {
+  const client = createMockClient();
+  if (id === 'primary-setup') {
+    // A saved folio logo, so the Remove badge branch is rendered (and must be hidden).
+    const settings = await client.systemSettings.get();
+    await client.systemSettings.save({
+      ...settings,
+      folio: { ...settings.folio, logo: 'data:image/png;base64,iVBORw0KGgo=' },
+    });
+  }
+  return client;
+}
+
+function renderViewOnly(id: PermissionPageId, page: ReactElement, client: ApiClient) {
   return render(
     <ThemeProvider theme={theme}>
-      <ApiProvider client={createMockClient()}>
+      <ApiProvider client={client}>
         <GrantedAccess granted={[pagePermission(id)]}>
           <SystemSettingsProvider>
             <MemoryRouter>
@@ -68,7 +82,7 @@ function leaks(container: HTMLElement): string[] {
     else if (ACTION.test(name)) found.push(`action: ${name}`);
   }
   const fields = container.querySelectorAll<HTMLInputElement>(
-    'input:not([type=hidden]):not([type=file]), textarea, select',
+    'input:not([type=hidden]), textarea, select',
   );
   for (const el of fields) {
     // The hidden measuring textarea of a multiline field is not a control.
@@ -90,7 +104,7 @@ function leaks(container: HTMLElement): string[] {
 
 describe.each(PAGES)('View-only %s', (id, page) => {
   it('shows the note, no actions and only disabled fields, on every item and tab', async () => {
-    const { container } = renderViewOnly(id, page);
+    const { container } = renderViewOnly(id, page, await seededClient(id));
     expect(await screen.findByTestId('read-only-note', {}, { timeout: 4000 })).toHaveTextContent(
       'View only',
     );
