@@ -166,6 +166,38 @@ describe('SetupList', () => {
       expect(button).toHaveFocus();
     });
 
+    it('opens the Change Log of the selected item only, titled with its name', async () => {
+      const user = userEvent.setup();
+      const client = createMockClient();
+      const list = vi.spyOn(client.changeLog, 'list');
+      render(
+        <ApiProvider client={client}>
+          <ThemeProvider theme={theme}>
+            <SetupList
+              items={items}
+              selectedId="a"
+              creating={false}
+              newLabel="New Room"
+              newTitle="New Room"
+              onSelect={vi.fn()}
+              onNew={vi.fn()}
+              more={{ noun: 'Room', changeLogPage: 'rooms', onCopy: vi.fn(), onDelete: vi.fn() }}
+            />
+          </ThemeProvider>
+        </ApiProvider>,
+      );
+      await user.click(screen.getByRole('button', { name: 'King Room more options' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Change Log' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Rooms: King Room: Change Log' });
+      expect(dialog).toBeInTheDocument();
+      await waitFor(() =>
+        expect(list).toHaveBeenCalledWith(
+          expect.objectContaining({ page: 'rooms', recordId: 'a' }),
+          expect.anything(),
+        ),
+      );
+    });
+
     it('opens the Change Log dialog from the menu', async () => {
       const user = userEvent.setup();
       renderMore();

@@ -22,6 +22,11 @@ describe('changeLogParams', () => {
       limit: '25',
     });
   });
+  it('sends the record id', () => {
+    expect(changeLogParams({ page: 'rooms', recordId: 'room-100' })).toMatchObject({
+      recordId: 'room-100',
+    });
+  });
   it('leaves unset values out', () => {
     expect(changeLogParams({ page: 'rooms' })).toMatchObject({
       sort: undefined,

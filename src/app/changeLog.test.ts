@@ -84,6 +84,7 @@ describe('filters', () => {
 it('titles the overlay after the page', () => {
   expect(changeLogTitle('system-settings')).toBe('System Settings: Change Log');
   expect(changeLogTitle('add-on-items')).toBe('Add-On Items: Change Log');
+  expect(changeLogTitle('rooms', '101')).toBe('Rooms: 101: Change Log');
 });
 
 it('labels an event type, never showing the raw id', () => {

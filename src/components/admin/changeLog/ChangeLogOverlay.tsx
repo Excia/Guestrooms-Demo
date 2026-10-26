@@ -43,6 +43,8 @@ import { useChangeLog } from './useChangeLog';
 export interface ChangeLogOverlayProps {
   /** The admin page the overlay was opened from; only that page's changes are listed. */
   page: ChangeLogPageId;
+  /** Only this record's changes (the setup list's three-dot menu); the title shows its name. */
+  record?: { id: string; name: string };
   open: boolean;
   onClose: () => void;
 }
@@ -60,7 +62,7 @@ const COLUMNS: { field: ChangeLogSortField | 'description'; label: string; width
 // Change Log dialog (Figma 16718:6217, decision D-AP-3): a page-specific log in a modal dialog, newest
 // first, with sort and filter on date, time, change type and action by. The X closes it; so do Escape
 // and a click on the backdrop. The table scrolls under a sticky header; the search sits in the header.
-export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverlayProps) {
+export default function ChangeLogOverlay({ page, record, open, onClose }: ChangeLogOverlayProps) {
   const api = useApi();
   const titleId = useId();
   const [sort, setSort] = useState<ChangeLogSort>(DEFAULT_CHANGE_LOG_SORT);
@@ -102,8 +104,8 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
   }, [searchDraft, appliedSearch]);
 
   const query: ChangeLogQuery = useMemo(
-    () => ({ page, sort, ...filters, pageNumber, limit: rowsPerPage }),
-    [page, sort, filters, pageNumber, rowsPerPage],
+    () => ({ page, recordId: record?.id, sort, ...filters, pageNumber, limit: rowsPerPage }),
+    [page, record?.id, sort, filters, pageNumber, rowsPerPage],
   );
   const { status, items, total, retry } = useChangeLog(query, open);
   const active = activeFilterColumns(filters);
@@ -189,7 +191,7 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
           component="h2"
           sx={{ fontWeight: 'bold', flex: 1, minWidth: 0 }}
         >
-          {changeLogTitle(page)}
+          {changeLogTitle(page, record?.name)}
         </Typography>
         <Box
           component="form"
@@ -288,7 +290,9 @@ export default function ChangeLogOverlay({ page, open, onClose }: ChangeLogOverl
                   <Typography color="text.secondary" sx={{ py: 3, textAlign: 'center' }}>
                     {active.size > 0
                       ? 'No changes match the filters.'
-                      : 'No changes have been recorded for this page in the last year.'}
+                      : record
+                        ? 'No changes have been recorded for this item in the last year.'
+                        : 'No changes have been recorded for this page in the last year.'}
                   </Typography>
                 </TableCell>
               </TableRow>

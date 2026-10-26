@@ -15,6 +15,7 @@ const invalid = (status: number, what: string) =>
 export function changeLogParams(q: ChangeLogQuery): Record<string, string | undefined> {
   return {
     page: q.page,
+    recordId: q.recordId,
     sort: q.sort && `${q.sort.field}:${q.sort.direction}`,
     dateFrom: q.dateFrom,
     dateTo: q.dateTo,
