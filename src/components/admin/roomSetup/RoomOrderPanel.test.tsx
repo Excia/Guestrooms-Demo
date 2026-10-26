@@ -54,19 +54,22 @@ describe('RoomOrderPanel', () => {
     expect(() => unmount()).not.toThrow();
   });
 
-  it('puts Close next to Save Order in one row, like New Room and the reorder button', () => {
+  it('puts a bare green Close next to a solid green Save Order in one row', () => {
     render(ui(['a', 'b']));
     const save = screen.getByRole('button', { name: 'Save Order' });
     const close = screen.getByRole('button', { name: 'Close room order' });
     expect(close.parentElement).toBe(save.parentElement);
     expect(getComputedStyle(save).minHeight).toBe('59px');
-    expect(getComputedStyle(close).width).toBe('59px');
+    // Icon button only: no box, no fill.
+    expect(getComputedStyle(close).borderStyle).not.toBe('solid');
+    expect(getComputedStyle(close).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(close).color).toBe('rgb(46, 125, 50)');
   });
 
-  it('draws each drag handle with the green reorder icon', () => {
+  it('draws each drag handle with the reorder icon in the dark text colour', () => {
     render(ui(['a']));
     const handle = screen.getByTestId('drag-handle-a');
-    expect(getComputedStyle(handle).color).toBe('rgb(46, 125, 50)');
-    expect(handle.querySelector('[data-testid="SwapVertIcon"]')).not.toBeNull();
+    expect(getComputedStyle(handle).color).toBe('rgba(0, 0, 0, 0.87)');
+    expect(handle.querySelector('[data-testid="ReorderIcon"]')).not.toBeNull();
   });
 });

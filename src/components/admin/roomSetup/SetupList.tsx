@@ -3,7 +3,6 @@ import ContentCopy from '@mui/icons-material/ContentCopyOutlined';
 import Delete from '@mui/icons-material/Delete';
 import History from '@mui/icons-material/History';
 import MoreHoriz from '@mui/icons-material/MoreHoriz';
-import SwapVert from '@mui/icons-material/SwapVert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
@@ -17,6 +16,7 @@ import { useRef, useState } from 'react';
 import type { ChangeLogPageId } from '../../../api/changeLogTypes';
 import { useReadOnly } from '../../../app/readOnlyContext';
 import { setupMoreMenuLabels, showsMoreMenu } from '../../../app/setupMoreMenu';
+import ReorderIcon from '../../shared/ReorderIcon';
 import ChangeLogOverlay from '../changeLog/ChangeLogOverlay';
 
 // A save can re-sort the list; keep the selected row in view without moving the page.
@@ -269,12 +269,12 @@ export default function SetupList({
               color="primary"
               sx={(t) => ({
                 flexShrink: 0,
-                width: t.spacing(7.375),
-                borderRadius: 1,
-                border: `1px solid ${t.palette.primary.outlinedBorder}`,
+                alignSelf: 'center',
+                p: 1,
+                '&.Mui-focusVisible': { outline: `2px solid ${t.palette.primary.main}` },
               })}
             >
-              <SwapVert />
+              <ReorderIcon />
             </IconButton>
           ) : null}
         </Box>
