@@ -310,8 +310,13 @@ export default function SetupList({
             <MenuItem
               onClick={() => {
                 const selectedItem = items.find((i) => i.id === selectedId);
+                // The menu only exists on a selected item; never fall back to the page-wide log.
+                if (!selectedItem) {
+                  closeMenu();
+                  return;
+                }
                 chooseAfterClose(() => {
-                  setLogRecord(selectedItem && { id: selectedItem.id, name: selectedItem.label });
+                  setLogRecord({ id: selectedItem.id, name: selectedItem.label });
                   setLogSession((n) => n + 1);
                   setLogOpen(true);
                 });

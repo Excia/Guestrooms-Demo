@@ -189,7 +189,7 @@ export default function ChangeLogOverlay({ page, record, open, onClose }: Change
           id={titleId}
           variant="subtitle1"
           component="h2"
-          sx={{ fontWeight: 'bold', flex: 1, minWidth: 0 }}
+          sx={{ fontWeight: 'bold', flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}
         >
           {changeLogTitle(page, record?.name)}
         </Typography>

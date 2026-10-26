@@ -2,6 +2,9 @@ import { isWithinRetention } from '../app/changeLog';
 import { mockChangeLog, queryChangeLog } from './changeLogData';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { createMockClient } from './mock';
+import { mockAddOns } from './addOnData';
+import { mockRateCategories } from './rateCategoryData';
+import { mockRoomTypes, mockRooms } from './roomSetupData';
 import { MOCK_TODAY } from './mockData';
 
 const all = mockChangeLog(MOCK_TODAY)['system-settings'];
@@ -117,6 +120,22 @@ describe('queryChangeLog by record', () => {
       MOCK_TODAY,
     );
     expect(page.items.map((e) => e.changeType)).toEqual(['created']);
+  });
+  it('has at least one entry for every seeded room, room type, add-on and rate category', () => {
+    const log = mockChangeLog(MOCK_TODAY);
+    const types = mockRoomTypes();
+    const seeds = [
+      ['rooms', mockRooms(types)],
+      ['room-types', types],
+      ['add-on-items', mockAddOns()],
+      ['rate-categories', mockRateCategories()],
+    ] as const;
+    for (const [page, records] of seeds) {
+      for (const record of records) {
+        const found = queryChangeLog(log[page], { page, recordId: record.id }, MOCK_TODAY);
+        expect(found.total, `${page} ${record.id}`).toBeGreaterThan(0);
+      }
+    }
   });
   it('has entries for every seeded setup record of the four pages', () => {
     const log = mockChangeLog(MOCK_TODAY);

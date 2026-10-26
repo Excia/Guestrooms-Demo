@@ -36,7 +36,8 @@ const isEntry = (v: unknown): v is ChangeLogEntry =>
   isString(v.time) &&
   isString(v.changeType) &&
   isString(v.description) &&
-  isString(v.actionBy);
+  isString(v.actionBy) &&
+  (v.recordId === undefined || isString(v.recordId));
 
 export function parseChangeLogPage(body: unknown, status: number): Page<ChangeLogEntry> {
   if (

@@ -198,6 +198,36 @@ describe('SetupList', () => {
       );
     });
 
+    it('fixes the item when the menu entry is chosen, even if the selection changes behind the dialog', async () => {
+      const user = userEvent.setup();
+      const client = createMockClient();
+      const props = {
+        creating: false,
+        newLabel: 'New Room',
+        newTitle: 'New Room',
+        onSelect: vi.fn(),
+        onNew: vi.fn(),
+        more: { noun: 'Room', changeLogPage: 'rooms' as const, onCopy: vi.fn(), onDelete: vi.fn() },
+      };
+      const ui = (selectedId: string) => (
+        <ApiProvider client={client}>
+          <ThemeProvider theme={theme}>
+            <SetupList items={items} selectedId={selectedId} {...props} />
+          </ThemeProvider>
+        </ApiProvider>
+      );
+      const { rerender } = render(ui('a'));
+      await user.click(screen.getByRole('button', { name: 'King Room more options' }));
+      await user.click(screen.getByRole('menuitem', { name: 'Change Log' }));
+      expect(
+        await screen.findByRole('dialog', { name: 'Rooms: King Room: Change Log' }),
+      ).toBeInTheDocument();
+      rerender(ui('b'));
+      expect(
+        screen.getByRole('dialog', { name: 'Rooms: King Room: Change Log' }),
+      ).toBeInTheDocument();
+    });
+
     it('opens the Change Log dialog from the menu', async () => {
       const user = userEvent.setup();
       renderMore();
