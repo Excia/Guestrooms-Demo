@@ -242,6 +242,10 @@ export default function SetupList({
               minHeight: t.spacing(7.375),
               borderColor: 'primary.outlinedBorder',
               minWidth: 0,
+              // One line, next to the reorder button.
+              whiteSpace: 'nowrap',
+              px: 1.25,
+              '& .MuiButton-startIcon': { mr: 0.5 },
             })}
           >
             {newLabel}

@@ -1,7 +1,7 @@
 import ArrowDownward from '@mui/icons-material/ArrowDownward';
 import ArrowUpward from '@mui/icons-material/ArrowUpward';
 import Close from '@mui/icons-material/Close';
-import DragIndicator from '@mui/icons-material/DragIndicator';
+import SwapVert from '@mui/icons-material/SwapVert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -86,29 +86,41 @@ export default function RoomOrderPanel({
 
   return (
     <Box>
+      {/* The same row as New Room and the reorder button in the list (SetupList), so the views line up. */}
       <Box
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.25 }}
+        sx={(t) => ({
+          display: 'flex',
+          gap: 1,
+          mb: 1.25,
+          [t.breakpoints.up('lg')]: { mr: t.spacing(1.875) },
+        })}
       >
-        <Typography variant="subtitle2" component="h2">
+        <Typography variant="subtitle2" component="h2" sx={visuallyHidden}>
           {noun} Order
         </Typography>
-        <IconButton aria-label={`Close ${noun.toLowerCase()} order`} onClick={close} size="small">
+        <Button
+          fullWidth
+          variant="contained"
+          size="large"
+          disabled={saving || !dirty}
+          onClick={() => onSave(order)}
+          sx={(t) => ({ minHeight: t.spacing(7.375), minWidth: 0, whiteSpace: 'nowrap' })}
+        >
+          {saving ? 'Saving…' : 'Save Order'}
+        </Button>
+        <IconButton
+          aria-label={`Close ${noun.toLowerCase()} order`}
+          onClick={close}
+          sx={(t) => ({
+            flexShrink: 0,
+            width: t.spacing(7.375),
+            borderRadius: 1,
+            border: `1px solid ${t.palette.primary.outlinedBorder}`,
+          })}
+        >
           <Close />
         </IconButton>
       </Box>
-      <Button
-        fullWidth
-        variant="contained"
-        size="large"
-        disabled={saving || !dirty}
-        onClick={() => onSave(order)}
-        sx={(t) => ({
-          mb: 1.25,
-          [t.breakpoints.up('lg')]: { width: `calc(100% - ${t.spacing(1.875)})` },
-        })}
-      >
-        {saving ? 'Saving…' : 'Save Order'}
-      </Button>
       {error ? (
         <Typography role="alert" variant="body2" sx={{ color: 'error.main', mb: 1.25 }}>
           {error}
@@ -180,9 +192,9 @@ export default function RoomOrderPanel({
                   setDragFrom(null);
                   setOver(null);
                 }}
-                sx={{ display: 'flex', cursor: 'grab', color: 'text.secondary' }}
+                sx={{ display: 'flex', cursor: 'grab', color: 'primary.main' }}
               >
-                <DragIndicator />
+                <SwapVert />
               </Box>
               <Typography sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                 {labelOf.get(id)}
