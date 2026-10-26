@@ -320,6 +320,21 @@ describe('TimeField', () => {
     expect(screen.getByRole('button', { name: 'Choose check in time' })).toBeDisabled();
     expect(input()).toBeDisabled();
   });
+
+  it('draws the dial ring and the AM/PM toggles in the primary green', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await open(user);
+    const ring = screen.getByTestId('clock-ring');
+    expect(ring).toHaveAttribute('stroke', theme.palette.primary.main);
+    // 4:00 PM: PM is selected (filled primary, contrast text), AM is outlined with primary text.
+    const pm = screen.getByRole('button', { name: 'PM' });
+    const am = screen.getByRole('button', { name: 'AM' });
+    expect(pm).toHaveAttribute('aria-pressed', 'true');
+    expect(getComputedStyle(pm).backgroundColor).toBe('rgb(46, 125, 50)');
+    expect(getComputedStyle(pm).color).toBe('rgb(255, 255, 255)');
+    expect(getComputedStyle(am).color).toBe('rgb(46, 125, 50)');
+  });
 });
 
 function hexToRgb(hex: string) {

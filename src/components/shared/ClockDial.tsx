@@ -38,6 +38,7 @@ const CENTRE = SIZE / 2;
 const LABEL_RADIUS = 88;
 const HAND_RADIUS = LABEL_RADIUS;
 const BUBBLE_RADIUS = 20;
+const RING_WIDTH = 2;
 
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
 const MINUTE_LABELS = Array.from({ length: 12 }, (_, i) => i * 5);
@@ -191,7 +192,15 @@ export default function ClockDial({
         '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
-      <circle cx={CENTRE} cy={CENTRE} r={CENTRE} fill={theme.palette.action.hover} />
+      <circle
+        cx={CENTRE}
+        cy={CENTRE}
+        r={CENTRE - RING_WIDTH / 2}
+        fill={theme.palette.primary.tint}
+        stroke={theme.palette.primary.main}
+        strokeWidth={RING_WIDTH}
+        data-testid="clock-ring"
+      />
       <line
         x1={CENTRE}
         y1={CENTRE}
