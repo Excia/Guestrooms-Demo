@@ -76,7 +76,7 @@ export const ACCESS_LEVEL_LABEL: Record<AccessLevel, string> = {
 };
 
 export const CHECK_IN_OPTIONS: readonly { value: CheckInSetting; label: string }[] = [
-  { value: 'any-time', label: 'Any Time' },
+  { value: 'any-time', label: 'AnyTime' },
   { value: 'arrival-date', label: 'On Check-In Date Only' },
   { value: 'never', label: 'Never' },
 ];
@@ -96,6 +96,8 @@ export interface FunctionRow {
   hint?: string;
   /** The Access area this function belongs to; it does not apply (N/A) when that area is No Access. */
   parent: AccessKey;
+  /** Legacy: Management only; the Staff column shows N/A (Operation Reports, Financial Reports). */
+  managementOnly?: boolean;
 }
 export interface CheckInRow {
   kind: 'checkIn';
@@ -114,12 +116,19 @@ const access = (
   levels: readonly AccessLevel[],
   hint?: string,
 ): AccessRow => ({ kind: 'access', key, label, levels, hint });
-const fn = (key: FunctionKey, label: string, parent: AccessKey, hint?: string): FunctionRow => ({
+const fn = (
+  key: FunctionKey,
+  label: string,
+  parent: AccessKey,
+  hint?: string,
+  managementOnly?: boolean,
+): FunctionRow => ({
   kind: 'function',
   key,
   label,
   parent,
   hint,
+  ...(managementOnly ? { managementOnly } : {}),
 });
 
 /** The Access and Function rows in the order of the page (legacy order). */
@@ -146,11 +155,11 @@ export const PERMISSION_ROWS: readonly PermissionRow[] = [
   ),
   access('reservationDetails', 'Reservation Full Details', EDIT_VIEW, 'guests, add-ons, notes'),
   fn('viewPrivateNotes', 'View Private Notes', 'reservationDetails'),
-  access('nightAudit', 'Night Audit', FOUR, 'Edit: history and running the night audit'),
+  access('nightAudit', 'Night Audit', FOUR, 'history and manual night audit run (create)'),
   access('roomBlocks', 'Room Block', FOUR),
   access('reporting', 'Reporting', EDIT_ONLY),
-  fn('operationalReports', 'Operational Reports', 'reporting'),
-  fn('financialReports', 'Financial Reports', 'reporting'),
+  fn('operationalReports', 'Operation Reports', 'reporting', undefined, true),
+  fn('financialReports', 'Financial Reports', 'reporting', undefined, true),
   access('folio', 'Folio', EDIT_VIEW),
   fn('addManualChargeCredit', 'Add Manual Charge / Credit', 'folio'),
   fn('addPositiveDepositPayment', 'Add Positive Deposit / Payment', 'folio'),
@@ -178,6 +187,16 @@ export function rowApplies(set: PermissionSet, row: PermissionRow): boolean {
   return row.parent === 'reservations'
     ? level === 'edit' || level === 'create-edit'
     : level !== 'none';
+}
+
+/**
+ * Legacy display rule: a cell is N/A (greyed) in the Staff column while Reservation Events is No Access
+ * (every function under it), and for the two Management-only report rows. Management always shows its cells.
+ */
+export function rowIsNotApplicable(set: PermissionSet, row: PermissionRow): boolean {
+  if (row.kind === 'access') return false;
+  if ('managementOnly' in row && row.managementOnly && set.id !== 'management') return true;
+  return row.parent === 'reservations' && set.id !== 'management' && set.access.reservations === 'none';
 }
 
 const rank = (level: AccessLevel) => ['none', 'view', 'edit', 'create-edit'].indexOf(level);
@@ -228,10 +247,13 @@ export function normalizeSet(raw: PermissionSet, keepHidden = false): Permission
   // The editor keeps what a hidden (N/A) row held, so switching the area back restores it; what is
   // saved and granted is always off.
   if (keepHidden) return normalized;
+  // What the page shows as N/A is saved as off (legacy). Other values are kept as chosen; the grant
+  // (`rowApplies`) is what ignores a function whose area does not allow it.
   for (const row of PERMISSION_ROWS) {
-    if (row.kind === 'function' && !rowApplies(normalized, row))
+    if (row.kind === 'function' && rowIsNotApplicable(normalized, row)) {
       normalized.functions[row.key] = false;
-    if (row.kind === 'checkIn' && !rowApplies(normalized, row)) normalized.checkIn = 'never';
+    }
+    if (row.kind === 'checkIn' && rowIsNotApplicable(normalized, row)) normalized.checkIn = 'never';
   }
   return normalized;
 }
@@ -400,7 +422,8 @@ export function withAccessLevel(
   // Legacy cascade: Edit switches the reservation functions on (check in Any Time); View or No
   // Access switches them off (Never).
   if (edits(next) && !edits(set)) return withReservationFunctions(next, true);
-  if (!edits(next)) return withReservationFunctions(next, false);
+  // Legacy: View switches them off; No Access leaves them (the Staff cells turn N/A and save as off).
+  if (next.access.reservations === 'view') return withReservationFunctions(next, false);
   return next;
 }
 
@@ -439,3 +462,22 @@ export const withPinOverride = (set: PermissionSet, pinOverride: boolean): Permi
 export const SETUP_PAGE_LABEL: Record<string, string> = {
   'primary-setup': 'System Settings',
 };
+
+// ---- the legacy "Admin Setup" row ------------------------------------------------------------
+
+/** The one Admin Setup row of the legacy screen: View (every setup page, read-only) or No Access. */
+export type AdminSetupLevel = 'view' | 'none';
+export const ADMIN_SETUP_OPTIONS: readonly AdminSetupLevel[] = ['view', 'none'];
+
+/** View when the set may open any setup page, else No Access. */
+export const adminSetupLevel = (set: PermissionSet): AdminSetupLevel =>
+  ADMIN_PAGE_IDS.some((id) => setupLevel(set, id) !== 'none') ? 'view' : 'none';
+
+/** Sets every Admin Setup page to the level (non-admin sets never get Edit). */
+export const withAdminSetup = (set: PermissionSet, level: AdminSetupLevel): PermissionSet => ({
+  ...set,
+  setup: Object.fromEntries([
+    ...Object.entries(set.setup),
+    ...ADMIN_PAGE_IDS.map((id) => [id, level] as const),
+  ]),
+});

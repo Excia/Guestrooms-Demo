@@ -12,10 +12,8 @@ import {
   type SetupLevel,
 } from '../app/permissionSets';
 
-// Mock data for the Permissions page (ticket 186). P-186-1: the defaults follow the legacy
-// PermissionsEdit defaults where it has them. Management sees every setup page read-only (the owner
-// says most non-admins are View); Staff has no setup access and keeps the pages the earlier mock
-// "Non-admin" user had, so the demo does not change for anyone who does not edit the sets.
+// Mock data for the Permissions page. P-186-2: the defaults are the legacy PermissionsEdit defaults
+// (setPermissionsOrDefaults), with Admin Setup View mapped onto every setup page.
 
 const setup = (level: SetupLevel, except: Record<string, SetupLevel> = {}) =>
   Object.fromEntries(ADMIN_PAGE_IDS.map((id) => [id, except[id] ?? level]));
@@ -34,7 +32,8 @@ export function mockPermissionSets(): PermissionSet[] {
     normalizeSet({
       id: 'management',
       name: 'Management',
-      setup: setup('view', { permissions: 'none' }),
+      // Legacy default: Admin Setup View (every setup page, read-only).
+      setup: setup('view'),
       access: access({
         closures: 'create-edit',
         reservations: 'create-edit',
@@ -46,7 +45,7 @@ export function mockPermissionSets(): PermissionSet[] {
         nonMembers: 'create-edit',
       }),
       functions: functions(FUNCTION_KEYS.filter((k) => k !== 'reopenCloseFolio')),
-      checkIn: 'any-time',
+      checkIn: 'arrival-date',
       pinOverride: true,
     }),
     normalizeSet({
@@ -55,17 +54,18 @@ export function mockPermissionSets(): PermissionSet[] {
       setup: setup('none'),
       access: access({
         closures: 'view',
-        reservations: 'edit',
+        reservations: 'view',
         reservationDetails: 'edit',
         nightAudit: 'view',
-        roomBlocks: 'view',
-        reporting: 'edit',
+        roomBlocks: 'edit',
+        reporting: 'none',
         folio: 'edit',
         nonMembers: 'edit',
       }),
       functions: functions(['addManualChargeCredit', 'addPositiveDepositPayment']),
-      checkIn: 'arrival-date',
-      pinOverride: false,
+      checkIn: 'never',
+      // No PIN row in legacy: whoever holds the permission may authorize an override with their PIN.
+      pinOverride: true,
     }),
   ];
 }
