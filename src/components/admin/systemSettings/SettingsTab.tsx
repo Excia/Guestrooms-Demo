@@ -2,6 +2,7 @@ import Box from '@mui/material/Box';
 import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import FormLabel from '@mui/material/FormLabel';
+import InputAdornment from '@mui/material/InputAdornment';
 import Radio from '@mui/material/Radio';
 import RadioGroup from '@mui/material/RadioGroup';
 import TextField from '@mui/material/TextField';
@@ -33,7 +34,6 @@ import { ErrorLines, fieldId, Hint, Section } from './fieldParts';
 import LookupField from './LookupField';
 import NightsStepper from './NightsStepper';
 import ToggleRow from './ToggleRow';
-import TrainingModeToggle from './TrainingModeToggle';
 
 export interface SettingsTabProps {
   value: SystemSettings;
@@ -60,7 +60,7 @@ const UNITS: { value: DurationUnit; label: string }[] = [
 ];
 
 // A column of the two-column form (stacks below 1200px).
-const column = { display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 } as const;
+const column = { display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 } as const;
 
 interface DurationRowProps {
   field: SystemSettingsField;
@@ -200,13 +200,12 @@ export default function SettingsTab({
         display: 'grid',
         gridTemplateColumns: '1fr',
         columnGap: 6,
-        rowGap: 4,
+        rowGap: 3,
         alignItems: 'start',
         [t.breakpoints.up('lg')]: { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
       })}
     >
-      {/* Top row: SSO Admin and Training Mode share one line (stacked below 1200px). */}
-      <Box sx={{ minWidth: 0 }}>
+      <Box sx={column}>
         <Section title="SSO Admin">
           <LookupField
             disabled
@@ -221,16 +220,7 @@ export default function SettingsTab({
             {SSO_ADMIN_NOTE}
           </Box>
         </Section>
-      </Box>
-      {/* The spacer is the SSO Admin heading's height and pt the field's label overhang, so the switch sits on the field's line. */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0, pt: 1.125 }}>
-        <Typography variant="settings_heading" aria-hidden="true" sx={{ visibility: 'hidden' }}>
-          &nbsp;
-        </Typography>
-        <TrainingModeToggle value={value} onChange={onChange} errors={errors} readOnly={readOnly} />
-      </Box>
 
-      <Box sx={column}>
         <Section title="Time Zone">
           <Select
             fullWidth
@@ -445,21 +435,20 @@ export default function SettingsTab({
             onChange={(e) => set('serviceChargeLabel', e.target.value)}
             disabled={readOnly}
             error={Boolean(errors.serviceChargeLabel)}
-            helperText={
-              <>
-                {errors.serviceChargeLabel?.[0] ? (
-                  <Box component="span" sx={{ display: 'block' }}>
-                    {errors.serviceChargeLabel[0]}
-                  </Box>
-                ) : null}
-                <Box component="span" sx={{ display: 'block', textAlign: 'right' }}>
-                  {`${value.serviceChargeLabel.length} / ${SERVICE_CHARGE_LABEL_MAX}`}
-                </Box>
-              </>
-            }
+            helperText={errors.serviceChargeLabel?.[0]}
             slotProps={{
               inputLabel: { shrink: true },
               htmlInput: { maxLength: SERVICE_CHARGE_LABEL_MAX },
+              // The counter sits inside the field, so the gaps between fields stay even.
+              input: {
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      {`${value.serviceChargeLabel.length} / ${SERVICE_CHARGE_LABEL_MAX}`}
+                    </Typography>
+                  </InputAdornment>
+                ),
+              },
             }}
           />
         </Section>
