@@ -281,3 +281,68 @@ describe('ChangeLogOverlay', () => {
     );
   });
 });
+
+describe('ChangeLogOverlay for one record', () => {
+  it('asks for that record only, titled with its name', async () => {
+    const client = createMockClient();
+    const list = vi.spyOn(client.changeLog, 'list');
+    render(
+      <ApiProvider client={client}>
+        <ChangeLogOverlay
+          page="rooms"
+          record={{ id: 'room-100', name: '100' }}
+          open
+          onClose={vi.fn()}
+        />
+      </ApiProvider>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Rooms: 100: Change Log' })).toBeInTheDocument();
+    expect((await loaded()).length).toBeGreaterThan(0);
+    expect(list).toHaveBeenCalledWith(
+      expect.objectContaining({ recordId: 'room-100' }),
+      expect.anything(),
+    );
+    expect(bodyRows().length).toBeLessThanOrEqual(3);
+  });
+
+  it('says "this item" when the record has no changes', async () => {
+    render(
+      <ApiProvider client={createMockClient()}>
+        <ChangeLogOverlay
+          page="rooms"
+          record={{ id: 'room-new-1', name: 'New' }}
+          open
+          onClose={vi.fn()}
+        />
+      </ApiProvider>,
+    );
+    expect(
+      await screen.findByText('No changes have been recorded for this item in the last year.'),
+    ).toBeInTheDocument();
+  });
+
+  it('names an empty-named record "(unnamed)"', () => {
+    render(
+      <ApiProvider client={createMockClient()}>
+        <ChangeLogOverlay page="rooms" record={{ id: 'x', name: '' }} open onClose={vi.fn()} />
+      </ApiProvider>,
+    );
+    expect(
+      screen.getByRole('dialog', { name: 'Rooms: (unnamed): Change Log' }),
+    ).toBeInTheDocument();
+  });
+
+  it('the header button sends no record id', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const list = vi.spyOn(client.changeLog, 'list');
+    render(
+      <ApiProvider client={client}>
+        <ChangeLogButton page="rooms" />
+      </ApiProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Change Log' }));
+    await loaded();
+    expect(list.mock.calls.every(([q]) => q.recordId === undefined)).toBe(true);
+  });
+});

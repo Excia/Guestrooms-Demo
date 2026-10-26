@@ -441,6 +441,7 @@ email?, confirmationSent?}`) and `leadOccupant`. Absent means the backend does n
 
 - Retention: one year. The backend never returns an entry older than one year before today (the mock does the same).
 - The backend writes the entries when an admin page saves or deletes something (Q-97-3 in `entries/97-change-log.md`).
+- **Per-record log (the setup lists' three-dot menu).** `GET /change-log` also takes `recordId` (the id of one room, room type, add-on or rate category of that `page`); the answer then lists only that record's changes, with the same filters, sort and paging. An entry about a record carries `recordId`; page-wide entries have none and appear only in the page log. The legacy log scopes the same way (by the record's id). The header Change Log button sends no `recordId`. A record with no changes answers an empty page. The client refuses an empty or over-200-character `recordId` (400 `invalid-query`).
 
 ## Online Booking settings (ticket 7.9, branch `feat/96-online-booking-settings`)
 

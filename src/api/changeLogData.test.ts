@@ -2,6 +2,9 @@ import { isWithinRetention } from '../app/changeLog';
 import { mockChangeLog, queryChangeLog } from './changeLogData';
 import { assertChangeLogQuery } from './changeLogValidation';
 import { createMockClient } from './mock';
+import { mockAddOns } from './addOnData';
+import { mockRateCategories } from './rateCategoryData';
+import { mockRoomTypes, mockRooms } from './roomSetupData';
 import { MOCK_TODAY } from './mockData';
 
 const all = mockChangeLog(MOCK_TODAY)['system-settings'];
@@ -86,7 +89,68 @@ describe('queryChangeLog', () => {
   });
 });
 
+describe('queryChangeLog by record', () => {
+  const rooms = mockChangeLog(MOCK_TODAY).rooms;
+  it('lists only the changes of that record, newest first', () => {
+    const page = queryChangeLog(
+      rooms,
+      { page: 'rooms', recordId: 'room-100', limit: 200 },
+      MOCK_TODAY,
+    );
+    expect(page.items.length).toBeGreaterThan(0);
+    expect(page.items.every((e) => e.recordId === 'room-100')).toBe(true);
+    expect(page.items.every((e) => e.description.includes('"100"'))).toBe(true);
+    const keys = page.items.map((e) => e.date + e.time);
+    expect(keys).toEqual([...keys].sort().reverse());
+  });
+  it('is smaller than the page log and empty for a record without changes', () => {
+    const whole = queryChangeLog(rooms, { page: 'rooms', limit: 200 }, MOCK_TODAY);
+    const one = queryChangeLog(
+      rooms,
+      { page: 'rooms', recordId: 'room-100', limit: 200 },
+      MOCK_TODAY,
+    );
+    expect(one.total).toBeLessThan(whole.total);
+    expect(queryChangeLog(rooms, { page: 'rooms', recordId: 'nope' }, MOCK_TODAY).total).toBe(0);
+  });
+  it('combines with the other filters', () => {
+    const page = queryChangeLog(
+      rooms,
+      { page: 'rooms', recordId: 'room-100', changeTypes: ['created'], limit: 200 },
+      MOCK_TODAY,
+    );
+    expect(page.items.map((e) => e.changeType)).toEqual(['created']);
+  });
+  it('has at least one entry for every seeded room, room type, add-on and rate category', () => {
+    const log = mockChangeLog(MOCK_TODAY);
+    const types = mockRoomTypes();
+    const seeds = [
+      ['rooms', mockRooms(types)],
+      ['room-types', types],
+      ['add-on-items', mockAddOns()],
+      ['rate-categories', mockRateCategories()],
+    ] as const;
+    for (const [page, records] of seeds) {
+      for (const record of records) {
+        const found = queryChangeLog(log[page], { page, recordId: record.id }, MOCK_TODAY);
+        expect(found.total, `${page} ${record.id}`).toBeGreaterThan(0);
+      }
+    }
+  });
+  it('has entries for every seeded setup record of the four pages', () => {
+    const log = mockChangeLog(MOCK_TODAY);
+    for (const page of ['rooms', 'room-types', 'add-on-items', 'rate-categories'] as const) {
+      expect(log[page].some((e) => e.recordId !== undefined)).toBe(true);
+    }
+  });
+});
+
 describe('assertChangeLogQuery', () => {
+  it('guards the record id', () => {
+    expect(() => assertChangeLogQuery({ page: 'rooms', recordId: 'room-1' })).not.toThrow();
+    expect(() => assertChangeLogQuery({ page: 'rooms', recordId: '  ' })).toThrow();
+    expect(() => assertChangeLogQuery({ page: 'rooms', recordId: 'x'.repeat(201) })).toThrow();
+  });
   it('accepts a normal query and refuses bad input', () => {
     expect(() => assertChangeLogQuery({ page: 'rooms', timeFrom: '08:00' })).not.toThrow();
     expect(() => assertChangeLogQuery({ page: 'nope' as never })).toThrow();

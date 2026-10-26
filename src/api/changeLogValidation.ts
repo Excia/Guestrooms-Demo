@@ -17,6 +17,10 @@ export function assertChangeLogQuery(q: ChangeLogQuery): void {
     !hhmm(q.timeTo) ||
     !text(q.actionBy) ||
     !text(q.search) ||
+    !(
+      q.recordId === undefined ||
+      (typeof q.recordId === 'string' && q.recordId.trim() !== '' && q.recordId.length <= 200)
+    ) ||
     (q.dateFrom !== undefined && q.dateTo !== undefined && q.dateFrom > q.dateTo) ||
     (q.changeTypes !== undefined &&
       !(

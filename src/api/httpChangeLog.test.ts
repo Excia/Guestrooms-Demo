@@ -22,12 +22,36 @@ describe('changeLogParams', () => {
       limit: '25',
     });
   });
+  it('sends the record id', () => {
+    expect(changeLogParams({ page: 'rooms', recordId: 'room-100' })).toMatchObject({
+      recordId: 'room-100',
+    });
+  });
   it('leaves unset values out', () => {
     expect(changeLogParams({ page: 'rooms' })).toMatchObject({
       sort: undefined,
       changeTypes: undefined,
       pageNumber: undefined,
     });
+  });
+});
+
+describe('answers with a record id', () => {
+  const entry = {
+    id: 'a',
+    date: '2026-01-01',
+    time: '10:00',
+    changeType: 'created',
+    description: 'd',
+    actionBy: 'x',
+  };
+  it('accepts a string recordId and rejects another type', () => {
+    expect(() =>
+      parseChangeLogPage({ items: [{ ...entry, recordId: 'r' }], total: 1 }, 200),
+    ).not.toThrow();
+    expect(() =>
+      parseChangeLogPage({ items: [{ ...entry, recordId: 5 }], total: 1 }, 200),
+    ).toThrow();
   });
 });
 

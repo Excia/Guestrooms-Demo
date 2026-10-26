@@ -37,6 +37,8 @@ export interface ChangeLogEntry {
   description: string;
   /** Employee name. */
   actionBy: string;
+  /** The setup record (room, room type, add-on, rate category) the change is about; page-wide changes have none. */
+  recordId?: string;
 }
 
 /** An event type; the Change Type filter offers exactly these. */
@@ -47,6 +49,11 @@ export interface ChangeEventType {
 
 export interface ChangeLogQuery {
   page: ChangeLogPageId;
+  /**
+   * Only the changes of this one record of the page (the three-dot menu's Change Log). Like the legacy
+   * log, which scopes by the record's id (`reservationId`). Unset: the whole page.
+   */
+  recordId?: string;
   /** Default: newest first (date descending, then time descending). */
   sort?: ChangeLogSort;
   dateFrom?: IsoDate;

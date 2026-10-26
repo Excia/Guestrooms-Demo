@@ -14,6 +14,9 @@ import {
   type ChangeLogQuery,
   type ChangeLogSortField,
 } from './changeLogTypes';
+import { mockAddOns } from './addOnData';
+import { mockRateCategories } from './rateCategoryData';
+import { mockRoomTypes, mockRooms } from './roomSetupData';
 import type { Page } from './types';
 
 /** Placeholder event types (the Figma reference table is an image of a spreadsheet; Q-97-2). */
@@ -116,7 +119,40 @@ export function mockChangeLog(today: string): Record<ChangeLogPageId, ChangeLogE
       };
     });
   });
+  addRecordEntries(out, today);
   return out;
+}
+
+/** PLACEHOLDER: a few changes per seeded setup record, so each item's own Change Log has rows. */
+function addRecordEntries(out: Record<ChangeLogPageId, ChangeLogEntry[]>, today: string) {
+  const types = mockRoomTypes();
+  const records: [ChangeLogPageId, string, { id: string; name: string }[]][] = [
+    ['rooms', 'Room', mockRooms(types)],
+    ['room-types', 'Room Type', types],
+    ['add-on-items', 'Add-On', mockAddOns()],
+    ['rate-categories', 'Rate Category', mockRateCategories()],
+  ];
+  const steps: [string, (noun: string, name: string) => string][] = [
+    ['created', (noun, name) => `${noun} "${name}" created`],
+    ['updated', (noun, name) => `${noun} "${name}" description updated`],
+    ['updated', (noun, name) => `${noun} "${name}" active dates changed`],
+  ];
+  records.forEach(([page, noun, list], pageIndex) => {
+    list.forEach((record, r) => {
+      steps.forEach(([changeType, text], i) => {
+        const minutes = (r * 97 + i * 211 + pageIndex * 31) % (24 * 60);
+        out[page].push({
+          id: `${page}-rec-${record.id}-${i + 1}`,
+          recordId: record.id,
+          date: addDays(today, -(10 + i * 40 + r * 7)),
+          time: `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`,
+          changeType,
+          description: text(noun, record.name),
+          actionBy: EMPLOYEES[(r + i) % EMPLOYEES.length],
+        });
+      });
+    });
+  });
 }
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
@@ -160,6 +196,7 @@ export function queryChangeLog(
       (!q.dateTo || e.date <= q.dateTo) &&
       (!q.timeFrom || e.time >= q.timeFrom) &&
       (!q.timeTo || e.time <= q.timeTo) &&
+      (q.recordId === undefined || e.recordId === q.recordId) &&
       (!types || types.has(e.changeType)) &&
       includes(e.actionBy, q.actionBy) &&
       includes(e.description, q.search),
