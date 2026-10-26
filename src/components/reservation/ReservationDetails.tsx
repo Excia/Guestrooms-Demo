@@ -89,7 +89,12 @@ export interface ReservationDetailsProps {
   /** Raised after a room change settles: the detail reloads in place. */
   refreshToken?: number;
   /** Reopens the Change Room dialog on its first step (the data drifted); a new `nonce` each time. */
-  reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
+  reopenChange?: {
+    stayId: string;
+    edits: Record<string, string>;
+    nonce: number;
+    lockedForSeconds?: number;
+  } | null;
   /** The reservation was cancelled or a check in undone: the schedule behind the panel reloads. */
   onReservationChanged?: () => void;
   /** Opens another reservation in the panel (the one a room was split into). */
@@ -492,7 +497,10 @@ function Loaded({
   const say = (text: string) => setNotice((n) => ({ id: (n?.id ?? 0) + 1, text }));
   const changeRoomId = useId();
   // The Change Room dialog: closed (null), or open with the choices to start from.
-  const [changing, setChanging] = useState<{ edits?: Record<string, string> } | null>(null);
+  const [changing, setChanging] = useState<{
+    edits?: Record<string, string>;
+    lockedForSeconds?: number;
+  } | null>(null);
   const [seenReopen, setSeenReopen] = useState(reopenChange?.nonce ?? 0);
   const cta = splitCta(detail);
   const api = useApi();
@@ -593,7 +601,7 @@ function Loaded({
   ) {
     setSeenReopen(reopenChange.nonce);
     setSelectedRoomId(reopenChange.stayId);
-    setChanging({ edits: reopenChange.edits });
+    setChanging({ edits: reopenChange.edits, lockedForSeconds: reopenChange.lockedForSeconds });
   }
 
   const run = (actionId: CtaActionId) => {
@@ -941,6 +949,7 @@ function Loaded({
           effectiveDate={roomChange.effectiveDate}
           today={todayDate}
           initialEdits={changing.edits}
+          initialLockedFor={changing.lockedForSeconds}
           onCancel={() => setChanging(null)}
           onSubmit={(submission) => {
             setChanging(null);

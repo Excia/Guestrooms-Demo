@@ -4,6 +4,7 @@ import type {
   AddPaymentMethodRequest,
   CheckInReservationRequest,
   SplitRoomRequest,
+  OverridePermission,
   VerifyOverridePinRequest,
 } from './types';
 import { assertRequestId, assertResourceId } from './validation';
@@ -39,8 +40,16 @@ export function assertCheckInReservationRequest(request: CheckInReservationReque
   }
 }
 
+/** The permissions whose holder's PIN the backend accepts for an override. */
+export const OVERRIDE_PERMISSIONS: readonly OverridePermission[] = [
+  'reservation.check-in.any-time',
+  'function.changeReservationLocation',
+  'function.changeReservationRoomType',
+  'function.changeReservationRoom',
+];
+
 export function assertVerifyOverridePinRequest(request: VerifyOverridePinRequest): void {
-  if (request.permission !== 'reservation.check-in.any-time') throw invalid('permission');
+  if (!OVERRIDE_PERMISSIONS.includes(request.permission)) throw invalid('permission');
   if (
     typeof request.pin !== 'string' ||
     request.pin.trim() === '' ||

@@ -171,6 +171,7 @@ export default function Schedule({
     stayId: string;
     edits: Record<IsoDate, string>;
     nonce: number;
+    lockedForSeconds?: number;
   } | null>(null);
   // The server owns "today" (the club's): when it differs from this browser's, the panel follows it.
   const [serverToday, setServerToday] = useState<IsoDate | undefined>(undefined);
@@ -564,6 +565,7 @@ export default function Schedule({
             stayId,
             edits: Object.fromEntries(plan.map((n) => [n.date, n.roomId])),
             nonce: (r?.nonce ?? 0) + 1,
+            lockedForSeconds: failure.lockedForSeconds,
           }));
         }
         finish();

@@ -127,6 +127,22 @@ export function assertChangeRoomRequest(request: ChangeRoomRequest): void {
   ) {
     throw invalidQuery('room change request');
   }
+  if (request.overrideCodes !== undefined) {
+    const codes = request.overrideCodes as unknown;
+    if (typeof codes !== 'object' || codes === null || Array.isArray(codes)) {
+      throw invalidQuery('override codes');
+    }
+    for (const [field, code] of Object.entries(codes)) {
+      if (
+        !['location', 'roomType', 'room'].includes(field) ||
+        typeof code !== 'string' ||
+        code === '' ||
+        code.length > 32
+      ) {
+        throw invalidQuery('override codes');
+      }
+    }
+  }
   request.nights.forEach((night, i) => {
     if (typeof night !== 'object' || night === null || typeof night.date !== 'string') {
       throw invalidQuery('room change request');

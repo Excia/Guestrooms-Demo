@@ -30,7 +30,12 @@ export interface ReservationPanelProps {
   /** A room change is being saved. */
   roomChangeBusy?: boolean;
   /** Reopens the Change Room dialog on its first step (the data drifted); `nonce` makes each request new. */
-  reopenChange?: { stayId: string; edits: Record<string, string>; nonce: number } | null;
+  reopenChange?: {
+    stayId: string;
+    edits: Record<string, string>;
+    nonce: number;
+    lockedForSeconds?: number;
+  } | null;
   /** Raised after a room change settles: the open details reload in place. */
   detailRefresh?: number;
   /** The reservation was cancelled or a check in undone (ticket 2.5): the page reloads the schedule. */

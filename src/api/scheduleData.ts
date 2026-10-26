@@ -1,6 +1,7 @@
 // Mock schedule: a small realistic inventory and a deterministic 200-room generator, plus the
 // move mutations applied to that in-memory state. Replaced by the backend later.
 import { housekeepingOptionsFor, needsHousekeepingBlock } from '../app/housekeepingBlocks';
+import { changedFields, type UnlockField } from '../app/overrideUnlock';
 import { addDays, daysBetween, nightsOverlap } from '../lib/dates';
 import { rateOutcome } from '../lib/roomChangeRates';
 import { changedNights, normalizeRuns, planFromBlocks, planProblem, stayOf } from '../lib/stayPlan';
@@ -1184,6 +1185,8 @@ export function changeRoomDuringStay(
   state: ScheduleState,
   request: ChangeRoomRequest,
   rule: RoomChangeRule,
+  /** Called with what the plan changes, before anything is applied; throws when the caller may not. */
+  authorize: (fields: ReadonlySet<UnlockField>) => void = () => {},
 ): ChangeRoomResult {
   const block = findBlock(state, request.reservationRoomId);
   if (block.roomChange && block.roomChange.stayId !== block.id) throw notFound('Reservation room');
@@ -1210,6 +1213,11 @@ export function changeRoomDuringStay(
   const changed = changedNights(now, request.nights);
   if (changed.length === 0) throw invalidChange({ nights: ['No night changes room'] });
   const roomOf = (id: string) => findRoom(state, id);
+  authorize(
+    changedFields(
+      now.map((n, i) => ({ from: roomOf(n.roomId), to: roomOf(request.nights[i].roomId) })),
+    ),
+  );
   const currentType = roomOf(block.roomId).roomTypeId;
   if (
     block.roomTypeLocked &&

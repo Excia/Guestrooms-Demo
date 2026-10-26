@@ -616,6 +616,24 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   Absent means the backend does not say; the UI then lets the attempt run and the backend answers.
 - The Reservation List's bulk check in only selects reservations arriving **today** (the club's date): past-dated and future ones are never bulk checked in.
 
+**Override PINs for the Change Reservation functions (follow-up of ticket 187, "match legacy"):**
+
+- `OverridePermission` also takes `function.changeReservationLocation`, `function.changeReservationRoomType` and
+  `function.changeReservationRoom` (the Permissions page functions). `POST /overrides/verify-pin` with one of them is valid when the
+  PIN belongs to an employee whose permission set grants that function (and has PIN override on). Verify needs a caller who may edit
+  reservations (403 `forbidden` otherwise), as the check-in form needs a check-in grant.
+- `ChangeRoomRequest.overrideCodes?: { room?, roomType?, location? }` (`POST /reservation-rooms/{id}/change-room`): one PIN per field
+  that was unlocked. The server works out what the plan changes (room: any night's room id; room type and location: the new room
+  differs from the old one in them) and, for **every** changed field the caller's own grant lacks, tests that field's code against
+  that function. Missing code: 403 `override-required`; code of someone without the function or unknown: 403 `override-invalid`;
+  locked out: 429 `override-locked` (`details.retryAfterSeconds`, which the UI passes to the reopened prompt). Nothing changes on an
+  error. The codes are hashed in the replay fingerprint, never stored or logged. A caller who holds a function sends no code for
+  that field (an unneeded code is ignored). **Deviation from legacy:** legacy keeps one `overrideCode` (the last PIN entered); two
+  fields unlocked with two different PINs would then fail. One code per field avoids that (Q-187-4, decided).
+- Legacy also sends `requestedPermissionValue` (an access-set option) with the code; the UI does not: the function name says what
+  the PIN must hold (Q-187-5).
+- The dialog never sends a plan that touches a still-locked field: Continue is disabled with "Unlock Room to make this change." (this also covers a dialog reopened after a refusal with its choices kept).
+
 **Override PINs: what the real backend must do (tickets 163 and 187):**
 
 - `POST /overrides/verify-pin` and the `overrideCode` of `POST /reservations/{id}/check-in` are the only places a code is
