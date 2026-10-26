@@ -6,7 +6,8 @@ import type {
   CheckInReservationRequest,
   CheckInReservationResult,
   SplitRoomRequest,
-  VerifyOverrideCodeRequest,
+  VerifyOverridePinRequest,
+  VerifyOverridePinResult,
   ApiClient,
   BookingHold,
   CancelReservationRequest,
@@ -74,7 +75,7 @@ import {
   assertAddPaymentMethodRequest,
   assertCheckInReservationRequest,
   assertSplitRoomRequest,
-  assertVerifyOverrideCodeRequest,
+  assertVerifyOverridePinRequest,
 } from './checkInApi';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
@@ -531,9 +532,14 @@ const parseSplit =
     return withKnownAudit(body);
   };
 
-const parseOverrideCheck = (body: unknown, status: number): { valid: boolean } => {
-  if (!isObject(body) || !isFlag(body.valid)) throw invalid(status, 'override code check');
-  return { valid: body.valid };
+const parseOverridePinCheck = (body: unknown, status: number): VerifyOverridePinResult => {
+  if (!isObject(body) || !isFlag(body.valid)) throw invalid(status, 'override PIN check');
+  const seconds = body.lockedForSeconds;
+  if (seconds === undefined) return { valid: body.valid };
+  if (typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+    throw invalid(status, 'override PIN check');
+  }
+  return { valid: body.valid, lockedForSeconds: seconds };
 };
 
 const parseCreated =
@@ -1496,14 +1502,6 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
         }),
-      verifyOverrideCode: (r: VerifyOverrideCodeRequest, o) =>
-        Promise.resolve().then(() => {
-          assertVerifyOverrideCodeRequest(r);
-          return request('/override-codes/verify', {}, o, parseOverrideCheck, {
-            method: 'POST',
-            body: r,
-          });
-        }),
       addRoom: (r: AddRoomRequest, o) =>
         Promise.resolve().then(() => {
           assertAddRoomRequest(r);
@@ -1837,6 +1835,16 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         request('/keycards/encoders', {}, o, parseKeys, { method: 'PUT', body: keys }),
       retrieveEncoders: (o) =>
         request('/keycards/encoders/retrieve', {}, o, parseKeys, { method: 'POST' }),
+    },
+    overrides: {
+      verifyPin: (r: VerifyOverridePinRequest, o) =>
+        Promise.resolve().then(() => {
+          assertVerifyOverridePinRequest(r);
+          return request('/overrides/verify-pin', {}, o, parseOverridePinCheck, {
+            method: 'POST',
+            body: r,
+          });
+        }),
     },
     permissions: { getGrant: (o) => request('/permissions/me', {}, o, parseGrant) },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },

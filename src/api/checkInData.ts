@@ -23,15 +23,8 @@ import type {
   ScheduleBlock,
   SplitRoomRequest,
 } from './types';
+import type { PinCheck } from './overridePin';
 import { ApiError } from './types';
-
-/**
- * PLACEHOLDER (P-163-1): the one override code the mock accepts, until the real PIN prompt and
- * validation (ticket 127). It is not a secret; it stands in for a manager's PIN.
- */
-export const MOCK_OVERRIDE_CODE = '4321';
-
-export const isMockOverrideCode = (code: string | undefined) => code === MOCK_OVERRIDE_CODE;
 
 const conflict = (code: string, message: string) => new ApiError(409, message, { code });
 const notFound = () => new ApiError(404, 'Reservation not found');
@@ -50,6 +43,8 @@ export interface CheckInEnv {
   clock: ClubClock;
   checkOutTime: string;
   level: CheckInLevel;
+  /** Tests an override PIN for the "any time" check in permission (rate limited by the caller). */
+  checkPin: (pin: string) => PinCheck;
 }
 
 /** The check in outcome per room, before the reservation is rebuilt. */
@@ -140,7 +135,14 @@ export function checkInReservation(
           code: 'override-required',
         });
       }
-      if (!isMockOverrideCode(request.overrideCode)) {
+      const pin = env.checkPin(request.overrideCode);
+      if (pin.kind === 'locked') {
+        throw new ApiError(429, 'Too many wrong override PINs; try again later', {
+          code: 'override-locked',
+          details: { retryAfterSeconds: [String(pin.retryAfterSeconds)] },
+        });
+      }
+      if (pin.kind !== 'valid') {
         throw new ApiError(403, 'That override code is not valid', { code: 'override-invalid' });
       }
     }

@@ -4,7 +4,7 @@ import type {
   AddPaymentMethodRequest,
   CheckInReservationRequest,
   SplitRoomRequest,
-  VerifyOverrideCodeRequest,
+  VerifyOverridePinRequest,
 } from './types';
 import { assertRequestId, assertResourceId } from './validation';
 
@@ -39,14 +39,14 @@ export function assertCheckInReservationRequest(request: CheckInReservationReque
   }
 }
 
-export function assertVerifyOverrideCodeRequest(request: VerifyOverrideCodeRequest): void {
+export function assertVerifyOverridePinRequest(request: VerifyOverridePinRequest): void {
   if (request.permission !== 'reservation.check-in.any-time') throw invalid('permission');
   if (
-    typeof request.code !== 'string' ||
-    request.code.trim() === '' ||
-    request.code.length > MAX_CODE
+    typeof request.pin !== 'string' ||
+    request.pin.trim() === '' ||
+    request.pin.length > MAX_CODE
   ) {
-    throw invalid('override code');
+    throw invalid('override PIN');
   }
 }
 

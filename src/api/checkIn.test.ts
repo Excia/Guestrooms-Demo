@@ -1,7 +1,7 @@
 import { housekeepingStatusOf } from '../app/housekeepingBlocks';
 import { createMockClient } from './mock';
 import { createHttpClient } from './http';
-import { MOCK_OVERRIDE_CODE } from './checkInData';
+import { MOCK_MANAGER_PIN } from './overridePin';
 import type { ApiClient, CheckInReservationRequest, PermissionGrant } from './types';
 
 const T = '2026-10-16';
@@ -181,7 +181,7 @@ describe('mock reservations.checkIn permission levels', () => {
       c.reservations.checkIn(await request(c, 'rs-31', ['rr-28'], { overrideCode: '0000' })),
     ).rejects.toMatchObject({ status: 403, code: 'override-invalid' });
     const ok = await c.reservations.checkIn(
-      await request(c, 'rs-31', ['rr-28'], { overrideCode: MOCK_OVERRIDE_CODE }),
+      await request(c, 'rs-31', ['rr-28'], { overrideCode: MOCK_MANAGER_PIN }),
     );
     expect(ok.rooms[0].checkedIn).toBe(true);
   });
@@ -307,27 +307,17 @@ describe('mock reservations.splitRoom', () => {
   });
 });
 
-describe('mock reservations.verifyOverrideCode', () => {
-  it('accepts the mock code and rejects others as a normal answer', async () => {
-    const c = mk();
-    const ask = (code: string) =>
-      c.reservations.verifyOverrideCode({ permission: 'reservation.check-in.any-time', code });
-    expect(await ask(MOCK_OVERRIDE_CODE)).toEqual({ valid: true });
-    expect(await ask('9999')).toEqual({ valid: false });
-  });
-});
-
 describe('override code handling in the mock', () => {
   it('verify needs a user with a check-in grant', async () => {
     const ask = (c: ApiClient) =>
-      c.reservations.verifyOverrideCode({ permission: 'reservation.check-in.any-time', code: '1' });
+      c.overrides.verifyPin({ permission: 'reservation.check-in.any-time', pin: '1' });
     await expect(ask(mk({ grant: NEVER }))).rejects.toMatchObject({ status: 403 });
     await expect(ask(mk({ grant: ARRIVAL }))).resolves.toEqual({ valid: false });
   });
 
   it('a replay with another code under the same request id is a conflict; the same code replays', async () => {
     const c = mk({ grant: ARRIVAL });
-    const req = await request(c, 'rs-31', ['rr-28'], { overrideCode: MOCK_OVERRIDE_CODE });
+    const req = await request(c, 'rs-31', ['rr-28'], { overrideCode: MOCK_MANAGER_PIN });
     const first = await c.reservations.checkIn(req);
     expect(await c.reservations.checkIn(req)).toEqual(first);
     await expect(c.reservations.checkIn({ ...req, overrideCode: '0000' })).rejects.toMatchObject({
@@ -440,21 +430,21 @@ describe('http client', () => {
     });
   });
 
-  it('asks the backend to verify an override code', async () => {
+  it('asks the backend to verify an override PIN', async () => {
     vi.stubGlobal('fetch', respond({ valid: true }));
     const http = createHttpClient('https://api.example.test');
     await expect(
-      http.reservations.verifyOverrideCode({
+      http.overrides.verifyPin({
         permission: 'reservation.check-in.any-time',
-        code: '1',
+        pin: '1',
       }),
     ).resolves.toEqual({ valid: true });
-    expect(String(calls[0].url)).toBe('https://api.example.test/override-codes/verify');
+    expect(String(calls[0].url)).toBe('https://api.example.test/overrides/verify-pin');
     vi.stubGlobal('fetch', respond({ valid: 'yes' }));
     await expect(
-      http.reservations.verifyOverrideCode({
+      http.overrides.verifyPin({
         permission: 'reservation.check-in.any-time',
-        code: '1',
+        pin: '1',
       }),
     ).rejects.toMatchObject({ code: 'invalid-response' });
   });
