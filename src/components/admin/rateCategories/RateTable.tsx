@@ -68,9 +68,9 @@ const toneOf = (t: Theme, seasons: readonly RateSeason[], season: RateSeason) =>
   return index === null ? t.palette.season.neutral : t.palette.season.tones[index];
 };
 
-const stickyFirst = (t: Theme, left: number | string = 0) => ({
+const stickyFirst = (t: Theme) => ({
   position: 'sticky' as const,
-  left,
+  left: 0,
   // A hairline on the right shows the column is pinned while the rest scrolls under it.
   borderRight: `1px solid ${t.palette.divider}`,
 });
@@ -106,6 +106,8 @@ export default function RateTable({
         // Inside a grid or flex cell it must shrink to the cell and scroll, never stretch the page.
         minWidth: 0,
         maxWidth: '100%',
+        // The title rows are as wide as this box (cqw), not as the table, so they never scroll away.
+        containerType: 'inline-size',
         // Inset ring: the scroll box would clip an outer one.
         '&:focus-visible': {
           outline: `2px solid ${t.palette.primary.main}`,
@@ -125,13 +127,16 @@ export default function RateTable({
             py: tablePx(t, RATE_TABLE.cellPaddingYPx),
             px: tablePx(t, RATE_TABLE.cellPaddingXPx),
           },
+          // Room type cells leave room for the colour edge (more specific than the rule above).
+          '& th.MuiTableCell-root[scope="row"]': {
+            pl: tablePx(t, RATE_TABLE.accentPx + RATE_TABLE.cellPaddingXPx),
+          },
         })}
       >
         <TableHead>
           <TableRow>
             <TableCell
               component="td"
-              colSpan={2}
               sx={(t) => ({
                 ...stickyFirst(t),
                 bgcolor: 'background.paper',
@@ -151,7 +156,6 @@ export default function RateTable({
                   lineHeight: 1.25,
                   borderBottom: 0,
                   borderLeft: `1px solid ${t.palette.divider}`,
-                  // Long help wraps inside the group; the header never widens the columns.
                   whiteSpace: 'normal',
                 })}
               >
@@ -177,20 +181,6 @@ export default function RateTable({
               scope="col"
               sx={(t) => ({
                 ...stickyFirst(t),
-                bgcolor: 'background.paper',
-                zIndex: 3,
-                minWidth: tablePx(t, RATE_TABLE.seasonColPx),
-                maxWidth: tablePx(t, RATE_TABLE.seasonColPx),
-                fontSize: t.typography.pxToRem(RATE_TABLE.headerFontPx),
-                fontWeight: 'bold',
-              })}
-            >
-              Season / Special Rates
-            </TableCell>
-            <TableCell
-              scope="col"
-              sx={(t) => ({
-                ...stickyFirst(t, tablePx(t, RATE_TABLE.seasonColPx)),
                 bgcolor: 'background.paper',
                 zIndex: 3,
                 minWidth: tablePx(t, RATE_TABLE.roomTypeMinPx),
@@ -228,99 +218,81 @@ export default function RateTable({
               key={season.id}
               data-season={season.id}
               data-tone={toneIndex === null ? 'neutral' : String(toneIndex)}
-              sx={(t) => ({
-                // One white separator between the season cards, painted on every cell of the first row.
-                '& > tr:first-of-type > *': {
-                  borderTop:
-                    seasonIndex === 0
-                      ? undefined
-                      : `${t.spacing(1)} solid ${t.palette.background.paper}`,
-                },
-              })}
             >
-              {(roomTypes.length === 0 ? [null] : roomTypes).map((roomType, rowIndex) => {
-                const amounts = roomType ? amountsFor(season, roomType.id) : null;
+              <TableRow>
+                <TableCell
+                  colSpan={span}
+                  sx={(t) => ({
+                    p: 0,
+                    bgcolor: toneOf(t, seasons, season).band,
+                    // A white gap between the season cards.
+                    borderTop:
+                      seasonIndex === 0 ? undefined : `8px solid ${t.palette.background.paper}`,
+                  })}
+                >
+                  <SeasonTitle
+                    season={season}
+                    seasons={seasons}
+                    errors={e}
+                    skus={skus}
+                    onChange={(change) => onSeasonChange(season.id, change)}
+                    onDuplicate={() => onDuplicateSeason(season.id)}
+                    onRemove={() => onRemoveSeason(season.id)}
+                  />
+                </TableCell>
+              </TableRow>
+              {roomTypes.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={span}
+                    sx={(t) => ({ bgcolor: toneOf(t, seasons, season).row })}
+                  >
+                    No room types selected
+                  </TableCell>
+                </TableRow>
+              ) : null}
+              {roomTypes.map((roomType) => {
+                const amounts = amountsFor(season, roomType.id);
                 return (
-                  <TableRow key={roomType?.id ?? 'none'}>
-                    {rowIndex === 0 ? (
-                      <TableCell
-                        component="th"
-                        scope="rowgroup"
-                        rowSpan={Math.max(1, roomTypes.length)}
-                        sx={(t) => ({
+                  <TableRow key={roomType.id}>
+                    <TableCell
+                      component="th"
+                      scope="row"
+                      title={roomType.label}
+                      sx={(t) => {
+                        const tone = toneOf(t, seasons, season);
+                        return {
                           ...stickyFirst(t),
-                          bgcolor: toneOf(t, seasons, season).band,
-                          zIndex: 2,
-                          p: 0,
-                          verticalAlign: 'top',
-                          minWidth: tablePx(t, RATE_TABLE.seasonColPx),
-                          maxWidth: tablePx(t, RATE_TABLE.seasonColPx),
+                          bgcolor: tone.row,
+                          zIndex: 1,
                           fontWeight: 'normal',
-                          boxShadow: `inset ${tablePx(t, RATE_TABLE.accentPx)} 0 0 ${toneOf(t, seasons, season).accent}`,
-                        })}
+                          minWidth: tablePx(t, RATE_TABLE.roomTypeMinPx),
+                          maxWidth: tablePx(t, RATE_TABLE.roomTypeMaxPx),
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          boxShadow: `inset ${tablePx(t, RATE_TABLE.accentPx)} 0 0 ${tone.accent}`,
+                        };
+                      }}
+                    >
+                      {roomType.label}
+                    </TableCell>
+                    {columns.map((c) => (
+                      <TableCell
+                        key={c.key}
+                        align="center"
+                        sx={(t) => ({ bgcolor: toneOf(t, seasons, season).row })}
                       >
-                        <SeasonCell
-                          season={season}
-                          errors={e}
-                          skus={skus}
-                          onChange={(change) => onSeasonChange(season.id, change)}
-                          onDuplicate={() => onDuplicateSeason(season.id)}
-                          onRemove={() => onRemoveSeason(season.id)}
+                        <AmountField
+                          label={`${name}, ${roomType.label}, ${c.label}`}
+                          cents={amounts[c.key]}
+                          onChange={(cents) => onAmountChange(season.id, roomType.id, c.key, cents)}
+                          onInvalidChange={(bad) =>
+                            onAmountInvalid(`${season.id}|${roomType.id}|${c.key}`, bad)
+                          }
                         />
                       </TableCell>
-                    ) : null}
-                    {roomType === null || amounts === null ? (
-                      <TableCell
-                        colSpan={span}
-                        sx={(t) => ({
-                          bgcolor: toneOf(t, seasons, season).row,
-                        })}
-                      >
-                        No room types selected
-                      </TableCell>
-                    ) : (
-                      <>
-                        <TableCell
-                          component="th"
-                          scope="row"
-                          title={roomType.label}
-                          sx={(t) => {
-                            const tone = toneOf(t, seasons, season);
-                            return {
-                              ...stickyFirst(t, tablePx(t, RATE_TABLE.seasonColPx)),
-                              bgcolor: tone.row,
-                              zIndex: 1,
-                              fontWeight: 'normal',
-                              minWidth: tablePx(t, RATE_TABLE.roomTypeMinPx),
-                              maxWidth: tablePx(t, RATE_TABLE.roomTypeMaxPx),
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            };
-                          }}
-                        >
-                          {roomType.label}
-                        </TableCell>
-                        {columns.map((c) => (
-                          <TableCell
-                            key={c.key}
-                            align="center"
-                            sx={(t) => ({ bgcolor: toneOf(t, seasons, season).row })}
-                          >
-                            <AmountField
-                              label={`${name}, ${roomType.label}, ${c.label}`}
-                              cents={amounts[c.key]}
-                              onChange={(cents) =>
-                                onAmountChange(season.id, roomType.id, c.key, cents)
-                              }
-                              onInvalidChange={(bad) =>
-                                onAmountInvalid(`${season.id}|${roomType.id}|${c.key}`, bad)
-                              }
-                            />
-                          </TableCell>
-                        ))}
-                      </>
-                    )}
+                    ))}
                   </TableRow>
                 );
               })}
@@ -332,8 +304,9 @@ export default function RateTable({
   );
 }
 
-interface SeasonCellProps {
+interface SeasonTitleProps {
   season: RateSeason;
+  seasons: readonly RateSeason[];
   errors: SeasonErrors;
   skus: readonly RateSku[];
   onChange: (change: SeasonChange) => void;
@@ -341,30 +314,43 @@ interface SeasonCellProps {
   onRemove: () => void;
 }
 
-// The first column of a season (legacy "Season / Special Rates"): it spans the season's room type
-// rows and holds the name, start and end date, SKU, duplicate and remove. The default season has its
-// title and the legacy explanation. Sticky, so the dates stay in view while the rates scroll.
-function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }: SeasonCellProps) {
+// The title row of a season card: name, dates, SKU, then duplicate and remove. The default season
+// has only its title and the legacy explanation.
+function SeasonTitle({
+  season,
+  seasons,
+  errors: e,
+  skus,
+  onChange,
+  onDuplicate,
+  onRemove,
+}: SeasonTitleProps) {
   const name = seasonLabel(season);
   const kind = seasonSkuKind(season);
   const kindLabelId = `${seasonDomId(season.id, 'sku')}-kind`;
   return (
     <Box
       sx={(t) => ({
+        position: 'sticky',
+        left: 0,
+        // As wide as the scroll box, so the controls stay in view while the rates scroll.
+        // Measured in Chrome at 1400px: a title row of exactly 100cqw made the table 6px wider than
+        // the box, so it always scrolled; a small allowance (titleAllowancePx) avoids that.
+        width: `calc(100cqw - ${tablePx(t, RATE_TABLE.titleAllowancePx)})`,
+        boxSizing: 'border-box',
         display: 'flex',
-        flexDirection: 'column',
-        gap: 1,
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+        gap: 1.5,
         py: 1,
-        pr: 1,
-        pl: tablePx(t, RATE_TABLE.accentPx + 6),
+        pr: 1.5,
+        pl: tablePx(t, RATE_TABLE.accentPx + 8),
+        boxShadow: `inset ${tablePx(t, RATE_TABLE.accentPx)} 0 0 ${toneOf(t, seasons, season).accent}`,
       })}
     >
       {season.isDefault ? (
-        <Box>
-          <Typography
-            component="span"
-            sx={{ display: 'block', fontWeight: 'bold', typography: 'body2' }}
-          >
+        <Box sx={{ py: 0.5 }}>
+          <Typography component="span" sx={{ display: 'block', fontWeight: 'bold' }}>
             Default
           </Typography>
           <Typography variant="body2" sx={{ fontStyle: 'italic' }}>
@@ -373,28 +359,15 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
         </Box>
       ) : (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Typography
-              aria-hidden
-              component="span"
-              sx={{ fontWeight: 'bold', typography: 'body2' }}
-            >
-              Season / Special Rates
-            </Typography>
-            <Box component="span" sx={visuallyHidden}>
-              {name}
-            </Box>
-            <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-              <IconButton
-                size="small"
-                color="primary"
-                aria-label={`Duplicate season ${name}`}
-                onClick={onDuplicate}
-              >
-                <ContentCopy fontSize="small" />
-              </IconButton>
-              <RemoveIconButton size="small" label={`season ${name}`} onClick={onRemove} />
-            </Box>
+          <Typography
+            aria-hidden
+            component="span"
+            sx={{ fontWeight: 'bold', typography: 'body2', width: 104, pt: 1 }}
+          >
+            Season / Special Rates
+          </Typography>
+          <Box component="span" sx={visuallyHidden}>
+            {name}
           </Box>
           <TextField
             id={seasonDomId(season.id, 'name')}
@@ -406,76 +379,87 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
             helperText={e.name}
             slotProps={{ htmlInput: { maxLength: SEASON_NAME_MAX } }}
             required
-            sx={{ bgcolor: 'background.paper' }}
+            sx={(t) => ({ width: t.spacing(24), bgcolor: 'background.paper' })}
           />
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            <Box
-              id={seasonDomId(season.id, 'startDate')}
-              sx={{ flex: 1, minWidth: 0, bgcolor: 'background.paper' }}
-            >
-              <DateField
-                fullWidth
+          <Box
+            id={seasonDomId(season.id, 'startDate')}
+            sx={(t) => ({ width: t.spacing(21), bgcolor: 'background.paper' })}
+          >
+            <DateField
+              fullWidth
+              size="small"
+              label="Start date"
+              ariaLabel={`${name} start date`}
+              value={season.startDate}
+              onChange={(startDate) => onChange({ startDate })}
+              error={Boolean(e.startDate)}
+              helperText={e.startDate}
+            />
+          </Box>
+          <Box
+            id={seasonDomId(season.id, 'endDate')}
+            sx={(t) => ({ width: t.spacing(21), bgcolor: 'background.paper' })}
+          >
+            <DateField
+              fullWidth
+              size="small"
+              label="End date"
+              ariaLabel={`${name} end date`}
+              value={season.endDate}
+              min={season.startDate || undefined}
+              onChange={(endDate) => onChange({ endDate })}
+              error={Boolean(e.endDate)}
+              helperText={e.endDate}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+            <FormControl>
+              <FormLabel id={kindLabelId} sx={{ typography: 'caption', color: 'text.primary' }}>
+                {`SKU type (${name})`}
+              </FormLabel>
+              <RadioGroup
+                row
+                aria-labelledby={kindLabelId}
+                value={kind}
+                onChange={(ev) => {
+                  const next = ev.target.value as AddOnKind;
+                  // A SKU of the other kind no longer applies.
+                  const keep = skus.some((s) => s.id === season.sku?.id && s.kind === next);
+                  onChange({ skuKind: next, sku: keep ? season.sku : null });
+                }}
+              >
+                <FormControlLabel
+                  value="item"
+                  control={<Radio size="small" />}
+                  label="Item"
+                  sx={{ mr: 1 }}
+                />
+                <FormControlLabel value="combo" control={<Radio size="small" />} label="Combo" />
+              </RadioGroup>
+            </FormControl>
+            <Box sx={(t) => ({ width: t.spacing(30), bgcolor: 'background.paper' })}>
+              <LookupField
+                id={seasonDomId(season.id, 'sku')}
                 size="small"
-                label="Start date"
-                ariaLabel={`${name} start date`}
-                value={season.startDate}
-                onChange={(startDate) => onChange({ startDate })}
-                error={Boolean(e.startDate)}
-                helperText={e.startDate}
-              />
-            </Box>
-            <Box
-              id={seasonDomId(season.id, 'endDate')}
-              sx={{ flex: 1, minWidth: 0, bgcolor: 'background.paper' }}
-            >
-              <DateField
-                fullWidth
-                size="small"
-                label="End date"
-                ariaLabel={`${name} end date`}
-                value={season.endDate}
-                min={season.startDate || undefined}
-                onChange={(endDate) => onChange({ endDate })}
-                error={Boolean(e.endDate)}
-                helperText={e.endDate}
+                label={`SKU (${name})`}
+                placeholder="Same as the category"
+                value={season.sku ?? null}
+                options={skusOfKind(skus, kind)}
+                onChange={(sku) => onChange({ sku })}
+                error={e.sku}
               />
             </Box>
           </Box>
-          <FormControl>
-            <FormLabel id={kindLabelId} sx={{ typography: 'caption', color: 'text.primary' }}>
-              {`SKU type (${name})`}
-            </FormLabel>
-            <RadioGroup
-              row
-              aria-labelledby={kindLabelId}
-              value={kind}
-              onChange={(ev) => {
-                const next = ev.target.value as AddOnKind;
-                // A SKU of the other kind no longer applies.
-                const keep = skus.some((s) => s.id === season.sku?.id && s.kind === next);
-                onChange({ skuKind: next, sku: keep ? season.sku : null });
-              }}
-            >
-              <FormControlLabel
-                value="item"
-                control={<Radio size="small" />}
-                label="Item"
-                sx={{ mr: 1 }}
-              />
-              <FormControlLabel value="combo" control={<Radio size="small" />} label="Combo" />
-            </RadioGroup>
-          </FormControl>
-          <Box sx={{ bgcolor: 'background.paper' }}>
-            <LookupField
-              id={seasonDomId(season.id, 'sku')}
+          <Box sx={{ ml: 'auto', display: 'flex', gap: 0.5, alignItems: 'center', pt: 0.5 }}>
+            <IconButton
               size="small"
-              label={`SKU (${name})`}
-              placeholder="Same as the category"
-              value={season.sku ?? null}
-              options={skusOfKind(skus, kind)}
-              onChange={(sku) => onChange({ sku })}
-              error={e.sku}
-            />
+              color="primary"
+              aria-label={`Duplicate season ${name}`}
+              onClick={onDuplicate}
+            >
+              <ContentCopy fontSize="small" />
+            </IconButton>
+            <RemoveIconButton size="small" label={`season ${name}`} onClick={onRemove} />
           </Box>
         </>
       )}
@@ -485,7 +469,14 @@ function SeasonCell({ season, errors: e, skus, onChange, onDuplicate, onRemove }
           variant="caption"
           color="error"
           role="alert"
-          sx={{ bgcolor: 'background.paper', px: 1, py: 0.25, borderRadius: 0.5 }}
+          sx={{
+            flexBasis: '100%',
+            bgcolor: 'background.paper',
+            px: 1,
+            py: 0.25,
+            borderRadius: 0.5,
+            width: 'fit-content',
+          }}
         >
           {e.amount}
         </Typography>
