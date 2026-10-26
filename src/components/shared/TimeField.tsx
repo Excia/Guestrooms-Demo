@@ -219,7 +219,11 @@ export default function TimeField({
         anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
         transformOrigin={{ vertical: 'top', horizontal: 'left' }}
         slotProps={{
-          paper: { role: 'dialog', 'aria-label': `Choose ${name}`, sx: { p: 2, mt: 0.5 } },
+          paper: {
+            role: 'dialog',
+            'aria-label': `Choose ${name}`,
+            sx: { p: 2, mt: 0.5, outline: 'none' },
+          },
           transition: {
             onEntered: () => dial.current?.focus(),
             onExited: () => {

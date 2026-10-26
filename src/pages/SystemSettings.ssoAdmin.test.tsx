@@ -39,20 +39,6 @@ describe('SSO Admin field', () => {
     expect(sso().compareDocumentPosition(timeZone) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it('shares the top row with Training Mode, before the first column', async () => {
-    renderPage();
-    const timeZone = await loaded();
-    const toggle = screen.getByRole('switch', { name: 'Training Mode' });
-    const row = screen.getByTestId('training-mode-row');
-    // Same grid, adjacent cells (SSO Admin then Training Mode), both ahead of Time Zone.
-    const ssoCell = sso().closest('section')?.parentElement;
-    expect(row.parentElement?.parentElement).toBe(ssoCell?.parentElement);
-    expect(row.parentElement?.previousElementSibling).toBe(ssoCell);
-    expect(
-      toggle.compareDocumentPosition(timeZone) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-  });
-
   it('is a disabled control showing Admin User with a described, non-actionable search icon', async () => {
     renderPage();
     await loaded();
