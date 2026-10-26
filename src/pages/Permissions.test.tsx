@@ -108,6 +108,25 @@ describe('Permissions page', () => {
     expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
+  it('reads as the Booking Rules chart: bordered grid, column and row headers, gray N/A cells', async () => {
+    renderPage();
+    const table = await loaded();
+    expect(table).toHaveStyle({ tableLayout: 'fixed' });
+    expect(
+      within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Permission', 'Management', 'Staff']);
+    // Every body cell has the shared matrix border; the two Staff report cells are the N/A cells.
+    const cells = within(table).getAllByRole('cell');
+    expect(cells.length).toBe(26 * 2);
+    for (const c of cells) expect(c).toHaveStyle({ borderStyle: 'solid' });
+    const na = cells.filter((c) => c.textContent === 'N/A');
+    expect(na).toHaveLength(2);
+    // The table sits in a scrolling wrapper (desktop-first, scrolls below 1200px).
+    expect(table.parentElement).toHaveStyle({ overflowX: 'auto' });
+  });
+
   it('offers the legacy options row by row', async () => {
     renderPage();
     await loaded();
