@@ -17,7 +17,9 @@ export interface EmployeesData {
 }
 
 // The employees, the people who can be added and the permission sets load together.
-export function useEmployeesData(): EmployeesData {
+export function useEmployeesData({
+  withPermissionSets = true,
+}: { withPermissionSets?: boolean } = {}): EmployeesData {
   const api = useApi();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<{
@@ -33,7 +35,7 @@ export function useEmployeesData(): EmployeesData {
     Promise.all([
       api.employees.list(signal),
       api.employees.listCandidates(signal),
-      api.permissions.listPermissionSets(signal),
+      withPermissionSets ? api.permissions.listPermissionSets(signal) : Promise.resolve([]),
     ])
       .then(([employees, candidates, permissionSets]) =>
         setState({
@@ -50,7 +52,7 @@ export function useEmployeesData(): EmployeesData {
         if (!controller.signal.aborted) setState((s) => ({ ...s, status: 'error' }));
       });
     return () => controller.abort();
-  }, [api, attempt]);
+  }, [api, attempt, withPermissionSets]);
 
   const reload = useCallback(() => {
     setState((s) => ({ ...s, status: 'loading' }));

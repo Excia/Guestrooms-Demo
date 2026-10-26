@@ -1406,18 +1406,28 @@ export interface EmployeeSetup {
   id: string;
   name: string;
   role: EmployeeRole;
-  /** Null for an administrator (full access) only. */
-  permissionSetId: string | null;
-  /** An inactive employee keeps the assignment but cannot sign in. */
-  active: boolean;
+  /**
+   * Extended fields (archived variant `/admin/employees-extended`, not in the legacy screen): absent
+   * means the backend does not track them. Null for an administrator (full access) only.
+   */
+  permissionSetId?: string | null;
+  /** Extended: an inactive employee keeps the assignment but cannot sign in. Absent means active. */
+  active?: boolean;
 }
 
 /** What a form sends. `id` is chosen from the directory, so a repeated save changes nothing. */
 export interface EmployeeInput {
   id: string;
   role: EmployeeRole;
-  permissionSetId: string | null;
-  active: boolean;
+  /** Extended (see `EmployeeSetup`); left out by the legacy screen. */
+  permissionSetId?: string | null;
+  active?: boolean;
+}
+
+/** One row of the legacy save: the employee and the type (Employee Type select). */
+export interface EmployeeRoleInput {
+  id: string;
+  role: EmployeeRole;
 }
 
 /**
@@ -1432,7 +1442,13 @@ export interface EmployeesApi {
   listCandidates(options?: RequestOptions): Promise<LookupRef[]>;
   /** Creates or replaces the assignment of `input.id`; answers with what was stored. */
   save(input: EmployeeInput, options?: RequestOptions): Promise<EmployeeSetup>;
-  /** Removes the access (the legacy "unassigned" type). The person stays in the directory. */
+  /**
+   * The legacy save (`PUT /employees`): the changed rows and the new employee, all or nothing. Existing
+   * employees get the new type; a new one is added. Answers with the whole list afterwards. Errors as
+   * `save`; 409 when no active administrator would remain.
+   */
+  saveRoles(inputs: EmployeeRoleInput[], options?: RequestOptions): Promise<EmployeeSetup[]>;
+  /** Removes the access (legacy: the type becomes "Unassigned"). The person stays in the directory. */
   remove(id: string, options?: RequestOptions): Promise<void>;
 }
 

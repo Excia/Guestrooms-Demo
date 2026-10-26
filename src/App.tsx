@@ -50,6 +50,11 @@ export const COMPONENTS_DEMO_PATH = '/dev/components';
 // The schedule (grid, drag and drop, dialogs) is the largest page: its code loads on demand.
 const Schedule = lazy(() => import('./pages/Schedule'));
 const Folio = lazy(() => import('./pages/Folio'));
+/** The richer Employees variant kept for the owner's side-by-side comparison; development builds only. */
+export const EMPLOYEES_EXTENDED_PATH = '/admin/employees-extended';
+const EmployeesExtended = import.meta.env.DEV
+  ? lazy(() => import('./pages/EmployeesExtended'))
+  : null;
 const ComponentsDemo = import.meta.env.DEV ? lazy(() => import('./pages/ComponentsDemo')) : null;
 // Dev-only mock of the embedded widget and the online booking pages (ticket 5.2).
 export const ONLINE_BOOKING_DEMO_PATH = '/dev/online-booking';
@@ -147,6 +152,20 @@ export default function App() {
                   <ComponentsDemo />
                 </Suspense>
               </ErrorBoundary>
+            }
+          />
+        ) : null}
+        {EmployeesExtended ? (
+          <Route
+            path={EMPLOYEES_EXTENDED_PATH}
+            element={
+              <RequireAccess pageId="employees">
+                <ErrorBoundary>
+                  <Suspense fallback={null}>
+                    <EmployeesExtended />
+                  </Suspense>
+                </ErrorBoundary>
+              </RequireAccess>
             }
           />
         ) : null}

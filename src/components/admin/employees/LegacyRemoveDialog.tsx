@@ -1,0 +1,51 @@
+import Button from '@mui/material/Button';
+import Dialog from '@mui/material/Dialog';
+import DialogActions from '@mui/material/DialogActions';
+import DialogContent from '@mui/material/DialogContent';
+import DialogContentText from '@mui/material/DialogContentText';
+import DialogTitle from '@mui/material/DialogTitle';
+import { useId } from 'react';
+import { focusOnMount } from '../../shared/focusOnMount';
+
+export interface LegacyRemoveDialogProps {
+  open: boolean;
+  busy?: boolean;
+  error?: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}
+
+// The legacy confirmation (ConfirmDialog): title "Confirm", "Are you sure you want to remove this
+// Employee?", Cancel and OK. Cancel takes focus so Enter never removes.
+export default function LegacyRemoveDialog({
+  open,
+  busy,
+  error,
+  onCancel,
+  onConfirm,
+}: LegacyRemoveDialogProps) {
+  const id = useId();
+  return (
+    <Dialog
+      open={open}
+      onClose={onCancel}
+      aria-labelledby={`${id}-title`}
+      aria-describedby={`${id}-message`}
+    >
+      <DialogTitle id={`${id}-title`}>Confirm</DialogTitle>
+      <DialogContent>
+        <DialogContentText id={`${id}-message`} sx={{ color: 'text.primary' }}>
+          {error ?? 'Are you sure you want to remove this Employee?'}
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button ref={focusOnMount} variant="outlined" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button variant="contained" disabled={busy} onClick={onConfirm}>
+          OK
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}

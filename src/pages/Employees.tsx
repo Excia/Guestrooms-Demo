@@ -1,51 +1,60 @@
+import AddCircle from '@mui/icons-material/AddCircle';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useEffect, useMemo, useState } from 'react';
+import { visuallyHidden } from '@mui/utils';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError, useApi } from '../api';
+import { EMPLOYEE_ROLES } from '../app/employees';
 import {
-  blankEmployee,
-  employeeSummary,
-  EMPLOYEE_FIELD_ORDER,
-  EMPLOYEE_ROLES,
-  lastAdministratorProblem,
-  needsPermissionSet,
-  sortEmployees,
-  toEmployeeDraft,
-  toEmployeeInput,
-  validateEmployee,
-  withRole,
-  type EmployeeField,
-} from '../app/employees';
+  blankNewEmployee,
+  canSave,
+  hasUnsaved,
+  isOnlyAdministrator,
+  pruneEdits,
+  removeControl,
+  roleOf,
+  saveInputs,
+  setRole,
+  validateNewEmployee,
+  VALIDATION_MESSAGE,
+  type NewEmployeeRow,
+  type RoleEdits,
+} from '../app/employeesLegacy';
+import { useLeaveGuard } from '../app/useLeaveGuard';
 import { useReadOnly } from '../app/readOnlyContext';
 import AdminShell from '../components/admin/AdminShell';
-import RemoveEmployeeDialog from '../components/admin/employees/RemoveEmployeeDialog';
+import LegacyRemoveDialog from '../components/admin/employees/LegacyRemoveDialog';
 import {
   useEmployeesData,
   type EmployeesData,
 } from '../components/admin/employees/useEmployeesData';
-import SetupActions from '../components/admin/roomSetup/SetupActions';
-import SetupList from '../components/admin/roomSetup/SetupList';
-import { focusField, useSetupEditor } from '../components/admin/roomSetup/useSetupEditor';
 import LookupField from '../components/admin/systemSettings/LookupField';
-import ToggleRow from '../components/admin/systemSettings/ToggleRow';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
+import NonActionableDialog from '../components/shared/NonActionableDialog';
+import RemoveIconButton from '../components/shared/RemoveIconButton';
+import SaveButton from '../components/shared/SaveButton';
 import SaveToast from '../components/shared/SaveToast';
 import Select from '../components/shared/Select';
 
-const SOLE_ADMIN_HINT =
-  'This is the only active administrator. Make another employee an administrator to change this.';
+const ADD_BUTTON_ID = 'employees-add';
+const ROLE_OPTIONS = EMPLOYEE_ROLES.map((r) => ({ value: r.id, label: r.label }));
+const rowGrid = {
+  display: 'grid',
+  gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 3fr) minmax(0, 3fr) auto' },
+  gap: 2,
+  alignItems: 'start',
+} as const;
 
-const fieldDomId = (f: EmployeeField) => `employee-${f}`;
-
-// Employees (Admin Setup, LP-A.4 / ticket 185): the list of employees on the left, the form on the
-// right. There is no Figma frame; the layout follows the other setup pages and the legacy
-// EmployeesEdit screen (person, employee type, remove).
+// Employees (Admin Setup, LP-A.4 / ticket 185), matching the legacy EmployeesEdit screen: one row per
+// employee (Name, Employee Type, Remove), Add Employee from the club directory, one Save for the
+// changed types and the new employee. The richer variant (permission set, Active, list and form) is
+// kept at /admin/employees-extended in development builds (pages/EmployeesExtended.tsx).
 export default function Employees() {
-  const data = useEmployeesData();
+  const data = useEmployeesData({ withPermissionSets: false });
   if (data.status !== 'ready') {
     return (
       <AdminShell active="Employees" title="Employees" changeLog="employees">
@@ -74,69 +83,52 @@ export default function Employees() {
 function EmployeesEditor({ data }: { data: EmployeesData }) {
   const api = useApi();
   const readOnly = useReadOnly();
-  // View-only comes from the route (ReadOnlyProvider, ticket 186): no New, Save, Remove or Copy.
-  const { permissionSets } = data;
-  const sorted = useMemo(() => sortEmployees(data.employees), [data.employees]);
-  const listEntries = useMemo(
-    () => sorted.map((e) => ({ id: e.id, label: e.name, inactive: !e.active })),
-    [sorted],
-  );
-  const editor = useSetupEditor({ items: sorted, toDraft: toEmployeeDraft, blank: blankEmployee });
-  const { draft, creating } = editor;
-  const setDraft = (next: typeof draft) => {
-    setSaveError(null);
-    editor.setDraft(next);
-  };
-  const errors = editor.attempted ? validateEmployee(draft, { creating, permissionSets }) : {};
+  const saved = data.employees;
+  const [edits, setEdits] = useState<RoleEdits>({});
+  const [adding, setAdding] = useState<NewEmployeeRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [problems, setProblems] = useState<string[] | null>(null);
   const [toast, setToast] = useState({ open: false, id: 0 });
-  const [removing, setRemoving] = useState(false);
+  const [removeId, setRemoveId] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
-  // A message belongs to the item it was shown for: another selection, New or Cancel clears it.
-  useEffect(() => setSaveError(null), [editor.selectedId, editor.creating]);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const focusAfterRender = useRef<string | null>(null);
+
+  const dirty = !readOnly && hasUnsaved(edits, adding);
+  const guard = useLeaveGuard(dirty);
+
+  useEffect(() => {
+    const id = focusAfterRender.current;
+    if (id === null) return;
+    focusAfterRender.current = null;
+    document.getElementById(id)?.focus();
+  }, [adding, saved]);
 
   const save = async (): Promise<boolean> => {
-    // Nothing to save in View-only mode (guards the Enter key and the leave prompt).
     if (readOnly) return false;
-    const found = validateEmployee(draft, { creating, permissionSets });
-    const first = EMPLOYEE_FIELD_ORDER.find((f) => found[f]);
-    const input = toEmployeeInput(draft);
-    if (first || !input) {
-      editor.setAttempted(true);
-      focusField(fieldDomId(first ?? 'person'));
-      return false;
-    }
-    const last = lastAdministratorProblem(data.employees, input.id, input);
-    if (last) {
-      setSaveError(last);
+    const errors = validateNewEmployee(adding);
+    if (errors.length > 0) {
+      setProblems(errors);
       return false;
     }
     setSaving(true);
     setSaveError(null);
     try {
-      const stored = await api.employees.save(input);
-      // The employee is stored; a failed list refresh must not read as a failed save.
-      await data
-        .refresh()
-        .catch(() =>
-          data.patch((list) =>
-            list.some((e) => e.id === stored.id)
-              ? list.map((e) => (e.id === stored.id ? stored : e))
-              : [...list, stored],
-          ),
-        );
-      editor.afterSave(stored.id);
+      const stored = await api.employees.saveRoles(saveInputs(saved, edits, adding));
+      // The change is stored; a failed refresh falls back to the list the save answered with.
+      await data.refresh().catch(() => data.patch(() => stored));
+      setEdits({});
+      setAdding(null);
       setToast((t) => ({ open: true, id: t.id + 1 }));
       return true;
     } catch (error) {
       setSaveError(
-        error instanceof ApiError && error.status === 422
-          ? 'Some fields are not valid. Check the highlighted fields.'
-          : error instanceof ApiError && error.status === 409
-            ? 'The club needs at least one active administrator. Reload the page and try again.'
-            : 'The employee could not be saved. Try again.',
+        error instanceof ApiError && error.status === 409
+          ? 'The club needs at least one active administrator. Reload the page and try again.'
+          : error instanceof ApiError && error.status === 422
+            ? 'Some employees are not valid. Reload the page and try again.'
+            : 'Employees could not be saved. Try again.',
       );
       return false;
     } finally {
@@ -144,195 +136,194 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
     }
   };
 
-  const blockedReason = editor.selected
-    ? lastAdministratorProblem(data.employees, editor.selected.id, null)
-    : null;
-
   const confirmRemove = async () => {
-    const target = editor.selected;
-    if (!target) return;
+    const id = removeId;
+    if (id === null) return;
     setRemoveBusy(true);
     setRemoveError(null);
     try {
-      await api.employees.remove(target.id);
+      await api.employees.remove(id);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        // Already gone (another session removed it): refresh and close.
-        await data
-          .refresh()
-          .catch(() => data.patch((list) => list.filter((e) => e.id !== target.id)));
-        setRemoving(false);
+      // Already gone (another session removed it): fall through to the refresh.
+      if (!(error instanceof ApiError && error.status === 404)) {
+        setRemoveError(
+          error instanceof ApiError && error.status === 409
+            ? 'The club needs at least one active administrator. Reload the page and try again.'
+            : error instanceof ApiError && error.status === 403
+              ? 'You may not remove employees.'
+              : 'The employee could not be removed. Try again.',
+        );
         setRemoveBusy(false);
-        editor.afterDelete();
         return;
       }
-      setRemoveError(
-        error instanceof ApiError && error.status === 409
-          ? 'The club needs at least one active administrator. Reload the page and try again.'
-          : error instanceof ApiError && error.status === 403
-            ? 'You may not remove employees.'
-            : 'The employee could not be removed. Try again.',
-      );
-      setRemoveBusy(false);
-      return;
     }
-    await data.refresh().catch(() => data.patch((list) => list.filter((e) => e.id !== target.id)));
-    setRemoving(false);
+    const gone = (list: typeof saved) => list.filter((e) => e.id !== id);
+    await data.refresh().catch(() => data.patch(gone));
+    // Other rows keep their unsaved type changes (the legacy reload kept the update list).
+    setEdits((e) => pruneEdits(gone(saved), e));
+    setRemoveId(null);
     setRemoveBusy(false);
-    editor.afterDelete();
+    focusAfterRender.current = ADD_BUTTON_ID;
   };
 
-  const isAdministrator = !needsPermissionSet(draft.role);
-  // Legacy: the only active administrator cannot be changed, so the edit is not offered at all.
-  const soleAdmin =
-    editor.selected !== undefined &&
-    lastAdministratorProblem(data.employees, editor.selected.id, {
-      role: 'staff',
-      active: true,
-    }) !== null;
-  const title = editor.selected?.name ?? 'New Employee';
+  const saveButton = readOnly ? undefined : (
+    <SaveButton
+      dirty={canSave(edits, adding)}
+      saving={saving}
+      noun="Employees"
+      onClick={() => void save()}
+    />
+  );
+
   return (
-    <AdminShell
-      active="Employees"
-      title={title}
-      changeLog="employees"
-      sidebarLabel="Employees"
-      sidebar={
-        <SetupList
-          items={listEntries}
-          selectedId={editor.selectedId}
-          creating={editor.creating}
-          newLabel="New Employee"
-          newTitle="New Employee"
-          onSelect={editor.select}
-          onNew={editor.startNew}
-          more={{
-            noun: 'Employee',
-            changeLogPage: 'employees',
-            deleteLabel: 'Remove Employee',
-            onDelete: () => {
-              setRemoveError(null);
-              setRemoving(true);
-            },
-          }}
-        />
-      }
-      actions={
-        <SetupActions
-          saveNoun="Employee"
-          creating={editor.creating}
-          dirty={editor.dirty}
-          saving={saving}
-          onSave={() => void save()}
-          onCancel={editor.cancelNew}
-        />
-      }
-    >
+    <AdminShell active="Employees" title="Employees" actions={saveButton} changeLog="employees">
       {saveError ? (
         <Alert severity="error" sx={{ mb: 3 }}>
           {saveError}
         </Alert>
       ) : null}
-      {data.employees.length === 0 ? (
-        <Typography sx={{ mb: 3, color: 'text.secondary' }}>
-          {readOnly
-            ? 'No employees.'
-            : 'No employees have access yet. Choose a person from the club directory to add one.'}
-        </Typography>
+      {readOnly && saved.length === 0 ? (
+        <Typography sx={{ color: 'text.secondary' }}>No employees.</Typography>
       ) : null}
-      {editor.selected ? (
-        <Typography sx={{ mb: 3, color: 'text.secondary' }}>
-          {employeeSummary(editor.selected, permissionSets)}
-          {editor.selected.active ? '' : ', Inactive'}
-        </Typography>
-      ) : null}
-      {readOnly && data.employees.length === 0 ? null : (
-        <Box
-          component="form"
-          noValidate
-          aria-label="Employee"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!readOnly) void save();
-          }}
-          sx={{ display: 'flex', flexDirection: 'column', gap: 4, maxWidth: 480 }}
-        >
-          <Box id={fieldDomId('person')}>
-            {creating ? (
+      <Box
+        component="ul"
+        aria-label="Employees"
+        sx={{ m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 3 }}
+      >
+        {saved.map((e) => {
+          const only = isOnlyAdministrator(saved, edits, e.id);
+          const control = removeControl(saved, edits, e.id, adding !== null);
+          const noteId = `employee-${e.id}-note`;
+          return (
+            <Box component="li" key={e.id} sx={{ listStyle: 'none' }}>
+              <Box role="group" aria-label={e.name} sx={rowGrid}>
+                <TextField
+                  label="Name"
+                  value={e.name}
+                  slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
+                  fullWidth
+                />
+                <Box>
+                  <Select
+                    label="Employee Type"
+                    ariaLabel={`Employee Type, ${e.name}`}
+                    value={roleOf(e, edits)}
+                    options={ROLE_OPTIONS}
+                    onChange={(role) => setEdits(setRole(saved, edits, e.id, role))}
+                    disabled={only}
+                    describedBy={only ? noteId : undefined}
+                    fullWidth
+                  />
+                  {only ? (
+                    <Box component="span" id={noteId} sx={visuallyHidden}>
+                      The only administrator. Make another employee an administrator to change this.
+                    </Box>
+                  ) : null}
+                </Box>
+                {control === 'hidden' ? (
+                  // Keeps the column, so the types line up in every row.
+                  <Box
+                    aria-hidden
+                    sx={{ display: { xs: 'none', md: 'block' }, width: (t) => t.spacing(5) }}
+                  />
+                ) : (
+                  <RemoveIconButton
+                    label={e.name}
+                    onClick={() => {
+                      setRemoveError(null);
+                      setRemoveId(e.id);
+                    }}
+                    disabled={control === 'disabled'}
+                    disabledReason={
+                      adding
+                        ? 'Finish or cancel the new employee first'
+                        : 'A club needs an employee'
+                    }
+                    sx={{ mt: { md: 1 } }}
+                  />
+                )}
+              </Box>
+            </Box>
+          );
+        })}
+        {adding ? (
+          <Box component="li" sx={{ listStyle: 'none' }}>
+            <Box role="group" aria-label="New employee" sx={rowGrid}>
               <LookupField
-                id="employee-person-input"
-                label="Employee"
-                value={draft.person}
+                id="employees-new-person"
+                label="Add Employee"
+                value={adding.person}
                 options={data.candidates}
-                onChange={(person) => setDraft({ ...draft, person })}
-                error={errors.person}
-                disabled={readOnly}
+                onChange={(person) => setAdding({ ...adding, person })}
                 noOptionsText="No one else in the club directory"
-                required
               />
-            ) : (
-              <TextField
-                label="Employee"
-                value={draft.person?.label ?? ''}
-                slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
+              <Select
+                id="employees-new-role"
+                label="Employee Type"
+                ariaLabel="Employee Type, new employee"
+                value={adding.role ?? ''}
+                options={ROLE_OPTIONS}
+                onChange={(role) => setAdding({ ...adding, role })}
                 fullWidth
               />
-            )}
+              <RemoveIconButton
+                label="new employee"
+                onClick={() => {
+                  setAdding(null);
+                  focusAfterRender.current = ADD_BUTTON_ID;
+                }}
+                sx={{ mt: { md: 1 } }}
+              />
+            </Box>
           </Box>
-          <Select
-            id={fieldDomId('role')}
-            label="Employee Type"
-            value={draft.role}
-            options={EMPLOYEE_ROLES.map((r) => ({ value: r.id, label: r.label }))}
-            onChange={(role) => setDraft(withRole(draft, role))}
-            error={Boolean(errors.role)}
-            helperText={errors.role ?? (soleAdmin ? SOLE_ADMIN_HINT : undefined)}
-            disabled={readOnly || soleAdmin}
-            required
-            fullWidth
-          />
-          <Select
-            id={fieldDomId('permissionSetId')}
-            label="Permission Set"
-            value={isAdministrator ? '' : (draft.permissionSetId ?? '')}
-            options={permissionSets.map((s) => ({ value: s.id, label: s.label }))}
-            onChange={(permissionSetId) => setDraft({ ...draft, permissionSetId })}
-            placeholder={isAdministrator ? 'Full access' : 'Select a permission set'}
-            helperText={
-              errors.permissionSetId ??
-              (isAdministrator ? 'Administrators have access to everything.' : undefined)
-            }
-            error={Boolean(errors.permissionSetId)}
-            disabled={readOnly || isAdministrator}
-            required={!isAdministrator}
-            fullWidth
-          />
-          <ToggleRow
-            label="Active"
-            checked={draft.active}
-            onChange={(active) => setDraft({ ...draft, active })}
-            description={
-              soleAdmin
-                ? SOLE_ADMIN_HINT
-                : 'An inactive employee keeps their settings but cannot sign in.'
-            }
-            disabled={readOnly || soleAdmin}
-          />
-        </Box>
+        ) : null}
+      </Box>
+      {readOnly || adding ? null : (
+        <Button
+          id={ADD_BUTTON_ID}
+          startIcon={<AddCircle />}
+          onClick={() => {
+            setAdding(blankNewEmployee());
+            focusAfterRender.current = 'employees-new-person';
+          }}
+          sx={{ mt: 3 }}
+        >
+          Add Employee
+        </Button>
       )}
-      <RemoveEmployeeDialog
-        target={removing && editor.selected ? { name: editor.selected.name, blockedReason } : null}
+      <NonActionableDialog
+        open={problems !== null}
+        onClose={() => setProblems(null)}
+        title="Validation Error(s)"
+      >
+        <Typography sx={{ mb: 1 }}>{VALIDATION_MESSAGE}</Typography>
+        <Box component="ul" sx={{ m: 0, pl: 3 }}>
+          {(problems ?? []).map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </Box>
+      </NonActionableDialog>
+      <LegacyRemoveDialog
+        open={removeId !== null}
         busy={removeBusy}
         error={removeError}
-        onCancel={() => setRemoving(false)}
-        onRemove={() => void confirmRemove()}
+        onCancel={() => setRemoveId(null)}
+        onConfirm={() => void confirmRemove()}
       />
-      <ConfirmDialog {...editor.confirmProps(save, 'This employee has not been saved.')} />
+      <ConfirmDialog
+        open={guard.pending}
+        onClose={guard.stay}
+        onDiscard={guard.leave}
+        onConfirm={() => {
+          void save().then((ok) => (ok ? guard.leave() : guard.stay()));
+        }}
+        title="Employees have not been saved."
+      />
       <SaveToast
         open={toast.open}
         saveId={toast.id}
         onClose={() => setToast((t) => ({ ...t, open: false }))}
-        message="Employee Saved"
+        message="Employees Saved"
       />
     </AdminShell>
   );

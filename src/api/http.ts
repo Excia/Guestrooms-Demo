@@ -956,8 +956,8 @@ const isEmployee = (v: unknown) =>
   isString(v.id) &&
   isString(v.name) &&
   isEmployeeRole(v.role) &&
-  (v.permissionSetId === null || isString(v.permissionSetId)) &&
-  typeof v.active === 'boolean';
+  (v.permissionSetId === undefined || v.permissionSetId === null || isString(v.permissionSetId)) &&
+  (v.active === undefined || typeof v.active === 'boolean');
 const parseEmployees = (body: unknown, status: number): EmployeeSetup[] => {
   if (!Array.isArray(body) || !body.every(isEmployee)) throw invalid(status, 'employees');
   return body as unknown as EmployeeSetup[];
@@ -1815,6 +1815,11 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
         request(`/employees/${encodeURIComponent(input.id)}`, {}, o, parseEmployee, {
           method: 'PUT',
           body: input,
+        }),
+      saveRoles: (inputs, o) =>
+        request('/employees', {}, o, parseEmployees, {
+          method: 'PUT',
+          body: { employees: inputs },
         }),
       remove: (id, o) =>
         request(`/employees/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),

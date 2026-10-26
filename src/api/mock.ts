@@ -115,7 +115,14 @@ import {
   withoutRoom,
 } from '../app/roomSetup';
 import { addDays } from '../lib/dates';
-import type { ApiClient, IsoDate, PermissionGrant, RequestOptions, RoomChangeRule } from './types';
+import type {
+  ApiClient,
+  EmployeeSetup,
+  IsoDate,
+  PermissionGrant,
+  RequestOptions,
+  RoomChangeRule,
+} from './types';
 import { ApiError } from './types';
 import {
   assertChangeRoomRequest,
@@ -932,6 +939,63 @@ export function createMockClient({
             return { ...stored };
           },
           () => ({ name: '', ...input }),
+          o,
+        ),
+      saveRoles: (inputs, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            }
+            const ids = inputs.map((i) => i.id);
+            if (
+              inputs.length === 0 ||
+              new Set(ids).size !== ids.length ||
+              inputs.some((i) => !isEmployeeRole(i.role) || !directory.some((p) => p.id === i.id))
+            ) {
+              throw new ApiError(422, 'Employees are not valid', { code: 'validation' });
+            }
+            // All or nothing: the whole list is built first, then the administrator rule is checked.
+            // The legacy screen has no permission set, so keep the data consistent for the extended
+            // variant: an administrator has none, a manager or staff without one gets the set of that type.
+            const setFor = (role: EmployeeSetup['role'], current: string | null | undefined) =>
+              role === 'administrator'
+                ? null
+                : (current ??
+                  permissionSets.find((s) => s.id === (role === 'manager' ? 'management' : 'staff'))
+                    ?.id ??
+                  null);
+            const next: EmployeeSetup[] = [
+              ...employees.map((e) => {
+                const change = inputs.find((i) => i.id === e.id);
+                if (!change) return e;
+                return {
+                  ...e,
+                  role: change.role,
+                  permissionSetId: setFor(change.role, e.permissionSetId),
+                };
+              }),
+              ...inputs
+                .filter((i) => !employees.some((e) => e.id === i.id))
+                .map((i) => ({
+                  id: i.id,
+                  name: directory.find((p) => p.id === i.id)?.label ?? '',
+                  role: i.role,
+                  permissionSetId: setFor(i.role, undefined),
+                })),
+            ];
+            const hadAdmin = employees.some(
+              (e) => e.active !== false && e.role === 'administrator',
+            );
+            if (hadAdmin && !next.some((e) => e.active !== false && e.role === 'administrator')) {
+              throw new ApiError(409, 'The club needs an active administrator', {
+                code: 'last-administrator',
+              });
+            }
+            employees = next;
+            return structuredClone(employees);
+          },
+          () => [],
           o,
         ),
       remove: (id, o) =>
