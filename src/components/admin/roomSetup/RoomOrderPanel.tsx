@@ -1,7 +1,6 @@
 import ArrowDownward from '@mui/icons-material/ArrowDownward';
 import ArrowUpward from '@mui/icons-material/ArrowUpward';
 import Close from '@mui/icons-material/Close';
-import SwapVert from '@mui/icons-material/SwapVert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
@@ -9,6 +8,7 @@ import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useRef, useState } from 'react';
 import { moveItem, reconcileOrder, sameOrder } from '../../../app/roomOrder';
+import ReorderIcon from '../../shared/ReorderIcon';
 import ConfirmDialog from '../../shared/ConfirmDialog';
 
 export interface RoomOrderItem {
@@ -111,11 +111,12 @@ export default function RoomOrderPanel({
         <IconButton
           aria-label={`Close ${noun.toLowerCase()} order`}
           onClick={close}
+          color="primary"
           sx={(t) => ({
             flexShrink: 0,
-            width: t.spacing(7.375),
-            borderRadius: 1,
-            border: `1px solid ${t.palette.primary.outlinedBorder}`,
+            alignSelf: 'center',
+            p: 1,
+            '&.Mui-focusVisible': { outline: `2px solid ${t.palette.primary.main}` },
           })}
         >
           <Close />
@@ -171,32 +172,23 @@ export default function RoomOrderPanel({
                 pl: 0.5,
                 pr: 0.5,
                 borderRadius: 1,
-                border: `1px solid ${t.palette.divider}`,
-                bgcolor: 'background.paper',
+                // No box around a row; a drop target is outlined while dragging.
+                outline:
+                  over === index && dragFrom !== null
+                    ? `2px solid ${t.palette.primary.main}`
+                    : 'none',
                 opacity: dragFrom === index ? 0.5 : 1,
-                borderColor: over === index && dragFrom !== null ? 'primary.main' : 'divider',
               })}
             >
-              <Box
-                data-testid={`drag-handle-${id}`}
-                draggable
-                aria-hidden
-                onDragStart={(e: React.DragEvent) => {
-                  setDragFrom(index);
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', id);
-                  const row = rows.current.get(id);
-                  if (row) e.dataTransfer.setDragImage(row, 0, 0);
+              <Typography
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflowWrap: 'anywhere',
+                  color: 'text.secondary',
+                  textTransform: 'uppercase',
                 }}
-                onDragEnd={() => {
-                  setDragFrom(null);
-                  setOver(null);
-                }}
-                sx={{ display: 'flex', cursor: 'grab', color: 'primary.main' }}
               >
-                <SwapVert />
-              </Box>
-              <Typography sx={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                 {labelOf.get(id)}
               </Typography>
               <IconButton
@@ -219,6 +211,25 @@ export default function RoomOrderPanel({
               >
                 <ArrowDownward fontSize="small" />
               </IconButton>
+              <Box
+                data-testid={`drag-handle-${id}`}
+                draggable
+                aria-hidden
+                onDragStart={(e: React.DragEvent) => {
+                  setDragFrom(index);
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', id);
+                  const row = rows.current.get(id);
+                  if (row) e.dataTransfer.setDragImage(row, 0, 0);
+                }}
+                onDragEnd={() => {
+                  setDragFrom(null);
+                  setOver(null);
+                }}
+                sx={{ display: 'flex', cursor: 'grab', color: 'text.primary' }}
+              >
+                <ReorderIcon />
+              </Box>
             </Box>
           ))}
         </Box>
