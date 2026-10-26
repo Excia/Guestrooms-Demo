@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { ThemeProvider } from '@mui/material/styles';
 import { theme } from '../../theme';
 import type { CheckInPastDatePlan } from '../../app/checkInDecision';
-import { OverrideCodeDialog, PastDateCheckInDialog } from './CheckInDialogs';
+import { PastDateCheckInDialog } from './CheckInDialogs';
 
 const plan = { originalArrival: '2026-10-23', split: false } as unknown as CheckInPastDatePlan;
 
@@ -67,24 +67,5 @@ describe('PastDateCheckInDialog layout', () => {
       screen.getByRole('button', { name: 'Split this room from the reservation' }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Override and check in' })).toBeInTheDocument();
-  });
-});
-
-describe('OverrideCodeDialog layout', () => {
-  it('has the heading row with a close icon that cancels', async () => {
-    const onCancel = vi.fn();
-    render(
-      <ThemeProvider theme={theme}>
-        <OverrideCodeDialog
-          open
-          error={false}
-          busy={false}
-          onSubmit={vi.fn()}
-          onCancel={onCancel}
-        />
-      </ThemeProvider>,
-    );
-    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(onCancel).toHaveBeenCalled();
   });
 });

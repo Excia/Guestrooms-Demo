@@ -600,10 +600,32 @@ export interface CheckInReservationResult {
   integrationErrors: IntegrationError[];
 }
 
-/** Which permission an override code is for (ticket 127 builds the real PIN prompt). */
-export interface VerifyOverrideCodeRequest {
-  permission: 'reservation.check-in.any-time';
-  code: string;
+/** The permissions whose holder's PIN can authorize an override. Add one per flow that needs it. */
+export type OverridePermission = 'reservation.check-in.any-time';
+
+/** Ask whether `pin` belongs to an employee who holds `permission` (ticket 187). */
+export interface VerifyOverridePinRequest {
+  permission: OverridePermission;
+  pin: string;
+}
+
+/**
+ * `valid: false` is a normal answer (wrong PIN, unknown PIN and a holder without the permission look
+ * alike). `lockedForSeconds` is present when too many wrong PINs locked the caller out: the PIN was
+ * not tested and the caller must wait.
+ */
+export interface VerifyOverridePinResult {
+  valid: boolean;
+  lockedForSeconds?: number;
+}
+
+/** Override PINs of authorized employees (ticket 187). */
+export interface OverridesApi {
+  /** Advisory: the action that uses the PIN tests it again. */
+  verifyPin(
+    request: VerifyOverridePinRequest,
+    options?: RequestOptions,
+  ): Promise<VerifyOverridePinResult>;
 }
 
 /** Split one room off a multi-room reservation into a reservation of its own; answers the new reservation. */
@@ -648,11 +670,6 @@ export interface ReservationsApi {
     request: CheckInReservationRequest,
     options?: RequestOptions,
   ): Promise<CheckInReservationResult>;
-  /** `{ valid }`; a wrong code is a normal answer, not an error. Ticket 127 replaces the mock rule. */
-  verifyOverrideCode(
-    request: VerifyOverrideCodeRequest,
-    options?: RequestOptions,
-  ): Promise<{ valid: boolean }>;
   /** Add another room for the whole stay (ticket 151). Idempotent on `requestId`. */
   addRoom(request: AddRoomRequest, options?: RequestOptions): Promise<ReservationDetail>;
   /** Set one room's party and named guests (ticket 151). Idempotent on `requestId`. */
@@ -1824,6 +1841,7 @@ export interface ReportsApi {
 export interface ApiClient {
   dashboard: DashboardApi;
   reservations: ReservationsApi;
+  overrides: OverridesApi;
   reservationList: ReservationListApi;
   permissions: PermissionsApi;
   schedule: ScheduleApi;

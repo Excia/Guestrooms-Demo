@@ -582,7 +582,7 @@ backend's concern (Q-75-3).
 | Method and path                           | Body / response                                                                                                                                    | Errors                                                                                                                                           |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `POST /reservations/{id}/check-in`        | `CheckInReservationRequest { requestId, reservationId, version, reservationRoomIds[], pastDateConfirmed, overrideCode?, checkOutAfter }` returns `CheckInReservationResult { reservation, rooms[], autoCheckedOut, nightsPosted, integrationErrors[] }` | 400 `invalid-id`/`invalid-query`; 403 `forbidden`, `override-required`, `override-invalid`; 404; 409 `stale`, `future-arrival`, `past-date-unconfirmed`, `idempotency-conflict` |
-| `POST /override-codes/verify`             | `{ permission: 'reservation.check-in.any-time', code }` returns `{ valid }` (a wrong code is a normal answer)                                       | 400                                                                                                                                              |
+| `POST /overrides/verify-pin`              | `VerifyOverridePinRequest { permission: 'reservation.check-in.any-time', pin }` returns `{ valid, lockedForSeconds? }` (a wrong PIN is a normal answer; `lockedForSeconds` means locked out, see below) | 400; 403 `forbidden`                                                                                                                             |
 | `POST /reservation-rooms/{id}/split`      | `SplitRoomRequest { requestId, reservationId, reservationRoomId, version }` returns the **new** `ReservationDetail`                                 | 400; 403 `forbidden`; 404; 409 `stale`, `not-splittable` (one room), `idempotency-conflict`                                                      |
 | `POST /reservations/{id}/payment-methods` | PLACEHOLDER (ticket 3.9): puts a mock card on file; returns the `ReservationDetail`                                                                | 400; 404                                                                                                                                         |
 
@@ -592,7 +592,7 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   A past arrival needs `pastDateConfirmed: true` (409 `past-date-unconfirmed`). A future arrival is 409 `future-arrival` at every level.
 - The caller's check-in level is `any-time`, `arrival-date-only` or `never` (permissions below). `never` is 403 `forbidden`.
   `arrival-date-only` plus a past arrival needs a valid `overrideCode` (403 `override-required` / `override-invalid`).
-  Ticket 127 builds the real PIN prompt and validation; the mock accepts one fixed placeholder code.
+  Ticket 187 built the PIN prompt and the mock validation (see "Override PINs" below).
 - A room that cannot be checked in does not fail the request. It comes back in `rooms[]` with `checkedIn: false` and a `failure`:
   `unassigned`, `room-not-ready` (dirty), `occupied` (another reservation is still checked in to the assigned room),
   `no-payment-method` (required also for a past date, D-008), `not-checkable` (not waiting for check in). The other rooms are still checked in.
@@ -605,17 +605,30 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   Absent means the backend does not say; the UI then lets the attempt run and the backend answers.
 - The Reservation List's bulk check in only selects reservations arriving **today** (the club's date): past-dated and future ones are never bulk checked in.
 
-**Override codes: what the real backend must do (ticket 163; ticket 127 builds the prompt):**
+**Override PINs: what the real backend must do (tickets 163 and 187):**
 
-- `POST /override-codes/verify` and the `overrideCode` of `POST /reservations/{id}/check-in` are the only places a code is
+- `POST /overrides/verify-pin` and the `overrideCode` of `POST /reservations/{id}/check-in` are the only places a code is
   tested, so both need **rate limiting and lockout** (per user and per club, e.g. a short lock after a few wrong codes) and must answer
   the same way for "wrong" and "unknown" so codes cannot be probed. Only a signed-in user who holds a check-in grant may call verify
   (the mock answers 403 `forbidden` otherwise).
 - **Verify is advisory.** It only lets the UI move on or show an error early; the check in **re-validates** the code every time and
   is the only authority. A code verified earlier must not be trusted.
-- The request's `permission: 'reservation.check-in.any-time'` names the permission whose holder's PIN is accepted: a code is valid when it
-  belongs to a user who holds that permission (a manager), not to the caller. It is the only value today; it is a field so other
-  override-able permissions can use the same endpoint.
+- The request's `permission: 'reservation.check-in.any-time'` names the permission whose holder's PIN is accepted: a PIN is valid when it
+  belongs to an employee who holds that permission (a manager), not to the caller. It is the only value today; it is a field so other
+  override-able permissions can use the same endpoint (`OverridePermission` in `src/api/types.ts`; the reusable `OverridePinDialog`
+  takes it as a prop). "Wrong", "unknown" and "holder lacks the permission" all answer `{ valid: false }`.
+- **Lockout (as mocked, numbers are placeholders):** 5 wrong PINs in a row lock the caller for 300 seconds (`MAX_FAILED_PINS`,
+  `PIN_LOCKOUT_SECONDS` in `src/api/overridePin.ts`). While locked no PIN is tested, not even a right one. Verify then answers
+  `{ valid: false, lockedForSeconds }` (a normal answer, so the dialog can show the wait); the check in answers **429
+  `override-locked`** with `details.retryAfterSeconds`. A right PIN resets the count. The count and the lock are shared by both
+  endpoints. **Forms the UI accepts for "locked out" on verify:** `200 { valid: false, lockedForSeconds }` or `HTTP 429` with the wait in
+  the `Retry-After` header (whole seconds) or in `details.retryAfterSeconds: ['<seconds>']` (a 429 with neither is shown as 60 seconds).
+  `{ valid: true, lockedForSeconds }` is contradictory and the client rejects it as `invalid-response`. On the check in the form is
+  `429 override-locked` with `details.retryAfterSeconds` (or `Retry-After`); the dialog reopens already locked for that long.
+- **The real backend should not copy the mock's reset-on-success.** Count failures per target (the employee whose PIN is guessed) and
+  per club, and do not reset the count when a different PIN succeeds: otherwise a caller who owns a valid PIN can alternate it with
+  guesses and never lock out. The mock resets on a right PIN only because it has a single caller.
+- The older name `POST /override-codes/verify` with `{ permission, code }` and `reservations.verifyOverrideCode` no longer exist.
 - **Audit record** for every override: who entered the code, whose code it was, which reservation and rooms, the permission and the time, also for refused attempts.
 - **Never log the code** (request bodies of these two endpoints must be excluded from access logs and traces) and never store it in
   the idempotency record: store a hash of it. The mock does this: its replay fingerprint holds a hash, not the code.

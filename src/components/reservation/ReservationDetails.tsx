@@ -23,7 +23,7 @@ import { changeRoomAvailability } from '../../app/changeRoom';
 import { type EarlyLateValues } from '../../app/earlyLate';
 import { checkInLevel, RESERVATION_EDIT_PERMISSION } from '../../app/permissions';
 import { RESERVATION_PANEL_SIDE, toastSideFor } from '../../app/layout';
-import { splitConfirmation } from '../../app/checkInCopy';
+import { OVERRIDE_TITLE, splitConfirmation } from '../../app/checkInCopy';
 import { roomParty } from '../../app/roomGuests';
 import {
   checkInText,
@@ -60,7 +60,8 @@ import { focusOnMount } from '../shared/focusOnMount';
 import SplitButton from '../shared/SplitButton';
 import ChangeRoomDialog, { type RoomChangeSubmission } from './ChangeRoomDialog';
 import CheckInPanel from './CheckInPanel';
-import { AutoCheckOutDialog, OverrideCodeDialog, PastDateCheckInDialog } from './CheckInDialogs';
+import { AutoCheckOutDialog, PastDateCheckInDialog } from './CheckInDialogs';
+import { OverridePinDialog } from '../shared/OverridePinDialog';
 import PaymentMethodsDialog from './PaymentMethodsDialog';
 import { useCheckInFlow } from './useCheckInFlow';
 import DetailsAccordion from './DetailsAccordion';
@@ -659,11 +660,13 @@ function Loaded({
         />
       ) : null}
       {step?.name === 'override' ? (
-        <OverrideCodeDialog
+        <OverridePinDialog
           open
-          error={flow.codeError}
-          busy={flow.busy}
-          onSubmit={(code) => void flow.submitOverride(code)}
+          title={OVERRIDE_TITLE}
+          confirmLabel="Override and check in"
+          permission="reservation.check-in.any-time"
+          lockedForSeconds={step.lockedForSeconds}
+          onAuthorized={flow.authorizeOverride}
           onCancel={flow.cancelOverride}
         />
       ) : null}

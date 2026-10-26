@@ -3,14 +3,8 @@ import Dialog from '@mui/material/Dialog';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
-import TextField from '@mui/material/TextField';
-import { useId, useState, type FormEvent, type ReactNode } from 'react';
-import {
-  AUTO_CHECK_OUT_TITLE,
-  autoCheckOutMessage,
-  OVERRIDE_TITLE,
-  pastDatePrompt,
-} from '../../app/checkInCopy';
+import { useId, type ReactNode } from 'react';
+import { AUTO_CHECK_OUT_TITLE, autoCheckOutMessage, pastDatePrompt } from '../../app/checkInCopy';
 import type { CheckInPastDatePlan } from '../../app/checkInDecision';
 import type { CheckInLevel } from '../../app/permissions';
 import DialogHeader from '../shared/DialogHeader';
@@ -129,70 +123,5 @@ export function AutoCheckOutDialog({
         Run night audit
       </Button>
     </PromptDialog>
-  );
-}
-
-export interface OverrideCodeDialogProps {
-  open: boolean;
-  /** The code was checked and refused (or the check failed). */
-  error: boolean;
-  busy: boolean;
-  onSubmit: (code: string) => void;
-  onCancel: () => void;
-}
-
-/**
- * Asks for the override code that lets a user who may check in only on the arrival date check in
- * for a past date. Validation is mocked for now; ticket 127 builds the real PIN prompt and this
- * dialog becomes (or wraps) it. The code is a password field and is never shown or kept.
- */
-export function OverrideCodeDialog({
-  open,
-  error,
-  busy,
-  onSubmit,
-  onCancel,
-}: OverrideCodeDialogProps) {
-  const id = useId();
-  const [code, setCode] = useState('');
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    if (code.trim() !== '' && !busy) onSubmit(code.trim());
-  };
-  return (
-    <Dialog
-      open={open}
-      onClose={onCancel}
-      slotProps={{
-        paper: { sx: { width: (t) => t.spacing(55.5) }, component: 'form', onSubmit: submit },
-        transition: { onExited: () => setCode('') },
-      }}
-      aria-labelledby={`${id}-title`}
-    >
-      <DialogHeader id={`${id}-title`} title={OVERRIDE_TITLE} onClose={onCancel} />
-      <DialogContent>
-        <TextField
-          inputRef={focusOnMount}
-          label="Override code"
-          type="password"
-          autoComplete="off"
-          fullWidth
-          margin="dense"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          error={error}
-          helperText={error ? 'That override code is not valid.' : ' '}
-          slotProps={{ htmlInput: { maxLength: 32 } }}
-        />
-      </DialogContent>
-      <DialogActions sx={stackedActionsSx}>
-        <Button type="submit" variant="contained" fullWidth disabled={busy || code.trim() === ''}>
-          Override and check in
-        </Button>
-        <Button variant="outlined" fullWidth onClick={onCancel}>
-          Cancel
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 }
