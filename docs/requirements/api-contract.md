@@ -622,16 +622,17 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   `function.changeReservationRoom` (the Permissions page functions). `POST /overrides/verify-pin` with one of them is valid when the
   PIN belongs to an employee whose permission set grants that function (and has PIN override on). Verify needs a caller who may edit
   reservations (403 `forbidden` otherwise), as the check-in form needs a check-in grant.
-- `ChangeRoomRequest.overrideCode?` (`POST /reservation-rooms/{id}/change-room`): the PIN that unlocked a field. The server works out
-  what the plan changes (room: any night's room id; room type and location: the new room differs from the old one in them) and, for
-  every one the caller's own grant lacks, tests the code against that function. Missing code: 403 `override-required`; code of someone
-  without the function(s) or unknown: 403 `override-invalid`; locked out: 429 `override-locked` (`details.retryAfterSeconds`).
-  Nothing changes on an error. The code is hashed in the replay fingerprint, never stored or logged. A caller who holds every needed
-  function sends no code (an unneeded code is ignored).
+- `ChangeRoomRequest.overrideCodes?: { room?, roomType?, location? }` (`POST /reservation-rooms/{id}/change-room`): one PIN per field
+  that was unlocked. The server works out what the plan changes (room: any night's room id; room type and location: the new room
+  differs from the old one in them) and, for **every** changed field the caller's own grant lacks, tests that field's code against
+  that function. Missing code: 403 `override-required`; code of someone without the function or unknown: 403 `override-invalid`;
+  locked out: 429 `override-locked` (`details.retryAfterSeconds`, which the UI passes to the reopened prompt). Nothing changes on an
+  error. The codes are hashed in the replay fingerprint, never stored or logged. A caller who holds a function sends no code for
+  that field (an unneeded code is ignored). **Deviation from legacy:** legacy keeps one `overrideCode` (the last PIN entered); two
+  fields unlocked with two different PINs would then fail. One code per field avoids that (Q-187-4, decided).
 - Legacy also sends `requestedPermissionValue` (an access-set option) with the code; the UI does not: the function name says what
   the PIN must hold (Q-187-5).
-- The UI keeps one held code (the last PIN entered). Unlocking two fields with two different PINs sends only the last one and the
-  server may answer `override-invalid`; the dialog then asks again (Q-187-4).
+- The dialog never sends a plan that touches a still-locked field: Continue is disabled with "Unlock Room to make this change." (this also covers a dialog reopened after a refusal with its choices kept).
 
 **Override PINs: what the real backend must do (tickets 163 and 187):**
 

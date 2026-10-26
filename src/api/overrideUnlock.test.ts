@@ -27,7 +27,11 @@ async function request(c: ApiClient, over: Partial<ChangeRoomRequest> = {}) {
 }
 const mk = (g: PermissionGrant) => createMockClient({ today: T, grant: g });
 
+const BOTH = (pin: string) => ({ room: pin, location: pin });
+
 describe('mock room change and the Change Reservation functions', () => {
+  // The default plan moves the last night to rm-110: another room in another location (same type), so
+  // it needs the Room and the Location function.
   it('a user who holds every function needs no code', async () => {
     const c = mk(ALL_FUNCTIONS);
     await expect(c.reservations.changeRoomDuringStay(await request(c))).resolves.toBeDefined();
@@ -41,22 +45,49 @@ describe('mock room change and the Change Reservation functions', () => {
     });
   });
 
-  it('refuses a wrong PIN and the PIN of someone without the function (override-invalid)', async () => {
+  it('needs a code for every field the change touches, not just one', async () => {
     const c = mk(EDIT_ONLY);
-    for (const overrideCode of ['0000', MOCK_STAFF_PIN]) {
-      await expect(
-        c.reservations.changeRoomDuringStay(await request(c, { overrideCode })),
-      ).rejects.toMatchObject({ status: 403, code: 'override-invalid' });
-    }
+    await expect(
+      c.reservations.changeRoomDuringStay(
+        await request(c, { overrideCodes: { room: MOCK_MANAGER_PIN } }),
+      ),
+    ).rejects.toMatchObject({ status: 403, code: 'override-required' });
   });
 
-  it('accepts the PIN of a holder and applies the change; the PIN is not part of a replay conflict', async () => {
+  it('refuses a wrong PIN and the PIN of someone without the function (override-invalid)', async () => {
     const c = mk(EDIT_ONLY);
-    const req = await request(c, { overrideCode: MOCK_MANAGER_PIN });
+    for (const pin of ['0000', MOCK_STAFF_PIN]) {
+      await expect(
+        c.reservations.changeRoomDuringStay(await request(c, { overrideCodes: BOTH(pin) })),
+      ).rejects.toMatchObject({ status: 403, code: 'override-invalid' });
+    }
+    await expect(
+      c.reservations.changeRoomDuringStay(
+        await request(c, { overrideCodes: { room: MOCK_MANAGER_PIN, location: '0000' } }),
+      ),
+    ).rejects.toMatchObject({ status: 403, code: 'override-invalid' });
+  });
+
+  it('a room in the same location and type needs only the Room code', async () => {
+    const c = mk(grant('reservation.edit', UNLOCK_PERMISSION.location, UNLOCK_PERMISSION.roomType));
+    const req = await request(c, {
+      nights: NIGHTS.map((date) => ({ date, roomId: date === '2026-10-16' ? 'rm-302' : 'rm-301' })),
+    });
+    await expect(c.reservations.changeRoomDuringStay(req)).rejects.toMatchObject({
+      code: 'override-required',
+    });
+    await expect(
+      c.reservations.changeRoomDuringStay({ ...req, overrideCodes: { room: MOCK_MANAGER_PIN } }),
+    ).resolves.toBeDefined();
+  });
+
+  it('accepts the PINs of holders and applies the change; a replay with other codes conflicts', async () => {
+    const c = mk(EDIT_ONLY);
+    const req = await request(c, { overrideCodes: BOTH(MOCK_MANAGER_PIN) });
     const first = await c.reservations.changeRoomDuringStay(req);
     expect(await c.reservations.changeRoomDuringStay(req)).toEqual(first);
     await expect(
-      c.reservations.changeRoomDuringStay({ ...req, overrideCode: '0000' }),
+      c.reservations.changeRoomDuringStay({ ...req, overrideCodes: BOTH('0000') }),
     ).rejects.toMatchObject({ code: 'idempotency-conflict' });
   });
 
@@ -64,11 +95,11 @@ describe('mock room change and the Change Reservation functions', () => {
     const c = mk(EDIT_ONLY);
     for (let i = 0; i < MAX_FAILED_PINS - 1; i++) {
       await c.reservations
-        .changeRoomDuringStay(await request(c, { overrideCode: '0000' }))
+        .changeRoomDuringStay(await request(c, { overrideCodes: BOTH('0000') }))
         .catch(() => undefined);
     }
     await expect(
-      c.reservations.changeRoomDuringStay(await request(c, { overrideCode: '0000' })),
+      c.reservations.changeRoomDuringStay(await request(c, { overrideCodes: BOTH('0000') })),
     ).rejects.toMatchObject({ status: 429, code: 'override-locked' });
   });
 

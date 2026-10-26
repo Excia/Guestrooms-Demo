@@ -1,5 +1,12 @@
 import { createPermissions } from './permissions';
-import { changedFields, lockedFields, missingFunctions, UNLOCK_PERMISSION } from './overrideUnlock';
+import {
+  changedFields,
+  fieldsToUnlock,
+  lockedFields,
+  missingFields,
+  unlockMessage,
+  UNLOCK_PERMISSION,
+} from './overrideUnlock';
 
 const all = createPermissions().can;
 const none = createPermissions([]).can;
@@ -23,20 +30,33 @@ describe('changedFields and missingFunctions', () => {
   it('a different room of the same type and location changes only the room', () => {
     const changed = changedFields([{ from: a, to: { ...a, id: 'r2' } }]);
     expect([...changed]).toEqual(['room']);
-    expect(missingFunctions(changed, onlyRoom)).toEqual([]);
-    expect(missingFunctions(changed, none)).toEqual([UNLOCK_PERMISSION.room]);
+    expect(missingFields(changed, onlyRoom)).toEqual([]);
+    expect(missingFields(changed, none)).toEqual(['room']);
   });
   it('another room type and location add those fields', () => {
     const changed = changedFields([
       { from: a, to: { id: 'r3', roomTypeId: 't2', locationId: 'l2' } },
     ]);
     expect([...changed].sort()).toEqual(['location', 'room', 'roomType']);
-    expect(missingFunctions(changed, onlyRoom)).toEqual([
-      UNLOCK_PERMISSION.location,
-      UNLOCK_PERMISSION.roomType,
-    ]);
+    expect(missingFields(changed, onlyRoom)).toEqual(['location', 'roomType']);
   });
   it('an unchanged night changes nothing', () => {
     expect(changedFields([{ from: a, to: a }]).size).toBe(0);
+  });
+});
+
+describe('fieldsToUnlock and unlockMessage', () => {
+  it('lists only the changed fields that are still locked', () => {
+    const changed = new Set(['room', 'roomType'] as const);
+    expect(fieldsToUnlock(changed, new Set(['roomType', 'location'] as const))).toEqual([
+      'roomType',
+    ]);
+    expect(fieldsToUnlock(changed, new Set())).toEqual([]);
+  });
+  it('words the instruction', () => {
+    expect(unlockMessage(['room'])).toBe('Unlock Room to make this change.');
+    expect(unlockMessage(['location', 'roomType', 'room'])).toBe(
+      'Unlock Location, Room Type and Room to make this change.',
+    );
   });
 });

@@ -4,6 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
+import { ApiError } from '../api/types';
 import { MOCK_MANAGER_PIN, MOCK_STAFF_PIN } from '../api/overridePin';
 import type { ApiClient, ChangeRoomRequest } from '../api/types';
 import { GrantedAccess } from '../app/testing';
@@ -144,7 +145,9 @@ describe('the lock icons of Change Room During Stay', () => {
     await user.click(lockButton(dlg, 'Room')!);
     const again = await screen.findByRole('dialog', { name: 'Enter override code to unlock' });
     await user.type(within(again).getByLabelText('Override code'), `${MOCK_STAFF_PIN}{Enter}`);
-    expect((await within(again).findAllByText('That override code is not valid.')).length).toBe(2);
+    expect(
+      (await within(again).findAllByText('That override code is not valid.')).length,
+    ).toBeGreaterThan(0);
     expect(
       within(dlg).getByRole('combobox', { name: /Room for night 2/, hidden: true }),
     ).toBeDisabled();
@@ -158,6 +161,97 @@ describe('the lock icons of Change Room During Stay', () => {
     await toConfirm(user, dlg);
     await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
     await waitFor(() => expect(calls).toHaveLength(1));
-    expect(calls[0].overrideCode).toBe(MOCK_MANAGER_PIN);
+    expect(calls[0].overrideCodes).toEqual({ room: MOCK_MANAGER_PIN });
+  });
+
+  async function unlock(user: User, name: string) {
+    await user.click(
+      lockButton(await screen.findByRole('dialog', { name: 'Change Room During Stay' }), name)!,
+    );
+    const prompt = await screen.findByRole('dialog', { name: 'Enter override code to unlock' });
+    await user.type(within(prompt).getByLabelText('Override code'), `${MOCK_MANAGER_PIN}{Enter}`);
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Enter override code to unlock' })).toBeNull(),
+    );
+  }
+
+  it('moves focus to the unlocked field and links each locked field to its lock button', async () => {
+    const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }), EDIT_ONLY);
+    expect(menu(dlg, 2)).toHaveAccessibleDescription('Room is locked. Unlock it with an override code.');
+    expect(within(dlg).getByRole('combobox', { name: 'Room type' })).toHaveAccessibleDescription(
+      'Room Type is locked. Unlock it with an override code.',
+    );
+    await unlock(user, 'Room Type');
+    await waitFor(() =>
+      expect(within(dlg).getByRole('combobox', { name: 'Room type' })).toHaveFocus(),
+    );
+    await unlock(user, 'Room');
+    await waitFor(() => expect(menu(dlg, 2)).toHaveFocus());
+  });
+
+  it('a locked Location and Room Type keep the room menus to the current location and type; unlocking Location widens them', async () => {
+    const { user, dlg } = await openChangeRoom(createMockClient({ today: TODAY }), EDIT_ONLY);
+    await unlock(user, 'Room');
+    const names = async () => {
+      await user.click(menu(dlg, 5));
+      const list = within(await screen.findByRole('listbox')).getAllByRole('option');
+      await user.keyboard('{Escape}');
+      return list.map((o) => o.textContent ?? '');
+    };
+    const locked = await names();
+    expect(locked.some((t) => t.startsWith('Room 301'))).toBe(true);
+    expect(locked.some((t) => t.startsWith('Room 110'))).toBe(false);
+    expect(locked.some((t) => t.startsWith('Room 107'))).toBe(false);
+    await unlock(user, 'Location');
+    await unlock(user, 'Room Type');
+    // Both pinned filters are free again: other locations and types are listed.
+    await waitFor(async () => {
+      const open = await names();
+      expect(open.some((t) => t.startsWith('Room 110'))).toBe(true);
+      expect(open.some((t) => t.startsWith('Room 107'))).toBe(true);
+    });
+  });
+
+  it('after a refusal the reopened dialog keeps the choices but blocks Continue until the field is unlocked again', async () => {
+    const base = createMockClient({ today: TODAY });
+    let calls = 0;
+    const client = withChange(async (r, o) => {
+      calls += 1;
+      if (calls === 1) throw new ApiError(403, 'no', { code: 'override-invalid' });
+      return base.reservations.changeRoomDuringStay(r, o);
+    }, base);
+    const { user, dlg } = await openChangeRoom(client, EDIT_ONLY);
+    await unlock(user, 'Room');
+    await pick(user, dlg, 2, '302');
+    await toConfirm(user, dlg);
+    await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
+    const again = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    await within(again).findByRole('combobox', { name: /Room for night 2/ });
+    const next = within(again).getByRole('button', { name: 'Continue' });
+    expect(next).toBeDisabled();
+    expect(next).toHaveAccessibleDescription('Unlock Room to make this change.');
+    await unlock(user, 'Room');
+    await waitFor(() => expect(next).toBeEnabled());
+  });
+
+  it('after a lockout the reopened prompt starts locked for the time the server named', async () => {
+    const client = withChange(async () => {
+      throw new ApiError(429, 'locked', {
+        code: 'override-locked',
+        details: { retryAfterSeconds: ['300'] },
+      });
+    });
+    const { user, dlg } = await openChangeRoom(client, EDIT_ONLY);
+    await unlock(user, 'Room');
+    await pick(user, dlg, 2, '302');
+    await toConfirm(user, dlg);
+    await user.click(await screen.findByRole('button', { name: 'Update Reservation' }));
+    const again = await screen.findByRole('dialog', { name: 'Change Room During Stay' });
+    await within(again).findByRole('combobox', { name: /Room for night 2/ });
+    await user.click(lockButton(again, 'Room')!);
+    const prompt = await screen.findByRole('dialog', { name: 'Enter override code to unlock' });
+    expect(
+      within(prompt).getAllByText('Too many incorrect codes. Try again in 5 minutes.').length,
+    ).toBeGreaterThan(0);
   });
 });

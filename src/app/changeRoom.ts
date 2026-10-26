@@ -29,6 +29,7 @@ import {
 } from '../lib/roomChangeRates';
 import { changedNights, isChange, normalizeRuns, stayOf } from '../lib/stayPlan';
 import { buildRoomOptions, type RoomOption } from './roomOptions';
+import type { UnlockCodes } from './overrideUnlock';
 import { formatMoney } from './quickStats';
 import { formatDialogDate, safeDetail } from './scheduleGrid';
 
@@ -455,11 +456,13 @@ export function toChangeRoomRequest(input: {
   asked: boolean;
   answer: RateChoice | null;
   requestId: string;
-  /** The PIN that unlocked a field (Location, Room Type, Room), when one was used. */
-  overrideCode?: string;
+  /** The PIN that unlocked each field (Location, Room Type, Room), when any was used. */
+  overrideCodes?: UnlockCodes;
 }): ChangeRoomRequest {
   return {
-    ...(input.overrideCode ? { overrideCode: input.overrideCode } : {}),
+    ...(input.overrideCodes && Object.keys(input.overrideCodes).length > 0
+      ? { overrideCodes: input.overrideCodes }
+      : {}),
     requestId: input.requestId,
     reservationRoomId: input.block.id,
     fromRoomId: input.block.roomId,
@@ -603,6 +606,8 @@ export interface RoomChangeFailure {
   reopen: boolean;
   /** The club's today, when the server said the effective date differs (`details.today`). */
   serverToday?: IsoDate;
+  /** Locked out of override PINs for this long (`override-locked`): the reopened prompt starts locked. */
+  lockedForSeconds?: number;
 }
 
 export const UNKNOWN_ROOM_CHANGE =
@@ -622,6 +627,7 @@ const COPY: Record<string, string> = {
   forbidden: 'You do not have permission to change this reservation.',
 };
 
+const seconds = (v: string | undefined) => (Number(v) > 0 ? Number(v) : undefined);
 const detailOf = (error: unknown, key: string): string | undefined =>
   (error as { details?: Record<string, string[]> })?.details?.[key]?.[0];
 
@@ -667,6 +673,8 @@ export function changeRoomFailure(error: unknown): RoomChangeFailure {
           ? 'Too many incorrect override codes. Try again later.'
           : 'The override code was not accepted. Unlock the field again to change the room.',
       reopen: true,
+      lockedForSeconds:
+        code === 'override-locked' ? seconds(detailOf(error, 'retryAfterSeconds')) : undefined,
     };
   }
   const known = typeof code === 'string' ? COPY[code] : undefined;

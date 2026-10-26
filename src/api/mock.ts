@@ -63,7 +63,7 @@ import {
   type CancelledStore,
 } from './reservationMenuData';
 import { addPaymentMethod, checkInReservation, paymentOnFile, splitRoom } from './checkInData';
-import { missingFunctions } from '../app/overrideUnlock';
+import { missingFields, UNLOCK_PERMISSION } from '../app/overrideUnlock';
 import { createPinGuard, MOCK_PIN_HOLDERS } from './overridePin';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
@@ -446,24 +446,28 @@ export function createMockClient({
             if (!permissionsFromGrant(currentGrant()).can(RESERVATION_EDIT_PERMISSION)) {
               throw new ApiError(403, 'You may not change this reservation', { code: 'forbidden' });
             }
-            // The override PIN is never kept: the replay fingerprint holds only a hash of it.
-            const { overrideCode, ...rest } = request;
+            // The override PINs are never kept: the replay fingerprint holds only hashes of them.
+            const { overrideCodes, ...rest } = request;
             const fingerprint = {
               ...rest,
-              overrideCodeHash: overrideCode && hashCode(overrideCode),
+              overrideCodeHashes: Object.fromEntries(
+                Object.entries(overrideCodes ?? {}).map(([field, code]) => [field, hashCode(code)]),
+              ),
             };
             return replayable(fingerprint, () =>
               changeRoomDuringStay(schedule, request, roomChangeRule, (fields) => {
                 // A field whose function the user lacks needs the PIN of someone who holds it.
-                const missing = missingFunctions(fields, permissionsFromGrant(currentGrant()).can);
-                if (missing.length === 0) return;
-                if (!overrideCode) {
-                  throw new ApiError(403, 'An override code is needed to change this', {
-                    code: 'override-required',
-                  });
-                }
-                for (const permission of missing) {
-                  const pin = pinGuard.check(permission, overrideCode);
+                for (const field of missingFields(
+                  fields,
+                  permissionsFromGrant(currentGrant()).can,
+                )) {
+                  const code = overrideCodes?.[field];
+                  if (!code) {
+                    throw new ApiError(403, 'An override code is needed to change this', {
+                      code: 'override-required',
+                    });
+                  }
+                  const pin = pinGuard.check(UNLOCK_PERMISSION[field], code);
                   if (pin.kind === 'locked') {
                     throw new ApiError(429, 'Too many wrong override PINs; try again later', {
                       code: 'override-locked',
@@ -1600,7 +1604,13 @@ export function createMockClient({
                 ? checkInEnv().level !== 'never'
                 : canEditReservations();
             if (!mayProbe) {
-              throw new ApiError(403, 'You may not check in', { code: 'forbidden' });
+              throw new ApiError(
+                403,
+                request.permission === 'reservation.check-in.any-time'
+                  ? 'You may not check in'
+                  : 'You may not change this reservation',
+                { code: 'forbidden' },
+              );
             }
             const check = pinGuard.check(request.permission, request.pin);
             if (check.kind === 'locked') {

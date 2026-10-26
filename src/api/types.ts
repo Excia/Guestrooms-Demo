@@ -476,12 +476,13 @@ export interface NightRoom {
  */
 export interface ChangeRoomRequest {
   /**
-   * The PIN of an employee who holds the functions the change needs and the user lacks (Change
-   * Reservation Room, Room Type, Location; see the lock icons of the dialog). Without it such a change
-   * is refused 403 `override-required`; a PIN that does not carry them 403 `override-invalid`, a locked
-   * out caller 429 `override-locked`. Never logged or stored (hash only).
+   * The PIN of an employee who holds a function the change needs and the user lacks, one per field the
+   * change touches: `room` (Change Reservation Room), `roomType`, `location` (see the lock icons of the
+   * dialog). A field the caller may change needs no code. Missing code: 403 `override-required`; a
+   * code of someone without that function or unknown: 403 `override-invalid`; locked out: 429
+   * `override-locked`. Never logged or stored (hash only).
    */
-  overrideCode?: string;
+  overrideCodes?: { location?: string; roomType?: string; room?: string };
   requestId: string;
   reservationRoomId: string;
   fromRoomId: string;

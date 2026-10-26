@@ -1,3 +1,4 @@
+import { visuallyHidden } from '@mui/utils';
 import Lock from '@mui/icons-material/Lock';
 import LockOpen from '@mui/icons-material/LockOpen';
 import ShieldMoon from '@mui/icons-material/ShieldMoon';
@@ -55,9 +56,14 @@ import {
 } from '../../app/changeRoom';
 import { formatPanelDate } from '../../app/newReservation';
 import {
+  changedFields,
+  fieldsToUnlock,
   lockedFields,
+  sentCodes,
+  unlockMessage,
   UNLOCK_LABEL,
   UNLOCK_PERMISSION,
+  type UnlockCodes,
   type UnlockField,
 } from '../../app/overrideUnlock';
 import { useAccess } from '../../app/useAccess';
@@ -91,6 +97,8 @@ export interface ChangeRoomDialogProps {
   today: IsoDate;
   /** Choices to start from (the dialog reopened after the data drifted); invalid ones are dropped. */
   initialEdits?: Readonly<Record<IsoDate, string>>;
+  /** The last save was refused with a lockout: the PIN prompt starts locked for this long. */
+  initialLockedFor?: number;
   /** Cancel, Escape and the backdrop: nothing was changed. */
   onCancel: () => void;
   onSubmit: (submission: RoomChangeSubmission) => void;
@@ -114,6 +122,8 @@ interface NightRowProps {
   dialogId: string;
   /** The Room lock is closed: the night's room cannot be changed. */
   locked: boolean;
+  /** Id of the lock button that explains a locked menu (`aria-describedby`). */
+  lockId: string;
   onPick: (date: IsoDate, roomId: string) => void;
 }
 
@@ -130,6 +140,7 @@ const NightRow = memo(function NightRow({
   filter,
   dialogId,
   locked,
+  lockId,
   onPick,
 }: NightRowProps) {
   const [open, setOpen] = useState(false);
@@ -248,6 +259,7 @@ const NightRow = memo(function NightRow({
               htmlInput: {
                 ...params.slotProps?.htmlInput,
                 'aria-label': `Room for night ${nightNo}, ${dateLabel(date)}`,
+                ...(locked ? { 'aria-describedby': lockId } : {}),
                 // Focusing a menu (Tab, or the dialog opening on it) selects its text, so typing a
                 // room number replaces "Room 210" instead of being appended to it.
                 onFocus: (e: React.FocusEvent<HTMLInputElement>) => {
@@ -268,25 +280,34 @@ const NightRow = memo(function NightRow({
 
 /** The legacy lock icon: closed until a manager's PIN opens the field; open it only says so. */
 function FieldLock({
+  id,
   field,
   locked,
   onUnlock,
 }: {
+  id: string;
   field: UnlockField;
   locked: boolean;
   onUnlock: (field: UnlockField) => void;
 }) {
   const label = UNLOCK_LABEL[field];
   return (
-    <IconButton
-      color="primary"
-      aria-label={locked ? `Unlock ${label}` : `${label} unlocked`}
-      title={locked ? 'Unlock' : undefined}
-      disabled={!locked}
-      onClick={() => onUnlock(field)}
-    >
-      {locked ? <Lock /> : <LockOpen />}
-    </IconButton>
+    <>
+      <IconButton
+        id={id}
+        color="primary"
+        aria-label={locked ? `Unlock ${label}` : `${label} unlocked`}
+        disabled={!locked}
+        onClick={() => onUnlock(field)}
+      >
+        {locked ? <Lock /> : <LockOpen />}
+      </IconButton>
+      {locked ? (
+        <Box id={`${id}-why`} component="span" sx={visuallyHidden}>
+          {label} is locked. Unlock it with an override code.
+        </Box>
+      ) : null}
+    </>
   );
 }
 
@@ -306,6 +327,7 @@ export default function ChangeRoomDialog({
   effectiveDate,
   today,
   initialEdits,
+  initialLockedFor,
   onCancel,
   onSubmit,
 }: ChangeRoomDialogProps) {
@@ -321,7 +343,9 @@ export default function ChangeRoomDialog({
   // opened the last one is held here only, and sent with the request.
   const { can } = useAccess();
   const [unlocked, setUnlocked] = useState<ReadonlySet<UnlockField>>(new Set());
-  const [overrideCode, setOverrideCode] = useState<string | undefined>();
+  const [codes, setCodes] = useState<UnlockCodes>({});
+  // The field to move focus to once its prompt has closed.
+  const [focusField, setFocusField] = useState<UnlockField | null>(null);
   const [unlocking, setUnlocking] = useState<UnlockField | null>(null);
   const locked = useMemo(() => lockedFields(can, unlocked), [can, unlocked]);
   const [answer, setAnswer] = useState<RateChoice>('retain');
@@ -339,6 +363,17 @@ export default function ChangeRoomDialog({
   );
 
   const ready = data.status === 'ready' ? data : null;
+  // After a PIN unlocks a field, focus moves to that field (the lock button is disabled by then).
+  useEffect(() => {
+    if (!focusField || unlocking) return;
+    const target =
+      focusField === 'room'
+        ? bodyRef.current?.querySelector<HTMLElement>('input[aria-label^="Room for night"]')
+        : bodyRef.current?.querySelector<HTMLElement>(
+            `[data-unlock-field="${focusField}"] [role="combobox"]`,
+          );
+    target?.focus();
+  }, [focusField, unlocking]);
   // One location: the Location select is hidden and no location filter applies.
   const showLocation = ready ? showLocations(ready.inventory.locations) : false;
   const currentRoom = ready?.inventory.rooms.find((r) => r.id === room.roomId);
@@ -405,7 +440,19 @@ export default function ChangeRoomDialog({
     ...n,
     roomId: edits[n.date] ?? carried[n.date] ?? n.roomId,
   }));
-  const blocker = confirmBlocker(current, plan);
+  // What the plan changes, and which of those fields are still locked (a reopened dialog can carry
+  // choices that touch a locked field): saving would be refused, so Continue says what to unlock.
+  const factsOf = (roomId: string) => ready?.inventory.rooms.find((r) => r.id === roomId);
+  const changed = changedFields(
+    current.flatMap((n, i) => {
+      const from = factsOf(n.roomId);
+      const to = factsOf(plan[i].roomId);
+      return from && to ? [{ from, to }] : [];
+    }),
+  );
+  const toUnlock = fieldsToUnlock(changed, locked);
+  const blocker =
+    confirmBlocker(current, plan) ?? (toUnlock.length > 0 ? unlockMessage(toUnlock) : null);
   const stayed = stayedNights(room, detail.arrival, effectiveDate);
   const roomsById = useMemo(
     () => new Map((ready?.inventory.rooms ?? []).map((r) => [r.id, r])),
@@ -430,7 +477,12 @@ export default function ChangeRoomDialog({
   // A lock shows only to a user who lacks the function (a user who holds it sees none).
   const lock = (field: UnlockField) =>
     can(UNLOCK_PERMISSION[field]) ? null : (
-      <FieldLock field={field} locked={locked.has(field)} onUnlock={setUnlocking} />
+      <FieldLock
+        id={`${id}-lock-${field}`}
+        field={field}
+        locked={locked.has(field)}
+        onUnlock={setUnlocking}
+      />
     );
   const title = step === 'plan' ? 'Change Room During Stay' : 'Confirm Room Change';
 
@@ -445,7 +497,7 @@ export default function ChangeRoomDialog({
         answer,
         requestId: newRequestId(),
         // Only a PIN that was needed: with every function held there is no code to send.
-        overrideCode: unlocked.size > 0 ? overrideCode : undefined,
+        overrideCodes: sentCodes(codes, changed, can),
       }),
       block: ready.block,
       plan,
@@ -471,6 +523,7 @@ export default function ChangeRoomDialog({
         filter={filter}
         dialogId={id}
         locked={locked.has('room')}
+        lockId={`${id}-lock-room-why`}
         onPick={onPick}
       />
     ) : null;
@@ -539,13 +592,23 @@ export default function ChangeRoomDialog({
               sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}
             >
               {showLocation ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', flex: '1 1 12rem' }}>
+                <Box
+                  data-unlock-field="location"
+                  sx={{ display: 'flex', alignItems: 'center', flex: '1 1 12rem' }}
+                >
                   <TextField
                     select
                     size="small"
                     label="Location"
                     value={filter.locationId}
                     disabled={locked.has('location')}
+                    slotProps={{
+                      select: {
+                        SelectDisplayProps: (locked.has('location')
+                          ? { 'aria-describedby': `${id}-lock-location-why` }
+                          : {}) as object,
+                      },
+                    }}
                     onChange={(e) => setFilter((f) => ({ ...f, locationId: e.target.value }))}
                     sx={{ flex: 1 }}
                   >
@@ -559,13 +622,23 @@ export default function ChangeRoomDialog({
                   {lock('location')}
                 </Box>
               ) : null}
-              <Box sx={{ display: 'flex', alignItems: 'center', flex: '1 1 12rem' }}>
+              <Box
+                data-unlock-field="roomType"
+                sx={{ display: 'flex', alignItems: 'center', flex: '1 1 12rem' }}
+              >
                 <TextField
                   select
                   size="small"
                   label="Room type"
                   value={filter.roomTypeId}
                   disabled={locked.has('roomType')}
+                  slotProps={{
+                    select: {
+                      SelectDisplayProps: (locked.has('roomType')
+                        ? { 'aria-describedby': `${id}-lock-roomType-why` }
+                        : {}) as object,
+                    },
+                  }}
                   onChange={(e) => setFilter((f) => ({ ...f, roomTypeId: e.target.value }))}
                   sx={{ flex: 1 }}
                 >
@@ -756,15 +829,12 @@ export default function ChangeRoomDialog({
           open
           title="Enter override code to unlock"
           confirmLabel="Unlock"
-          permission={
-            UNLOCK_PERMISSION[unlocking] as
-              | 'function.changeReservationLocation'
-              | 'function.changeReservationRoomType'
-              | 'function.changeReservationRoom'
-          }
+          permission={UNLOCK_PERMISSION[unlocking]}
+          lockedForSeconds={initialLockedFor}
           onAuthorized={(pin) => {
             setUnlocked((u) => new Set(u).add(unlocking));
-            setOverrideCode(pin);
+            setCodes((c) => ({ ...c, [unlocking]: pin }));
+            setFocusField(unlocking);
             setUnlocking(null);
           }}
           onCancel={() => setUnlocking(null)}

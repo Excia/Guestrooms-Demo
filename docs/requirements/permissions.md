@@ -185,5 +185,6 @@ the code (hash only), treat "verify" as advisory and re-validate on check in. De
 whether the Location, Room Type and Room of a reservation room can be changed. A user who lacks one sees a lock icon next to that
 field (Change Room During Stay; a user who holds it sees none); the field starts locked, and a click on the lock asks for "Enter
 override code to unlock" (the shared `OverridePinDialog`, permission = that function). A valid PIN unlocks that one field for this
-dialog and is sent with the save; Cancel does nothing. The backend re-checks (`override-required` / `override-invalid`). Administrators hold
+dialog (focus moves to it) and is sent with the save, one code per field; Cancel does nothing. A plan that touches a locked field cannot be continued. The backend re-checks (`override-required` / `override-invalid`). Administrators hold
 everything and see no locks. Pure rule: `lockedFields`, `changedFields`, `missingFunctions` in `src/app/overrideUnlock.ts`.
+The dev user "Partial" holds `reservation.edit` but none of these functions, so it now sees the locks (the Administrator and the Management set with the functions on do not).
