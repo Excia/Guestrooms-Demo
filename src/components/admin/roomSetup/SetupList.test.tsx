@@ -79,6 +79,11 @@ describe('SetupList', () => {
     );
     const add = screen.getByRole('button', { name: 'New Room' });
     expect(getComputedStyle(add).whiteSpace).toBe('nowrap');
+    // The reorder button is a bare green icon: no box, no fill.
+    const reorder = screen.getByRole('button', { name: 'Reorder rooms' });
+    expect(getComputedStyle(reorder).borderStyle).not.toBe('solid');
+    expect(getComputedStyle(reorder).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(getComputedStyle(reorder).color).toBe('rgb(46, 125, 50)');
     expect(screen.getByRole('button', { name: 'Reorder rooms' }).parentElement).toBe(
       add.parentElement,
     );

@@ -335,6 +335,53 @@ describe('TimeField', () => {
     expect(getComputedStyle(pm).color).toBe('rgb(255, 255, 255)');
     expect(getComputedStyle(am).color).toBe('rgb(46, 125, 50)');
   });
+
+  it('uses no default MUI blue anywhere in the open picker, in any state', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    const dialog = await open(user);
+    const dial = screen.getByRole('slider', { name: 'Hours' });
+    const defaultBlues = [
+      'rgb(25, 118, 210)',
+      'rgb(66, 165, 245)',
+      'rgb(144, 202, 248)',
+      'rgb(21, 101, 192)',
+      'rgb(33, 150, 243)',
+    ];
+    const props = ['outlineColor', 'borderTopColor', 'backgroundColor', 'color', 'stroke', 'fill'];
+    const scan = () => {
+      for (const el of [dialog, ...Array.from(dialog.querySelectorAll('*'))]) {
+        const style = getComputedStyle(el);
+        for (const prop of props) {
+          expect(defaultBlues, `${el.tagName} ${prop}`).not.toContain(
+            style[prop as keyof CSSStyleDeclaration] as string,
+          );
+        }
+      }
+    };
+    scan();
+    // Hover, focus and press the dial and the toggles.
+    for (const el of [
+      dial,
+      screen.getByRole('button', { name: 'AM' }),
+      screen.getByRole('button', { name: /^Minutes/ }),
+    ]) {
+      await user.hover(el);
+      el.focus();
+      scan();
+    }
+    fireEvent.pointerDown(dial, { button: 0, pointerId: 1 });
+    scan();
+    // The dial hides the browser outline and only keyboard focus draws the green one.
+    expect(getComputedStyle(dial).outlineStyle).toBe('none');
+    const rules = Array.from(document.styleSheets)
+      .flatMap((sheet) => Array.from(sheet.cssRules))
+      .map((rule) => rule.cssText)
+      .filter((text) => text.includes('focus-visible') && text.includes('outline'))
+      .join('\n');
+    expect(rules).toContain(theme.palette.primary.main);
+    for (const blue of defaultBlues) expect(rules).not.toContain(blue);
+  });
 });
 
 function hexToRgb(hex: string) {

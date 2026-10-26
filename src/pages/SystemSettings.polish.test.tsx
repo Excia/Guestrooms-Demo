@@ -56,7 +56,7 @@ describe('Folio Details logo remove badge', () => {
 });
 
 describe('Training Mode', () => {
-  it('sits in the top right of the Settings tab, beside the SSO Admin field with the legacy label and a description', async () => {
+  it('sits in the top right of the Settings tab with the legacy label and a description', async () => {
     renderPage();
     await loaded();
     const toggle = screen.getByRole('switch', { name: 'Training Mode' });
@@ -68,6 +68,7 @@ describe('Training Mode', () => {
     expect(toggle).toHaveAccessibleDescription(/Night Audit can only be run manually/);
     const row = screen.getByTestId('training-mode-row');
     expect(row).toContainElement(toggle);
+    expect(getComputedStyle(row).justifyContent).toBe('flex-end');
     // Above the first section of the tab.
     const timeZone = screen.getByRole('heading', { name: 'Time Zone' });
     expect(

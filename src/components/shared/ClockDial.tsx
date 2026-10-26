@@ -189,6 +189,9 @@ export default function ClockDial({
         cursor: 'pointer',
         userSelect: 'none',
         borderRadius: '50%',
+        // No browser-default (blue) focus ring in any state; keyboard focus gets the green one.
+        outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
         '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
