@@ -652,6 +652,20 @@ describe('stayedPlan and keepValidEdits', () => {
 });
 
 describe('changeRoomFailure', () => {
+  it('an override refusal reverts and reopens the dialog so the PIN is asked again', () => {
+    for (const [status, code] of [
+      [403, 'override-required'],
+      [403, 'override-invalid'],
+      [429, 'override-locked'],
+    ] as const) {
+      expect(changeRoomFailure(new ApiError(status, 'x', { code }))).toMatchObject({
+        revert: true,
+        reopen: true,
+        refetch: false,
+      });
+    }
+  });
+
   it('a clear 4xx says nothing was applied: revert; 404 and 409 also reload', () => {
     expect(changeRoomFailure(new ApiError(409, 'x', { code: 'conflict' }))).toMatchObject({
       revert: true,

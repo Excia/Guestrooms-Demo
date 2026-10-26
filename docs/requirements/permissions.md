@@ -180,3 +180,10 @@ PIN is checked by the mock against a small employee table (ticket 187). Whether 
 the code (hash only), treat "verify" as advisory and re-validate on check in. Details in
 [api-contract.md](api-contract.md) ("Override PINs"). The mock accepts the PIN of an employee who holds `reservation.check-in.any-time` (the mock Administrator and Partial users' PINs; the Staff employee's PIN is refused), locks out after 5 wrong PINs for 5 minutes, and answers verify only for a user holding a check-in grant. The PIN prompt is the shared `OverridePinDialog`; any flow that needs an override passes its permission.
 
+**Change Reservation functions and the PIN lock (ticket 187 follow-up, owner decision "match legacy").** The functions
+`function.changeReservationRoom`, `function.changeReservationLocation` and `function.changeReservationRoomType` (Permissions page) decide
+whether the Location, Room Type and Room of a reservation room can be changed. A user who lacks one sees a lock icon next to that
+field (Change Room During Stay; a user who holds it sees none); the field starts locked, and a click on the lock asks for "Enter
+override code to unlock" (the shared `OverridePinDialog`, permission = that function). A valid PIN unlocks that one field for this
+dialog and is sent with the save; Cancel does nothing. The backend re-checks (`override-required` / `override-invalid`). Administrators hold
+everything and see no locks. Pure rule: `lockedFields`, `changedFields`, `missingFunctions` in `src/app/overrideUnlock.ts`.

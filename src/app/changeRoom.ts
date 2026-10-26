@@ -455,8 +455,11 @@ export function toChangeRoomRequest(input: {
   asked: boolean;
   answer: RateChoice | null;
   requestId: string;
+  /** The PIN that unlocked a field (Location, Room Type, Room), when one was used. */
+  overrideCode?: string;
 }): ChangeRoomRequest {
   return {
+    ...(input.overrideCode ? { overrideCode: input.overrideCode } : {}),
     requestId: input.requestId,
     reservationRoomId: input.block.id,
     fromRoomId: input.block.roomId,
@@ -652,6 +655,18 @@ export function changeRoomFailure(error: unknown): RoomChangeFailure {
       message: status === 409 ? REVIEW_PLAN : REVIEW_PLAN_UNKNOWN,
       reopen: true,
       serverToday: today && parseIsoDate(today) ? today : undefined,
+    };
+  }
+  if (code === 'override-required' || code === 'override-invalid' || code === 'override-locked') {
+    // Back to the dialog with the choices kept; the locks are closed again, so the PIN is asked again.
+    return {
+      revert: true,
+      refetch: false,
+      message:
+        code === 'override-locked'
+          ? 'Too many incorrect override codes. Try again later.'
+          : 'The override code was not accepted. Unlock the field again to change the room.',
+      reopen: true,
     };
   }
   const known = typeof code === 'string' ? COPY[code] : undefined;

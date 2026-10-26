@@ -1,3 +1,5 @@
+import Lock from '@mui/icons-material/Lock';
+import LockOpen from '@mui/icons-material/LockOpen';
 import ShieldMoon from '@mui/icons-material/ShieldMoon';
 import Alert from '@mui/material/Alert';
 import Autocomplete from '@mui/material/Autocomplete';
@@ -10,6 +12,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import FormControl from '@mui/material/FormControl';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import FormLabel from '@mui/material/FormLabel';
+import IconButton from '@mui/material/IconButton';
 import ListSubheader from '@mui/material/ListSubheader';
 import MenuItem from '@mui/material/MenuItem';
 import Radio from '@mui/material/Radio';
@@ -51,12 +54,20 @@ import {
   type RoomFilter,
 } from '../../app/changeRoom';
 import { formatPanelDate } from '../../app/newReservation';
+import {
+  lockedFields,
+  UNLOCK_LABEL,
+  UNLOCK_PERMISSION,
+  type UnlockField,
+} from '../../app/overrideUnlock';
+import { useAccess } from '../../app/useAccess';
 import { showLocations } from '../../app/locations';
 import { filterRoomOptions } from '../../app/roomOptions';
 import { daysBetween, type IsoDate } from '../../lib/dates';
 import { newRequestId } from '../../lib/requestId';
 import { changedNights, planFromBlocks, stayOf } from '../../lib/stayPlan';
 import { focusOnMount } from '../shared/focusOnMount';
+import { OverridePinDialog } from '../shared/OverridePinDialog';
 import { useChangeRoomData } from './useChangeRoomData';
 
 /** A confirmed room plan, handed to the schedule page, which applies it and sends the request. */
@@ -101,6 +112,8 @@ interface NightRowProps {
   index: NightIndex;
   filter: RoomFilter;
   dialogId: string;
+  /** The Room lock is closed: the night's room cannot be changed. */
+  locked: boolean;
   onPick: (date: IsoDate, roomId: string) => void;
 }
 
@@ -116,6 +129,7 @@ const NightRow = memo(function NightRow({
   index,
   filter,
   dialogId,
+  locked,
   onPick,
 }: NightRowProps) {
   const [open, setOpen] = useState(false);
@@ -152,6 +166,7 @@ const NightRow = memo(function NightRow({
       <Autocomplete<RoomChoice, false, true>
         size="small"
         disableClearable
+        disabled={locked}
         open={open}
         onOpen={() => setOpen(true)}
         onClose={() => setOpen(false)}
@@ -251,6 +266,30 @@ const NightRow = memo(function NightRow({
   );
 });
 
+/** The legacy lock icon: closed until a manager's PIN opens the field; open it only says so. */
+function FieldLock({
+  field,
+  locked,
+  onUnlock,
+}: {
+  field: UnlockField;
+  locked: boolean;
+  onUnlock: (field: UnlockField) => void;
+}) {
+  const label = UNLOCK_LABEL[field];
+  return (
+    <IconButton
+      color="primary"
+      aria-label={locked ? `Unlock ${label}` : `${label} unlocked`}
+      title={locked ? 'Unlock' : undefined}
+      disabled={!locked}
+      onClick={() => onUnlock(field)}
+    >
+      {locked ? <Lock /> : <LockOpen />}
+    </IconButton>
+  );
+}
+
 /**
  * Change Room During Stay (Figma 1326:19431 and the room menu 2623:14538; requirements 27.9.1.2).
  * Step 1 shows the stay one night per line: nights already stayed are locked (shield icon), every
@@ -278,6 +317,13 @@ export default function ChangeRoomDialog({
   // carried over from a reopened dialog, when that is still valid).
   const [edits, setEdits] = useState<Record<IsoDate, string>>({});
   const [pickedFilter, setFilter] = useState<RoomFilter>(NO_ROOM_FILTER);
+  // Locks: a field is locked while the user lacks its function and no PIN opened it. The PIN that
+  // opened the last one is held here only, and sent with the request.
+  const { can } = useAccess();
+  const [unlocked, setUnlocked] = useState<ReadonlySet<UnlockField>>(new Set());
+  const [overrideCode, setOverrideCode] = useState<string | undefined>();
+  const [unlocking, setUnlocking] = useState<UnlockField | null>(null);
+  const locked = useMemo(() => lockedFields(can, unlocked), [can, unlocked]);
   const [answer, setAnswer] = useState<RateChoice>('retain');
   const [scrollTop, setScrollTop] = useState(0);
   const submitted = useRef(false);
@@ -295,9 +341,21 @@ export default function ChangeRoomDialog({
   const ready = data.status === 'ready' ? data : null;
   // One location: the Location select is hidden and no location filter applies.
   const showLocation = ready ? showLocations(ready.inventory.locations) : false;
+  const currentRoom = ready?.inventory.rooms.find((r) => r.id === room.roomId);
+  // A locked Location or Room Type keeps the rooms to those of the current room.
   const filter = useMemo<RoomFilter>(
-    () => (showLocation ? pickedFilter : { ...pickedFilter, locationId: '' }),
-    [showLocation, pickedFilter],
+    () => ({
+      ...pickedFilter,
+      locationId: !showLocation
+        ? ''
+        : locked.has('location')
+          ? (currentRoom?.locationId ?? '')
+          : pickedFilter.locationId,
+      roomTypeId: locked.has('roomType')
+        ? (currentRoom?.roomTypeId ?? '')
+        : pickedFilter.roomTypeId,
+    }),
+    [showLocation, pickedFilter, locked, currentRoom],
   );
   useEffect(() => {
     if (focusedFirst.current || !ready || step !== 'plan') return;
@@ -369,6 +427,11 @@ export default function ChangeRoomDialog({
           ask: ready.rule.askRateOnRoomChange,
         })
       : null;
+  // A lock shows only to a user who lacks the function (a user who holds it sees none).
+  const lock = (field: UnlockField) =>
+    can(UNLOCK_PERMISSION[field]) ? null : (
+      <FieldLock field={field} locked={locked.has(field)} onUnlock={setUnlocking} />
+    );
   const title = step === 'plan' ? 'Change Room During Stay' : 'Confirm Room Change';
 
   const confirm = () => {
@@ -381,6 +444,8 @@ export default function ChangeRoomDialog({
         asked: question.asked,
         answer,
         requestId: newRequestId(),
+        // Only a PIN that was needed: with every function held there is no code to send.
+        overrideCode: unlocked.size > 0 ? overrideCode : undefined,
       }),
       block: ready.block,
       plan,
@@ -405,6 +470,7 @@ export default function ChangeRoomDialog({
         index={index}
         filter={filter}
         dialogId={id}
+        locked={locked.has('room')}
         onPick={onPick}
       />
     ) : null;
@@ -473,38 +539,56 @@ export default function ChangeRoomDialog({
               sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}
             >
               {showLocation ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: '1 1 12rem' }}>
+                  <TextField
+                    select
+                    size="small"
+                    label="Location"
+                    value={filter.locationId}
+                    disabled={locked.has('location')}
+                    onChange={(e) => setFilter((f) => ({ ...f, locationId: e.target.value }))}
+                    sx={{ flex: 1 }}
+                  >
+                    <MenuItem value="">All locations</MenuItem>
+                    {ready?.inventory.locations.map((l) => (
+                      <MenuItem key={l.id} value={l.id}>
+                        {l.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  {lock('location')}
+                </Box>
+              ) : null}
+              <Box sx={{ display: 'flex', alignItems: 'center', flex: '1 1 12rem' }}>
                 <TextField
                   select
                   size="small"
-                  label="Location"
-                  value={filter.locationId}
-                  onChange={(e) => setFilter((f) => ({ ...f, locationId: e.target.value }))}
-                  sx={{ flex: '1 1 12rem' }}
+                  label="Room type"
+                  value={filter.roomTypeId}
+                  disabled={locked.has('roomType')}
+                  onChange={(e) => setFilter((f) => ({ ...f, roomTypeId: e.target.value }))}
+                  sx={{ flex: 1 }}
                 >
-                  <MenuItem value="">All locations</MenuItem>
-                  {ready?.inventory.locations.map((l) => (
-                    <MenuItem key={l.id} value={l.id}>
-                      {l.name}
+                  <MenuItem value="">All room types</MenuItem>
+                  {ready?.inventory.roomTypes.map((t) => (
+                    <MenuItem key={t.id} value={t.id}>
+                      {t.name}
                     </MenuItem>
                   ))}
                 </TextField>
-              ) : null}
-              <TextField
-                select
-                size="small"
-                label="Room type"
-                value={filter.roomTypeId}
-                onChange={(e) => setFilter((f) => ({ ...f, roomTypeId: e.target.value }))}
-                sx={{ flex: '1 1 12rem' }}
-              >
-                <MenuItem value="">All room types</MenuItem>
-                {ready?.inventory.roomTypes.map((t) => (
-                  <MenuItem key={t.id} value={t.id}>
-                    {t.name}
-                  </MenuItem>
-                ))}
-              </TextField>
+                {lock('roomType')}
+              </Box>
             </Box>
+            {can(UNLOCK_PERMISSION.room) ? null : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
+                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                  {locked.has('room')
+                    ? 'Changing the room needs an override code.'
+                    : 'Room unlocked with an override code.'}
+                </Typography>
+                {lock('room')}
+              </Box>
+            )}
             {rows ? (
               // Long stays: a scrolling container that renders only the rows in view.
               <Box
@@ -667,6 +751,25 @@ export default function ChangeRoomDialog({
           </Button>
         )}
       </DialogActions>
+      {unlocking ? (
+        <OverridePinDialog
+          open
+          title="Enter override code to unlock"
+          confirmLabel="Unlock"
+          permission={
+            UNLOCK_PERMISSION[unlocking] as
+              | 'function.changeReservationLocation'
+              | 'function.changeReservationRoomType'
+              | 'function.changeReservationRoom'
+          }
+          onAuthorized={(pin) => {
+            setUnlocked((u) => new Set(u).add(unlocking));
+            setOverrideCode(pin);
+            setUnlocking(null);
+          }}
+          onCancel={() => setUnlocking(null)}
+        />
+      ) : null}
     </Dialog>
   );
 }

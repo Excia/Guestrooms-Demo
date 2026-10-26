@@ -475,6 +475,13 @@ export interface NightRoom {
  *   backend answers 400 `invalid-query` (details.rateChoice) for `null`.
  */
 export interface ChangeRoomRequest {
+  /**
+   * The PIN of an employee who holds the functions the change needs and the user lacks (Change
+   * Reservation Room, Room Type, Location; see the lock icons of the dialog). Without it such a change
+   * is refused 403 `override-required`; a PIN that does not carry them 403 `override-invalid`, a locked
+   * out caller 429 `override-locked`. Never logged or stored (hash only).
+   */
+  overrideCode?: string;
   requestId: string;
   reservationRoomId: string;
   fromRoomId: string;
@@ -602,7 +609,11 @@ export interface CheckInReservationResult {
 }
 
 /** The permissions whose holder's PIN can authorize an override. Add one per flow that needs it. */
-export type OverridePermission = 'reservation.check-in.any-time';
+export type OverridePermission =
+  | 'reservation.check-in.any-time'
+  | 'function.changeReservationLocation'
+  | 'function.changeReservationRoomType'
+  | 'function.changeReservationRoom';
 
 /** Ask whether `pin` belongs to an employee who holds `permission` (ticket 187). */
 export interface VerifyOverridePinRequest {

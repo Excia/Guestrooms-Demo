@@ -127,6 +127,14 @@ export function assertChangeRoomRequest(request: ChangeRoomRequest): void {
   ) {
     throw invalidQuery('room change request');
   }
+  if (
+    request.overrideCode !== undefined &&
+    (typeof request.overrideCode !== 'string' ||
+      request.overrideCode === '' ||
+      request.overrideCode.length > 32)
+  ) {
+    throw invalidQuery('override code');
+  }
   request.nights.forEach((night, i) => {
     if (typeof night !== 'object' || night === null || typeof night.date !== 'string') {
       throw invalidQuery('room change request');
