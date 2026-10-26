@@ -15,6 +15,7 @@ const invalid = (status: number, what: string) =>
 export function changeLogParams(q: ChangeLogQuery): Record<string, string | undefined> {
   return {
     page: q.page,
+    recordId: q.recordId,
     sort: q.sort && `${q.sort.field}:${q.sort.direction}`,
     dateFrom: q.dateFrom,
     dateTo: q.dateTo,
@@ -35,7 +36,8 @@ const isEntry = (v: unknown): v is ChangeLogEntry =>
   isString(v.time) &&
   isString(v.changeType) &&
   isString(v.description) &&
-  isString(v.actionBy);
+  isString(v.actionBy) &&
+  (v.recordId === undefined || isString(v.recordId));
 
 export function parseChangeLogPage(body: unknown, status: number): Page<ChangeLogEntry> {
   if (

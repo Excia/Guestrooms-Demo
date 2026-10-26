@@ -79,6 +79,8 @@ export default function SetupList({
 }: SetupListProps) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [logOpen, setLogOpen] = useState(false);
+  // The item whose log is open, fixed when the menu item is chosen (the selection can change behind the dialog).
+  const [logRecord, setLogRecord] = useState<{ id: string; name: string } | undefined>();
   // A new key on every opening gives the dialog fresh sort, filters, page and rows (D-97-5).
   const [logSession, setLogSession] = useState(0);
   const closeMenu = () => setMenuAnchor(null);
@@ -307,7 +309,14 @@ export default function SetupList({
           >
             <MenuItem
               onClick={() => {
+                const selectedItem = items.find((i) => i.id === selectedId);
+                // The menu only exists on a selected item; never fall back to the page-wide log.
+                if (!selectedItem) {
+                  closeMenu();
+                  return;
+                }
                 chooseAfterClose(() => {
+                  setLogRecord({ id: selectedItem.id, name: selectedItem.label });
                   setLogSession((n) => n + 1);
                   setLogOpen(true);
                 });
@@ -343,6 +352,7 @@ export default function SetupList({
           <ChangeLogOverlay
             key={logSession}
             page={more.changeLogPage}
+            record={logRecord}
             open={logOpen}
             onClose={() => setLogOpen(false)}
           />
