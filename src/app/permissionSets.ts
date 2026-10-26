@@ -196,7 +196,9 @@ export function rowApplies(set: PermissionSet, row: PermissionRow): boolean {
 export function rowIsNotApplicable(set: PermissionSet, row: PermissionRow): boolean {
   if (row.kind === 'access') return false;
   if ('managementOnly' in row && row.managementOnly && set.id !== 'management') return true;
-  return row.parent === 'reservations' && set.id !== 'management' && set.access.reservations === 'none';
+  return (
+    row.parent === 'reservations' && set.id !== 'management' && set.access.reservations === 'none'
+  );
 }
 
 const rank = (level: AccessLevel) => ['none', 'view', 'edit', 'create-edit'].indexOf(level);
