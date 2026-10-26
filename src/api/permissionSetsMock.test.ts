@@ -112,13 +112,17 @@ describe('mock permission sets', () => {
   it('a PIN holder counts only while the saved set allows PIN override', async () => {
     const store = memoryStore();
     const admin = createMockClient({ permissionSetsStore: store });
-    const sets = await admin.permissions.getPermissionSets();
+    const sets = (await admin.permissions.getPermissionSets()).map((s) =>
+      s.id === 'management' ? { ...s, checkIn: 'any-time' as const } : s,
+    );
+    await admin.permissions.savePermissionSets(sets);
     const verify = (pin: string) =>
       createMockClient({
         permissionSetId: 'management',
         permissionSetsStore: store,
       }).overrides.verifyPin({ permission: 'reservation.check-in.any-time', pin });
-    // Jordan Lee (Management set, PIN 1357) overrides while the Management set allows it.
+    // Jordan Lee (Management set, PIN 1357) overrides while the Management set allows any-time check in
+    // and PIN override (legacy has no PIN row; the flag stays on by default).
     expect((await verify('1357')).valid).toBe(true);
     await admin.permissions.savePermissionSets(
       sets.map((s) => (s.id === 'management' ? { ...s, pinOverride: false } : s)),

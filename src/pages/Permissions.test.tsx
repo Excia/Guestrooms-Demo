@@ -32,63 +32,146 @@ async function choose(name: string, option: string) {
 }
 
 describe('Permissions page', () => {
-  it('shows one column per set with Admin Setup, Access, Function and PIN rows', async () => {
+  it('mirrors the legacy table: Management and Staff columns, one Admin Setup row, legacy rows in order', async () => {
     renderPage();
     const table = await loaded();
     expect(screen.getByRole('heading', { level: 1, name: 'Permissions' })).toBeInTheDocument();
-    expect(screen.getByText(/All Admins are granted all permissions/)).toBeInTheDocument();
+    expect(
+      screen.getByText('All Admins are granted all permissions by default in the system.'),
+    ).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Management' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Staff' })).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Rooms, Management' })).toHaveTextContent('View');
-    expect(screen.getByRole('combobox', { name: 'Rooms, Staff' })).toHaveTextContent('No Access');
-    expect(screen.getByRole('combobox', { name: 'Night Audit, Staff' })).toHaveTextContent('View');
-    expect(screen.getByRole('combobox', { name: 'Check In Room, Staff' })).toHaveTextContent(
-      'On Check-In Date Only',
+    // No sections, no per-page setup rows, no PIN row.
+    expect(screen.queryByRole('combobox', { name: /^Rooms,/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/PIN/)).not.toBeInTheDocument();
+    const labels = within(table)
+      .getAllByRole('rowheader')
+      .map((h) => h.firstElementChild?.textContent);
+    expect(labels).toEqual([
+      'Admin Setup',
+      'Closure Events + Details',
+      'Reservation Events + Core Details',
+      'Change Reservation Room',
+      'Change Reservation Location',
+      'Change Reservation Room Type',
+      'Change Rate Category',
+      'Adjust Room Rate',
+      'Check In Room',
+      'Undo Check In',
+      'Check Out Reservation',
+      'Reservation Full Details',
+      'View Private Notes',
+      'Night Audit',
+      'Room Block',
+      'Reporting',
+      'Operation Reports',
+      'Financial Reports',
+      'Folio',
+      'Add Manual Charge / Credit',
+      'Add Positive Deposit / Payment',
+      'Add Negative Deposit / Payment',
+      'Split Folio',
+      'Settle Folio',
+      'Manually Reopen / Close Folio',
+      'Non-Members',
+    ]);
+    expect(screen.getByText('from unassigned or other room')).toBeInTheDocument();
+    expect(screen.getByText('manual check out prior to set check out time')).toBeInTheDocument();
+    expect(screen.getByText('guests, add-ons, notes')).toBeInTheDocument();
+    expect(screen.getByText('history and manual night audit run (create)')).toBeInTheDocument();
+    // Legacy defaults.
+    expect(screen.getByRole('combobox', { name: 'Admin Setup, Management' })).toHaveTextContent(
+      'View',
     );
-    expect(screen.getByRole('combobox', { name: 'Split Folio, Management' })).toHaveTextContent(
-      'Yes',
+    expect(screen.getByRole('combobox', { name: 'Admin Setup, Staff' })).toHaveTextContent(
+      'No Access',
     );
     expect(
-      screen.getByRole('combobox', { name: 'Authorize Overrides with PIN, Management' }),
-    ).toHaveTextContent('Yes');
+      screen.getByRole('combobox', { name: 'Reservation Events + Core Details, Staff' }),
+    ).toHaveTextContent('View');
+    expect(screen.getByRole('combobox', { name: 'Check In Room, Management' })).toHaveTextContent(
+      'On Check-In Date Only',
+    );
+    expect(screen.getByRole('combobox', { name: 'Check In Room, Staff' })).toHaveTextContent(
+      'Never',
+    );
+    expect(screen.getByRole('combobox', { name: 'Reporting, Staff' })).toHaveTextContent(
+      'No Access',
+    );
+    expect(
+      screen.getByRole('combobox', { name: 'Manually Reopen / Close Folio, Management' }),
+    ).toHaveTextContent('No');
+    // The Staff column has no report rows.
+    expect(
+      screen.queryByRole('combobox', { name: 'Operation Reports, Staff' }),
+    ).not.toBeInTheDocument();
     expect(save()).toHaveAttribute('aria-disabled', 'true');
   });
 
-  it('offers No Access, View and Edit for a setup page and the legacy levels for areas', async () => {
+  it('offers the legacy options row by row', async () => {
     renderPage();
     await loaded();
-    await userEvent.click(screen.getByRole('combobox', { name: 'Rooms, Staff' }));
-    // Like the legacy screen: View or No Access only; Edit is for administrators.
-    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual([
-      'No Access',
-      'View',
-    ]);
-    await userEvent.keyboard('{Escape}');
-    await userEvent.click(screen.getByRole('combobox', { name: 'Reporting, Staff' }));
-    expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual([
+    const options = async (name: string) => {
+      await userEvent.click(screen.getByRole('combobox', { name }));
+      const list = (await screen.findAllByRole('option')).map((o) => o.textContent);
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument());
+      return list;
+    };
+    expect(await options('Admin Setup, Staff')).toEqual(['View', 'No Access']);
+    expect(await options('Closure Events + Details, Staff')).toEqual([
+      'Create + Edit',
       'Edit',
+      'View',
       'No Access',
     ]);
+    expect(await options('Reservation Full Details, Staff')).toEqual(['Edit', 'View', 'No Access']);
+    expect(await options('Reporting, Management')).toEqual(['Edit', 'No Access']);
+    expect(await options('Folio, Staff')).toEqual(['Edit', 'View', 'No Access']);
+    expect(await options('Night Audit, Staff')).toEqual([
+      'Create + Edit',
+      'Edit',
+      'View',
+      'No Access',
+    ]);
+    expect(await options('Check In Room, Staff')).toEqual([
+      'AnyTime',
+      'On Check-In Date Only',
+      'Never',
+    ]);
+    expect(await options('Undo Check In, Staff')).toEqual(['Yes', 'No']);
   });
 
-  it('marks function rows N/A when their area is No Access', async () => {
+  it('cascades Reservation Events for Staff and shows N/A under No Access', async () => {
     renderPage();
     await loaded();
-    await choose('Folio, Staff', 'No Access');
-    expect(screen.queryByRole('combobox', { name: 'Split Folio, Staff' })).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Split Folio, Management' })).toBeInTheDocument();
+    await choose('Reservation Events + Core Details, Staff', 'Edit');
+    expect(screen.getByRole('combobox', { name: 'Check In Room, Staff' })).toHaveTextContent(
+      'AnyTime',
+    );
+    expect(screen.getByRole('combobox', { name: 'Undo Check In, Staff' })).toHaveTextContent('Yes');
+    await choose('Reservation Events + Core Details, Staff', 'View');
+    expect(screen.getByRole('combobox', { name: 'Check In Room, Staff' })).toHaveTextContent(
+      'Never',
+    );
+    await choose('Reservation Events + Core Details, Staff', 'No Access');
+    expect(
+      screen.queryByRole('combobox', { name: 'Undo Check In, Staff' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Undo Check In, Management' })).toBeInTheDocument();
   });
 
-  it('saves a change, shows Saved and stores it', async () => {
+  it('saves a change, shows Saved and maps Admin Setup onto every setup page', async () => {
     const client = createMockClient();
     const spy = vi.spyOn(client.permissions, 'savePermissionSets');
     renderPage(client);
     await loaded();
-    await choose('Rooms, Staff', 'View');
+    await choose('Admin Setup, Staff', 'View');
     expect(save()).not.toHaveAttribute('aria-disabled');
     await userEvent.click(save());
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(spy.mock.calls[0]?.[0].find((s) => s.id === 'staff')?.setup.rooms).toBe('view');
+    const sent = spy.mock.calls[0]?.[0].find((s) => s.id === 'staff');
+    expect(Object.values(sent?.setup ?? {}).every((l) => l === 'view')).toBe(true);
     expect((await screen.findAllByText('Permissions Saved')).length).toBeGreaterThan(0);
     expect(save()).toHaveAttribute('aria-disabled', 'true');
     expect(
@@ -104,7 +187,7 @@ describe('Permissions page', () => {
       .mockRejectedValueOnce(new ApiError(500, 'boom'));
     renderPage({ ...client, permissions: { ...client.permissions, savePermissionSets: fail } });
     await loaded();
-    await choose('Rooms, Staff', 'View');
+    await choose('Admin Setup, Staff', 'View');
     await userEvent.click(save());
     expect(
       await screen.findByText('You do not have permission to change permissions.'),
@@ -113,7 +196,7 @@ describe('Permissions page', () => {
     expect(
       await screen.findByText('Permissions could not be saved. Try again.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Rooms, Staff' })).toHaveTextContent('View');
+    expect(screen.getByRole('combobox', { name: 'Admin Setup, Staff' })).toHaveTextContent('View');
   });
 
   it('shows an error with Retry that reloads', async () => {
@@ -141,7 +224,7 @@ describe('Permissions page', () => {
     expect(
       screen.queryByRole('button', { name: saveButtonName('Permissions') }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Rooms, Staff' })).toHaveAttribute(
+    expect(screen.getByRole('combobox', { name: 'Admin Setup, Staff' })).toHaveAttribute(
       'aria-disabled',
       'true',
     );

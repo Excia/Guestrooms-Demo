@@ -1,6 +1,10 @@
 import { mockPermissionSets } from '../api/permissionSetsData';
 import { ADMIN_PAGE_IDS, createPermissions, type Permission } from './permissions';
 import {
+  ADMIN_SETUP_OPTIONS,
+  adminSetupDisplay,
+  rowIsNotApplicable,
+  withAdminSetup,
   clampLevel,
   grantFromSet,
   levelsFor,
@@ -53,15 +57,20 @@ describe('normalizeSet', () => {
     expect(set.setup['api-keys']).toBe('view');
     expect(set.setup.bad).toBeUndefined();
   });
-  it('turns off functions and check in whose area is No Access', () => {
+  it('saves what the page shows as N/A as off (Staff under No Access, Staff report rows), keeps the rest', () => {
     const set = normalizeSet({
-      ...management,
-      access: { ...management.access, reservations: 'none', folio: 'none' },
+      ...staff,
+      access: { ...staff.access, reservations: 'none' },
+      checkIn: 'any-time',
+      functions: { ...staff.functions, undoCheckIn: true, operationalReports: true },
     });
     expect(set.checkIn).toBe('never');
     expect(set.functions.undoCheckIn).toBe(false);
-    expect(set.functions.splitFolio).toBe(false);
-    expect(set.functions.viewPrivateNotes).toBe(true);
+    expect(set.functions.operationalReports).toBe(false);
+    // Management has no N/A cells: a value under No Access is kept as chosen (legacy).
+    const mgmt = normalizeSet({ ...management, access: { ...management.access, folio: 'none' } });
+    expect(mgmt.functions.splitFolio).toBe(true);
+    expect(mgmt.functions.operationalReports).toBe(true);
   });
   it('is idempotent', () => {
     expect(normalizeSet(normalizeSet(management))).toEqual(normalizeSet(management));
@@ -81,16 +90,26 @@ describe('rowApplies', () => {
 });
 
 describe('grantFromSet', () => {
-  it('Staff keeps what the earlier non-admin mock user had, and no setup page', () => {
+  it('Staff (legacy defaults) sees the reservation pages read-only and has no setup page', () => {
     const can = canOf(staff);
     expect(can('page.schedule')).toBe(true);
-    expect(can('page.reporting')).toBe(true);
     expect(can('page.night-audit-history')).toBe(true);
-    expect(can('reservation.edit')).toBe(true);
-    expect(can('reservation.check-in.arrival-date')).toBe(true);
-    expect(can('reservation.check-in.any-time')).toBe(false);
+    expect(can('page.room-blocks')).toBe(true);
+    expect(can('page.reporting')).toBe(false);
+    expect(can('reservation.edit')).toBe(false);
+    expect(can('reservation.check-in.arrival-date')).toBe(false);
     expect(can('night-audit.run')).toBe(false);
     for (const id of ADMIN_PAGE_IDS) expect(can(`page.${id}`)).toBe(false);
+  });
+  it('Management (legacy defaults) opens every setup page read-only and checks in on the date', () => {
+    const can = canOf(management);
+    for (const id of ADMIN_PAGE_IDS) {
+      expect(can(`page.${id}`)).toBe(true);
+      expect(can(`${id}.edit`)).toBe(false);
+    }
+    expect(can('reservation.edit')).toBe(true);
+    expect(can('reservation.check-in.arrival-date')).toBe(true);
+    expect(can('night-audit.run')).toBe(true);
   });
   it('View gives the page, Edit adds <id>.edit', () => {
     let set = withSetupLevel(staff, 'rooms', 'view');
@@ -124,10 +143,10 @@ describe('grantFromSet', () => {
   });
   it('a View reservation set cannot check in or change anything (legacy)', () => {
     const view = withAccessLevel(management, 'reservations', 'view');
-    expect(view.checkIn).toBe('never');
-    expect(view.functions.undoCheckIn).toBe(false);
-    expect(view.functions.adjustRoomRate).toBe(false);
-    // Even a stored any-time / arrival-date with View grants nothing.
+    // Management keeps its hand-tuned values (legacy cascades Staff only)...
+    expect(view.checkIn).toBe(management.checkIn);
+    expect(view.functions.undoCheckIn).toBe(true);
+    // ...but a stored any-time / arrival-date with View grants nothing.
     const forced = {
       ...view,
       checkIn: 'any-time' as const,
@@ -147,17 +166,18 @@ describe('grantFromSet', () => {
     expect(back.functions.changeReservationRoom).toBe(true);
     expect(back.functions.checkOutReservation).toBe(true);
   });
-  it('the editor remembers hidden values of other areas, but what is saved is off', () => {
+  it('the editor remembers hidden values of other areas; the grant ignores them while the area is No Access', () => {
     const none = updateSet([management], 'management', (s) =>
       withAccessLevel(s, 'folio', 'none'),
     )[0] as PermissionSet;
     expect(none.functions.splitFolio).toBe(true);
-    expect(normalizeSet(none).functions.splitFolio).toBe(false);
+    expect(canOf(none)('function.splitFolio')).toBe(false);
     const back = updateSet([none], 'management', (s) =>
       withAccessLevel(s, 'folio', 'edit'),
     )[0] as PermissionSet;
-    expect(back.functions.splitFolio).toBe(true);
+    expect(canOf(back)('function.splitFolio')).toBe(true);
   });
+
   it('check in follows the setting', () => {
     expect(canOf(withCheckIn(management, 'any-time'))('reservation.check-in.any-time')).toBe(true);
     expect(canOf(withCheckIn(management, 'never'))('reservation.check-in.any-time')).toBe(false);
@@ -228,5 +248,57 @@ describe('parseStoredSets', () => {
   });
   it('a save must include both required sets', () => {
     expect(validateSets([management])).toHaveLength(1);
+  });
+});
+
+describe('legacy Admin Setup row and N/A cells', () => {
+  it('offers View then No Access, and sets every setup page', () => {
+    expect(ADMIN_SETUP_OPTIONS).toEqual(['view', 'none']);
+    const none = withAdminSetup(management, 'none');
+    expect(adminSetupDisplay(none)).toBe('none');
+    for (const id of ADMIN_PAGE_IDS) expect(none.setup[id]).toBe('none');
+    const view = withAdminSetup(staff, 'view');
+    expect(adminSetupDisplay(view)).toBe('view');
+    for (const id of ADMIN_PAGE_IDS) expect(view.setup[id]).toBe('view');
+    // Stored per-page levels that differ show as mixed; picking View or No Access fixes them.
+    const mixed = withSetupLevel(none, 'rooms', 'view');
+    expect(adminSetupDisplay(mixed)).toBe('mixed');
+    expect(adminSetupDisplay(withAdminSetup(mixed, 'view'))).toBe('view');
+    expect(adminSetupDisplay(withSetupLevel(view, 'rooms', 'edit'))).toBe('mixed');
+  });
+  it('shows N/A for Staff under No Access and for the Management-only report rows', () => {
+    const rows = PERMISSION_ROWS;
+    const row = (key: string) =>
+      rows.find((r) => r.kind !== 'access' && r.kind !== 'checkIn' && r.key === key)!;
+    const staffNone = { ...staff, access: { ...staff.access, reservations: 'none' as const } };
+    expect(rowIsNotApplicable(staffNone, row('undoCheckIn'))).toBe(true);
+    expect(rowIsNotApplicable(staff, row('undoCheckIn'))).toBe(false);
+    expect(rowIsNotApplicable(staff, row('operationalReports'))).toBe(true);
+    expect(rowIsNotApplicable(management, row('operationalReports'))).toBe(false);
+    expect(rowIsNotApplicable(staff, row('splitFolio'))).toBe(false);
+  });
+  it('cascades Reservation Events like legacy, for the Staff set only', () => {
+    // Every change TO Edit or Create + Edit switches the functions on, also Edit -> Create + Edit.
+    const hand = {
+      ...staff,
+      access: { ...staff.access, reservations: 'edit' as const },
+      checkIn: 'never' as const,
+    };
+    const again = withAccessLevel(hand, 'reservations', 'create-edit');
+    expect(again.checkIn).toBe('any-time');
+    expect(again.functions.undoCheckIn).toBe(true);
+    // Management is not touched by any change.
+    const tuned = { ...management, checkIn: 'never' as const };
+    for (const level of ['edit', 'view', 'none', 'create-edit'] as const) {
+      const next = withAccessLevel(tuned, 'reservations', level);
+      expect(next.checkIn).toBe('never');
+      expect(next.functions).toEqual(tuned.functions);
+    }
+    const edit = withAccessLevel(staff, 'reservations', 'edit');
+    expect(edit.checkIn).toBe('any-time');
+    expect(edit.functions.adjustRoomRate).toBe(true);
+    const view = withAccessLevel(edit, 'reservations', 'view');
+    expect(view.checkIn).toBe('never');
+    expect(view.functions.adjustRoomRate).toBe(false);
   });
 });

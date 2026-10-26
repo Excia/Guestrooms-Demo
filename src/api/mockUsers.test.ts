@@ -30,7 +30,7 @@ describe('mock users', () => {
     expect(can('view-only', 'rooms.edit')).toBe(false);
     expect(can('view-only', 'locations.edit')).toBe(false);
     expect(can('view-only', 'admin')).toBe(false);
-    expect(can('view-only', 'page.permissions')).toBe(false);
+    expect(can('view-only', 'page.permissions')).toBe(true);
   });
   it('partial has Rooms and Room Types only', () => {
     expect(can('partial', 'page.rooms')).toBe(true);

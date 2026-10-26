@@ -55,13 +55,6 @@ export const ADMINISTRATOR_SET: PermissionSetSummary = {
 
 export const SETUP_LEVELS: readonly SetupLevel[] = ['none', 'view', 'edit'];
 
-/**
- * The levels the Permissions page offers for an Admin Setup page of a non-admin set: View or No
- * Access only, as in the legacy screen (Administrators alone change setup, so granting Edit would
- * hand out more than any non-admin may hold). A stored `edit` (a backend decision) still shows, so it is not hidden.
- */
-export const setupLevelOptions = (current: SetupLevel): readonly SetupLevel[] =>
-  current === 'edit' ? SETUP_LEVELS : ['none', 'view'];
 export const SETUP_LEVEL_LABEL: Record<SetupLevel, string> = {
   none: 'No Access',
   view: 'View',
@@ -76,7 +69,7 @@ export const ACCESS_LEVEL_LABEL: Record<AccessLevel, string> = {
 };
 
 export const CHECK_IN_OPTIONS: readonly { value: CheckInSetting; label: string }[] = [
-  { value: 'any-time', label: 'Any Time' },
+  { value: 'any-time', label: 'AnyTime' },
   { value: 'arrival-date', label: 'On Check-In Date Only' },
   { value: 'never', label: 'Never' },
 ];
@@ -96,6 +89,8 @@ export interface FunctionRow {
   hint?: string;
   /** The Access area this function belongs to; it does not apply (N/A) when that area is No Access. */
   parent: AccessKey;
+  /** Legacy: Management only; the Staff column shows N/A (Operation Reports, Financial Reports). */
+  managementOnly?: boolean;
 }
 export interface CheckInRow {
   kind: 'checkIn';
@@ -114,12 +109,19 @@ const access = (
   levels: readonly AccessLevel[],
   hint?: string,
 ): AccessRow => ({ kind: 'access', key, label, levels, hint });
-const fn = (key: FunctionKey, label: string, parent: AccessKey, hint?: string): FunctionRow => ({
+const fn = (
+  key: FunctionKey,
+  label: string,
+  parent: AccessKey,
+  hint?: string,
+  managementOnly?: boolean,
+): FunctionRow => ({
   kind: 'function',
   key,
   label,
   parent,
   hint,
+  ...(managementOnly ? { managementOnly } : {}),
 });
 
 /** The Access and Function rows in the order of the page (legacy order). */
@@ -146,11 +148,11 @@ export const PERMISSION_ROWS: readonly PermissionRow[] = [
   ),
   access('reservationDetails', 'Reservation Full Details', EDIT_VIEW, 'guests, add-ons, notes'),
   fn('viewPrivateNotes', 'View Private Notes', 'reservationDetails'),
-  access('nightAudit', 'Night Audit', FOUR, 'Edit: history and running the night audit'),
+  access('nightAudit', 'Night Audit', FOUR, 'history and manual night audit run (create)'),
   access('roomBlocks', 'Room Block', FOUR),
   access('reporting', 'Reporting', EDIT_ONLY),
-  fn('operationalReports', 'Operational Reports', 'reporting'),
-  fn('financialReports', 'Financial Reports', 'reporting'),
+  fn('operationalReports', 'Operation Reports', 'reporting', undefined, true),
+  fn('financialReports', 'Financial Reports', 'reporting', undefined, true),
   access('folio', 'Folio', EDIT_VIEW),
   fn('addManualChargeCredit', 'Add Manual Charge / Credit', 'folio'),
   fn('addPositiveDepositPayment', 'Add Positive Deposit / Payment', 'folio'),
@@ -178,6 +180,19 @@ export function rowApplies(set: PermissionSet, row: PermissionRow): boolean {
   return row.parent === 'reservations'
     ? level === 'edit' || level === 'create-edit'
     : level !== 'none';
+}
+
+/**
+ * Legacy display rule: a cell is N/A (greyed) in the Staff column while Reservation Events is No Access
+ * (every function under it), and for the two Management-only report rows. Management always shows its cells.
+ */
+// The set ids are the two editable sets of the legacy screen (Management, Staff); a new set would need a column rule here.
+export function rowIsNotApplicable(set: PermissionSet, row: PermissionRow): boolean {
+  if (row.kind === 'access') return false;
+  if ('managementOnly' in row && row.managementOnly && set.id !== 'management') return true;
+  return (
+    row.parent === 'reservations' && set.id !== 'management' && set.access.reservations === 'none'
+  );
 }
 
 const rank = (level: AccessLevel) => ['none', 'view', 'edit', 'create-edit'].indexOf(level);
@@ -228,10 +243,13 @@ export function normalizeSet(raw: PermissionSet, keepHidden = false): Permission
   // The editor keeps what a hidden (N/A) row held, so switching the area back restores it; what is
   // saved and granted is always off.
   if (keepHidden) return normalized;
+  // What the page shows as N/A is saved as off (legacy). Other values are kept as chosen; the grant
+  // (`rowApplies`) is what ignores a function whose area does not allow it.
   for (const row of PERMISSION_ROWS) {
-    if (row.kind === 'function' && !rowApplies(normalized, row))
+    if (row.kind === 'function' && rowIsNotApplicable(normalized, row)) {
       normalized.functions[row.key] = false;
-    if (row.kind === 'checkIn' && !rowApplies(normalized, row)) normalized.checkIn = 'never';
+    }
+    if (row.kind === 'checkIn' && rowIsNotApplicable(normalized, row)) normalized.checkIn = 'never';
   }
   return normalized;
 }
@@ -286,7 +304,7 @@ export function grantFromSet(raw: PermissionSet): string[] {
   const reservations = set.access.reservations;
   if (reservations !== 'none') {
     for (const id of PAGES_OF_RESERVATIONS) out.add(pagePermission(id));
-    // View is read-only: no editing and, like legacy, no check in (normalizeSet has set it to never).
+    // View is read-only: no editing and, like legacy, no check in (a stored AnyTime is ignored here).
     if (reservations !== 'view') {
       out.add(RESERVATION_EDIT_PERMISSION);
       if (set.checkIn === 'any-time') out.add(CHECK_IN_ANY_TIME_PERMISSION);
@@ -395,12 +413,16 @@ export function withAccessLevel(
 ): PermissionSet {
   const next: PermissionSet = { ...set, access: { ...set.access, [key]: clampLevel(key, level) } };
   if (key !== 'reservations') return next;
-  const edits = (s: PermissionSet) =>
-    s.access.reservations === 'edit' || s.access.reservations === 'create-edit';
-  // Legacy cascade: Edit switches the reservation functions on (check in Any Time); View or No
-  // Access switches them off (Never).
-  if (edits(next) && !edits(set)) return withReservationFunctions(next, true);
-  if (!edits(next)) return withReservationFunctions(next, false);
+  // Legacy `reservationEventsCoreUpdated` touches the Staff set only: any change TO Edit or Create + Edit
+  // switches the eight reservation functions on (Check In AnyTime); a change to View switches them off
+  // (Never); No Access leaves them (the Staff cells turn N/A and save as off). Management keeps its
+  // hand-tuned values; the grant (`rowApplies`) is what stops a View set from checking in.
+  if (set.id !== 'staff') return next;
+  const reservations = next.access.reservations;
+  if (reservations === 'edit' || reservations === 'create-edit') {
+    return withReservationFunctions(next, true);
+  }
+  if (reservations === 'view') return withReservationFunctions(next, false);
   return next;
 }
 
@@ -430,12 +452,28 @@ export const withCheckIn = (set: PermissionSet, checkIn: CheckInSetting): Permis
   checkIn,
 });
 
-export const withPinOverride = (set: PermissionSet, pinOverride: boolean): PermissionSet => ({
-  ...set,
-  pinOverride,
-});
+// ---- the legacy "Admin Setup" row ------------------------------------------------------------
 
-/** Label of an Admin Setup page in the table: the navigation's name (Primary Setup is "System Settings"). */
-export const SETUP_PAGE_LABEL: Record<string, string> = {
-  'primary-setup': 'System Settings',
+/** The one Admin Setup row of the legacy screen: View (every setup page, read-only) or No Access. */
+export type AdminSetupLevel = 'view' | 'none';
+export const ADMIN_SETUP_OPTIONS: readonly AdminSetupLevel[] = ['view', 'none'];
+
+/**
+ * What the Admin Setup row shows: View (every page View), No Access (every page none), or `mixed`
+ * when stored per-page levels differ (a backend decision). Picking View or No Access rewrites every page.
+ */
+export const adminSetupDisplay = (set: PermissionSet): AdminSetupLevel | 'mixed' => {
+  const levels = new Set(ADMIN_PAGE_IDS.map((id) => setupLevel(set, id)));
+  if (levels.size === 1 && levels.has('view')) return 'view';
+  if (levels.size === 1 && levels.has('none')) return 'none';
+  return 'mixed';
 };
+
+/** Sets every Admin Setup page to the level (non-admin sets never get Edit). */
+export const withAdminSetup = (set: PermissionSet, level: AdminSetupLevel): PermissionSet => ({
+  ...set,
+  setup: Object.fromEntries([
+    ...Object.entries(set.setup),
+    ...ADMIN_PAGE_IDS.map((id) => [id, level] as const),
+  ]),
+});

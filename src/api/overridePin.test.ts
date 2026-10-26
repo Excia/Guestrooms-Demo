@@ -11,6 +11,28 @@ import type { CheckInReservationRequest, PermissionGrant } from './types';
 
 const PERMISSION = 'reservation.check-in.any-time';
 
+describe('createPinGuard holders without a permission set', () => {
+  const now = () => new Date('2026-10-16T12:00:00Z');
+  const holder = (over: object) => ({
+    id: 'e',
+    name: 'E',
+    pin: '1111',
+    grant: { role: 'x', permissions: [] } as PermissionGrant,
+    ...over,
+  });
+
+  it('an employee with no set and no grant is never unrestricted', () => {
+    const g = createPinGuard([holder({})], now);
+    expect(g.check(PERMISSION, '1111')).toEqual({ kind: 'invalid' });
+  });
+
+  it('an unknown or missing set resolves to no grant, so the PIN is refused', () => {
+    const resolve = () => null;
+    const g = createPinGuard([holder({ permissionSetId: 'gone' })], now, undefined, resolve);
+    expect(g.check(PERMISSION, '1111')).toEqual({ kind: 'invalid' });
+  });
+});
+
 describe('createPinGuard', () => {
   let at = new Date('2026-10-16T12:00:00Z').getTime();
   const guard = () => createPinGuard(MOCK_PIN_HOLDERS, () => new Date(at));

@@ -710,7 +710,7 @@ backend derives from the set the user is assigned to. Administrators hold every 
 | 3   | `PUT /permission-sets`  | `PermissionSet[]` (replaces the list)    | `PermissionSet[]` as stored                              | 401, 403 `forbidden` unless the caller is an administrator, 422 |
 
 **Who may write (privilege escalation):** only an administrator saves. A set can never grant more than its editor holds, and the Permissions page offers a non-admin
-set only View or No Access on each Admin Setup page (as legacy), so editing a set cannot raise anyone above an administrator's own decision. **Replace semantics:** `PUT` stores exactly the
+set only View or No Access in its single Admin Setup row, which writes that level to every setup page (as legacy), so editing a set cannot raise anyone above an administrator's own decision. **Replace semantics:** `PUT` stores exactly the
 sets sent and must include `management` and `staff` (422 otherwise); names are kept as stored. The client lists sets for Employees with `fields=summary` so Employees needs no
 `permissions.edit`.
 

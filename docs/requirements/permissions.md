@@ -75,7 +75,7 @@ Saved through `permissions.getPermissionSets` / `savePermissionSets` ([api-contr
 `permissions.listPermissionSets()` returns `{ id, name, editable }[]` for the Employees page. Pure rules: `src/app/permissionSets.ts`.
 
 **Admin Setup levels (per page, owner decision 2026-10-25):** No Access (no permission), **View** (`page.<id>`), **Edit** (`page.<id>` and `<id>.edit`).
-The Permissions page offers a non-admin set only **View or No Access** on every setup page, as the legacy screen does (Edit belongs to Administrators), and
+The Permissions page offers a non-admin set only **View or No Access** in its single Admin Setup row, as the legacy screen does (Edit belongs to Administrators), and
 **only an administrator may save permission sets** (the mock refuses anyone else with 403): a set can never grant more than its editor holds, so there is no
 escalation by editing a set. A stored `edit` (a backend decision) still displays and is kept.
 `admin` still means Edit on every page. `adminPageLevel(can, id)` in `src/app/access.ts` gives the level; the route guard (`RequireAccess`)
@@ -109,9 +109,15 @@ Tabs, list selection, links and Generate Preview stay usable. `src/pages/viewOnl
 Pages also stop saving in code (no Save button, `dirty` false, `save()` returns early). Hiding is not authorization: the mock refuses the Admin Setup writes without `<page>.edit` (or `admin`) with 403
 (`roomSetup`, `roomOptions`, `addOns`, `rateCategories`, `bookingRules`, `systemSettings`, `keycards`; Locations and Employees check themselves), and the backend must do the same.
 
-**Mock:** default sets (P-186-1) in `src/api/permissionSetsData.ts`. Management: every setup page View except Permissions (No Access), all areas at
-the top level, Check In Any Time, PIN override on. Staff: no setup pages, what the earlier "Non-admin" user had (Reservation Events Edit, Night
-Audit View, Room Block View, Reporting Edit, Folio Edit, Check In On Check-In Date Only), PIN override off. In dev the edited sets persist under
+**The page is the legacy screen** (see [entries/permissions-legacy-format.md](entries/permissions-legacy-format.md)): Management and Staff columns, one **Admin Setup** row
+(View or No Access, which sets every setup page to View or No Access in the stored set), the legacy Access and Function rows in legacy order and wording, no sections,
+no per-page rows, no PIN row. The per-page `<id>.edit` model stays underneath (Administrators, and a backend that grants it); the page never writes `edit` for a non-admin set.
+
+**Mock:** default sets (P-186-2) in `src/api/permissionSetsData.ts` are the legacy defaults. Management: Admin Setup View (every setup page), Closure and Reservation Events
+Create + Edit, Full Details Edit, Night Audit and Room Block Create + Edit, Reporting Edit, Folio Edit, Non-Members Create + Edit, every function Yes except Manually Reopen / Close Folio,
+Check In On Check-In Date Only. Staff: Admin Setup No Access, Closure View, Reservation Events View, Full Details Edit, Night Audit View, Room Block Edit, Reporting No Access, Folio Edit,
+Non-Members Edit, Manual Charge and Positive Deposit Yes, the rest No, Check In Never. (So the dev "Non-admin" user can no longer edit reservations by default.)
+`pinOverride` is on for both sets and has no row (legacy has none). In dev the edited sets persist under
 `localStorage['gr.mockPermissionSets']`; the mock users "Non-admin" (Staff set) and "View-only admin" (Management set) read the saved set, so
 edit a set as Administrator, switch user, and the change is live. "Partial" keeps its fixed grant (Rooms and Room Types, now with Edit). Demo builds
 always run as Administrator.
@@ -121,8 +127,8 @@ always run as Administrator.
 | User id     | Label                       | Role string           | Grant                                                                                                                                                                                                                                            | Who gets it                                       |
 | ----------- | --------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
 | `admin`     | Administrator               | Administrator         | `'all'` (every known permission)                                                                                                                                                                                                                 | Demo builds always (D-033); dev choice            |
-| `view-only` | View-only admin (Management set) | Management | read from the saved Management set (ticket 186); every setup page View |
-| `non-admin` | Non-admin (Staff set)  | Staff                 | now read from the saved Staff set (ticket 186); by default the 13 non-admin `page.<id>` (dashboard, schedule, reservations, new-reservation-results, folio, open-folios, unassigned-charges, waitlist, night-audit-history, add-on-countdown, room-blocks, member-directory, reporting); `reservation.edit` | Dev fallback for a missing or corrupt stored user |
+| `view-only` | View-only admin (Management set) | Management | read from the saved Management set (legacy defaults): every setup page View, reservation edit, check in on the arrival date, Night Audit run. Use this user to demo the override PIN (the past-date check-in prompt; the Administrator's PIN is accepted) |
+| `non-admin` | Non-admin (Staff set)  | Staff                 | read from the saved Staff set (legacy defaults, P-186-2): the reservation pages read-only (Reservation Events View), Room Block, Night Audit history and the folio pages, no Reporting, no `reservation.edit`, no check in, no setup page | Dev fallback for a missing or corrupt stored user |
 | `partial`   | Partial (Rooms, Room Types) | Staff with some setup | the 13 above plus `page.rooms` and `page.room-types`; `reservation.edit`                                                                                                                                                                         | Dev choice                                        |
 
 Dev only: `localStorage gr.mockUser` selects the user, via the lazy-loaded dev user switcher (absent from
@@ -164,8 +170,8 @@ Check in has three levels. Two grants express them (`checkInLevel(can)` in `src/
 | `reservation.check-in.arrival-date` | arrival date only  | Check in on the arrival date. A past date needs an **override code** (the prompt reads "Override and check in"); validated by the backend      |
 | neither                           | never                | Check in is disabled with a reason (also the automatic check out that follows a check in)                                                    |
 
-Unrestricted users (`'all'`) hold the highest level. Mock users: Administrator = any time; Non-admin = arrival date only
-(shows the override code); Partial = any time. The names are provisional until the Permissions page design (Q-G-1). The override
+Unrestricted users (`'all'`) hold the highest level. Mock users: Administrator = any time; Non-admin (Staff set, legacy default Never) cannot check in; View-only admin (Management set, legacy default On Check-In Date Only) =
+arrival date only, so a past date shows the override PIN prompt; Partial = any time. The names are provisional until the Permissions page design (Q-G-1). The override
 PIN is checked by the mock against a small employee table (ticket 187). Whether the automatic check out needs its own permission is an open question
 (Q-163-1): until then it follows these levels.
 
