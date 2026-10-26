@@ -59,20 +59,26 @@ function setup(over: Partial<RateTableProps> = {}) {
 }
 
 describe('RateTable', () => {
-  it('spans each season cell over its room type rows, one rowgroup per season', () => {
+  it('has one tbody per season and one compact row per room type under its title row', () => {
     setup();
-    const groups = screen
-      .getAllByRole('rowheader')
-      .filter((h) => h.getAttribute('scope') === 'rowgroup');
-    expect(groups).toHaveLength(3);
-    groups.forEach((g) => expect(g).toHaveAttribute('rowspan', String(ROOMS.length)));
-    expect(document.querySelectorAll('tbody[data-season]')).toHaveLength(3);
+    const bodies = [...document.querySelectorAll('tbody[data-season]')];
+    expect(bodies).toHaveLength(3);
+    // title row + one row per room type; no cell spans several rows
+    bodies.forEach((b) => expect(b.querySelectorAll('tr')).toHaveLength(1 + ROOMS.length));
+    expect(document.querySelectorAll('[rowspan]')).toHaveLength(0);
   });
 
-  it('spans one row when there are no room types', () => {
+  it('shows the Season / Special Rates label once per dated season, in its title row', () => {
+    setup();
+    expect(screen.getAllByText('Season / Special Rates')).toHaveLength(2);
+    expect(
+      screen.getAllByRole('textbox', { name: 'Season name' })[0]?.closest('tbody'),
+    ).toHaveAttribute('data-season');
+  });
+
+  it('says there are no room types in one row per season', () => {
     setup({ roomTypes: [] });
     expect(screen.getAllByText('No room types selected')).toHaveLength(3);
-    screen.getAllByRole('rowheader').forEach((g) => expect(g).toHaveAttribute('rowspan', '1'));
   });
 
   it('shows the group headers and their notes as separate texts, with no tooltip-only help', () => {
@@ -112,7 +118,7 @@ describe('RateTable', () => {
     setup({ errors: { s1: { amount: 'Enter a rate between 0 and 9,999,999.99 (Mon).' } } });
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('Enter a rate between 0');
-    expect(alert.closest('th')).toHaveAttribute('scope', 'rowgroup');
+    expect(alert.closest('tbody')).toHaveAttribute('data-season', 's1');
   });
 
   it.each(['name', 'startDate', 'endDate', 'sku'] as const)(
