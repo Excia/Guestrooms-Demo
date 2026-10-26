@@ -6,7 +6,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError, useApi } from '../api';
 import { EMPLOYEE_ROLES } from '../app/employees';
 import {
@@ -47,7 +47,6 @@ const rowGrid = {
   gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 3fr) minmax(0, 3fr) auto' },
   gap: 2,
   alignItems: 'start',
-  listStyle: 'none',
 } as const;
 
 // Employees (Admin Setup, LP-A.4 / ticket 185), matching the legacy EmployeesEdit screen: one row per
@@ -98,7 +97,6 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
 
   const dirty = !readOnly && hasUnsaved(edits, adding);
   const guard = useLeaveGuard(dirty);
-  const candidates = useMemo(() => data.candidates, [data.candidates]);
 
   useEffect(() => {
     const id = focusAfterRender.current;
@@ -197,80 +195,86 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
           const control = removeControl(saved, edits, e.id, adding !== null);
           const noteId = `employee-${e.id}-note`;
           return (
-            <Box component="li" key={e.id} role="group" aria-label={e.name} sx={rowGrid}>
-              <TextField
-                label="Name"
-                value={e.name}
-                slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
-                fullWidth
-              />
-              <Box>
-                <Select
-                  label="Employee Type"
-                  ariaLabel={`Employee Type, ${e.name}`}
-                  value={roleOf(e, edits)}
-                  options={ROLE_OPTIONS}
-                  onChange={(role) => setEdits(setRole(saved, edits, e.id, role))}
-                  disabled={only}
-                  describedBy={only ? noteId : undefined}
+            <Box component="li" key={e.id} sx={{ listStyle: 'none' }}>
+              <Box role="group" aria-label={e.name} sx={rowGrid}>
+                <TextField
+                  label="Name"
+                  value={e.name}
+                  slotProps={{ input: { readOnly: true }, inputLabel: { shrink: true } }}
                   fullWidth
                 />
-                {only ? (
-                  <Box component="span" id={noteId} sx={visuallyHidden}>
-                    The only administrator. Make another employee an administrator to change this.
-                  </Box>
-                ) : null}
+                <Box>
+                  <Select
+                    label="Employee Type"
+                    ariaLabel={`Employee Type, ${e.name}`}
+                    value={roleOf(e, edits)}
+                    options={ROLE_OPTIONS}
+                    onChange={(role) => setEdits(setRole(saved, edits, e.id, role))}
+                    disabled={only}
+                    describedBy={only ? noteId : undefined}
+                    fullWidth
+                  />
+                  {only ? (
+                    <Box component="span" id={noteId} sx={visuallyHidden}>
+                      The only administrator. Make another employee an administrator to change this.
+                    </Box>
+                  ) : null}
+                </Box>
+                {control === 'hidden' ? (
+                  // Keeps the column, so the types line up in every row.
+                  <Box
+                    aria-hidden
+                    sx={{ display: { xs: 'none', md: 'block' }, width: (t) => t.spacing(5) }}
+                  />
+                ) : (
+                  <RemoveIconButton
+                    label={e.name}
+                    onClick={() => {
+                      setRemoveError(null);
+                      setRemoveId(e.id);
+                    }}
+                    disabled={control === 'disabled'}
+                    disabledReason={
+                      adding
+                        ? 'Finish or cancel the new employee first'
+                        : 'A club needs an employee'
+                    }
+                    sx={{ mt: { md: 1 } }}
+                  />
+                )}
               </Box>
-              {control === 'hidden' ? (
-                // Keeps the column, so the types line up in every row.
-                <Box
-                  aria-hidden
-                  sx={{ display: { xs: 'none', md: 'block' }, width: (t) => t.spacing(5) }}
-                />
-              ) : (
-                <RemoveIconButton
-                  label={e.name}
-                  onClick={() => {
-                    setRemoveError(null);
-                    setRemoveId(e.id);
-                  }}
-                  disabled={control === 'disabled'}
-                  disabledReason={
-                    adding ? 'Finish or cancel the new employee first' : 'A club needs an employee'
-                  }
-                  sx={{ mt: { md: 1 } }}
-                />
-              )}
             </Box>
           );
         })}
         {adding ? (
-          <Box component="li" role="group" aria-label="New employee" sx={rowGrid}>
-            <LookupField
-              id="employees-new-person"
-              label="Add Employee"
-              value={adding.person}
-              options={candidates}
-              onChange={(person) => setAdding({ ...adding, person })}
-              noOptionsText="No one else in the club directory"
-            />
-            <Select
-              id="employees-new-role"
-              label="Employee Type"
-              ariaLabel="Employee Type, new employee"
-              value={adding.role ?? ''}
-              options={ROLE_OPTIONS}
-              onChange={(role) => setAdding({ ...adding, role })}
-              fullWidth
-            />
-            <RemoveIconButton
-              label="new employee"
-              onClick={() => {
-                setAdding(null);
-                focusAfterRender.current = ADD_BUTTON_ID;
-              }}
-              sx={{ mt: { md: 1 } }}
-            />
+          <Box component="li" sx={{ listStyle: 'none' }}>
+            <Box role="group" aria-label="New employee" sx={rowGrid}>
+              <LookupField
+                id="employees-new-person"
+                label="Add Employee"
+                value={adding.person}
+                options={data.candidates}
+                onChange={(person) => setAdding({ ...adding, person })}
+                noOptionsText="No one else in the club directory"
+              />
+              <Select
+                id="employees-new-role"
+                label="Employee Type"
+                ariaLabel="Employee Type, new employee"
+                value={adding.role ?? ''}
+                options={ROLE_OPTIONS}
+                onChange={(role) => setAdding({ ...adding, role })}
+                fullWidth
+              />
+              <RemoveIconButton
+                label="new employee"
+                onClick={() => {
+                  setAdding(null);
+                  focusAfterRender.current = ADD_BUTTON_ID;
+                }}
+                sx={{ mt: { md: 1 } }}
+              />
+            </Box>
           </Box>
         ) : null}
       </Box>

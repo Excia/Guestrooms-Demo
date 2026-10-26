@@ -1947,10 +1947,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       listPermissionSets: (o) =>
         request('/permission-sets', { fields: 'summary' }, o, parsePermissionSetSummaries),
       savePermissionSets: (sets, o) =>
-        request('/permission-sets', {}, o, parsePermissionSets, {
-          method: 'PUT',
-          body: sets.map((s) => normalizeSet(s)),
-        }),
+        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets.map((s) => normalizeSet(s)) }),
     },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
     registrationCard: {

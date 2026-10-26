@@ -956,6 +956,15 @@ export function createMockClient({
               throw new ApiError(422, 'Employees are not valid', { code: 'validation' });
             }
             // All or nothing: the whole list is built first, then the administrator rule is checked.
+            // The legacy screen has no permission set, so keep the data consistent for the extended
+            // variant: an administrator has none, a manager or staff without one gets the set of that type.
+            const setFor = (role: EmployeeSetup['role'], current: string | null | undefined) =>
+              role === 'administrator'
+                ? null
+                : (current ??
+                  permissionSets.find((s) => s.id === (role === 'manager' ? 'management' : 'staff'))
+                    ?.id ??
+                  null);
             const next: EmployeeSetup[] = [
               ...employees.map((e) => {
                 const change = inputs.find((i) => i.id === e.id);
@@ -963,7 +972,7 @@ export function createMockClient({
                 return {
                   ...e,
                   role: change.role,
-                  ...(change.role === 'administrator' ? { permissionSetId: null } : {}),
+                  permissionSetId: setFor(change.role, e.permissionSetId),
                 };
               }),
               ...inputs
@@ -972,6 +981,7 @@ export function createMockClient({
                   id: i.id,
                   name: directory.find((p) => p.id === i.id)?.label ?? '',
                   role: i.role,
+                  permissionSetId: setFor(i.role, undefined),
                 })),
             ];
             const hadAdmin = employees.some(

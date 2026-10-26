@@ -44,6 +44,7 @@ describe('Employees page (legacy EmployeesEdit)', () => {
   it('lists every employee as a read-only Name and an Employee Type, in the server order', async () => {
     renderPage();
     const list = await loaded();
+    expect(within(list).getAllByRole('listitem')).toHaveLength(6);
     const rows = within(list).getAllByRole('group');
     expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
       'Alex Moreno',
@@ -320,5 +321,75 @@ describe('Employees page (legacy EmployeesEdit)', () => {
     renderPage(createMockClient({ scenario: 'empty' }), ['page.employees']);
     await loaded();
     expect(screen.getByText('No employees.')).toBeInTheDocument();
+  });
+
+  it('shows a message for 409 and 422 from the save and keeps the edits', async () => {
+    for (const [status, text] of [
+      [409, /at least one active administrator/],
+      [422, /not valid/],
+    ] as const) {
+      const user = userEvent.setup();
+      const client = createMockClient();
+      const view = renderPage({
+        ...client,
+        employees: {
+          ...client.employees,
+          saveRoles: vi.fn().mockRejectedValue(new ApiError(status, 'x')),
+        },
+      });
+      await loaded();
+      await choose(user, typeOf('Dana Whitfield'), 'Manager');
+      await user.click(save());
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(typeOf('Dana Whitfield')).toHaveTextContent('Manager');
+      view.unmount();
+    }
+  });
+
+  it('saves from the leave prompt and then leaves', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const spy = vi.spyOn(client.employees, 'saveRoles');
+    renderPage(client);
+    await loaded();
+    await choose(user, typeOf('Dana Whitfield'), 'Manager');
+    await user.click(screen.getByRole('link', { name: 'Go to schedule' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Employees have not been saved.' });
+    await user.click(within(dialog).getByRole('button', { name: 'Save now' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith([{ id: 'emp-3', role: 'manager' }]));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('does not offer a saved person again, and offers a removed one, when the refresh fails', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const failRefresh = vi
+      .fn()
+      .mockImplementationOnce(() => client.employees.list())
+      .mockRejectedValue(new ApiError(500, 'boom'));
+    renderPage({ ...client, employees: { ...client.employees, list: failRefresh } });
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Add Employee' }));
+    await user.type(screen.getByRole('combobox', { name: 'Add Employee' }), 'sam');
+    await user.click(await screen.findByRole('option', { name: 'Sam Rivera' }));
+    await choose(
+      user,
+      screen.getByRole('combobox', { name: 'Employee Type, new employee' }),
+      'Staff',
+    );
+    await user.click(save());
+    await screen.findAllByText('Employees Saved');
+    // Remove Priya: the refresh fails again, the lists are patched locally.
+    await user.click(screen.getByRole('button', { name: 'Remove Priya Nair' }));
+    await user.click(
+      within(await screen.findByRole('dialog', { name: 'Confirm' })).getByRole('button', {
+        name: 'OK',
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Add Employee' }));
+    await user.click(screen.getByRole('combobox', { name: 'Add Employee' }));
+    expect(await screen.findByRole('option', { name: 'Priya Nair' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Sam Rivera' })).not.toBeInTheDocument();
   });
 });

@@ -152,6 +152,23 @@ describe('mock employees API: legacy save (saveRoles)', () => {
     });
   });
 
+  it('keeps permission sets consistent for the extended variant', async () => {
+    const api = createMockClient().employees;
+    const [candidate] = await api.listCandidates();
+    const before = (await api.list()).find((e) => e.id === 'emp-2')?.permissionSetId;
+    const list = await api.saveRoles([
+      { id: 'emp-1', role: 'administrator' },
+      { id: 'emp-2', role: 'staff' },
+      { id: 'emp-3', role: 'administrator' },
+      { id: candidate.id, role: 'manager' },
+    ]);
+    const get = (id: string) => list.find((e) => e.id === id);
+    // A kept set stays; an administrator has none; a new manager gets the Management set.
+    expect(get('emp-2')?.permissionSetId).toBe(before);
+    expect(get('emp-3')?.permissionSetId).toBeNull();
+    expect(get(candidate.id)?.permissionSetId).toBe('management');
+  });
+
   it('refuses without employees.edit (403)', async () => {
     const api = createMockClient({
       grant: { role: 'Staff', permissions: ['page.employees'] },

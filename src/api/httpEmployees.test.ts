@@ -1,7 +1,7 @@
 import { createHttpClient } from './http';
 import { mockEmployeeCandidates, mockEmployees } from './employeesData';
 
-const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const make = (fetchMock: typeof fetch) =>
   createHttpClient('https://api.example.com/v1', { fetch: fetchMock });
 
@@ -79,5 +79,24 @@ describe('http employees client', () => {
     const plain = [{ id: 'a', name: 'A', role: 'staff' }];
     const fetchMock = vi.fn().mockResolvedValue(json(plain));
     expect(await make(fetchMock).employees.list()).toEqual(plain);
+  });
+
+  it('turns 403, 409 and 422 into ApiErrors with the status and code', async () => {
+    for (const [status, code] of [
+      [403, 'forbidden'],
+      [409, 'last-administrator'],
+      [422, 'validation'],
+    ] as const) {
+      const fetchMock = vi
+        .fn()
+        .mockImplementation(async () => json({ code, message: 'x' }, status));
+      const client = make(fetchMock);
+      await expect(client.employees.saveRoles([{ id: 'a', role: 'staff' }])).rejects.toMatchObject({
+        name: 'ApiError',
+        status,
+        code,
+      });
+      await expect(client.employees.remove('a')).rejects.toMatchObject({ status });
+    }
   });
 });
