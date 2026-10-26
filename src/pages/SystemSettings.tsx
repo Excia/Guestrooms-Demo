@@ -29,6 +29,7 @@ import { fieldId } from '../components/admin/systemSettings/fieldParts';
 import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
 import OnlineBookingTab from '../components/admin/systemSettings/OnlineBookingTab';
 import SettingsTab from '../components/admin/systemSettings/SettingsTab';
+import TrainingModeToggle from '../components/admin/systemSettings/TrainingModeToggle';
 import ConfirmDialog from '../components/shared/ConfirmDialog';
 import SaveToast from '../components/shared/SaveToast';
 import SaveButton from '../components/shared/SaveButton';
@@ -232,13 +233,21 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
           sx={{ outline: 'none' }}
         >
           {tab === 'settings' ? (
-            <SettingsTab
-              value={draft}
-              onChange={editDraft}
-              errors={errors}
-              options={options}
-              readOnly={readOnly}
-            />
+            <>
+              <TrainingModeToggle
+                value={draft}
+                onChange={editDraft}
+                errors={errors}
+                readOnly={readOnly}
+              />
+              <SettingsTab
+                value={draft}
+                onChange={editDraft}
+                errors={errors}
+                options={options}
+                readOnly={readOnly}
+              />
+            </>
           ) : tab === 'registration' ? (
             <RegistrationCardTab
               value={draft.registrationCard}

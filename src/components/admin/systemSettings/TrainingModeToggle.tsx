@@ -19,7 +19,7 @@ export interface TrainingModeToggleProps {
   readOnly?: boolean;
 }
 
-// Top right of the Settings tab, on the same line as the SSO Admin field. The visible text reads "Training Mode Enabled" or
+// Top right of the Settings tab, as in legacy. The visible text reads "Training Mode Enabled" or
 // "Training Mode Disabled" like legacy, but the switch's name stays "Training Mode" (its state is
 // the switch's own) so a screen reader does not hear the state twice.
 export default function TrainingModeToggle({
@@ -44,12 +44,15 @@ export default function TrainingModeToggle({
   const showNote = forcedManual && !value.trainingMode && value.nightAudit === 'manual';
 
   return (
-    <Box data-testid="training-mode-row" sx={{ minWidth: 0 }}>
+    <Box
+      data-testid="training-mode-row"
+      sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}
+    >
       <Box
         sx={{ maxWidth: (t) => t.spacing(48), display: 'flex', flexDirection: 'column', gap: 0.5 }}
       >
         <FormControlLabel
-          sx={{ alignSelf: 'flex-start', m: 0 }}
+          sx={{ alignSelf: 'flex-end' }}
           label={
             <>
               Training Mode{' '}
