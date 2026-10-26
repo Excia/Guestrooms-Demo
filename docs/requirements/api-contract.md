@@ -571,6 +571,10 @@ backend's concern (Q-75-3).
 - `DELETE /employees/{id}` (`employees.remove`): removes the access (legacy "Unassigned"); the person returns to the candidates.
   404 `not-found`; 409 `last-administrator`; needs `employees.edit`. The changes are recorded in the Change Log page `employees`.
 
+Only an administrator may change employees: `PUT /employees`, `PUT /employees/{id}` and `DELETE /employees/{id}` answer 403
+`forbidden` to anyone else, even a user granted `employees.edit`. Employee types decide permissions, and nobody may edit their
+own, so the page is View-only for non-administrators and the backend must enforce the same rule.
+
 ## Room closures (ticket 149)
 
 - `SaveClosureRequest {roomId, startDate, endDate, description, requestId}`; dates are half-open like

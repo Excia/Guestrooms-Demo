@@ -20,7 +20,8 @@ import {
   withRole,
   type EmployeeField,
 } from '../app/employees';
-import { useReadOnly } from '../app/readOnlyContext';
+import { useEmployeesReadOnly } from '../app/useEmployeesReadOnly';
+import ReadOnlyProvider from '../components/admin/ReadOnlyProvider';
 import AdminShell from '../components/admin/AdminShell';
 import RemoveEmployeeDialog from '../components/admin/employees/RemoveEmployeeDialog';
 import {
@@ -45,7 +46,16 @@ const fieldDomId = (f: EmployeeField) => `employee-${f}`;
 // matches the legacy screen, see pages/Employees.tsx). Employees (Admin Setup, LP-A.4 / ticket 185): the list of employees on the left, the form on the
 // right. There is no Figma frame; the layout follows the other setup pages and the legacy
 // EmployeesEdit screen (person, employee type, remove).
+// Employee types are changed by administrators only: anyone else sees the page View-only.
 export default function EmployeesExtended() {
+  return (
+    <ReadOnlyProvider readOnly={useEmployeesReadOnly()}>
+      <EmployeesExtendedPage />
+    </ReadOnlyProvider>
+  );
+}
+
+function EmployeesExtendedPage() {
   const data = useEmployeesData();
   if (data.status !== 'ready') {
     return (
@@ -74,7 +84,7 @@ export default function EmployeesExtended() {
 
 function EmployeesEditor({ data }: { data: EmployeesData }) {
   const api = useApi();
-  const readOnly = useReadOnly();
+  const readOnly = useEmployeesReadOnly();
   // View-only comes from the route (ReadOnlyProvider, ticket 186): no New, Save, Remove or Copy.
   const { permissionSets } = data;
   const sorted = useMemo(() => sortEmployees(data.employees), [data.employees]);

@@ -94,3 +94,37 @@ dialog look (this build's dialogs), and writing each row to the server in separa
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------------------------- | ----------- | ------ |
 | Q-185-7 | Legacy has no permission set on an employee: its permissions come from the employee type (Administrator, Manager, Staff) and the Permissions page. Is that still how sets are assigned, or should an employee get a set of their own (the extended variant)? | Permission Set | Legacy: no set on this page; the type decides. The extended variant stays for comparison | Owner       | open   |
 | Q-185-8 | Should an employee be deactivatable without removing them (extended Active switch)? Legacy only has Remove                                                                                                                                                   | Active         | Not on the real page                                                                     | Owner       | open   |
+
+## Legacy look (branch `fix/employees-legacy-look`, 2026-10-26)
+
+The owner saw that the page still did not look like the legacy one. Values below are read from the legacy
+`EmployeesEdit.vue` `<style>` block and the shared Quasar components it uses (`TextInput`, `SelectInput`, `LookupInput`,
+`ButtonHtml`, `SaveOrRemoveButton`; `src/scss/_variables.scss`, `quasar-variables.sass`). px are converted at 8px per theme
+spacing unit; measured in Chrome at 1663px width.
+
+| Part                    | Legacy CSS / component                                                                       | Ours (theme)                                                                                         |
+| ----------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Row grid                | `grid-template-columns: 300px 300px auto 80px; column-gap: 10px; align-items: center`        | Same, `spacing(37.5)` x2, `auto`, `spacing(10)`, gap `spacing(1.25)`; one column below `md`          |
+| Row spacing             | `margin-bottom: 15px` per row                                                                | List gap `spacing(1.875)` (rows 71px apart: 56px field + 15px)                                       |
+| Name column             | Outlined Quasar input, 300px, read only                                                      | Outlined TextField, 300px, read only (measured 300 x 56)                                             |
+| Employee Type column    | Outlined Quasar select, 300px, no default option                                             | Outlined Select, 300px                                                                               |
+| Remove                  | `delete_forever` icon, negative red, flat, size lg (icon about 31px), padding sm (8px), in the 80px column, left aligned | `DeleteForever` icon 31px, error colour, 8px padding (47px button), in the 80px column |
+| Add Employee            | Flat button, default text colour, `add_circle` icon 8px before the label, no caps, label weight 500, 14px | Text button, `text.primary`, `AddCircle`, `textTransform: none`, weight 500, 14px, icon gap 8px |
+| Add row                 | Same grid: lookup in the Name column, type select, cancel (remove) button in the last column | Same                                                                                                 |
+| Save button             | `SAVE EMPLOYEES` (primary, white text) / `SAVED` with check (white, primary text), top right | This build's shared Save button (same states), top right of the shell header                         |
+| Title and header        | 20px bold title, button on the right, `1px solid #ddd` under it, 20px below                  | This build's Admin Setup shell header (one header for every admin page; not changed here)            |
+| Palette and font        | Roboto; primary `#018922`, negative `#EA2B01`, borders `#dae2eb`                              | Theme tokens (same family and brand colours)                                                         |
+| Unassigned              | Not listed; Remove sets the type to Unassigned, the person is back in the lookup              | Same                                                                                                 |
+
+Kept from this build on purpose: the Admin Setup shell (left navigation, panel, header), the Save button states, the
+dialogs, the theme's field look (floating label on the border).
+
+### Rules confirmed and tested
+
+1. At least one administrator must exist. When the only administrator is the one shown locked, making another employee an
+   administrator in the same draft frees the first row's type and Remove at once (and locks the new one); page tests cover
+   both directions, `employeesLegacy.test.ts` covers the rule.
+2. Nobody changes their own permissions: only an administrator edits Employee Type. A non-administrator sees Employees
+   View-only even when granted `employees.edit` (`useEmployeesReadOnly`), and the mock refuses every employee write
+   (`save`, `saveRoles`, `remove`) from a non-administrator with 403, so a non-administrator cannot change their own row
+   either. Documented in `api-contract.md`.

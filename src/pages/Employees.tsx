@@ -4,6 +4,7 @@ import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
+import type { Theme } from '@mui/material/styles';
 import Typography from '@mui/material/Typography';
 import { visuallyHidden } from '@mui/utils';
 import { useEffect, useRef, useState } from 'react';
@@ -25,7 +26,8 @@ import {
   type RoleEdits,
 } from '../app/employeesLegacy';
 import { useLeaveGuard } from '../app/useLeaveGuard';
-import { useReadOnly } from '../app/readOnlyContext';
+import { useEmployeesReadOnly } from '../app/useEmployeesReadOnly';
+import ReadOnlyProvider from '../components/admin/ReadOnlyProvider';
 import AdminShell from '../components/admin/AdminShell';
 import LegacyRemoveDialog from '../components/admin/employees/LegacyRemoveDialog';
 import {
@@ -42,18 +44,33 @@ import Select from '../components/shared/Select';
 
 const ADD_BUTTON_ID = 'employees-add';
 const ROLE_OPTIONS = EMPLOYEE_ROLES.map((r) => ({ value: r.id, label: r.label }));
-const rowGrid = {
+// Legacy EmployeesEdit.vue: `.ce-employeesedit-container { display: grid; grid-template-columns: 300px 300px
+// auto 80px; column-gap: 10px; align-items: center; margin-bottom: 15px }` (px at 8px per spacing unit).
+const rowGrid = (t: Theme) => ({
   display: 'grid',
-  gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 3fr) minmax(0, 3fr) auto' },
-  gap: 2,
-  alignItems: 'start',
-} as const;
+  gridTemplateColumns: '1fr',
+  [t.breakpoints.up('md')]: {
+    gridTemplateColumns: `minmax(0, ${t.spacing(37.5)}) minmax(0, ${t.spacing(37.5)}) auto ${t.spacing(10)}`,
+  },
+  columnGap: t.spacing(1.25),
+  rowGap: t.spacing(1.25),
+  alignItems: 'center',
+});
 
 // Employees (Admin Setup, LP-A.4 / ticket 185), matching the legacy EmployeesEdit screen: one row per
 // employee (Name, Employee Type, Remove), Add Employee from the club directory, one Save for the
 // changed types and the new employee. The richer variant (permission set, Active, list and form) is
 // kept at /admin/employees-extended in development builds (pages/EmployeesExtended.tsx).
+// Employee types are changed by administrators only: anyone else sees the page View-only.
 export default function Employees() {
+  return (
+    <ReadOnlyProvider readOnly={useEmployeesReadOnly()}>
+      <EmployeesPage />
+    </ReadOnlyProvider>
+  );
+}
+
+function EmployeesPage() {
   const data = useEmployeesData({ withPermissionSets: false });
   if (data.status !== 'ready') {
     return (
@@ -82,7 +99,7 @@ export default function Employees() {
 
 function EmployeesEditor({ data }: { data: EmployeesData }) {
   const api = useApi();
-  const readOnly = useReadOnly();
+  const readOnly = useEmployeesReadOnly();
   const saved = data.employees;
   const [edits, setEdits] = useState<RoleEdits>({});
   const [adding, setAdding] = useState<NewEmployeeRow | null>(null);
@@ -188,7 +205,7 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
       <Box
         component="ul"
         aria-label="Employees"
-        sx={{ m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 3 }}
+        sx={{ m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1.875 }}
       >
         {saved.map((e) => {
           const only = isOnlyAdministrator(saved, edits, e.id);
@@ -220,13 +237,7 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
                     </Box>
                   ) : null}
                 </Box>
-                {control === 'hidden' ? (
-                  // Keeps the column, so the types line up in every row.
-                  <Box
-                    aria-hidden
-                    sx={{ display: { xs: 'none', md: 'block' }, width: (t) => t.spacing(5) }}
-                  />
-                ) : (
+                {control === 'hidden' ? null : (
                   <RemoveIconButton
                     label={e.name}
                     onClick={() => {
@@ -239,7 +250,7 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
                         ? 'Finish or cancel the new employee first'
                         : 'A club needs an employee'
                     }
-                    sx={{ mt: { md: 1 } }}
+                    icon="delete-forever"
                   />
                 )}
               </Box>
@@ -272,7 +283,7 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
                   setAdding(null);
                   focusAfterRender.current = ADD_BUTTON_ID;
                 }}
-                sx={{ mt: { md: 1 } }}
+                icon="delete-forever"
               />
             </Box>
           </Box>
@@ -281,12 +292,20 @@ function EmployeesEditor({ data }: { data: EmployeesData }) {
       {readOnly || adding ? null : (
         <Button
           id={ADD_BUTTON_ID}
+          color="inherit"
           startIcon={<AddCircle />}
           onClick={() => {
             setAdding(blankNewEmployee());
             focusAfterRender.current = 'employees-new-person';
           }}
-          sx={{ mt: 3 }}
+          // Legacy ButtonHtml: flat, default text colour, no caps, weight 500, icon 8px from the label.
+          sx={{
+            mt: 1.875,
+            color: 'text.primary',
+            textTransform: 'none',
+            fontWeight: 500,
+            '& .MuiButton-startIcon': { mr: 1 },
+          }}
         >
           Add Employee
         </Button>
