@@ -10,7 +10,7 @@ import type { ReactNode } from 'react';
 import {
   ACCESS_LEVEL_LABEL,
   ADMIN_SETUP_OPTIONS,
-  adminSetupLevel,
+  adminSetupDisplay,
   CHECK_IN_OPTIONS,
   PERMISSION_ROWS,
   rowIsNotApplicable,
@@ -173,15 +173,23 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
             {sets.map((set) =>
               cell(
                 set.id,
-                <CellSelect<AdminSetupLevel>
+                <CellSelect<AdminSetupLevel | 'mixed'>
                   id={permissionCellId(set.id, 'adminSetup')}
                   ariaLabel={`Admin Setup, ${set.name}`}
-                  value={adminSetupLevel(set)}
-                  options={ADMIN_SETUP_OPTIONS.map((value) => ({
-                    value,
-                    label: SETUP_LEVEL_LABEL[value],
-                  }))}
-                  onChange={(level) => edit(set.id, (s) => withAdminSetup(s, level))}
+                  value={adminSetupDisplay(set)}
+                  options={[
+                    ...ADMIN_SETUP_OPTIONS.map((value) => ({
+                      value,
+                      label: SETUP_LEVEL_LABEL[value],
+                    })),
+                    // Shown only while stored per-page levels differ; choosing View or No Access fixes it.
+                    ...(adminSetupDisplay(set) === 'mixed'
+                      ? [{ value: 'mixed' as const, label: 'Mixed (per page)', disabled: true }]
+                      : []),
+                  ]}
+                  onChange={(level) =>
+                    level !== 'mixed' && edit(set.id, (s) => withAdminSetup(s, level))
+                  }
                 />,
               ),
             )}

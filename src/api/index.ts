@@ -18,19 +18,28 @@ const MOCK_LATENCY_MS = 300;
 
 /** Dev only: the edited permission sets survive a reload, so a mock user can be switched to see them. */
 export const MOCK_PERMISSION_SETS_KEY = 'gr.mockPermissionSets';
-function browserSetsStore() {
+const MOCK_PERMISSION_SETS_VERSION = 2;
+export function browserSetsStore() {
   return {
     load: () => {
       try {
         const raw = globalThis.localStorage?.getItem(MOCK_PERMISSION_SETS_KEY);
-        return raw ? parseStoredSets(JSON.parse(raw)) : null;
+        // Version 2: the legacy-format defaults. Older stored sets (from the first version of the page) are dropped.
+        const stored: unknown = raw ? JSON.parse(raw) : null;
+        const versioned = stored as { version?: unknown; sets?: unknown } | null;
+        return versioned?.version === MOCK_PERMISSION_SETS_VERSION
+          ? parseStoredSets(versioned.sets)
+          : null;
       } catch {
         return null;
       }
     },
     save: (sets: PermissionSet[]) => {
       try {
-        globalThis.localStorage?.setItem(MOCK_PERMISSION_SETS_KEY, JSON.stringify(sets));
+        globalThis.localStorage?.setItem(
+          MOCK_PERMISSION_SETS_KEY,
+          JSON.stringify({ version: MOCK_PERMISSION_SETS_VERSION, sets }),
+        );
       } catch {
         /* storage unavailable: the edit lasts for this page load */
       }

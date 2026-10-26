@@ -2,7 +2,7 @@ import { mockPermissionSets } from '../api/permissionSetsData';
 import { ADMIN_PAGE_IDS, createPermissions, type Permission } from './permissions';
 import {
   ADMIN_SETUP_OPTIONS,
-  adminSetupLevel,
+  adminSetupDisplay,
   rowIsNotApplicable,
   withAdminSetup,
   clampLevel,
@@ -143,10 +143,10 @@ describe('grantFromSet', () => {
   });
   it('a View reservation set cannot check in or change anything (legacy)', () => {
     const view = withAccessLevel(management, 'reservations', 'view');
-    expect(view.checkIn).toBe('never');
-    expect(view.functions.undoCheckIn).toBe(false);
-    expect(view.functions.adjustRoomRate).toBe(false);
-    // Even a stored any-time / arrival-date with View grants nothing.
+    // Management keeps its hand-tuned values (legacy cascades Staff only)...
+    expect(view.checkIn).toBe(management.checkIn);
+    expect(view.functions.undoCheckIn).toBe(true);
+    // ...but a stored any-time / arrival-date with View grants nothing.
     const forced = {
       ...view,
       checkIn: 'any-time' as const,
@@ -255,12 +255,16 @@ describe('legacy Admin Setup row and N/A cells', () => {
   it('offers View then No Access, and sets every setup page', () => {
     expect(ADMIN_SETUP_OPTIONS).toEqual(['view', 'none']);
     const none = withAdminSetup(management, 'none');
-    expect(adminSetupLevel(none)).toBe('none');
+    expect(adminSetupDisplay(none)).toBe('none');
     for (const id of ADMIN_PAGE_IDS) expect(none.setup[id]).toBe('none');
     const view = withAdminSetup(staff, 'view');
-    expect(adminSetupLevel(view)).toBe('view');
+    expect(adminSetupDisplay(view)).toBe('view');
     for (const id of ADMIN_PAGE_IDS) expect(view.setup[id]).toBe('view');
-    expect(adminSetupLevel(withSetupLevel(none, 'rooms', 'view'))).toBe('view');
+    // Stored per-page levels that differ show as mixed; picking View or No Access fixes them.
+    const mixed = withSetupLevel(none, 'rooms', 'view');
+    expect(adminSetupDisplay(mixed)).toBe('mixed');
+    expect(adminSetupDisplay(withAdminSetup(mixed, 'view'))).toBe('view');
+    expect(adminSetupDisplay(withSetupLevel(view, 'rooms', 'edit'))).toBe('mixed');
   });
   it('shows N/A for Staff under No Access and for the Management-only report rows', () => {
     const rows = PERMISSION_ROWS;
@@ -273,7 +277,23 @@ describe('legacy Admin Setup row and N/A cells', () => {
     expect(rowIsNotApplicable(management, row('operationalReports'))).toBe(false);
     expect(rowIsNotApplicable(staff, row('splitFolio'))).toBe(false);
   });
-  it('cascades Reservation Events like legacy: Edit switches the functions on, View off', () => {
+  it('cascades Reservation Events like legacy, for the Staff set only', () => {
+    // Every change TO Edit or Create + Edit switches the functions on, also Edit -> Create + Edit.
+    const hand = {
+      ...staff,
+      access: { ...staff.access, reservations: 'edit' as const },
+      checkIn: 'never' as const,
+    };
+    const again = withAccessLevel(hand, 'reservations', 'create-edit');
+    expect(again.checkIn).toBe('any-time');
+    expect(again.functions.undoCheckIn).toBe(true);
+    // Management is not touched by any change.
+    const tuned = { ...management, checkIn: 'never' as const };
+    for (const level of ['edit', 'view', 'none', 'create-edit'] as const) {
+      const next = withAccessLevel(tuned, 'reservations', level);
+      expect(next.checkIn).toBe('never');
+      expect(next.functions).toEqual(tuned.functions);
+    }
     const edit = withAccessLevel(staff, 'reservations', 'edit');
     expect(edit.checkIn).toBe('any-time');
     expect(edit.functions.adjustRoomRate).toBe(true);

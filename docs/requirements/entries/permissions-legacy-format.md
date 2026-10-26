@@ -15,12 +15,20 @@ same format as the legacy screen with every option matching. Source: `GuestRooms
 | Access levels | Create + Edit / Edit / View / No Access for Closure, Reservation Events, Night Audit, Room Block, Non-Members; Edit / View / No Access for Full Details and Folio; **Edit / No Access** for Reporting | Same | Same |
 | Check In Room | AnyTime / On Check-In Date Only / Never (label "AnyTime") | "Any Time" | "AnyTime" |
 | Functions | Yes / No | Same | Same |
-| Cascade | Changing Staff Reservation Events to Edit or Create + Edit sets the eight reservation functions Yes and Check In AnyTime; to View sets them No and Never; No Access changes nothing | Cascade on both columns, also on No Access | Cascade on both columns (Management has no cascade in legacy; see Q-PL-1), View and Edit as legacy, No Access leaves the values |
+| Cascade | Changing Staff Reservation Events to Edit or Create + Edit (also Edit to Create + Edit) sets the eight reservation functions Yes and Check In AnyTime; to View sets them No and Never; No Access changes nothing. Management has no cascade | Cascade on both columns, also on No Access | Exactly legacy: Staff only. Management keeps hand-tuned values; the grant ignores check in and the functions while Reservation Events is View (`rowApplies`) |
 | N/A cells | Staff column: every function under Reservation Events while it is No Access; Operation Reports and Financial Reports (Management only). Management shows all cells | N/A for any column whenever the area does not allow the row | Exactly the legacy N/A cells (`rowIsNotApplicable`); N/A saves as off |
 | Defaults | Management: Admin Setup View, Closure and Reservation Create + Edit, all functions Yes except Reopen/Close Folio, Check In On Check-In Date Only, Full Details Edit, Night Audit and Room Block Create + Edit, Reporting Edit, Folio Edit, Non-Members Create + Edit. Staff: Admin Setup No Access, Closure View, Reservation View, functions No, Check In Never, Full Details Edit, Night Audit View, Room Block Edit, Reporting No Access, Folio Edit, Manual Charge and Positive Deposit Yes, Non-Members Edit | Own defaults (Staff Reservation Events Edit, Reporting Edit, no Permissions page for Management) | The legacy defaults (P-186-2) |
 | PIN override | No row on this screen (the override dialog asks for an authorized employee's PIN) | A "PIN Override" section with "Authorize Overrides with PIN" | Removed from the page. `PermissionSet.pinOverride` stays in the model, defaults on for both sets, so whoever holds the permission may authorize (legacy behavior); the ticket text asked for a PIN row, see Q-PL-2 |
 | Whole page read-only | Controls disabled and button disabled when the signed-in employee's Admin Setup is View | View-only mode | Same idea through the View-only mode (fields disabled, no Save, a note) |
 | Save | Staff N/A values saved as No / Never; Management-only report values not sent for Staff | Normalized sets | Normalized sets: what the page shows as N/A is saved as off; other values kept as chosen |
+
+## Dev and mock notes
+
+- The override PIN is demoed with the dev user **View-only admin (Management set)**: it checks in on the arrival date, so a past date opens the PIN prompt; the Administrator's PIN is accepted.
+  The dev "Non-admin" (Staff set) cannot check in under the legacy defaults, so it cannot demo it. No extra mock user was needed.
+- Stored Admin Setup levels that differ per page show as "Mixed (per page)" (a disabled option); picking View or No Access rewrites every page.
+- `localStorage['gr.mockPermissionSets']` is now versioned (`{ version: 2, sets }`); sets stored by the first version of the page are ignored and the legacy defaults load.
+- A PIN holder with no permission set uses their explicit fixed grant (only the Administrator has `all`); an unknown set means no grant.
 
 ## Mapping onto our permissions model
 
@@ -35,7 +43,8 @@ same format as the legacy screen with every option matching. Source: `GuestRooms
 
 | ID | Question | Blocks | Default used | Who answers | Status |
 | -- | -------- | ------ | ------------ | ----------- | ------ |
-| Q-PL-1 | Legacy cascades only the Staff column. Should Management also cascade (so a View Management set cannot keep Check In AnyTime)? | Cascade | Both columns cascade, because a View reservation set must not check in | Owner | open |
+| Q-PL-1 | A View Management set can show Check In AnyTime / functions Yes (legacy has no Management cascade) although the grant ignores them. Show a hint or grey them? | Display | Nothing extra (legacy parity); the grant gates | Owner | open |
+| Q-PL-4 | Legacy employee type (Admin / Management / Staff) IS the permission row. The Employees page lets a Manager or Staff employee pick either set. Should the type decide the set (manager -> Management, staff -> Staff)? | Employees (#222) | Free choice of the two sets, unchanged | Owner | open |
 | Q-PL-2 | The Permissions ticket asked for a PIN override row; legacy has none. Keep it hidden (default on for both sets) or add it back? | PIN prompt | Hidden; the permission itself decides who may authorize | Owner | open |
 | Q-PL-3 | Legacy "Admin Setup View" lets a Management user see every setup page, including Permissions and Employees (read-only). Is that intended, or should some pages stay hidden? | Setup access | All setup pages, as the single legacy row implies | Owner | open |
 
