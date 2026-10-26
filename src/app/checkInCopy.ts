@@ -148,6 +148,13 @@ export function checkInRequestFailure(error: unknown): CheckInRequestFailure {
       askOverrideAgain: true,
     };
   }
+  if (code === 'override-locked') {
+    return {
+      message: 'Too many incorrect override codes. Try again later.',
+      refetch: false,
+      askOverrideAgain: true,
+    };
+  }
   if (status === 403) return { message: 'You may not check in this reservation.', refetch: false };
   if (code === 'stale') {
     return {

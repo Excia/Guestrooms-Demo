@@ -4,7 +4,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
-import { MOCK_OVERRIDE_CODE } from '../api/checkInData';
+import { MOCK_MANAGER_PIN } from '../api/overridePin';
 import { ApiError } from '../api/types';
 import type { ApiClient, CheckInReservationRequest, CheckInReservationResult } from '../api/types';
 import { GrantedAccess } from '../app/testing';
@@ -210,7 +210,7 @@ describe('permission levels', () => {
     expect(field).toBeInvalid();
     expect((await client.reservations.getDetail('rs-31')).rooms[0].status).toBe('nyci');
     await user.clear(field);
-    await user.type(field, `${MOCK_OVERRIDE_CODE}{Enter}`);
+    await user.type(field, `${MOCK_MANAGER_PIN}{Enter}`);
     const checkIn = await dialog('Check in');
     expect(
       within(checkIn).getByText(/Confirm that you want to check in for a prior date/),
@@ -440,11 +440,11 @@ describe('results and failures', () => {
     const client = wrap(async () => {
       throw new ApiError(403, 'no', { code: 'override-invalid' });
     });
-    client.reservations.verifyOverrideCode = base.reservations.verifyOverrideCode;
+    client.overrides = base.overrides;
     const { user } = await open('rs-31', { client, granted: ARRIVAL_ONLY });
     await user.click(await screen.findByRole('button', { name: 'Check In' }));
     await user.click(await screen.findByRole('button', { name: 'Override and check in' }));
-    await user.type(await screen.findByLabelText('Override code'), `${MOCK_OVERRIDE_CODE}{Enter}`);
+    await user.type(await screen.findByLabelText('Override code'), `${MOCK_MANAGER_PIN}{Enter}`);
     await user.click(await screen.findByRole('button', { name: 'Complete check in' }));
     expect((await screen.findAllByText(/override code was not accepted/)).length).toBeGreaterThan(
       0,

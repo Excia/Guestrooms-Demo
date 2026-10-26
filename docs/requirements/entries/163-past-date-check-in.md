@@ -37,7 +37,7 @@ ticket carries no link, the frame comes from ticket #28).
 
 ## Placeholders and invented values
 
-- **P-163-1:** the mock accepts the override code `4321` (`MOCK_OVERRIDE_CODE`, `src/api/checkInData.ts`) until ticket 127 builds the real PIN prompt and validation.
+- **P-163-1:** replaced by ticket 187 (2026-10-26): the mock code `4321` is gone; the PIN prompt and mock employee PINs are in [187-override-pin.md](187-override-pin.md). `POST /override-codes/verify` is now `POST /overrides/verify-pin`.
 - **P-163-2:** two invented late arrivals in the schedule mock (`src/api/scheduleData.ts`): GR-50395 (Dominic Whitlock, room 110, 10/12 to 10/15, never arrived: check in, then out automatically) and
   GR-50396 (Priya Venkataraman, rooms 106 and C8 since 10/14, room 106 in house: the split case). The Reservation List mock's GR-50402 and GR-50403 now arrive today (they were 4 and 2 days ahead) so the bulk check in still shows its "No room assigned" failure.
 - **P-163-3:** the placeholder Payment Methods dialog ("Add mock card", `PaymentMethodsDialog.tsx`) and `POST /reservations/{id}/payment-methods`; ticket 3.9 replaces them. The mock folio no longer shows past nights of a room still waiting for check in as posted.
