@@ -27,6 +27,7 @@ import {
   type PermissionSet,
 } from '../../../app/permissionSets';
 import CellSelect from '../bookingRules/CellSelect';
+import { cellSx, matrixTableSx, notApplicableSx } from '../bookingRules/matrixStyles';
 
 const YES_NO = [
   { value: 'yes', label: 'Yes' },
@@ -47,16 +48,13 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
   const edit = (setId: string, change: (set: PermissionSet) => PermissionSet) =>
     onChange(updateSet(sets, setId, change));
 
+  // Row label cell, as in the Booking Rules matrix: label, then the legacy hint as a caption. Area rows
+  // are bold; the function rows under them are indented.
   const rowHead = (label: string, hint?: string, indent = false) => (
     <TableCell
       component="th"
       scope="row"
-      sx={(t) => ({
-        fontWeight: indent ? 'normal' : 'bold',
-        pl: indent ? 4 : 2,
-        borderBottom: `1px solid ${t.palette.divider}`,
-        width: t.spacing(45),
-      })}
+      sx={(t) => ({ ...cellSx(t), fontWeight: indent ? 'normal' : 'bold', pl: indent ? 5 : 2 })}
     >
       <Typography component="span" sx={{ display: 'block', fontWeight: 'inherit' }}>
         {label}
@@ -65,8 +63,7 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
         <Typography
           variant="caption"
           component="span"
-          color="text.secondary"
-          sx={{ display: 'block' }}
+          sx={{ display: 'block', color: 'text.secondary' }}
         >
           {hint}
         </Typography>
@@ -75,23 +72,13 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
   );
 
   const cell = (setId: string, content: ReactNode) => (
-    <TableCell
-      key={setId}
-      sx={(t) => ({ borderBottom: `1px solid ${t.palette.divider}`, minWidth: t.spacing(24) })}
-    >
+    <TableCell key={setId} sx={cellSx}>
       {content}
     </TableCell>
   );
 
   const na = (setId: string) => (
-    <TableCell
-      key={setId}
-      align="center"
-      sx={(t) => ({
-        bgcolor: 'action.disabledBackground',
-        borderBottom: `1px solid ${t.palette.divider}`,
-      })}
-    >
+    <TableCell key={setId} align="center" sx={notApplicableSx}>
       N/A
     </TableCell>
   );
@@ -145,11 +132,12 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
   };
 
   return (
+    // Wider than the content below 1200px: the wrapper scrolls, as on Booking Rules.
     <Box sx={{ overflowX: 'auto' }}>
-      <Table aria-label="Permission sets" sx={{ tableLayout: 'auto', borderCollapse: 'collapse' }}>
+      <Table aria-label="Permission sets" sx={matrixTableSx}>
         <TableHead>
           <TableRow>
-            <TableCell sx={{ bgcolor: 'background.paper', border: 0 }}>
+            <TableCell sx={{ width: (t) => t.spacing(40), border: 0 }}>
               <Box component="span" sx={visuallyHidden}>
                 Permission
               </Box>
@@ -158,7 +146,7 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
               <TableCell
                 key={set.id}
                 scope="col"
-                sx={{ bgcolor: 'background.paper', fontWeight: 'bold', border: 0 }}
+                sx={(t) => ({ ...cellSx(t), verticalAlign: 'top' })}
               >
                 <Typography variant="h4_fixed" component="span">
                   {set.name}

@@ -36,6 +36,7 @@ import {
   type BookingRulesErrors,
 } from '../../../app/bookingRules';
 import CellSelect from './CellSelect';
+import { cellSx, matrixTableSx, notApplicableSx } from './matrixStyles';
 import PeriodField from './PeriodField';
 import RoomTypesField from './RoomTypesField';
 
@@ -452,13 +453,6 @@ export interface RulesMatrixProps {
   options: BookingRulesOptions;
 }
 
-const cellSx = (t: import('@mui/material/styles').Theme) => ({
-  border: `1px solid ${t.palette.divider}`,
-  px: 2,
-  py: 1.5,
-  verticalAlign: 'middle',
-});
-
 // The rules matrix (Figma 15957:83580): one row per rule, one column per audience. The rows are
 // data (`ROWS`); an "N/A" cell is a gray cell, a switched-off column shows cleared, disabled cells.
 export default function RulesMatrix({ rules, onChange, errors, options }: RulesMatrixProps) {
@@ -472,7 +466,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
   return (
     <Table
       aria-label="Booking rules"
-      sx={{ tableLayout: 'fixed', minWidth: (t) => t.spacing(120), borderCollapse: 'collapse' }}
+      sx={matrixTableSx}
     >
       <TableHead>
         <TableRow>
@@ -574,7 +568,7 @@ export default function RulesMatrix({ rules, onChange, errors, options }: RulesM
                 <TableCell
                   key={audience}
                   align="center"
-                  sx={(t) => ({ ...cellSx(t), bgcolor: 'action.disabledBackground' })}
+                  sx={notApplicableSx}
                 >
                   N/A
                 </TableCell>
