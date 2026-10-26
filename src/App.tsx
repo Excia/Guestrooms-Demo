@@ -13,6 +13,7 @@ import {
   RATE_CATEGORIES_PATH,
   ROOM_OPTIONS_PATH,
   KEYCARD_INTEGRATION_PATH,
+  EMPLOYEES_PATH,
   LOCATIONS_PATH,
   PERMISSIONS_PATH,
   ROOM_TYPES_PATH,
@@ -30,6 +31,7 @@ import Dashboard from './pages/Dashboard';
 import RoomTypes from './pages/RoomTypes';
 import Rooms from './pages/Rooms';
 import BookingRules from './pages/BookingRules';
+import Employees from './pages/Employees';
 import Locations from './pages/Locations';
 import Permissions from './pages/Permissions';
 import AddOnItems from './pages/AddOnItems';
@@ -85,6 +87,7 @@ const pages: Partial<Record<string, ReactElement>> = {
   [KEYCARD_INTEGRATION_PATH]: <KeycardIntegration />,
   [LOCATIONS_PATH]: <Locations />,
   [PERMISSIONS_PATH]: <Permissions />,
+  [EMPLOYEES_PATH]: <Employees />,
   [FOLIO_PATH]: (
     <Suspense fallback={null}>
       <Folio />

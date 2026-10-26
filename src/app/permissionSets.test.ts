@@ -5,6 +5,7 @@ import {
   grantFromSet,
   levelsFor,
   normalizeSet,
+  parseStoredSets,
   PERMISSION_ROWS,
   rowApplies,
   setsDirty,
@@ -20,8 +21,7 @@ import {
 import { adminPageLevel } from './access';
 
 const [management, staff] = mockPermissionSets() as [PermissionSet, PermissionSet];
-const canOf = (set: PermissionSet) =>
-  createPermissions(grantFromSet(set) as Permission[]).can;
+const canOf = (set: PermissionSet) => createPermissions(grantFromSet(set) as Permission[]).can;
 
 describe('clampLevel', () => {
   it('keeps an offered level', () => {
@@ -44,9 +44,14 @@ describe('clampLevel', () => {
 describe('normalizeSet', () => {
   it('has a level for every admin page and fails closed for missing ones', () => {
     const set = normalizeSet({ ...staff, setup: { rooms: 'edit', junk: 'edit' } });
-    expect(Object.keys(set.setup).sort()).toEqual([...ADMIN_PAGE_IDS].sort());
+    expect(Object.keys(set.setup).sort()).toEqual([...ADMIN_PAGE_IDS, 'junk'].sort());
     expect(set.setup.rooms).toBe('edit');
     expect(set.setup.locations).toBe('none');
+  });
+  it('keeps the page keys of a newer backend, with valid levels only', () => {
+    const set = normalizeSet({ ...staff, setup: { 'api-keys': 'view', bad: 'root' as never } });
+    expect(set.setup['api-keys']).toBe('view');
+    expect(set.setup.bad).toBeUndefined();
   });
   it('turns off functions and check in whose area is No Access', () => {
     const set = normalizeSet({
@@ -117,6 +122,42 @@ describe('grantFromSet', () => {
     expect(none('page.schedule')).toBe(false);
     expect(none('reservation.check-in.arrival-date')).toBe(false);
   });
+  it('a View reservation set cannot check in or change anything (legacy)', () => {
+    const view = withAccessLevel(management, 'reservations', 'view');
+    expect(view.checkIn).toBe('never');
+    expect(view.functions.undoCheckIn).toBe(false);
+    expect(view.functions.adjustRoomRate).toBe(false);
+    // Even a stored any-time / arrival-date with View grants nothing.
+    const forced = {
+      ...view,
+      checkIn: 'any-time' as const,
+      functions: { ...view.functions, undoCheckIn: true },
+    };
+    const can = canOf(forced);
+    expect(can('reservation.check-in.any-time')).toBe(false);
+    expect(can('reservation.check-in.arrival-date')).toBe(false);
+    expect(can('function.undoCheckIn')).toBe(false);
+    expect(can('reservation.edit')).toBe(false);
+    expect(can('page.reservations')).toBe(true);
+  });
+  it('switching Reservation Events back to Edit switches the reservation functions on again (legacy)', () => {
+    const view = withAccessLevel(staff, 'reservations', 'view');
+    const back = withAccessLevel(view, 'reservations', 'edit');
+    expect(back.checkIn).toBe('any-time');
+    expect(back.functions.changeReservationRoom).toBe(true);
+    expect(back.functions.checkOutReservation).toBe(true);
+  });
+  it('the editor remembers hidden values of other areas, but what is saved is off', () => {
+    const none = updateSet([management], 'management', (s) =>
+      withAccessLevel(s, 'folio', 'none'),
+    )[0] as PermissionSet;
+    expect(none.functions.splitFolio).toBe(true);
+    expect(normalizeSet(none).functions.splitFolio).toBe(false);
+    const back = updateSet([none], 'management', (s) =>
+      withAccessLevel(s, 'folio', 'edit'),
+    )[0] as PermissionSet;
+    expect(back.functions.splitFolio).toBe(true);
+  });
   it('check in follows the setting', () => {
     expect(canOf(withCheckIn(management, 'any-time'))('reservation.check-in.any-time')).toBe(true);
     expect(canOf(withCheckIn(management, 'never'))('reservation.check-in.any-time')).toBe(false);
@@ -147,7 +188,6 @@ describe('editing helpers', () => {
       withAccessLevel(s, 'folio', 'none'),
     );
     expect(next[0]).toBe(management);
-    expect(next[1]?.functions.splitFolio).toBe(false);
     expect(next[1]?.access.folio).toBe('none');
   });
   it('setsDirty compares normalized values', () => {
@@ -161,9 +201,9 @@ describe('editing helpers', () => {
 describe('validateSets and summarizeSets', () => {
   it('refuses duplicates, nameless sets and the Administrator set', () => {
     expect(validateSets([management, staff])).toEqual([]);
-    expect(validateSets([management, management])).toHaveLength(1);
-    expect(validateSets([{ ...staff, name: ' ' }])).toHaveLength(1);
-    expect(validateSets([{ ...staff, id: 'admin' }])).toHaveLength(1);
+    expect(validateSets([management, staff, management])).toHaveLength(1);
+    expect(validateSets([management, { ...staff, name: ' ' }])).toHaveLength(1);
+    expect(validateSets([management, staff, { ...staff, id: 'admin' }])).toHaveLength(1);
   });
   it('lists the Administrator first, not editable', () => {
     expect(summarizeSets([management, staff])).toEqual([
@@ -171,5 +211,21 @@ describe('validateSets and summarizeSets', () => {
       { id: 'management', name: 'Management', editable: true },
       { id: 'staff', name: 'Staff', editable: true },
     ]);
+  });
+});
+
+describe('parseStoredSets', () => {
+  it('accepts a full, well formed list and normalizes it', () => {
+    expect(parseStoredSets([management, staff])).toEqual([management, staff]);
+  });
+  it('falls back (null) for junk, a missing required set or a malformed set', () => {
+    expect(parseStoredSets(null)).toBeNull();
+    expect(parseStoredSets('x')).toBeNull();
+    expect(parseStoredSets([management])).toBeNull();
+    expect(parseStoredSets([management, { id: 'staff' }])).toBeNull();
+    expect(parseStoredSets([management, { ...staff, access: 'all' }])).toBeNull();
+  });
+  it('a save must include both required sets', () => {
+    expect(validateSets([management])).toHaveLength(1);
   });
 });

@@ -23,6 +23,7 @@ screenshot arrives. Back to the [index](README.md).
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
 | `admin`                        | Opens every Admin Setup page at once (Primary Setup, Rate Categories, Room Types, Rooms, Add-On Items, Notifications)                                                                                                                                                                                                                                   | `ADMIN_PERMISSION`            |
 | `locations.edit`               | Add, change and remove locations on the Locations page (ticket 182). Without it the page opens read-only (fields disabled, no Add Location, Remove or Save), for clubs where only Clubessential changes locations. Whether read-only is a permission or a system flag is Q-182-1. A user holds it only by an explicit grant or `'all'`                  | `LOCATIONS_EDIT_PERMISSION`   |
+| `employees.edit`               | Add, change, deactivate and remove employees on the Employees page (ticket 185). Without it the page opens view-only (no New, Save or menu, fields disabled). A user holds it only by an explicit grant or `'all'`                                                                                                                                      | `EMPLOYEES_EDIT_PERMISSION`   |
 | `reservation.edit`             | Change a reservation in the Schedule details panel (Early/Late saves, edit guests and notes since ticket 151) and create one from the New Reservation panel. Add Another Room does **not** need it (legacy, D-LM-5). Without it the panel is read-only and says why. Fail-closed: a user holds it only by an explicit grant or `'all'`. The only action permission so far; the real name and granularity wait for the Permissions page (Q-G-1, Q-19-14) | `RESERVATION_EDIT_PERMISSION` |
 | `page.dashboard`               | Dashboard button in the menu (the `/dashboard` route itself is unguarded, D-035)                                                                                                                                                                                                                                                                        | route table                   |
 | `page.schedule`                | Schedule \| Home                                                                                                                                                                                                                                                                                                                                        | route table                   |
@@ -45,6 +46,7 @@ screenshot arrives. Back to the [index](README.md).
 | `page.add-on-items`            | Admin Setup: Add-On Items                                                                                                                                                                                                                                                                                                                               | route table                   |
 | `page.keycard-integration`    | Admin Setup: Keycard Integration (not in the menu; linked from the Admin Setup navigation)                                                                                                                                                                                                                                                              | route table                   
 | `page.locations`               | Admin Setup: Locations (not in the menu; linked from the Admin Setup navigation)                                                                                                                                                                                                                                                                        | route table                   |
+| `page.employees`               | Admin Setup: Employees (not in the menu; linked from the Admin Setup navigation)                                                                                                                                                                                                                                                                        | route table                   |
 | `page.notifications`           | Admin Setup: Notifications                                                                                                                                                                                                                                                                                                                              | route table                   |
 
 The table above is the registry: `admin`, the action permissions (`reservation.edit`, `locations.edit`, the two check-in
@@ -73,6 +75,9 @@ Saved through `permissions.getPermissionSets` / `savePermissionSets` ([api-contr
 `permissions.listPermissionSets()` returns `{ id, name, editable }[]` for the Employees page. Pure rules: `src/app/permissionSets.ts`.
 
 **Admin Setup levels (per page, owner decision 2026-10-25):** No Access (no permission), **View** (`page.<id>`), **Edit** (`page.<id>` and `<id>.edit`).
+The Permissions page offers a non-admin set only **View or No Access** on every setup page, as the legacy screen does (Edit belongs to Administrators), and
+**only an administrator may save permission sets** (the mock refuses anyone else with 403): a set can never grant more than its editor holds, so there is no
+escalation by editing a set. A stored `edit` (a backend decision) still displays and is kept.
 `admin` still means Edit on every page. `adminPageLevel(can, id)` in `src/app/access.ts` gives the level; the route guard (`RequireAccess`)
 renders a View page inside `ReadOnlyProvider`. `locations.edit` is the same rule (`<id>.edit` for `locations`). The Admin Setup pages are the
 routes with `section: 'admin'`, so a new admin route gets a row on the Permissions page and a permission automatically.
@@ -82,13 +87,17 @@ routes with `section: 'admin'`, so a new admin route gets a row on the Permissio
 Folio (Edit, View, No Access), Non-Members (four). **Function sets** (Yes/No): Change Reservation Room, Location, Room Type, Rate Category, Adjust Room Rate,
 Undo Check In, Check Out Reservation, View Private Notes, Operational Reports, Financial Reports, Add Manual Charge / Credit, Add Positive /
 Negative Deposit / Payment, Split Folio, Settle Folio, Manually Reopen / Close Folio; plus Check In Room (Any Time, On Check-In Date Only, Never).
-A function (or Check In Room) under an area set to No Access is N/A and off.
+A function (or Check In Room) whose area does not allow it is N/A and off. As in the legacy screen, the Reservation Events functions (change room, location, room type,
+rate category, adjust rate, check in, undo check in, check out) need **Edit or Create + Edit**: with **View** or No Access they are off and Check In Room is Never, so a View
+reservation set cannot check in. Switching Reservation Events to Edit switches them on again (Check In Any Time), as legacy; other areas restore the values they had.
 
 **What a set grants today (`grantFromSet`):** the dashboard for everyone; Admin Setup pages as above; Reservation Events View gives the schedule,
 reservations, search results, waitlist, add-on countdown and member directory, Edit adds `reservation.edit`, and the check-in grants follow
 Check In Room; Night Audit View gives `page.night-audit-history`, Edit adds `night-audit.run` ("Edit" = history plus running the audit);
 Room Block, Reporting and Folio give their pages (Folio also Open Folios and Unassigned Charges); each function that is on gives
-`function.<key>`. **Stored but not read by any screen yet:** Closure Events, Reservation Full Details, Non-Members, and every `function.*`
+`function.<key>`. The Employees page reads the sets through `permissions.listPermissionSets` (its own placeholder sets and endpoint are gone); an employee's
+`permissionSetId` is `management` or `staff`. **PIN override (ticket 187):** a PIN holder in a set counts only while the saved set has `pinOverride` on and grants the permission;
+the Administrator's PIN always counts. **Stored but not read by any screen yet:** Closure Events, Reservation Full Details, Non-Members, and every `function.*`
 except check in (the screens pick them up as their tickets land).
 
 **View-only mode (`src/components/admin/ReadOnlyProvider.tsx`, `src/app/readOnlyContext.ts`):** one flag per page. Effects: every MUI field control below it is
@@ -97,7 +106,8 @@ the note "View only. ..." and drops the page actions; `SaveButton`, `RemoveIconB
 reorder, Copy and Delete (the three-dot menu keeps Change Log); `EditOnly` hides Add Season, Add Encoder, Remove All, Retrieve Encoder, Add Member
 Type, Add option and Duplicate season; Photos' Add and "Select all / none" are hidden. The Change Log overlay stays usable (`EditableIsland`).
 Tabs, list selection, links and Generate Preview stay usable. `src/pages/viewOnly.test.tsx` checks all ten Admin Setup pages.
-Hiding is not authorization: the backend must refuse the writes.
+Pages also stop saving in code (no Save button, `dirty` false, `save()` returns early). Hiding is not authorization: the mock refuses the Admin Setup writes without `<page>.edit` (or `admin`) with 403
+(`roomSetup`, `roomOptions`, `addOns`, `rateCategories`, `bookingRules`, `systemSettings`, `keycards`; Locations and Employees check themselves), and the backend must do the same.
 
 **Mock:** default sets (P-186-1) in `src/api/permissionSetsData.ts`. Management: every setup page View except Permissions (No Access), all areas at
 the top level, Check In Any Time, PIN override on. Staff: no setup pages, what the earlier "Non-admin" user had (Reservation Events Edit, Night
@@ -156,11 +166,11 @@ Check in has three levels. Two grants express them (`checkInLevel(can)` in `src/
 
 Unrestricted users (`'all'`) hold the highest level. Mock users: Administrator = any time; Non-admin = arrival date only
 (shows the override code); Partial = any time. The names are provisional until the Permissions page design (Q-G-1). The override
-code is a mock until ticket 127 builds the PIN prompt. Whether the automatic check out needs its own permission is an open question
+PIN is checked by the mock against a small employee table (ticket 187). Whether the automatic check out needs its own permission is an open question
 (Q-163-1): until then it follows these levels.
 
-**Override codes (what the backend must do):** the code is a manager's PIN; the permission whose holder's PIN is accepted is
+**Override PINs (what the backend must do):** the code is a manager's PIN; the permission whose holder's PIN is accepted is
 `reservation.check-in.any-time`. Rate limit and lock out wrong codes, audit every override (who, whose code, when, what), never log or store
 the code (hash only), treat "verify" as advisory and re-validate on check in. Details in
-[api-contract.md](api-contract.md) ("Override codes"). The mock accepts one fixed code and only for a user holding a check-in grant.
+[api-contract.md](api-contract.md) ("Override PINs"). The mock accepts the PIN of an employee who holds `reservation.check-in.any-time` (the mock Administrator and Partial users' PINs; the Staff employee's PIN is refused), locks out after 5 wrong PINs for 5 minutes, and answers verify only for a user holding a check-in grant. The PIN prompt is the shared `OverridePinDialog`; any flow that needs an override passes its permission.
 

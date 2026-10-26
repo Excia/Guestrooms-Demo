@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
@@ -53,10 +54,13 @@ export default function BookingRules() {
   const saved = loaded?.rules ?? null;
   const draft = edits ?? saved;
   const errors = useMemo(() => (draft ? validateBookingRules(draft) : {}), [draft]);
-  const dirty = Boolean(saved && draft && rulesDirty(saved, draft));
+  const readOnly = useReadOnly();
+  const dirty = !readOnly && Boolean(saved && draft && rulesDirty(saved, draft));
   const guard = useLeaveGuard(dirty);
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     if (!draft || !loaded) return false;
     const first = Object.keys(validateBookingRules(draft))[0];
     if (first) {
@@ -81,7 +85,7 @@ export default function BookingRules() {
     } finally {
       setSaving(false);
     }
-  }, [api, draft, loaded]);
+  }, [api, draft, loaded, readOnly]);
 
   const saveButton = (
     <SaveButton dirty={dirty} saving={saving} noun="Booking Rules" onClick={() => void save()} />

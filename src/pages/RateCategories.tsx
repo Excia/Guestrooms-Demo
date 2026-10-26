@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import EditOnly from '../components/admin/EditOnly';
 import Add from '@mui/icons-material/Add';
 import Alert from '@mui/material/Alert';
@@ -150,7 +151,10 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
 
   const associated = options.roomTypes.filter((t) => draft.roomTypeIds.includes(t.id));
 
+  const readOnly = useReadOnly();
   const save = async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateRateCategory(draft, data.categories, options.skus);
     if (badAmounts.size > 0) {
       editor.setAttempted(true);

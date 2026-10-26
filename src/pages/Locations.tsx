@@ -20,7 +20,7 @@ import {
   validateLocations,
   type RemovalCheck,
 } from '../app/locations';
-import { LOCATIONS_EDIT_PERMISSION } from '../app/permissions';
+import { adminPageLevel } from '../app/access';
 import { ROOM_TYPES_PATH } from '../app/routes';
 import { useAccess } from '../app/useAccess';
 import { useLeaveGuard } from '../app/useLeaveGuard';
@@ -73,9 +73,9 @@ export default function Locations() {
 function LocationsEditor({ data }: { data: ReturnType<typeof useLocationsData> }) {
   const api = useApi();
   const { can } = useAccess();
-  // View-only from the route (ticket 186) or without `locations.edit` (ticket 182).
+  // View-only from the route (ticket 186), or a level below Edit when the page is rendered without the route guard.
   const viewOnly = useReadOnly();
-  const readOnly = viewOnly || !can(LOCATIONS_EDIT_PERMISSION);
+  const readOnly = viewOnly || adminPageLevel(can, 'locations') !== 'edit';
   const saved = useMemo(() => data.locations.map(toLocationInput), [data.locations]);
   // A new club starts with one blank row.
   const [draft, setDraft] = useState<LocationInput[]>(() =>
@@ -120,6 +120,8 @@ function LocationsEditor({ data }: { data: ReturnType<typeof useLocationsData> }
   };
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateLocations(draft);
     const first = firstLocationError(draft, found);
     if (first) {
@@ -148,7 +150,7 @@ function LocationsEditor({ data }: { data: ReturnType<typeof useLocationsData> }
     } finally {
       setSaving(false);
     }
-  }, [api, data, draft]);
+  }, [api, data, draft, readOnly]);
 
   const saveButton = readOnly ? undefined : (
     <SaveButton dirty={dirty} saving={saving} noun="Locations" onClick={() => void save()} />

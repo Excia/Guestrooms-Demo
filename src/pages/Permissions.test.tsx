@@ -58,10 +58,10 @@ describe('Permissions page', () => {
     renderPage();
     await loaded();
     await userEvent.click(screen.getByRole('combobox', { name: 'Rooms, Staff' }));
+    // Like the legacy screen: View or No Access only; Edit is for administrators.
     expect((await screen.findAllByRole('option')).map((o) => o.textContent)).toEqual([
       'No Access',
       'View',
-      'Edit',
     ]);
     await userEvent.keyboard('{Escape}');
     await userEvent.click(screen.getByRole('combobox', { name: 'Reporting, Staff' }));
@@ -84,16 +84,16 @@ describe('Permissions page', () => {
     const spy = vi.spyOn(client.permissions, 'savePermissionSets');
     renderPage(client);
     await loaded();
-    await choose('Rooms, Staff', 'Edit');
+    await choose('Rooms, Staff', 'View');
     expect(save()).not.toHaveAttribute('aria-disabled');
     await userEvent.click(save());
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(spy.mock.calls[0]?.[0].find((s) => s.id === 'staff')?.setup.rooms).toBe('edit');
+    expect(spy.mock.calls[0]?.[0].find((s) => s.id === 'staff')?.setup.rooms).toBe('view');
     expect((await screen.findAllByText('Permissions Saved')).length).toBeGreaterThan(0);
     expect(save()).toHaveAttribute('aria-disabled', 'true');
     expect(
       (await client.permissions.getPermissionSets()).find((s) => s.id === 'staff')?.setup.rooms,
-    ).toBe('edit');
+    ).toBe('view');
   });
 
   it('keeps the changes and says why when the save is refused or fails', async () => {
@@ -104,7 +104,7 @@ describe('Permissions page', () => {
       .mockRejectedValueOnce(new ApiError(500, 'boom'));
     renderPage({ ...client, permissions: { ...client.permissions, savePermissionSets: fail } });
     await loaded();
-    await choose('Rooms, Staff', 'Edit');
+    await choose('Rooms, Staff', 'View');
     await userEvent.click(save());
     expect(
       await screen.findByText('You do not have permission to change permissions.'),
@@ -113,7 +113,7 @@ describe('Permissions page', () => {
     expect(
       await screen.findByText('Permissions could not be saved. Try again.'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Rooms, Staff' })).toHaveTextContent('Edit');
+    expect(screen.getByRole('combobox', { name: 'Rooms, Staff' })).toHaveTextContent('View');
   });
 
   it('shows an error with Retry that reloads', async () => {

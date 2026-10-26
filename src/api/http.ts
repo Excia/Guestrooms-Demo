@@ -6,7 +6,8 @@ import type {
   CheckInReservationRequest,
   CheckInReservationResult,
   SplitRoomRequest,
-  VerifyOverrideCodeRequest,
+  VerifyOverridePinRequest,
+  VerifyOverridePinResult,
   ApiClient,
   BookingHold,
   CancelReservationRequest,
@@ -56,12 +57,14 @@ import type {
   BookingRules,
   BookingRulesOptions,
   LocationSetup,
+  EmployeeSetup,
   LookupRef,
   SystemSettings,
   SystemSettingsOptions,
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { normalizeAudienceRules } from '../app/bookingRules';
+import { isEmployeeRole } from '../app/employees';
 import { isStoredEncoderKey } from '../app/keycards';
 import { isSeasonSkuShapeValid, MAX_RATE_CENTS } from '../app/rateCategories';
 import { expectedLeadOccupantName } from './createRules';
@@ -74,8 +77,9 @@ import {
   assertAddPaymentMethodRequest,
   assertCheckInReservationRequest,
   assertSplitRoomRequest,
-  assertVerifyOverrideCodeRequest,
+  assertVerifyOverridePinRequest,
 } from './checkInApi';
+import { retryAfterOf } from './retryAfter';
 import { ApiError, SETTABLE_HOUSEKEEPING_STATUSES } from './types';
 import {
   assertChangeRoomRequest,
@@ -106,7 +110,12 @@ import {
   assertUpdateNotesRequest,
 } from './reservationEditApi';
 import { parseIsoDate } from '../lib/dates';
-import { normalizeSet, summarizeSets, type PermissionSet } from '../app/permissionSets';
+import {
+  isPermissionSetShape,
+  normalizeSet,
+  type PermissionSet,
+  type PermissionSetSummary,
+} from '../app/permissionSets';
 
 export interface HttpClientOptions {
   fetch?: typeof fetch;
@@ -169,30 +178,24 @@ function parseGrant(body: unknown, status: number): PermissionGrant {
   return body as unknown as PermissionGrant;
 }
 
-const isLevel = (v: unknown, allowed: readonly string[]) => isString(v) && allowed.includes(v);
-
-function isPermissionSet(v: unknown): v is PermissionSet {
-  return (
-    isObject(v) &&
-    isString(v.id) &&
-    isString(v.name) &&
-    isObject(v.setup) &&
-    Object.values(v.setup).every((l) => isLevel(l, ['none', 'view', 'edit'])) &&
-    isObject(v.access) &&
-    Object.values(v.access).every((l) => isLevel(l, ['none', 'view', 'edit', 'create-edit'])) &&
-    isObject(v.functions) &&
-    Object.values(v.functions).every((f) => typeof f === 'boolean') &&
-    isLevel(v.checkIn, ['any-time', 'arrival-date', 'never']) &&
-    typeof v.pinOverride === 'boolean'
-  );
+function parsePermissionSetSummaries(body: unknown, status: number): PermissionSetSummary[] {
+  if (
+    !Array.isArray(body) ||
+    !body.every(
+      (v) => isObject(v) && isString(v.id) && isString(v.name) && typeof v.editable === 'boolean',
+    )
+  ) {
+    throw invalid(status, 'permission sets');
+  }
+  return body as unknown as PermissionSetSummary[];
 }
 
 function parsePermissionSets(body: unknown, status: number): PermissionSet[] {
-  if (!Array.isArray(body) || !body.every(isPermissionSet)) {
+  if (!Array.isArray(body) || !body.every(isPermissionSetShape)) {
     throw invalid(status, 'permission sets');
   }
-  // Repair what is missing or out of range, so a newer backend cannot break the editor.
-  return body.map(normalizeSet);
+  // Only a structurally wrong body is refused; `normalizeSet` repairs unknown levels, so a newer backend cannot break the editor.
+  return body.map((s) => normalizeSet(s));
 }
 
 function parsePage(body: unknown, status: number): Page<Reservation> {
@@ -558,9 +561,18 @@ const parseSplit =
     return withKnownAudit(body);
   };
 
-const parseOverrideCheck = (body: unknown, status: number): { valid: boolean } => {
-  if (!isObject(body) || !isFlag(body.valid)) throw invalid(status, 'override code check');
-  return { valid: body.valid };
+/** Wait shown when a 429 does not say how long. */
+const DEFAULT_LOCK_SECONDS = 60;
+
+const parseOverridePinCheck = (body: unknown, status: number): VerifyOverridePinResult => {
+  if (!isObject(body) || !isFlag(body.valid)) throw invalid(status, 'override PIN check');
+  const seconds = body.lockedForSeconds;
+  if (seconds === undefined) return { valid: body.valid };
+  // A locked-out answer never says valid.
+  if (body.valid || typeof seconds !== 'number' || !Number.isFinite(seconds) || seconds <= 0) {
+    throw invalid(status, 'override PIN check');
+  }
+  return { valid: body.valid, lockedForSeconds: seconds };
 };
 
 const parseCreated =
@@ -936,6 +948,26 @@ const parseLocationAreas = (body: unknown, status: number): LookupRef[] => {
   return body as unknown as LookupRef[];
 };
 
+const isEmployee = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isEmployeeRole(v.role) &&
+  (v.permissionSetId === null || isString(v.permissionSetId)) &&
+  typeof v.active === 'boolean';
+const parseEmployees = (body: unknown, status: number): EmployeeSetup[] => {
+  if (!Array.isArray(body) || !body.every(isEmployee)) throw invalid(status, 'employees');
+  return body as unknown as EmployeeSetup[];
+};
+const parseEmployee = (body: unknown, status: number): EmployeeSetup => {
+  if (!isEmployee(body)) throw invalid(status, 'employee');
+  return body as unknown as EmployeeSetup;
+};
+const parseEmployeeLookups = (body: unknown, status: number): LookupRef[] => {
+  if (!listOf(body, isLookup)) throw invalid(status, 'employee options');
+  return body as unknown as LookupRef[];
+};
+
 const parseKeys = (body: unknown, status: number): string[] => {
   if (!Array.isArray(body) || !body.every((k) => isString(k) && isStoredEncoderKey(k))) {
     throw invalid(status, 'encoder keys');
@@ -1298,7 +1330,12 @@ const parseChangeRoom =
     return result;
   };
 
-function errorFromBody(status: number, statusText: string, text: string): ApiError {
+function errorFromBody(
+  status: number,
+  statusText: string,
+  text: string,
+  retryAfter?: string | null,
+): ApiError {
   let message = statusText || 'Request failed';
   let code: string | undefined;
   let details: Record<string, string[]> | undefined;
@@ -1313,6 +1350,10 @@ function errorFromBody(status: number, statusText: string, text: string): ApiErr
   } catch {
     // Not JSON (e.g. an HTML error page): keep the status text.
   }
+  // A 429 may carry its wait only in the Retry-After header (seconds); keep it where callers look.
+  const seconds = retryAfter && /^\d{1,6}$/.test(retryAfter.trim()) ? retryAfter.trim() : undefined;
+  if (seconds && !details?.retryAfterSeconds)
+    details = { ...details, retryAfterSeconds: [seconds] };
   return new ApiError(status, message, { code, details });
 }
 
@@ -1397,7 +1438,12 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
 
     if (!response.ok) {
       if (response.status === 401) options.onUnauthorized?.();
-      throw errorFromBody(response.status, response.statusText, text);
+      throw errorFromBody(
+        response.status,
+        response.statusText,
+        text,
+        response.headers.get('Retry-After'),
+      );
     }
 
     // 204 and empty bodies parse as `undefined`; each parser decides whether that is valid.
@@ -1522,14 +1568,6 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             parseCheckInReservation(r),
             { method: 'POST', body: r, headers: { 'Idempotency-Key': r.requestId } },
           );
-        }),
-      verifyOverrideCode: (r: VerifyOverrideCodeRequest, o) =>
-        Promise.resolve().then(() => {
-          assertVerifyOverrideCodeRequest(r);
-          return request('/override-codes/verify', {}, o, parseOverrideCheck, {
-            method: 'POST',
-            body: r,
-          });
         }),
       addRoom: (r: AddRoomRequest, o) =>
         Promise.resolve().then(() => {
@@ -1767,6 +1805,17 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       save: (locations, o) =>
         request('/locations', {}, o, parseLocations, { method: 'PUT', body: locations }),
     },
+    employees: {
+      list: (o) => request('/employees', {}, o, parseEmployees),
+      listCandidates: (o) => request('/employees/candidates', {}, o, parseEmployeeLookups),
+      save: (input, o) =>
+        request(`/employees/${encodeURIComponent(input.id)}`, {}, o, parseEmployee, {
+          method: 'PUT',
+          body: input,
+        }),
+      remove: (id, o) =>
+        request(`/employees/${encodeURIComponent(id)}`, {}, o, parseNothing, { method: 'DELETE' }),
+    },
     systemSettings: {
       get: (o) => request('/settings/system', {}, o, parseSystemSettings),
       save: (settings, o) =>
@@ -1865,11 +1914,30 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       retrieveEncoders: (o) =>
         request('/keycards/encoders/retrieve', {}, o, parseKeys, { method: 'POST' }),
     },
+    overrides: {
+      verifyPin: (r: VerifyOverridePinRequest, o) =>
+        Promise.resolve().then(() => {
+          assertVerifyOverridePinRequest(r);
+          return request('/overrides/verify-pin', {}, o, parseOverridePinCheck, {
+            method: 'POST',
+            body: r,
+          }).catch((error: unknown): VerifyOverridePinResult => {
+            // HTTP 429 is the other way a backend may say "locked out".
+            if (error instanceof ApiError && error.status === 429) {
+              return {
+                valid: false,
+                lockedForSeconds: retryAfterOf(error) ?? DEFAULT_LOCK_SECONDS,
+              };
+            }
+            throw error;
+          });
+        }),
+    },
     permissions: {
       getGrant: (o) => request('/permissions/me', {}, o, parseGrant),
       getPermissionSets: (o) => request('/permission-sets', {}, o, parsePermissionSets),
-      listPermissionSets: async (o) =>
-        summarizeSets(await request('/permission-sets', {}, o, parsePermissionSets)),
+      listPermissionSets: (o) =>
+        request('/permission-sets', { fields: 'summary' }, o, parsePermissionSetSummaries),
       savePermissionSets: (sets, o) =>
         request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets }),
     },

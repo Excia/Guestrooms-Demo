@@ -90,6 +90,8 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
   }, [tab]);
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     if (!draft) return false;
     const found = validateSystemSettings(draft);
     const first = firstErrorField(found);
@@ -143,7 +145,7 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
     } finally {
       setSaving(false);
     }
-  }, [api, apply, draft, tab]);
+  }, [api, apply, draft, tab, readOnly]);
 
   const saveButton = (
     <SaveButton

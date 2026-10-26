@@ -172,6 +172,13 @@ describe('checkInRequestFailure', () => {
       });
     }
   });
+  it('tells a locked-out user to wait and goes back to the code step', () => {
+    expect(checkInRequestFailure(err(429, 'override-locked'))).toMatchObject({
+      message: expect.stringMatching(/Try again later/),
+      askOverrideAgain: true,
+      refetch: false,
+    });
+  });
   it('explains a refusal, a stale reservation and a date problem', () => {
     expect(checkInRequestFailure(err(403, 'forbidden')).message).toMatch(/may not check in/);
     expect(checkInRequestFailure(err(409, 'stale'))).toMatchObject({ refetch: true });

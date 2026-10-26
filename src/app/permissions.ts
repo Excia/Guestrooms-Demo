@@ -39,6 +39,9 @@ export type NightAuditPermission = 'night-audit.run';
 // One yes/no function of a permission set (Permissions page). Stored and granted; the screens pick
 // them up as their tickets land.
 export type FunctionPermission = `function.${FunctionKey}`;
+// `employees.edit` lets a user add, change, deactivate and remove employees (ticket 185); without it
+// the Employees page is read-only.
+export type EmployeesPermission = 'employees.edit';
 export type Permission =
   | PagePermission
   | AdminEditPermission
@@ -47,7 +50,8 @@ export type Permission =
   | AdminPermission
   | ReservationPermission
   | CheckInPermission
-  | LocationsPermission;
+  | LocationsPermission
+  | EmployeesPermission;
 
 export const ADMIN_PERMISSION: AdminPermission = 'admin';
 
@@ -70,6 +74,7 @@ export const functionPermission = (key: FunctionKey): FunctionPermission => `fun
 export const ADMIN_PAGE_IDS: readonly AdminPageId[] = routes
   .filter((r) => 'section' in r && r.section === 'admin')
   .map((r) => r.id as AdminPageId);
+export const EMPLOYEES_EDIT_PERMISSION: EmployeesPermission = 'employees.edit';
 
 export const ALL_PERMISSIONS: readonly Permission[] = [
   NIGHT_AUDIT_RUN_PERMISSION,

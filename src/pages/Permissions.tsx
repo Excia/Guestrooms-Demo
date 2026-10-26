@@ -47,6 +47,8 @@ export default function Permissions() {
   const guard = useLeaveGuard(dirty);
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     if (!draft) return false;
     setSaving(true);
     setSaveError(null);
@@ -68,7 +70,7 @@ export default function Permissions() {
     } finally {
       setSaving(false);
     }
-  }, [api, draft]);
+  }, [api, draft, readOnly]);
 
   const saveButton = (
     <SaveButton dirty={dirty} saving={saving} noun="Permissions" onClick={() => void save()} />

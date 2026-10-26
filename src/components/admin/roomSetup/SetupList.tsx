@@ -35,8 +35,11 @@ export interface SetupMoreMenu {
   /** Title-case item name: "Room", "Room Type", "Add-On", "Rate Category". */
   noun: string;
   changeLogPage: ChangeLogPageId;
-  onCopy: () => void;
+  /** Omitted where copying makes no sense (Employees): the Copy item is left out. */
+  onCopy?: () => void;
   onDelete: () => void;
+  /** Replaces "Delete <noun>" (Employees: "Remove Employee"). */
+  deleteLabel?: string;
 }
 
 export interface SetupListProps {
@@ -58,6 +61,8 @@ export interface SetupListProps {
   singleNewRow?: boolean;
   /** The three-dot menu (Change Log, Copy, Delete) of the selected active row. */
   more?: SetupMoreMenu;
+  /** False hides the New button (a view-only user, Employees). */
+  canCreate?: boolean;
   /** An icon button next to the New button (Rooms: reorder). */
   reorder?: { label: string; onClick: () => void };
 }
@@ -71,15 +76,18 @@ export default function SetupList({
   selectedId,
   newLabel,
   newTitle,
-  creating,
+  creating: creatingProp,
   onSelect,
   onNew,
   singleNewRow = false,
+  canCreate = true,
   more,
   reorder,
 }: SetupListProps) {
   // View-only: no New, no reorder, and the three-dot menu keeps only the Change Log.
   const readOnly = useReadOnly();
+  // Nothing can be created in View-only mode, so no unsaved "New" row either.
+  const creating = creatingProp && !readOnly;
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const [logOpen, setLogOpen] = useState(false);
   // The item whose log is open, fixed when the menu item is chosen (the selection can change behind the dialog).
@@ -87,6 +95,7 @@ export default function SetupList({
   // A new key on every opening gives the dialog fresh sort, filters, page and rows (D-97-5).
   const [logSession, setLogSession] = useState(0);
   const closeMenu = () => setMenuAnchor(null);
+  const onCopy = more?.onCopy;
   // Copy and Delete open a dialog (or switch the selection). They run after the menu has finished
   // closing, so the menu hands focus back to its button first and the dialog returns focus there.
   const afterMenu = useRef<(() => void) | null>(null);
@@ -226,7 +235,7 @@ export default function SetupList({
     );
   return (
     <Box>
-      {singleNewRow || readOnly ? null : (
+      {singleNewRow || readOnly || !canCreate ? null : (
         <Box
           sx={(t) => ({
             display: 'flex',
@@ -334,10 +343,10 @@ export default function SetupList({
               </ListItemIcon>
               <ListItemText>{setupMoreMenuLabels(more.noun, '').changeLog}</ListItemText>
             </MenuItem>
-            {readOnly ? null : (
+            {onCopy && !readOnly ? (
               <MenuItem
                 onClick={() => {
-                  chooseAfterClose(more.onCopy);
+                  chooseAfterClose(onCopy);
                 }}
               >
                 <ListItemIcon>
@@ -345,7 +354,7 @@ export default function SetupList({
                 </ListItemIcon>
                 <ListItemText>{setupMoreMenuLabels(more.noun, '').copy}</ListItemText>
               </MenuItem>
-            )}
+            ) : null}
             {readOnly ? null : (
               <MenuItem
                 onClick={() => {
@@ -356,7 +365,9 @@ export default function SetupList({
                 <ListItemIcon>
                   <Delete color="error" />
                 </ListItemIcon>
-                <ListItemText>{setupMoreMenuLabels(more.noun, '').delete}</ListItemText>
+                <ListItemText>
+                  {more.deleteLabel ?? setupMoreMenuLabels(more.noun, '').delete}
+                </ListItemText>
               </MenuItem>
             )}
           </Menu>

@@ -26,10 +26,13 @@ export type CheckInStep =
   /** The "check-in date has passed" confirmation. */
   | { name: 'past-date'; decision: PastDate }
   /** The override code, asked for before continuing a past-date check in. */
-  | { name: 'override'; decision: PastDate }
+  | { name: 'override'; decision: PastDate; lockedForSeconds?: number }
   /** "Split this room from the reservation?" */
   | { name: 'split'; roomId: string }
-  /** The check in panel. `confirmed`: the prior-date prompt was accepted. */
+  /**
+   * The check in panel. `confirmed`: the prior-date prompt was accepted. `overrideCode` (the accepted
+   * PIN) lives only in this step: leaving it drops the PIN, and it is never stored elsewhere.
+   */
   | { name: 'panel'; decision: Startable; confirmed: boolean; overrideCode?: string }
   /** Successes and failures of a check in where at least one room failed. */
   | {
@@ -90,7 +93,6 @@ export function useCheckInFlow({
   const api = useApi();
   const [step, setStep] = useState<CheckInStep | null>(null);
   const [busy, setBusy] = useState(false);
-  const [codeError, setCodeError] = useState(false);
   // The rooms waiting on a payment method, or null.
   const [payment, setPayment] = useState<{ ids: string[]; error: boolean } | null>(null);
   const [toast, setToast] = useState<CheckInToast | null>(null);
@@ -127,7 +129,6 @@ export function useCheckInFlow({
   const start = (targetIds: string[]): CheckInDecision => {
     const decision = decide(targetIds);
     if (decision.kind === 'disabled') return decision;
-    setCodeError(false);
     setStep(
       needsPastDatePrompt(decision)
         ? { name: 'past-date', decision }
@@ -138,7 +139,6 @@ export function useCheckInFlow({
 
   const close = () => {
     setStep(null);
-    setCodeError(false);
   };
 
   /** The first choice of the past-date prompt: adjust the dates, or split the room. */
@@ -158,7 +158,6 @@ export function useCheckInFlow({
   const chooseContinue = () => {
     if (step?.name !== 'past-date') return;
     if (step.decision.kind === 'needsOverride') {
-      setCodeError(false);
       setStep({ name: 'override', decision: step.decision });
     } else {
       setStep({ name: 'panel', decision: step.decision, confirmed: true });
@@ -170,31 +169,10 @@ export function useCheckInFlow({
     if (step?.name === 'override') setStep({ name: 'past-date', decision: step.decision });
   };
 
-  /** Validates the code (a mock until ticket 127); true when the flow moved on. */
-  const submitOverride = async (code: string): Promise<boolean> => {
-    if (step?.name !== 'override' || inflight.current) return false;
-    inflight.current = true;
-    setBusy(true);
-    setCodeError(false);
-    try {
-      const { valid } = await api.reservations.verifyOverrideCode({
-        permission: 'reservation.check-in.any-time',
-        code,
-      });
-      if (!mounted.current) return false;
-      if (!valid) {
-        setCodeError(true);
-        return false;
-      }
-      setStep({ name: 'panel', decision: step.decision, confirmed: true, overrideCode: code });
-      return true;
-    } catch {
-      if (mounted.current) setCodeError(true);
-      return false;
-    } finally {
-      inflight.current = false;
-      if (mounted.current) setBusy(false);
-    }
+  /** The override PIN dialog accepted the PIN: on to the check in, which sends the PIN again. */
+  const authorizeOverride = (pin: string) => {
+    if (step?.name !== 'override') return;
+    setStep({ name: 'panel', decision: step.decision, confirmed: true, overrideCode: pin });
   };
 
   const splitRoom = async () => {
@@ -264,7 +242,9 @@ export function useCheckInFlow({
       setBusy(false);
       notify(failure.message, 'error');
       if (failure.askOverrideAgain && decision.kind === 'needsOverride') {
-        setStep({ name: 'override', decision });
+        // A new PIN is a new request: the old attempt's idempotency key must not be reused with it.
+        attempt.current = null;
+        setStep({ name: 'override', decision, lockedForSeconds: failure.lockedForSeconds });
       }
       if (failure.refetch) void reload();
       return;
@@ -367,7 +347,6 @@ export function useCheckInFlow({
   return {
     step,
     busy,
-    codeError,
     payment,
     toast,
     toastOpen,
@@ -379,7 +358,7 @@ export function useCheckInFlow({
     chooseFirst,
     chooseContinue,
     cancelOverride,
-    submitOverride,
+    authorizeOverride,
     splitRoom,
     submit,
     cancelPayment: () => setPayment(null),

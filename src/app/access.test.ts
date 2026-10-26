@@ -24,6 +24,7 @@ const ADMIN_IDS = [
   'notifications',
   'locations',
   'permissions',
+  'employees',
 ] as const;
 
 const admin = createMockPermissions();

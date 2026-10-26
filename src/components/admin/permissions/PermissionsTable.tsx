@@ -14,7 +14,7 @@ import {
   PERMISSION_ROWS,
   rowApplies,
   SETUP_LEVEL_LABEL,
-  SETUP_LEVELS,
+  setupLevelOptions,
   SETUP_PAGE_LABEL,
   setupLevel,
   updateSet,
@@ -138,7 +138,7 @@ export default function PermissionsTable({ sets, onChange }: PermissionsTablePro
             id={permissionCellId(set.id, `setup-${pageId}`)}
             ariaLabel={`${pageTitle(pageId)}, ${set.name}`}
             value={setupLevel(set, pageId)}
-            options={SETUP_LEVELS.map((value) => ({ value, label: SETUP_LEVEL_LABEL[value] }))}
+            options={setupLevelOptions(setupLevel(set, pageId)).map((value) => ({ value, label: SETUP_LEVEL_LABEL[value] }))}
             onChange={(level) => edit(set.id, (s) => withSetupLevel(s, pageId, level))}
           />,
         ),

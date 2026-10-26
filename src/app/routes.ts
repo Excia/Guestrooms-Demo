@@ -48,6 +48,8 @@ export const KEYCARD_INTEGRATION_PATH = '/admin/keycard-integration';
 export const LOCATIONS_PATH = '/admin/locations';
 /** Permissions (ticket 186): Access sets and Function sets; the Admin Setup navigation links to it, the menu does not. */
 export const PERMISSIONS_PATH = '/admin/permissions';
+/** Employees (LP-A.4, ticket 185); the Admin Setup navigation links to it, the menu does not. */
+export const EMPLOYEES_PATH = '/admin/employees';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -156,6 +158,13 @@ export const routes = [
     title: 'Permissions',
     section: 'admin',
     showInMenu: false, // The Admin Setup navigation has it; the menu cleanup is a separate ticket.
+  },
+  {
+    id: 'employees',
+    path: EMPLOYEES_PATH,
+    title: 'Employees',
+    section: 'admin',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
   },
 ] as const satisfies readonly RouteMeta[];
 

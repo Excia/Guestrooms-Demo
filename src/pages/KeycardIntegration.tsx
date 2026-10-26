@@ -1,3 +1,4 @@
+import { useReadOnly } from '../app/readOnlyContext';
 import EditOnly from '../components/admin/EditOnly';
 import AddCircle from '@mui/icons-material/AddCircle';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
@@ -104,7 +105,8 @@ export default function KeycardIntegration() {
   });
 
   const errors = useMemo(() => validateEncoderRows(rows), [rows]);
-  const dirty = status === 'ready' && encodersChanged(saved, rows);
+  const readOnly = useReadOnly();
+  const dirty = !readOnly && status === 'ready' && encodersChanged(saved, rows);
   const guard = useLeaveGuard(dirty);
 
   const showToast = (message: string, severity: Toast['severity'] = 'success') =>
@@ -160,6 +162,8 @@ export default function KeycardIntegration() {
   };
 
   const save = useCallback(async (): Promise<boolean> => {
+    // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
+    if (readOnly) return false;
     const found = validateEncoderRows(rows);
     const first = rows.find((r) => found[r.id]);
     if (first) {
@@ -188,7 +192,7 @@ export default function KeycardIntegration() {
     } finally {
       setSaving(false);
     }
-  }, [api, rows]);
+  }, [api, rows, readOnly]);
 
   const saveButton = (
     <SaveButton dirty={dirty} saving={saving} noun="Encoder Keys" onClick={() => void save()} />

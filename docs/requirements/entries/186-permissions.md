@@ -1,6 +1,6 @@
 # 186 Permissions (LP-A.5): Access sets, Function sets, View-only admin
 
-Ticket Excia/Guestrooms-Demo#186 (same scope as #126); PR Excia/Guestrooms-Demo#<pr>. Figma: no frame; the owner's Permissions screenshots were **not
+Ticket Excia/Guestrooms-Demo#186 (same scope as #126); PR Excia/Guestrooms-Demo#218. Figma: no frame; the owner's Permissions screenshots were **not
 available** to the builder, so the layout follows the legacy `PermissionsEdit.vue`, the Booking Rules matrix and the Admin Setup shell.
 **Status:** in review (branch `feat/186-permissions`), 2026-10-26. Owner has not tested it.
 
@@ -17,7 +17,7 @@ available** to the builder, so the layout follows the legacy `PermissionsEdit.vu
 | Q-186-1 | Do the screenshots show one table (as legacy) or two (Access sets, Function sets)? Which rows, labels and order?                                  | Page layout        | One table with legacy rows and order; Function rows indented under their area                                       | Owner       | open   |
 | Q-186-2 | Are Management and Staff the only editable sets, or can the club add named sets (the Employees page assigns "permission levels")?                | Sets, Employees    | Two fixed sets; `listPermissionSets` returns Administrator, Management, Staff                                       | Owner       | open   |
 | Q-186-3 | Admin Setup rows: which pages (Employees and API Keys have no page yet), and are they labelled by menu name ("System Settings") or route name?   | Setup rows         | Every admin route gets a row, labelled by the Admin Setup navigation name; Employees/API Keys rows appear when their routes exist | Owner       | open   |
-| Q-186-4 | Should the Permissions page be editable by a non-admin at all? (A Management user with Edit could grant themselves more.)                         | Safety             | Allowed per page level; Management defaults to No Access on Permissions                                              | Owner       | open   |
+| Q-186-4 | Should a non-admin ever edit permissions? (Privilege escalation: a Management user with Edit could grant themselves more.)                       | Safety             | No: as legacy, non-admin sets get only View or No Access on setup pages; only an administrator saves (403 otherwise)   | Owner       | open   |
 | Q-186-5 | In View-only mode, does the three-dot menu keep Change Log (read-only), and does Generate Preview (registration card) stay?                      | View-only          | Yes to both: neither changes data                                                                                   | Owner       | open   |
 | Q-186-6 | What exactly does the PIN override row control: who may authorize (a Yes/No per set, as built), or which permissions an override may unlock?    | Ticket 187         | `pinOverride: boolean` per set: the set's holders may authorize overrides with their PIN                            | Owner       | open   |
 | Q-186-7 | Which screens must read the stored-but-unused settings (Closure Events, Reservation Full Details, Non-Members, the `function.*` switches)?       | Later tickets      | Stored and granted as `function.<key>`; no screen asks yet except check in and reservation edit                    | Owner       | open   |
@@ -31,6 +31,8 @@ available** to the builder, so the layout follows the legacy `PermissionsEdit.vu
 | D-186-1 | 2026-10-26 | Admin page levels are carried as `page.<id>` (View) and `<id>.edit` (Edit); `admin` is Edit everywhere; `locations.edit` is the first instance | One rule for every setup page, no second permission system       | ticket | open   |
 | D-186-2 | 2026-10-26 | View-only is one flag from the route guard (`ReadOnlyProvider`), not a prop per page; a component outside an admin route stays editable      | One mechanism for every page; the backend is the real gate      | agent  | open   |
 | D-186-3 | 2026-10-26 | `can()` reads the saved sets because the mock derives the signed-in user's grant from the saved set on every `getGrant`                        | Matches the real backend (grant from the user's set)             | ticket | open   |
+| D-186-5 | 2026-10-26 | A View reservation set cannot check in or change reservations (legacy: View forces Check In to Never and the functions off); Edit switches them on again | Matches PermissionsEdit.vue | agent  | open   |
+| D-186-6 | 2026-10-26 | Only an administrator saves permission sets; a PUT replaces the list and needs `management` and `staff`; PIN holders count only while their set has `pinOverride` | Prevents escalation (review of #218) | agent | open   |
 | D-186-4 | 2026-10-26 | Saving replaces both sets (`PUT /permission-sets`); names cannot be edited; the Administrator set cannot be changed                            | Idempotent; matches the legacy two-set screen                    | agent  | open   |
 
 ## Placeholders and invented values
@@ -44,8 +46,8 @@ available** to the builder, so the layout follows the legacy `PermissionsEdit.vu
 - **API:** `permissions.getPermissionSets`, `savePermissionSets`, `listPermissionSets`; section "Permission sets" in `api-contract.md`.
 - **Permissions:** new route `permissions` (`page.permissions`, `permissions.edit`); `<id>.edit` for every admin page; `night-audit.run`;
   `function.<key>` for each function. See `permissions.md`.
+- **Employees (#185) reconciled:** its placeholder sets and `employees.listPermissionSets` are removed; the page reads `permissions.listPermissionSets` and uses the generic View-only mechanism. Mock employees use `management` / `staff`.
 - **For Employees (#185):** use `api.permissions.listPermissionSets()` (`PermissionSetSummary { id, name, editable }`, exported from
   `src/app/permissionSets.ts`). Keep it small; the id of a set is what an employee record stores.
-- **For the PIN prompt (#187):** the row exists (`PermissionSet.pinOverride`, "Authorize Overrides with PIN"); wire the prompt to
-  `getPermissionSets()` / the grant as the ticket needs. Night Audit: the schedule's Night Audit button does not yet check `night-audit.run`
+- **PIN prompt (#187):** wired: the mock PIN guard counts a holder only while their saved set has `pinOverride` on and grants the permission (Administrator always). Night Audit: the schedule's Night Audit button does not yet check `night-audit.run`
   (the run screen does not exist); gate it with `can('night-audit.run')` when it lands.

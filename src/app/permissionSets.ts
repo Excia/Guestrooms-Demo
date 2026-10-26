@@ -54,6 +54,14 @@ export const ADMINISTRATOR_SET: PermissionSetSummary = {
 };
 
 export const SETUP_LEVELS: readonly SetupLevel[] = ['none', 'view', 'edit'];
+
+/**
+ * The levels the Permissions page offers for an Admin Setup page of a non-admin set: View or No
+ * Access only, as in the legacy screen (Administrators alone change setup, so granting Edit would
+ * hand out more than any non-admin may hold). A stored `edit` (a backend decision) still shows, so it is not hidden.
+ */
+export const setupLevelOptions = (current: SetupLevel): readonly SetupLevel[] =>
+  current === 'edit' ? SETUP_LEVELS : ['none', 'view'];
 export const SETUP_LEVEL_LABEL: Record<SetupLevel, string> = {
   none: 'No Access',
   view: 'View',
@@ -159,9 +167,17 @@ export const ACCESS_ROWS = PERMISSION_ROWS.filter((r): r is AccessRow => r.kind 
 export const levelsFor = (key: AccessKey): readonly AccessLevel[] =>
   ACCESS_ROWS.find((r) => r.key === key)?.levels ?? ['none'];
 
-/** Function and check-in rows are N/A (shown greyed, not saved as allowed) when their area is No Access. */
+/**
+ * Function and check-in rows are N/A (shown greyed, saved as off) when their area does not allow them.
+ * Like the legacy screen, the Reservation Events functions (change room, check in, undo, check out...)
+ * need Edit or Create + Edit: with View they are off and check in is Never. Other areas need more than No Access.
+ */
 export function rowApplies(set: PermissionSet, row: PermissionRow): boolean {
-  return row.kind === 'access' || set.access[row.parent] !== 'none';
+  if (row.kind === 'access') return true;
+  const level = set.access[row.parent];
+  return row.parent === 'reservations'
+    ? level === 'edit' || level === 'create-edit'
+    : level !== 'none';
 }
 
 const rank = (level: AccessLevel) => ['none', 'view', 'edit', 'create-edit'].indexOf(level);
@@ -190,8 +206,12 @@ export const setupLevel = (set: PermissionSet, id: string): SetupLevel => {
  * Repairs a set from the wire: unknown values fall back to the safest one, every key is present,
  * and a function that does not apply is off. Pure; the mock and the editor use the same rule.
  */
-export function normalizeSet(raw: PermissionSet): PermissionSet {
+export function normalizeSet(raw: PermissionSet, keepHidden = false): PermissionSet {
+  // Every known page gets a level; a key this client does not know is kept as it is (a newer backend
+  // may have more pages), but only with a valid level.
   const setup: Record<string, SetupLevel> = {};
+  for (const [id, level] of Object.entries(raw.setup ?? {}))
+    if (isSetupLevel(level)) setup[id] = level;
   for (const id of ADMIN_PAGE_IDS) setup[id] = setupLevel(raw, id);
   const accessLevels = {} as Record<AccessKey, AccessLevel>;
   for (const key of ACCESS_KEYS) accessLevels[key] = clampLevel(key, raw.access?.[key]);
@@ -205,6 +225,9 @@ export function normalizeSet(raw: PermissionSet): PermissionSet {
     pinOverride: raw.pinOverride === true,
   };
   for (const key of FUNCTION_KEYS) normalized.functions[key] = raw.functions?.[key] === true;
+  // The editor keeps what a hidden (N/A) row held, so switching the area back restores it; what is
+  // saved and granted is always off.
+  if (keepHidden) return normalized;
   for (const row of PERMISSION_ROWS) {
     if (row.kind === 'function' && !rowApplies(normalized, row))
       normalized.functions[row.key] = false;
@@ -228,7 +251,7 @@ export function updateSet(
   id: string,
   change: (set: PermissionSet) => PermissionSet,
 ): PermissionSet[] {
-  return sets.map((s) => (s.id === id ? normalizeSet(change(s)) : s));
+  return sets.map((s) => (s.id === id ? normalizeSet(change(s), true) : s));
 }
 
 const PAGES_OF_RESERVATIONS: readonly PermissionPageId[] = [
@@ -263,9 +286,12 @@ export function grantFromSet(raw: PermissionSet): string[] {
   const reservations = set.access.reservations;
   if (reservations !== 'none') {
     for (const id of PAGES_OF_RESERVATIONS) out.add(pagePermission(id));
-    if (reservations !== 'view') out.add(RESERVATION_EDIT_PERMISSION);
-    if (set.checkIn === 'any-time') out.add(CHECK_IN_ANY_TIME_PERMISSION);
-    if (set.checkIn === 'arrival-date') out.add(CHECK_IN_ARRIVAL_DATE_PERMISSION);
+    // View is read-only: no editing and, like legacy, no check in (normalizeSet has set it to never).
+    if (reservations !== 'view') {
+      out.add(RESERVATION_EDIT_PERMISSION);
+      if (set.checkIn === 'any-time') out.add(CHECK_IN_ANY_TIME_PERMISSION);
+      if (set.checkIn === 'arrival-date') out.add(CHECK_IN_ARRIVAL_DATE_PERMISSION);
+    }
   }
   if (set.access.nightAudit !== 'none') {
     out.add(pagePermission('night-audit-history'));
@@ -282,6 +308,34 @@ export function grantFromSet(raw: PermissionSet): string[] {
   return [...out];
 }
 
+/** The editable sets every club has; a save must send exactly these (a PUT replaces the list). */
+export const REQUIRED_SET_IDS: readonly string[] = ['management', 'staff'];
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Structurally a permission set (right kinds of fields); levels are not checked, `normalizeSet` repairs them. */
+export function isPermissionSetShape(v: unknown): v is PermissionSet {
+  return (
+    isRecord(v) &&
+    typeof v.id === 'string' &&
+    typeof v.name === 'string' &&
+    isRecord(v.setup) &&
+    isRecord(v.access) &&
+    isRecord(v.functions)
+  );
+}
+
+/**
+ * Sets read back from storage (the dev mock keeps them in localStorage): all of them well formed and
+ * including every required set, else null so the defaults are used. Normalized.
+ */
+export function parseStoredSets(raw: unknown): PermissionSet[] | null {
+  if (!Array.isArray(raw) || !raw.every(isPermissionSetShape)) return null;
+  const sets = raw.map((s) => normalizeSet(s));
+  return REQUIRED_SET_IDS.every((id) => sets.some((s) => s.id === id)) ? sets : null;
+}
+
 export interface SetProblem {
   setId: string;
   message: string;
@@ -291,6 +345,10 @@ export interface SetProblem {
 export function validateSets(sets: readonly PermissionSet[]): SetProblem[] {
   const problems: SetProblem[] = [];
   const seen = new Set<string>();
+  for (const id of REQUIRED_SET_IDS) {
+    if (!sets.some((s) => s.id === id))
+      problems.push({ setId: id, message: 'A permission set is missing.' });
+  }
   for (const set of sets) {
     if (seen.has(set.id)) problems.push({ setId: set.id, message: 'Duplicate permission set.' });
     seen.add(set.id);
@@ -326,14 +384,37 @@ export const withSetupLevel = (
   setup: { ...set.setup, [id]: level },
 });
 
-export const withAccessLevel = (
+export function withAccessLevel(
   set: PermissionSet,
   key: AccessKey,
   level: AccessLevel,
-): PermissionSet => ({
-  ...set,
-  access: { ...set.access, [key]: clampLevel(key, level) },
-});
+): PermissionSet {
+  const next: PermissionSet = { ...set, access: { ...set.access, [key]: clampLevel(key, level) } };
+  if (key !== 'reservations') return next;
+  const edits = (s: PermissionSet) =>
+    s.access.reservations === 'edit' || s.access.reservations === 'create-edit';
+  // Legacy cascade: Edit switches the reservation functions on (check in Any Time); View or No
+  // Access switches them off (Never).
+  if (edits(next) && !edits(set)) return withReservationFunctions(next, true);
+  if (!edits(next)) return withReservationFunctions(next, false);
+  return next;
+}
+
+const RESERVATION_FUNCTIONS: readonly FunctionKey[] = [
+  'changeReservationRoom',
+  'changeReservationLocation',
+  'changeReservationRoomType',
+  'changeRateCategory',
+  'adjustRoomRate',
+  'undoCheckIn',
+  'checkOutReservation',
+];
+
+function withReservationFunctions(set: PermissionSet, on: boolean): PermissionSet {
+  const functions = { ...set.functions };
+  for (const key of RESERVATION_FUNCTIONS) functions[key] = on;
+  return { ...set, functions, checkIn: on ? 'any-time' : 'never' };
+}
 
 export const withFunction = (set: PermissionSet, key: FunctionKey, on: boolean): PermissionSet => ({
   ...set,

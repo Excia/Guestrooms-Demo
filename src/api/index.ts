@@ -4,7 +4,7 @@ import { createHttpClient } from './http';
 import { createLazyClient } from './lazy';
 import { DEMO_MOCK_USER, MOCK_USER_STORAGE_KEY, resolveMockUser } from './mockUsers';
 import { todayIso } from '../lib/dates';
-import type { PermissionSet } from '../app/permissionSets';
+import { parseStoredSets, type PermissionSet } from '../app/permissionSets';
 import { createUnavailableClient } from './unavailable';
 import type { ApiClient } from './types';
 import { ApiError } from './types';
@@ -23,8 +23,7 @@ function browserSetsStore() {
     load: () => {
       try {
         const raw = globalThis.localStorage?.getItem(MOCK_PERMISSION_SETS_KEY);
-        const parsed: unknown = raw ? JSON.parse(raw) : null;
-        return Array.isArray(parsed) ? (parsed as PermissionSet[]) : null;
+        return raw ? parseStoredSets(JSON.parse(raw)) : null;
       } catch {
         return null;
       }

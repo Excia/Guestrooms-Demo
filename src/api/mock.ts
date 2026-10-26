@@ -10,8 +10,13 @@ import {
   noGrant,
 } from './mockData';
 import {
+  ADMIN_PERMISSION,
   adminEditPermission,
+  type AdminPageId,
+  type Permissions,
+  CHECK_IN_ANY_TIME_PERMISSION,
   checkInLevel,
+  EMPLOYEES_EDIT_PERMISSION,
   LOCATIONS_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
 } from '../app/permissions';
@@ -31,6 +36,7 @@ import { assertChangeLogQuery } from './changeLogValidation';
 import { mockChangeLog, MOCK_EVENT_TYPES, queryChangeLog } from './changeLogData';
 import { mockCustomReports } from './reportsData';
 import { mockLocations, MOCK_LOCATION_AREAS } from './locationsData';
+import { mockEmployeeCandidates, mockEmployees } from './employeesData';
 import {
   mockSystemSettings,
   MOCK_HOUSE_ACCOUNTS,
@@ -57,13 +63,8 @@ import {
   undoCheckIn,
   type CancelledStore,
 } from './reservationMenuData';
-import {
-  addPaymentMethod,
-  checkInReservation,
-  isMockOverrideCode,
-  paymentOnFile,
-  splitRoom,
-} from './checkInData';
+import { addPaymentMethod, checkInReservation, paymentOnFile, splitRoom } from './checkInData';
+import { createPinGuard, MOCK_PIN_HOLDERS } from './overridePin';
 import { buildQuickStats, emptyQuickStats } from './quickStatsData';
 import { buildListRows, checkInRoom, listOptions } from './reservationListData';
 import { queryReservationList } from './reservationListQuery';
@@ -96,6 +97,7 @@ import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
 import { validateSystemSettings } from '../app/systemSettings';
 import { checkRemoveLocation, validateLocations } from '../app/locations';
+import { isEmployeeRole, lastAdministratorProblem, needsPermissionSet } from '../app/employees';
 import {
   unknownOptionIds,
   normalizeLabel,
@@ -142,7 +144,7 @@ import {
   assertAddPaymentMethodRequest,
   assertCheckInReservationRequest,
   assertSplitRoomRequest,
-  assertVerifyOverrideCodeRequest,
+  assertVerifyOverridePinRequest,
 } from './checkInApi';
 
 export interface MockOptions {
@@ -228,9 +230,17 @@ export function createMockClient({
   let encoderKeys = mockEncoderKeys();
   let bookingRules = mockBookingRules();
   let locations = mockLocations();
+  let employees = mockEmployees();
+  // The club directory: people with access and people without (the add type-ahead source).
+  const directory = [
+    ...employees.map((e) => ({ id: e.id, label: e.name })),
+    ...mockEmployeeCandidates(),
+  ];
   const changeLog = mockChangeLog(today);
   const folioStore: FolioStore = new Map();
-  let permissionSets = (permissionSetsStore?.load() ?? mockPermissionSets()).map(normalizeSet);
+  let permissionSets = (permissionSetsStore?.load() ?? mockPermissionSets()).map((s) =>
+    normalizeSet(s),
+  );
   // The signed-in user's grant: derived from their (saved) permission set, else the fixed one.
   const currentGrant = (): PermissionGrant => {
     const set = permissionSetId ? permissionSets.find((s) => s.id === permissionSetId) : undefined;
@@ -311,15 +321,29 @@ export function createMockClient({
       })),
     };
   }
+  // One caller in the mock, so one rate limit and lockout for every PIN test.
+  const pinGuard = createPinGuard(
+    MOCK_PIN_HOLDERS,
+    now,
+    undefined,
+    // A holder in a permission set counts only while the saved set allows PIN override and grants the
+    // permission (ticket 186); the Administrator (no set) always counts.
+    (holder) => {
+      if (!holder.permissionSetId) return holder.grant;
+      const set = permissionSets.find((s) => s.id === holder.permissionSetId);
+      return set?.pinOverride ? { role: set.name, permissions: grantFromSet(set) } : null;
+    },
+  );
   const checkInEnv = () => ({
     now: now(),
     // The mock's "today" is configured; only the time of day follows the club's real clock.
     clock: { date: schedule.today, time: clubClock(systemSettings.timeZone, now()).time },
     checkOutTime: systemSettings.checkOutTime,
     level: checkInLevel(permissionsFromGrant(currentGrant()).can),
+    checkPin: (pin: string) => pinGuard.check(CHECK_IN_ANY_TIME_PERMISSION, pin),
   });
 
-  return {
+  const client: ApiClient = {
     dashboard: {
       getStats: (o) =>
         respond(
@@ -475,22 +499,6 @@ export function createMockClient({
           () => {
             assertCheckInReservationRequest(request);
             throw notFound();
-          },
-          o,
-        ),
-      verifyOverrideCode: (request, o) =>
-        respond(
-          () => {
-            assertVerifyOverrideCodeRequest(request);
-            // Only a signed-in user holding a check-in grant may probe codes.
-            if (checkInEnv().level === 'never') {
-              throw new ApiError(403, 'You may not check in', { code: 'forbidden' });
-            }
-            return { valid: isMockOverrideCode(request.code) };
-          },
-          () => {
-            assertVerifyOverrideCodeRequest(request);
-            return { valid: false };
           },
           o,
         ),
@@ -873,6 +881,76 @@ export function createMockClient({
         respond(
           () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
           () => structuredClone(MOCK_BOOKING_RULES_OPTIONS),
+          o,
+        ),
+    },
+    employees: {
+      list: (o) =>
+        respond(
+          () => structuredClone(employees),
+          () => [],
+          o,
+        ),
+      listCandidates: (o) =>
+        respond(
+          () =>
+            directory.filter((p) => !employees.some((e) => e.id === p.id)).map((p) => ({ ...p })),
+          () => [],
+          o,
+        ),
+      save: (input, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            }
+            const person = directory.find((p) => p.id === input.id);
+            const setOk =
+              input.permissionSetId === null
+                ? !needsPermissionSet(input.role)
+                : needsPermissionSet(input.role) &&
+                  permissionSets.some((s) => s.id === input.permissionSetId);
+            if (!person || !isEmployeeRole(input.role) || !setOk) {
+              throw new ApiError(422, 'Employee is not valid', { code: 'validation' });
+            }
+            if (lastAdministratorProblem(employees, input.id, input)) {
+              throw new ApiError(409, 'The club needs an active administrator', {
+                code: 'last-administrator',
+              });
+            }
+            const stored = {
+              id: person.id,
+              name: person.label,
+              role: input.role,
+              permissionSetId: input.permissionSetId,
+              active: input.active,
+            };
+            // A replace of this person's assignment: repeating the save changes nothing.
+            employees = employees.some((e) => e.id === input.id)
+              ? employees.map((e) => (e.id === input.id ? stored : e))
+              : [...employees, stored];
+            return { ...stored };
+          },
+          () => ({ name: '', ...input }),
+          o,
+        ),
+      remove: (id, o) =>
+        respond(
+          () => {
+            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
+              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            }
+            if (!employees.some((e) => e.id === id)) {
+              throw new ApiError(404, 'Employee not found', { code: 'not-found' });
+            }
+            if (lastAdministratorProblem(employees, id, null)) {
+              throw new ApiError(409, 'The club needs an active administrator', {
+                code: 'last-administrator',
+              });
+            }
+            employees = employees.filter((e) => e.id !== id);
+          },
+          () => undefined,
           o,
         ),
     },
@@ -1408,6 +1486,28 @@ export function createMockClient({
           o,
         ),
     },
+    overrides: {
+      verifyPin: (request, o) =>
+        respond(
+          () => {
+            assertVerifyOverridePinRequest(request);
+            // Only a signed-in user holding a check-in grant may probe PINs.
+            if (checkInEnv().level === 'never') {
+              throw new ApiError(403, 'You may not check in', { code: 'forbidden' });
+            }
+            const check = pinGuard.check(request.permission, request.pin);
+            if (check.kind === 'locked') {
+              return { valid: false, lockedForSeconds: check.retryAfterSeconds };
+            }
+            return { valid: check.kind === 'valid' };
+          },
+          () => {
+            assertVerifyOverridePinRequest(request);
+            return { valid: false };
+          },
+          o,
+        ),
+    },
     permissions: {
       getGrant: (o) =>
         respond(
@@ -1417,20 +1517,35 @@ export function createMockClient({
         ),
       listPermissionSets: (o) =>
         respond(
-          () => summarizeSets(permissionSets),
+          () => {
+            // Employees needs the list without `permissions.edit`: any user who may open Employees
+            // or Permissions (or an administrator) may read it.
+            const can = permissionsFromGrant(currentGrant()).can;
+            if (!can(ADMIN_PERMISSION) && !can('page.employees') && !can('page.permissions')) {
+              throw new ApiError(403, 'You may not read permission sets', { code: 'forbidden' });
+            }
+            return summarizeSets(permissionSets);
+          },
           () => summarizeSets([]),
           o,
         ),
       getPermissionSets: (o) =>
         respond(
-          () => structuredClone(permissionSets),
+          () => {
+            const can = permissionsFromGrant(currentGrant()).can;
+            if (!can(ADMIN_PERMISSION) && !can('page.permissions')) {
+              throw new ApiError(403, 'You may not read permissions', { code: 'forbidden' });
+            }
+            return structuredClone(permissionSets);
+          },
           () => [],
           o,
         ),
       savePermissionSets: (sets, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(currentGrant()).can(adminEditPermission('permissions'))) {
+            // Only an administrator changes permissions: a set can never grant more than its editor holds.
+            if (!permissionsFromGrant(currentGrant()).can(ADMIN_PERMISSION)) {
               throw new ApiError(403, 'You may not change permissions', { code: 'forbidden' });
             }
             // Like the backend: only the existing editable sets, each valid.
@@ -1440,10 +1555,13 @@ export function createMockClient({
             ) {
               throw new ApiError(422, 'Permission sets are not valid', { code: 'validation' });
             }
-            permissionSets = permissionSets.map((p) => {
-              const next = sets.find((s) => s.id === p.id);
-              return next ? normalizeSet({ ...next, name: p.name }) : p;
-            });
+            // A replace: the stored list is exactly what was sent (the names stay as they were).
+            permissionSets = sets.map((next) =>
+              normalizeSet({
+                ...next,
+                name: permissionSets.find((p) => p.id === next.id)?.name ?? next.name,
+              }),
+            );
             permissionSetsStore?.save(structuredClone(permissionSets));
             return structuredClone(permissionSets);
           },
@@ -1452,4 +1570,33 @@ export function createMockClient({
         ),
     },
   };
+  return guardAdminWrites(client, () => permissionsFromGrant(currentGrant()).can);
+}
+
+// The Admin Setup writes a View-only user must be refused (ticket 186): like the backend, each needs
+// `admin` or `<page>.edit`. Locations and Employees check inside their own methods.
+const ADMIN_WRITES: readonly [keyof ApiClient, readonly string[], AdminPageId][] = [
+  ['roomSetup', ['saveRoomType', 'deleteRoomType'], 'room-types'],
+  ['roomSetup', ['saveRoom', 'deleteRoom', 'saveRoomOrder'], 'rooms'],
+  ['roomOptions', ['save'], 'room-options'],
+  ['addOns', ['save', 'delete'], 'add-on-items'],
+  ['rateCategories', ['save', 'duplicate', 'delete'], 'rate-categories'],
+  ['bookingRules', ['save'], 'booking-rules'],
+  ['systemSettings', ['save'], 'primary-setup'],
+  ['keycards', ['saveEncoders', 'retrieveEncoders'], 'keycard-integration'],
+];
+
+function guardAdminWrites(client: ApiClient, can: () => Permissions['can']): ApiClient {
+  for (const [area, methods, page] of ADMIN_WRITES) {
+    const target = client[area] as unknown as Record<string, (...args: unknown[]) => unknown>;
+    for (const name of methods) {
+      const original = target[name];
+      if (!original) continue;
+      target[name] = (...args: unknown[]) =>
+        can()(ADMIN_PERMISSION) || can()(adminEditPermission(page))
+          ? original(...args)
+          : Promise.reject(new ApiError(403, `You may not change ${page}`, { code: 'forbidden' }));
+    }
+  }
+  return client;
 }

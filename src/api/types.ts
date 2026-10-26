@@ -601,10 +601,32 @@ export interface CheckInReservationResult {
   integrationErrors: IntegrationError[];
 }
 
-/** Which permission an override code is for (ticket 127 builds the real PIN prompt). */
-export interface VerifyOverrideCodeRequest {
-  permission: 'reservation.check-in.any-time';
-  code: string;
+/** The permissions whose holder's PIN can authorize an override. Add one per flow that needs it. */
+export type OverridePermission = 'reservation.check-in.any-time';
+
+/** Ask whether `pin` belongs to an employee who holds `permission` (ticket 187). */
+export interface VerifyOverridePinRequest {
+  permission: OverridePermission;
+  pin: string;
+}
+
+/**
+ * `valid: false` is a normal answer (wrong PIN, unknown PIN and a holder without the permission look
+ * alike). `lockedForSeconds` is present when too many wrong PINs locked the caller out: the PIN was
+ * not tested and the caller must wait.
+ */
+export interface VerifyOverridePinResult {
+  valid: boolean;
+  lockedForSeconds?: number;
+}
+
+/** Override PINs of authorized employees (ticket 187). */
+export interface OverridesApi {
+  /** Advisory: the action that uses the PIN tests it again. */
+  verifyPin(
+    request: VerifyOverridePinRequest,
+    options?: RequestOptions,
+  ): Promise<VerifyOverridePinResult>;
 }
 
 /** Split one room off a multi-room reservation into a reservation of its own; answers the new reservation. */
@@ -649,11 +671,6 @@ export interface ReservationsApi {
     request: CheckInReservationRequest,
     options?: RequestOptions,
   ): Promise<CheckInReservationResult>;
-  /** `{ valid }`; a wrong code is a normal answer, not an error. Ticket 127 replaces the mock rule. */
-  verifyOverrideCode(
-    request: VerifyOverrideCodeRequest,
-    options?: RequestOptions,
-  ): Promise<{ valid: boolean }>;
   /** Add another room for the whole stay (ticket 151). Idempotent on `requestId`. */
   addRoom(request: AddRoomRequest, options?: RequestOptions): Promise<ReservationDetail>;
   /** Set one room's party and named guests (ticket 151). Idempotent on `requestId`. */
@@ -1375,6 +1392,54 @@ export interface LocationsApi {
   save(locations: LocationInput[], options?: RequestOptions): Promise<LocationSetup[]>;
 }
 
+// ---- employees (Admin Setup, LP-A.4 / ticket 185) -----------------------------------------------
+
+/** What an employee does at the club (legacy `GuestRoomsUserType`: Admin, Management, Staff). */
+export type EmployeeRole = 'administrator' | 'manager' | 'staff';
+
+/**
+ * An employee who has been given access to Guest Rooms. People come from the club's own staff
+ * directory (read-only here); this screen only assigns a role and a permission set.
+ */
+export interface EmployeeSetup {
+  /** Id of the person in the club's directory; also the id of the assignment. */
+  id: string;
+  name: string;
+  role: EmployeeRole;
+  /** Null for an administrator (full access) only. */
+  permissionSetId: string | null;
+  /** An inactive employee keeps the assignment but cannot sign in. */
+  active: boolean;
+}
+
+/** What a form sends. `id` is chosen from the directory, so a repeated save changes nothing. */
+export interface EmployeeInput {
+  id: string;
+  role: EmployeeRole;
+  permissionSetId: string | null;
+  active: boolean;
+}
+
+/**
+ * Errors: 422 `validation` (rules in `src/app/employees.ts`), 409 `last-administrator` when the
+ * change would leave the club without an active administrator, 404 `not-found`, 403 `forbidden`
+ * (needs `employees.edit`).
+ */
+export interface EmployeesApi {
+  /** Employees with access, in no particular order. */
+  list(options?: RequestOptions): Promise<EmployeeSetup[]>;
+  /** People of the club directory who have no access yet (the "add" type-ahead source). */
+  listCandidates(options?: RequestOptions): Promise<LookupRef[]>;
+  /**
+   * The permission sets an employee can be given. Minimal on purpose: the Permissions page owns
+   * the sets; this is only what the assignment control needs.
+   */
+  /** Creates or replaces the assignment of `input.id`; answers with what was stored. */
+  save(input: EmployeeInput, options?: RequestOptions): Promise<EmployeeSetup>;
+  /** Removes the access (the legacy "unassigned" type). The person stays in the directory. */
+  remove(id: string, options?: RequestOptions): Promise<void>;
+}
+
 // ---- permissions -----------------------------------------------------------------------------
 
 /**
@@ -1788,6 +1853,7 @@ export interface ReportsApi {
 export interface ApiClient {
   dashboard: DashboardApi;
   reservations: ReservationsApi;
+  overrides: OverridesApi;
   reservationList: ReservationListApi;
   permissions: PermissionsApi;
   schedule: ScheduleApi;
@@ -1800,6 +1866,7 @@ export interface ApiClient {
   keycards: KeycardApi;
   bookingRules: BookingRulesApi;
   locations: LocationsApi;
+  employees: EmployeesApi;
   members: MembersApi;
   folios: FoliosApi;
   reports: ReportsApi;

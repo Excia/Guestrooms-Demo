@@ -548,6 +548,22 @@ backend's concern (Q-75-3).
   (409 `location-in-use`). Needs `locations.edit` (403 otherwise). The change is recorded in the Change Log page `locations`.
 - Revenue of a location goes to the GL account of its area.
 
+## Employees (LP-A.4 / ticket 185, built on the mock)
+
+- `GET /employees` (`employees.list`): employees who have access, `[{ id, name, role, permissionSetId, active }]`. `id` is the
+  person's id in the club directory; `role` is `administrator`, `manager` or `staff`; `permissionSetId` is null for an
+  administrator only.
+- `GET /employees/candidates` (`employees.listCandidates`): directory people without access, `[{ id, label }]`. The UI filters
+  them as the user types.
+- The sets an employee can be given come from `permissions.listPermissionSets` (section "Permission sets", ticket 186); the earlier `GET /employees/permission-sets` is gone. An employee's `permissionSetId` is `management` or `staff` (null for an administrator).
+  Minimal and read-only; the Permissions page (ticket 186) owns the sets.
+- `PUT /employees/{id}` (`employees.save`) with `{ id, role, permissionSetId, active }`: creates or replaces the assignment and
+  answers the stored employee. The id comes from the directory, so repeating the PUT changes nothing. The backend re-checks:
+  person exists; role is valid; a manager or staff needs an existing permission set, an administrator none (422 `validation`);
+  the change must leave at least one active administrator (409 `last-administrator`). Needs `employees.edit` (403).
+- `DELETE /employees/{id}` (`employees.remove`): removes the access (legacy "Unassigned"); the person returns to the candidates.
+  404 `not-found`; 409 `last-administrator`; needs `employees.edit`. The changes are recorded in the Change Log page `employees`.
+
 ## Room closures (ticket 149)
 
 - `SaveClosureRequest {roomId, startDate, endDate, description, requestId}`; dates are half-open like
@@ -566,7 +582,7 @@ backend's concern (Q-75-3).
 | Method and path                           | Body / response                                                                                                                                    | Errors                                                                                                                                           |
 | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `POST /reservations/{id}/check-in`        | `CheckInReservationRequest { requestId, reservationId, version, reservationRoomIds[], pastDateConfirmed, overrideCode?, checkOutAfter }` returns `CheckInReservationResult { reservation, rooms[], autoCheckedOut, nightsPosted, integrationErrors[] }` | 400 `invalid-id`/`invalid-query`; 403 `forbidden`, `override-required`, `override-invalid`; 404; 409 `stale`, `future-arrival`, `past-date-unconfirmed`, `idempotency-conflict` |
-| `POST /override-codes/verify`             | `{ permission: 'reservation.check-in.any-time', code }` returns `{ valid }` (a wrong code is a normal answer)                                       | 400                                                                                                                                              |
+| `POST /overrides/verify-pin`              | `VerifyOverridePinRequest { permission: 'reservation.check-in.any-time', pin }` returns `{ valid, lockedForSeconds? }` (a wrong PIN is a normal answer; `lockedForSeconds` means locked out, see below) | 400; 403 `forbidden`                                                                                                                             |
 | `POST /reservation-rooms/{id}/split`      | `SplitRoomRequest { requestId, reservationId, reservationRoomId, version }` returns the **new** `ReservationDetail`                                 | 400; 403 `forbidden`; 404; 409 `stale`, `not-splittable` (one room), `idempotency-conflict`                                                      |
 | `POST /reservations/{id}/payment-methods` | PLACEHOLDER (ticket 3.9): puts a mock card on file; returns the `ReservationDetail`                                                                | 400; 404                                                                                                                                         |
 
@@ -576,7 +592,7 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   A past arrival needs `pastDateConfirmed: true` (409 `past-date-unconfirmed`). A future arrival is 409 `future-arrival` at every level.
 - The caller's check-in level is `any-time`, `arrival-date-only` or `never` (permissions below). `never` is 403 `forbidden`.
   `arrival-date-only` plus a past arrival needs a valid `overrideCode` (403 `override-required` / `override-invalid`).
-  Ticket 127 builds the real PIN prompt and validation; the mock accepts one fixed placeholder code.
+  Ticket 187 built the PIN prompt and the mock validation (see "Override PINs" below).
 - A room that cannot be checked in does not fail the request. It comes back in `rooms[]` with `checkedIn: false` and a `failure`:
   `unassigned`, `room-not-ready` (dirty), `occupied` (another reservation is still checked in to the assigned room),
   `no-payment-method` (required also for a past date, D-008), `not-checkable` (not waiting for check in). The other rooms are still checked in.
@@ -589,17 +605,30 @@ Rules the backend must enforce (the mock does, `src/api/checkInData.ts`; the UI 
   Absent means the backend does not say; the UI then lets the attempt run and the backend answers.
 - The Reservation List's bulk check in only selects reservations arriving **today** (the club's date): past-dated and future ones are never bulk checked in.
 
-**Override codes: what the real backend must do (ticket 163; ticket 127 builds the prompt):**
+**Override PINs: what the real backend must do (tickets 163 and 187):**
 
-- `POST /override-codes/verify` and the `overrideCode` of `POST /reservations/{id}/check-in` are the only places a code is
+- `POST /overrides/verify-pin` and the `overrideCode` of `POST /reservations/{id}/check-in` are the only places a code is
   tested, so both need **rate limiting and lockout** (per user and per club, e.g. a short lock after a few wrong codes) and must answer
   the same way for "wrong" and "unknown" so codes cannot be probed. Only a signed-in user who holds a check-in grant may call verify
   (the mock answers 403 `forbidden` otherwise).
 - **Verify is advisory.** It only lets the UI move on or show an error early; the check in **re-validates** the code every time and
   is the only authority. A code verified earlier must not be trusted.
-- The request's `permission: 'reservation.check-in.any-time'` names the permission whose holder's PIN is accepted: a code is valid when it
-  belongs to a user who holds that permission (a manager), not to the caller. It is the only value today; it is a field so other
-  override-able permissions can use the same endpoint.
+- The request's `permission: 'reservation.check-in.any-time'` names the permission whose holder's PIN is accepted: a PIN is valid when it
+  belongs to an employee who holds that permission (a manager), not to the caller. It is the only value today; it is a field so other
+  override-able permissions can use the same endpoint (`OverridePermission` in `src/api/types.ts`; the reusable `OverridePinDialog`
+  takes it as a prop). "Wrong", "unknown" and "holder lacks the permission" all answer `{ valid: false }`.
+- **Lockout (as mocked, numbers are placeholders):** 5 wrong PINs in a row lock the caller for 300 seconds (`MAX_FAILED_PINS`,
+  `PIN_LOCKOUT_SECONDS` in `src/api/overridePin.ts`). While locked no PIN is tested, not even a right one. Verify then answers
+  `{ valid: false, lockedForSeconds }` (a normal answer, so the dialog can show the wait); the check in answers **429
+  `override-locked`** with `details.retryAfterSeconds`. A right PIN resets the count. The count and the lock are shared by both
+  endpoints. **Forms the UI accepts for "locked out" on verify:** `200 { valid: false, lockedForSeconds }` or `HTTP 429` with the wait in
+  the `Retry-After` header (whole seconds) or in `details.retryAfterSeconds: ['<seconds>']` (a 429 with neither is shown as 60 seconds).
+  `{ valid: true, lockedForSeconds }` is contradictory and the client rejects it as `invalid-response`. On the check in the form is
+  `429 override-locked` with `details.retryAfterSeconds` (or `Retry-After`); the dialog reopens already locked for that long.
+- **The real backend should not copy the mock's reset-on-success.** Count failures per target (the employee whose PIN is guessed) and
+  per club, and do not reset the count when a different PIN succeeds: otherwise a caller who owns a valid PIN can alternate it with
+  guesses and never lock out. The mock resets on a right PIN only because it has a single caller.
+- The older name `POST /override-codes/verify` with `{ permission, code }` and `reservations.verifyOverrideCode` no longer exist.
 - **Audit record** for every override: who entered the code, whose code it was, which reservation and rooms, the permission and the time, also for refused attempts.
 - **Never log the code** (request bodies of these two endpoints must be excluded from access logs and traces) and never store it in
   the idempotency record: store a hash of it. The mock does this: its replay fingerprint holds a hash, not the code.
@@ -669,16 +698,22 @@ backend derives from the set the user is assigned to. Administrators hold every 
 
 | #   | Endpoint                | Request                                  | Success                                                  | Errors                                               |
 | --- | ----------------------- | ---------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------- |
-| 1   | `GET /permission-sets`  | none                                     | `PermissionSet[]` (the editable sets, in full)           | 401, 5xx                                             |
-| 2   | `PUT /permission-sets`  | `PermissionSet[]` (replaces the sets)    | `PermissionSet[]` as stored                              | 401, 403 `forbidden` without `permissions.edit`, 422 |
+| 1   | `GET /permission-sets`  | none                                     | `PermissionSet[]` (the editable sets, in full)           | 401, 403 `forbidden` without `page.permissions`/`admin` |
+| 2   | `GET /permission-sets?fields=summary` | none                       | `{ id, name, editable }[]`, Administrator first          | 401, 403 `forbidden` without `page.employees`, `page.permissions` or `admin` |
+| 3   | `PUT /permission-sets`  | `PermissionSet[]` (replaces the list)    | `PermissionSet[]` as stored                              | 401, 403 `forbidden` unless the caller is an administrator, 422 |
+
+**Who may write (privilege escalation):** only an administrator saves. A set can never grant more than its editor holds, and the Permissions page offers a non-admin
+set only View or No Access on each Admin Setup page (as legacy), so editing a set cannot raise anyone above an administrator's own decision. **Replace semantics:** `PUT` stores exactly the
+sets sent and must include `management` and `staff` (422 otherwise); names are kept as stored. The client lists sets for Employees with `fields=summary` so Employees needs no
+`permissions.edit`.
 
 `PermissionSet { id, name, setup: { <admin page id>: 'none' | 'view' | 'edit' }, access: { <area>: 'none' | 'view' | 'edit' | 'create-edit' },
 functions: { <key>: boolean }, checkIn: 'any-time' | 'arrival-date' | 'never', pinOverride: boolean }`. The client method
 `listPermissionSets()` (used by Employees) is `GET /permission-sets` reduced to `{ id, name, editable }[]` plus the Administrator
 entry (`{ id: 'admin', name: 'Administrator', editable: false }`); it needs no endpoint of its own.
 
-- **Rules the backend repeats:** a missing page or area is the lowest level; a level the area does not offer is lowered; a function or the
-  check-in setting under an area set to No Access is off. `id` must be an existing editable set; the Administrator set cannot be changed
+- **Rules the backend repeats:** a missing page or area is the lowest level (a page key the client does not know is kept); a level the area does not offer is lowered; a function or the
+  check-in setting whose area does not allow it is off, and Reservation Events functions and check in need Edit or Create + Edit (View forces them off, check in Never). The client only rejects a structurally wrong body; unknown levels are repaired. `id` must be an existing editable set; the Administrator set cannot be changed
   (422). Repeating a save changes nothing. Names are not editable.
 - **Grant mapping (`GET /permissions/me`):** `page.<id>` for View, plus `<id>.edit` for Edit (Admin Setup pages); `reservation.edit`
   for Reservation Events Edit or better; the two check-in grants from `checkIn`; `page.night-audit-history` for Night Audit View and
