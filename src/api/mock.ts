@@ -16,7 +16,6 @@ import {
   type Permissions,
   CHECK_IN_ANY_TIME_PERMISSION,
   checkInLevel,
-  EMPLOYEES_EDIT_PERMISSION,
   LOCATIONS_EDIT_PERMISSION,
   RESERVATION_EDIT_PERMISSION,
 } from '../app/permissions';
@@ -908,8 +907,11 @@ export function createMockClient({
       save: (input, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
-              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            // Only an administrator changes employees (and so permissions): nobody edits their own.
+            if (!permissionsFromGrant(currentGrant()).can(ADMIN_PERMISSION)) {
+              throw new ApiError(403, 'Only an administrator may change employees', {
+                code: 'forbidden',
+              });
             }
             const person = directory.find((p) => p.id === input.id);
             const setOk =
@@ -944,8 +946,11 @@ export function createMockClient({
       saveRoles: (inputs, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
-              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            // Only an administrator changes employees (and so permissions): nobody edits their own.
+            if (!permissionsFromGrant(currentGrant()).can(ADMIN_PERMISSION)) {
+              throw new ApiError(403, 'Only an administrator may change employees', {
+                code: 'forbidden',
+              });
             }
             const ids = inputs.map((i) => i.id);
             if (
@@ -1001,8 +1006,11 @@ export function createMockClient({
       remove: (id, o) =>
         respond(
           () => {
-            if (!permissionsFromGrant(currentGrant()).can(EMPLOYEES_EDIT_PERMISSION)) {
-              throw new ApiError(403, 'You may not change employees', { code: 'forbidden' });
+            // Only an administrator changes employees (and so permissions): nobody edits their own.
+            if (!permissionsFromGrant(currentGrant()).can(ADMIN_PERMISSION)) {
+              throw new ApiError(403, 'Only an administrator may change employees', {
+                code: 'forbidden',
+              });
             }
             if (!employees.some((e) => e.id === id)) {
               throw new ApiError(404, 'Employee not found', { code: 'not-found' });

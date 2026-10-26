@@ -1,5 +1,6 @@
 import { useReadOnly } from '../../app/readOnlyContext';
 import Delete from '@mui/icons-material/Delete';
+import DeleteForever from '@mui/icons-material/DeleteForever';
 import Box from '@mui/material/Box';
 import IconButton, { type IconButtonProps } from '@mui/material/IconButton';
 import Tooltip from '@mui/material/Tooltip';
@@ -16,6 +17,8 @@ export interface RemoveIconButtonProps {
   /** "danger" (the standard for removing a row) uses the theme's error colour. */
   tone?: 'danger' | 'neutral';
   size?: IconButtonProps['size'];
+  /** The legacy Employees screen draws `delete_forever` at 31px (Quasar lg). Default: the trash can. */
+  icon?: 'delete' | 'delete-forever';
   sx?: IconButtonProps['sx'];
 }
 
@@ -28,6 +31,7 @@ export default function RemoveIconButton({
   disabledReason,
   tone = 'danger',
   size = 'medium',
+  icon = 'delete',
   sx,
 }: RemoveIconButtonProps) {
   const reasonId = useId();
@@ -59,7 +63,11 @@ export default function RemoveIconButton({
             ...(Array.isArray(sx) ? sx : sx ? [sx] : []),
           ]}
         >
-          <Delete fontSize={size === 'small' ? 'small' : 'medium'} />
+          {icon === 'delete-forever' ? (
+            <DeleteForever sx={(t) => ({ fontSize: t.spacing(3.875) })} />
+          ) : (
+            <Delete fontSize={size === 'small' ? 'small' : 'medium'} />
+          )}
         </IconButton>
         {reason ? (
           <Box id={reasonId} component="span" sx={visuallyHidden}>

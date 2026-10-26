@@ -392,4 +392,28 @@ describe('Employees page (legacy EmployeesEdit)', () => {
     expect(await screen.findByRole('option', { name: 'Priya Nair' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Sam Rivera' })).not.toBeInTheDocument();
   });
+
+  it('is view-only for a non-administrator even when granted employees.edit', async () => {
+    renderPage(createMockClient(), ['page.employees', 'employees.edit']);
+    await loaded();
+    expect(screen.queryByRole('button', { name: 'Add Employee' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Remove/ })).not.toBeInTheDocument();
+    expect(typeOf('Marcus Bell')).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('frees the only administrator the moment another employee is made administrator in the draft', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await loaded();
+    expect(typeOf('Alex Moreno')).toHaveAttribute('aria-disabled', 'true');
+    await choose(user, typeOf('Marcus Bell'), 'Administrator');
+    expect(typeOf('Alex Moreno')).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Remove Alex Moreno' })).toBeEnabled();
+    // And now Marcus is the only one whose controls are locked.
+    expect(typeOf('Marcus Bell')).not.toHaveAttribute('aria-disabled', 'true');
+    await choose(user, typeOf('Alex Moreno'), 'Staff');
+    expect(typeOf('Marcus Bell')).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByRole('button', { name: 'Remove Marcus Bell' })).not.toBeInTheDocument();
+  });
 });
