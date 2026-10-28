@@ -1105,6 +1105,37 @@ export interface RoomSetupApi {
   saveRoomOrder(roomIds: string[], options?: RequestOptions): Promise<RoomSetup[]>;
 }
 
+// ---- photo upload (Admin Setup: Room Types, Rooms, Add-On Items; ticket 190) -----------------
+
+/** What a photo belongs to. `entityId` is null while the record is new (not saved yet). */
+export type PhotoOwner = 'room-type' | 'room' | 'add-on';
+
+/** A file the user picked. The mock reads only this metadata; the backend receives the bytes. */
+export interface PhotoUploadFile {
+  name: string;
+  type: string;
+  size: number;
+}
+
+export interface PhotoUploadRequest {
+  owner: PhotoOwner;
+  entityId: string | null;
+  /** How many photos the record already has (the total limit counts them). */
+  existingCount: number;
+  files: PhotoUploadFile[];
+}
+
+/**
+ * Uploads photos and answers one `RoomPhoto` per file, in the order sent (`url` is empty until the
+ * storage service exists; the form previews the local file). The backend stores the files; the
+ * mock stores nothing. Deleting and reordering are part of saving the record (its `photos` list),
+ * so a photo removed from the form is dropped by the save. Errors: 422 `validation` (type, size,
+ * count or file name outside the rules in `src/app/photos.ts`), 5xx.
+ */
+export interface PhotoApi {
+  upload(request: PhotoUploadRequest, options?: RequestOptions): Promise<RoomPhoto[]>;
+}
+
 // ---- room options (Admin Setup, ticket LP-A.2 / 7.12) -----------------------------------------
 
 /** The club's Features and Bed Sizes: the one list Room Types, Rooms and the Schedule filter read. */
@@ -1912,6 +1943,7 @@ export interface ApiClient {
   settings: SettingsApi;
   systemSettings: SystemSettingsApi;
   roomSetup: RoomSetupApi;
+  photos: PhotoApi;
   roomOptions: RoomOptionsApi;
   addOns: AddOnApi;
   rateCategories: RateCategoryApi;

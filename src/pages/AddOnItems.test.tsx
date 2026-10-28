@@ -108,6 +108,9 @@ describe('Add-On Items page', () => {
     await loaded();
     await user.click(within(list()).getByRole('button', { name: 'Rollaway bed' }));
     await user.click(screen.getByRole('button', { name: 'Remove photo rollaway.jpg' }));
+    const confirm = screen.getByRole('button', { name: 'Confirm remove photo rollaway.jpg' });
+    await waitFor(() => expect(confirm).toHaveAttribute('aria-disabled', 'false'));
+    await user.click(confirm);
     expect(screen.getByText('0 of 50 photos')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Add-On' }));
     expect((await screen.findAllByText('Add-On Saved')).length).toBeGreaterThan(0);

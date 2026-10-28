@@ -3,7 +3,6 @@
 import type {
   RoomDetails,
   RoomInput,
-  RoomPhoto,
   RoomSetup,
   RoomSetupOptions,
   RoomTypeInput,
@@ -13,10 +12,15 @@ import { isValidIsoDate } from './dateSelection';
 
 export const NAME_MAX = 50;
 export const DESCRIPTION_MAX = 750;
-export const MAX_PHOTOS = 50;
-/** PLACEHOLDER until the storage service decides (Q-72-1): the PDF leaves types and size open. */
-export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
-export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+// The photo rules (limits, filtering, reorder) live in ./photos; re-exported for the setup pages.
+export {
+  acceptPhotoFiles,
+  MAX_PHOTOS,
+  PHOTO_MAX_BYTES,
+  PHOTO_TYPES,
+  removePhoto,
+  type PhotoFile,
+} from './photos';
 
 export const COUNT_LIMITS = {
   maxOccupancy: { min: 1, max: 99 },
@@ -253,36 +257,6 @@ export function checkDeleteRoom(
   }
   return { kind: 'ok', message: `Delete ${room.name}? This cannot be undone.` };
 }
-
-export interface PhotoFile {
-  name: string;
-  type: string;
-  size: number;
-}
-
-/** Filters a selection of files for the uploader; `errors` explain every file left out. */
-export function acceptPhotoFiles<T extends PhotoFile>(
-  files: readonly T[],
-  existingCount: number,
-): { accepted: T[]; errors: string[] } {
-  const accepted: T[] = [];
-  const errors: string[] = [];
-  for (const file of files) {
-    if (!(PHOTO_TYPES as readonly string[]).includes(file.type)) {
-      errors.push(`${file.name} is not a JPEG, PNG or WebP image.`);
-    } else if (file.size > PHOTO_MAX_BYTES) {
-      errors.push(`${file.name} is larger than ${PHOTO_MAX_BYTES / (1024 * 1024)} MB.`);
-    } else if (existingCount + accepted.length >= MAX_PHOTOS) {
-      errors.push(`${file.name} was not added: at most ${MAX_PHOTOS} photos.`);
-    } else {
-      accepted.push(file);
-    }
-  }
-  return { accepted, errors };
-}
-
-export const removePhoto = (photos: readonly RoomPhoto[], id: string): RoomPhoto[] =>
-  photos.filter((p) => p.id !== id);
 
 /** Quantity picker: clamps to the range and rounds to a whole number. */
 export function clampCount(value: number, min: number, max: number): number {

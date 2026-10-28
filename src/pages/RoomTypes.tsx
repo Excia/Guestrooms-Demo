@@ -293,6 +293,9 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
           />
         </Box>
         <PhotosField
+          key={editor.selectedId ?? 'new'}
+          owner="room-type"
+          entityId={editor.selectedId}
           id={fieldDomId('photos')}
           photos={draft.details.photos}
           onChange={(photos) => setDetails({ ...draft.details, photos })}
