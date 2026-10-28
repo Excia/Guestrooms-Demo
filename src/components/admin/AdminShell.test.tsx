@@ -69,6 +69,17 @@ describe('AdminShell side navigation', () => {
     expect(screen.getByRole('button', { name: 'API Keys' })).toBeDisabled();
   });
 
+  it('draws a divider above the first entry of the second group only, from lg up', () => {
+    renderShell();
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((st) => st.textContent ?? '')
+      .join('\n');
+    // Emotion writes the lg rule inside a min-width media query; only the groupStart item has it.
+    expect(
+      css.match(/@media \(min-width:1200px\)\{[^}]*padding-top:[^}]*border-top:1px solid/g),
+    ).toHaveLength(1);
+  });
+
   // Legacy SideBarControl: a 5px bar pinned to the panel edge, 15px from the tab, rounded on the left.
   it('draws one 5px active bar pinned to the right edge of the active item', () => {
     renderShell();

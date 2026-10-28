@@ -55,7 +55,7 @@ export default function Rooms() {
   const data = useRoomSetupData();
   if (data.status !== 'ready' || !data.options) {
     return (
-      <AdminShell active="Room Options" title="Rooms">
+      <AdminShell active="Rooms" title="Rooms">
         {data.status === 'error' ? (
           <Alert
             severity="error"
@@ -198,7 +198,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
   const title = editor.selected?.name ?? 'New Room';
   return (
     <AdminShell
-      active="Room Options"
+      active="Rooms"
       title={title}
       changeLog="rooms"
       sidebarLabel="Rooms"

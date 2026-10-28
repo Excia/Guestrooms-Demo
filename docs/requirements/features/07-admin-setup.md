@@ -4,7 +4,7 @@ Epic issue: Excia/Guestrooms-Demo#69. Figma page: Admin Setup. Back to the [inde
 fields are described in [00-foundation.md](00-foundation.md).
 
 **Shell (from tickets 7.1 and 7.3 to 7.7):** left navigation Locations, Room Options, Booking Rules,
-System Settings, Employees, Permissions, Keycard Integration, API Integrations, Migration Tool; a page
+System Settings, Employees, Permissions, Keycard Integration, API Integrations, Migration Tool (the nav entry was removed, D-AN-1; API Keys and four list pages were added); a page
 title; a primary save button. Admin-only routes (ticket 0.8). **Gaps:** Locations, Employees, Permissions
 and API Integrations appear in that navigation but have **no ticket and no design** (a follow-up epic
 "Employees and Permissions" is planned once the Permissions screenshot arrives, D-009). The menu's six
@@ -293,6 +293,8 @@ Excia/Guestrooms-Demo#75. Figma: Keycard Integration 2829:6860.
 - **Open questions:** Q-75-1 to Q-75-3.
 
 ## 7.7 Migration Tool
+
+> The left-navigation entry was removed (D-AN-1, entries/admin-menu-cleanup.md); the rest of this section is unchanged.
 
 Excia/Guestrooms-Demo#76. Figma: page, errors and results 15957:84602.
 
