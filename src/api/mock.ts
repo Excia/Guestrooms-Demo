@@ -95,6 +95,7 @@ import { validateEncoderKeys } from '../app/keycards';
 import { applyRoomOrder, orderScheduleRooms } from '../app/roomOrder';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
+import { referencedRateCategoryIds } from '../app/defaultRateCategories';
 import { validateSystemSettings } from '../app/systemSettings';
 import { checkRemoveLocation, validateLocations } from '../app/locations';
 import { isEmployeeRole, lastAdministratorProblem, needsPermissionSet } from '../app/employees';
@@ -122,6 +123,7 @@ import type {
   PermissionGrant,
   RequestOptions,
   RoomChangeRule,
+  SystemSettingsOptions,
 } from './types';
 import { ApiError } from './types';
 import {
@@ -225,6 +227,12 @@ export function createMockClient({
   const listCheckedIn = new Set<string>();
   const cancelledReservations: CancelledStore = new Map();
   let systemSettings = mockSystemSettings();
+  // The rate categories follow the Rate Categories list; the member types are the Booking Rules ones.
+  const systemSettingsOptions = (): SystemSettingsOptions => ({
+    ...structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
+    rateCategories: rateCategories.map((c) => ({ id: c.id, label: c.name })),
+    memberTypes: structuredClone(MOCK_BOOKING_RULES_OPTIONS.memberTypes),
+  });
   let roomTypes = mockRoomTypes();
   let rooms = mockRooms(roomTypes);
   let nextSetupId = 1;
@@ -1133,6 +1141,14 @@ export function createMockClient({
             if (Object.keys(errors).length > 0) {
               throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
             }
+            const known = new Set(rateCategories.map((c) => c.id));
+            if (
+              !referencedRateCategoryIds(settings.defaultRateCategories).every((id) =>
+                known.has(id),
+              )
+            ) {
+              throw new ApiError(422, 'Unknown rate category', { code: 'validation' });
+            }
             systemSettings = structuredClone({
               ...settings,
               onlineBooking: normalizeOnlineBooking(settings.onlineBooking),
@@ -1144,8 +1160,8 @@ export function createMockClient({
         ),
       getOptions: (o) =>
         respond(
-          () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
-          () => structuredClone(MOCK_SYSTEM_SETTINGS_OPTIONS),
+          () => systemSettingsOptions(),
+          () => systemSettingsOptions(),
           o,
         ),
       listHouseAccounts: (query, o) =>

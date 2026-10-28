@@ -752,3 +752,13 @@ The client normalizes sets before `PUT` (hidden N/A rows are sent as off), and t
   (or `admin`) and every read without `page.<id>`, and must refuse a night audit run without `night-audit.run`.
 - **PIN override:** `pinOverride` says whether the set may authorize another employee's override with its PIN. The PIN prompt (ticket
   187) reads it; its endpoints are not part of this section.
+
+## Default Rate Categories (ticket 189, branch `feat/189-default-rate-categories`)
+
+No new endpoint. `GET` and `PUT /settings/system` (row 15 above) gain `defaultRateCategories: {roomBlock, member, nonMember, owner, memberTypeOverrides}`.
+The four first keys are rate category ids (`RateCategorySetup.id`) or null (none chosen); `memberTypeOverrides` is a list of
+`{id, memberTypeId, rateCategoryId}` (ids of Booking Rules member types and rate categories; `id` is client-made for an unsaved row).
+`GET /settings/system/options` gains `rateCategories` and `memberTypes`, lists of `{id, label}`. The client tolerates a response that omits
+any of these for one release (read as none chosen and empty lists); after that they will be required. `PUT` answers 422 `validation` when
+an override lacks its member type or rate category, repeats a member type, or names a rate category that no longer exists
+(`src/app/defaultRateCategories.ts`). Whether the four defaults are required is open (Q-DRC-1).

@@ -12,6 +12,7 @@ import type { SystemSettings as SystemSettingsValues, SystemSettingsOptions } fr
 import {
   firstErrorField,
   isDirty,
+  isDefaultRateCategoriesField,
   isFolioField,
   isRegistrationCardField,
   MESSAGES,
@@ -24,6 +25,7 @@ import { isOnlineBookingField } from '../app/onlineBookingSettings';
 import { useLeaveGuard } from '../app/useLeaveGuard';
 import { useSystemSettings } from '../app/useSystemSettings';
 import AdminShell from '../components/admin/AdminShell';
+import DefaultRateCategoriesTab from '../components/admin/systemSettings/DefaultRateCategoriesTab';
 import FolioDetailsTab from '../components/admin/systemSettings/FolioDetailsTab';
 import { fieldId } from '../components/admin/systemSettings/fieldParts';
 import RegistrationCardTab from '../components/admin/systemSettings/RegistrationCardTab';
@@ -35,7 +37,7 @@ import SaveToast from '../components/shared/SaveToast';
 import SaveButton from '../components/shared/SaveButton';
 import { settingsTextSx } from '../components/admin/systemSettings/settingsText';
 
-type TabId = 'settings' | 'folio' | 'registration' | 'online';
+type TabId = 'settings' | 'rates' | 'folio' | 'registration' | 'online';
 const tabId = (id: string) => `system-settings-tab-${id}`;
 const panelId = (id: string) => `system-settings-panel-${id}`;
 
@@ -97,13 +99,15 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
     const found = validateSystemSettings(draft);
     const first = firstErrorField(found);
     if (first) {
-      const target: TabId = isFolioField(first)
-        ? 'folio'
-        : isRegistrationCardField(first)
-          ? 'registration'
-          : isOnlineBookingField(first)
-            ? 'online'
-            : 'settings';
+      const target: TabId = isDefaultRateCategoriesField(first)
+        ? 'rates'
+        : isFolioField(first)
+          ? 'folio'
+          : isRegistrationCardField(first)
+            ? 'registration'
+            : isOnlineBookingField(first)
+              ? 'online'
+              : 'settings';
       focusAfterTab.current = first;
       if (target !== tab) setTab(target);
       else {
@@ -149,12 +153,7 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
   }, [api, apply, draft, tab, readOnly]);
 
   const saveButton = (
-    <SaveButton
-      dirty={dirty}
-      saving={saving}
-      noun="System Settings"
-      onClick={() => void save()}
-    />
+    <SaveButton dirty={dirty} saving={saving} noun="System Settings" onClick={() => void save()} />
   );
 
   let body;
@@ -199,8 +198,13 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
             id={tabId('settings')}
             aria-controls={panelId('settings')}
           />
-          {/* Rate categories are managed in ticket 7.2; Figma shows the tab with no content. */}
-          <Tab label="Default Rate Categories" disabled />
+          {/* Legacy DefaultRateCategoriesEdit.vue (ticket 189); Figma shows the tab with no content. */}
+          <Tab
+            value="rates"
+            label="Default Rate Categories"
+            id={tabId('rates')}
+            aria-controls={panelId('rates')}
+          />
           <Tab
             value="folio"
             label="Folio Details"
@@ -248,6 +252,14 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
                 readOnly={readOnly}
               />
             </>
+          ) : tab === 'rates' ? (
+            <DefaultRateCategoriesTab
+              value={draft.defaultRateCategories}
+              onChange={(defaultRateCategories) => editDraft({ ...draft, defaultRateCategories })}
+              rateCategories={options.rateCategories}
+              memberTypes={options.memberTypes}
+              errors={errors}
+            />
           ) : tab === 'registration' ? (
             <RegistrationCardTab
               value={draft.registrationCard}

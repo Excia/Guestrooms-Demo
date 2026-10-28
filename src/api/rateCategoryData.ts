@@ -108,7 +108,7 @@ export function mockRateCategories(): RateCategorySetup[] {
         season('rc-member-holiday', 'Holidays', ['2026-12-20', '2027-01-02'], [195, 225, 275]),
       ],
       reservationCount: counts[RATE_CATEGORY_IDS.member] ?? 0,
-      // Invented: the Default Rate Categories tab (a later ticket) will own this link.
+      // Invented: the Default Rate Categories tab (ticket 189) will own this link; the backend reports it.
       settingNames: ['Members default rate category'],
     },
     {

@@ -948,6 +948,30 @@ export interface SystemSettings {
   registrationCard: RegistrationCardSettings;
   /** The Online Booking tab (ticket 7.9); read by the online booking flow (Epic 5). */
   onlineBooking: OnlineBookingSettings;
+  /** The Default Rate Categories tab (ticket 189); read when a room block or a reservation is priced. */
+  defaultRateCategories: DefaultRateCategories;
+}
+
+/**
+ * Default Rate Categories tab of System Settings (legacy DefaultRateCategoriesEdit.vue). Ids are
+ * rate category ids (`RateCategorySetup.id`); null means none chosen.
+ */
+export interface DefaultRateCategories {
+  /** Preselected when a room block is created. */
+  roomBlock: string | null;
+  member: string | null;
+  nonMember: string | null;
+  /** Applied when the occupant owns the room. */
+  owner: string | null;
+  /** A rate category for one member type, replacing the Members default for that type. */
+  memberTypeOverrides: MemberTypeRateOverride[];
+}
+
+export interface MemberTypeRateOverride {
+  /** Client-made id of an unsaved row; the backend keeps its own. */
+  id: string;
+  memberTypeId: string | null;
+  rateCategoryId: string | null;
 }
 
 /** Online Booking tab of System Settings (Figma 15957:84617). */
@@ -973,6 +997,10 @@ export interface SystemSettingsOptions {
   items: LookupRef[];
   areas: LookupRef[];
   members: LookupRef[];
+  /** Rate categories for the Default Rate Categories tab (the Rate Categories list, ticket 184). */
+  rateCategories: LookupRef[];
+  /** Member types for the member type overrides. */
+  memberTypes: LookupRef[];
 }
 
 export interface SystemSettingsApi {

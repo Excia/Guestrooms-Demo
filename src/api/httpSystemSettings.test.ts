@@ -51,3 +51,34 @@ describe('house account', () => {
     ).rejects.toMatchObject({ status: 200 });
   });
 });
+
+describe('default rate categories response validation', () => {
+  it('reads a missing object as none chosen and rejects a malformed one', async () => {
+    const { defaultRateCategories, ...without } = mockSystemSettings();
+    expect(defaultRateCategories.member).not.toBeNull();
+    const result = await make(vi.fn().mockResolvedValue(json(without))).systemSettings.get();
+    expect(result.defaultRateCategories).toEqual({
+      roomBlock: null,
+      member: null,
+      nonMember: null,
+      owner: null,
+      memberTypeOverrides: [],
+    });
+    const broken = { ...without, defaultRateCategories: { ...defaultRateCategories, member: 5 } };
+    await expect(
+      make(vi.fn().mockResolvedValue(json(broken))).systemSettings.get(),
+    ).rejects.toMatchObject({
+      status: 200,
+    });
+  });
+
+  it('reads options without the new lists as empty', async () => {
+    const { rateCategories, memberTypes, ...old } = (await import('./systemSettingsData'))
+      .MOCK_SYSTEM_SETTINGS_OPTIONS;
+    expect(rateCategories).toEqual([]);
+    expect(memberTypes).toEqual([]);
+    const result = await make(vi.fn().mockResolvedValue(json(old))).systemSettings.getOptions();
+    expect(result.rateCategories).toEqual([]);
+    expect(result.memberTypes).toEqual([]);
+  });
+});

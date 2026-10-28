@@ -13,6 +13,8 @@ export interface LegacyRemoveDialogProps {
   error?: string | null;
   onCancel: () => void;
   onConfirm: () => void;
+  /** Question to show; defaults to the Employee wording. */
+  message?: string;
 }
 
 // The legacy confirmation (ConfirmDialog): title "Confirm", "Are you sure you want to remove this
@@ -23,6 +25,7 @@ export default function LegacyRemoveDialog({
   error,
   onCancel,
   onConfirm,
+  message = 'Are you sure you want to remove this Employee?',
 }: LegacyRemoveDialogProps) {
   const id = useId();
   return (
@@ -35,7 +38,7 @@ export default function LegacyRemoveDialog({
       <DialogTitle id={`${id}-title`}>Confirm</DialogTitle>
       <DialogContent>
         <DialogContentText id={`${id}-message`} sx={{ color: 'text.primary' }}>
-          {error ?? 'Are you sure you want to remove this Employee?'}
+          {error ?? message}
         </DialogContentText>
       </DialogContent>
       <DialogActions>
