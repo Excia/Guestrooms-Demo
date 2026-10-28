@@ -76,7 +76,7 @@ data is added or a placeholder is replaced (see the PR checklist).
   lengths, SMS length, attachment count and size, "X digit" encoder key). Owner: the copy/limits come from
   the designer or owner (see [open-questions.md](open-questions.md)).
 - Default notification templates (page 85 of the requirements document, not available to the team).
-- The Migration Tool frame includes reference mockups that look like examples from another product.
+- The Migration Tool frame includes reference mockups that look like examples from another product. (Its left-nav entry was removed, D-AN-1.)
 - Payment methods in the mock (ticket 3.2): the mock has none, so a stable hash of the reservation id leaves
   about one reservation in five without one; its rooms fail bulk check-in with 409 `no-payment-method`.
   Replaced when payment methods exist (ticket 3.5). Checking in a list-only mock reservation (the

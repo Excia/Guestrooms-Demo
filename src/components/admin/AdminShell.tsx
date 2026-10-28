@@ -108,7 +108,23 @@ export default function AdminShell({
               const isActive = item.label === active;
               const available = item.path !== undefined && (!item.id || canAccessPage(item.id));
               return (
-                <Box component="li" key={item.label} sx={{ display: 'flex', position: 'relative' }}>
+                <Box
+                  component="li"
+                  key={item.label}
+                  sx={(t) => ({
+                    display: 'flex',
+                    position: 'relative',
+                    ...(item.groupStart
+                      ? {
+                          [t.breakpoints.up('lg')]: {
+                            mt: 1,
+                            pt: 1,
+                            borderTop: `1px solid ${t.palette.divider}`,
+                          },
+                        }
+                      : {}),
+                  })}
+                >
                   <Button
                     fullWidth
                     size="large"

@@ -66,7 +66,7 @@ export default function AddOnItems() {
   const data = useAddOnData();
   if (data.status !== 'ready' || !data.options) {
     return (
-      <AdminShell active="Room Options" title="Add-On Items">
+      <AdminShell active="Add-On Items" title="Add-On Items">
         {data.status === 'error' ? (
           <Alert
             severity="error"
@@ -183,7 +183,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
   const title = editor.selected?.name ?? 'New Add-On';
   return (
     <AdminShell
-      active="Room Options"
+      active="Add-On Items"
       title={title}
       changeLog="add-on-items"
       sidebarLabel="Add-Ons"

@@ -215,7 +215,7 @@ Issue Excia/Guestrooms-Demo#69. Epic status: **not started**. Details: [features
 | Excia/Guestrooms-Demo#73 | [7.4] Add-On Items                                                            | not started                |     |
 | Excia/Guestrooms-Demo#74 | [7.5] Booking Rules                                                           | not started                |     |
 | Excia/Guestrooms-Demo#75 | [7.6] Keycard Integration settings                                            | not started                |     |
-| Excia/Guestrooms-Demo#76 | [7.7] Migration Tool                                                          | not started                |     |
+| Excia/Guestrooms-Demo#76 | [7.7] Migration Tool (nav entry removed, D-AN-1)                              | not started                |     |
 | Excia/Guestrooms-Demo#95 | [7.8] Registration Card setting and PDF                                       | not started                |     |
 | Excia/Guestrooms-Demo#96 | [7.9] Online Booking settings tab                                             | not started                |     |
 | Excia/Guestrooms-Demo#97 | [7.10] Change Log overlay (admin pages)                                       | not started                |     |

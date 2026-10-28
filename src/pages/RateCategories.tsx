@@ -63,7 +63,7 @@ export default function RateCategories() {
   const data = useRateCategoryData();
   if (data.status !== 'ready' || !data.options) {
     return (
-      <AdminShell active="Room Options" title="Rate Categories">
+      <AdminShell active="Rate Categories" title="Rate Categories">
         {data.status === 'error' ? (
           <Alert
             severity="error"
@@ -270,7 +270,7 @@ function RateCategoryEditor({ data }: { data: RateCategoryData }) {
   const title = editor.selected?.name ?? 'New Rate Category';
   return (
     <AdminShell
-      active="Room Options"
+      active="Rate Categories"
       title={title}
       changeLog="rate-categories"
       sidebarLabel="Rate Categories"
