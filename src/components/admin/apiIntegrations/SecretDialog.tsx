@@ -44,6 +44,8 @@ export default function SecretDialog({
       await navigator.clipboard.writeText(secret);
       setCopyState('copied');
     } catch {
+      // Make sure the key can be read and copied by hand.
+      setVisible(true);
       setCopyState('failed');
     }
   };
@@ -57,10 +59,9 @@ export default function SecretDialog({
   return (
     <Dialog
       open={open}
-      // Not closed by a stray click or Escape: this is the only time the key is shown.
-      onClose={(_, reason) => {
-        if (reason === 'escapeKeyDown') close();
-      }}
+      // Done is the only way out: Escape and a backdrop click are ignored, because this is the
+      // only time the key is shown.
+      onClose={() => {}}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-message`}
       fullWidth

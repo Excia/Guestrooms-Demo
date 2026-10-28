@@ -37,7 +37,7 @@ Source of behavior: the legacy screens `APIIntegrations.vue` (tabs), `PayCloudAP
 | D-188-3 | 2026-10-28 | A saved PayCloud key shows masked and read-only; Replace Key opens an empty password field. Add API Token starts a new row. Save sends the whole set (`PUT`): a token left out is removed, one without `apiKey` keeps its key         | Idempotent save like Locations; no secret round trip                                        | agent  | open   |
 | D-188-4 | 2026-10-28 | The header Save saves the PayCloud and Authentications tabs together (each only when it has changes); all three tabs stay mounted so edits survive a tab switch; leaving the page with edits asks first                               | One Save and one unsaved-changes prompt, as on the other setup pages (legacy saved per tab) | agent  | open   |
 | D-188-5 | 2026-10-28 | API Keys act at once (no Save): Create asks for a name, Rotate and Revoke ask first. A new or rotated key opens a dialog with the key, Show/Hide and Copy Key; the key is dropped from the page when Done is chosen                   | A secret is never kept after the one time it is shown                                       | ticket | open   |
-| D-188-6 | 2026-10-28 | Create and Rotate carry a `requestId` (idempotency key), so a repeated request returns the same key instead of a second one                                                                                                           | Network retries must not create duplicate keys                                              | agent  | open   |
+| D-188-6 | 2026-10-28 | Create and Rotate carry a `requestId` (idempotency key, made once per dialog attempt and reused on retry). A replay returns the key WITHOUT its secret; it is forgotten on rotate or revoke; the mock keeps the last 100              | Network retries must not create duplicate keys                                              | agent  | open   |
 | D-188-7 | 2026-10-28 | Save tests every enabled integration and the toast uses the legacy wording ("Connection has been made successfully.", "Credentials saved, but connection test failed for Tiger TMS." and so on); Test Connection tests without saving | Legacy behavior (`APIAuthentications.vue`)                                                  | legacy | open   |
 | D-188-8 | 2026-10-28 | The Assa Abloy UUID is created in the browser the first time the integration is saved or tested while it is empty (legacy), and kept afterwards                                                                                       | Legacy behavior                                                                             | legacy | open   |
 
@@ -55,9 +55,11 @@ Source of behavior: the legacy screens `APIIntegrations.vue` (tabs), `PayCloudAP
   `listAuthentications`, `saveAuthentications`, `testConnection`; section "API integrations" in `api-contract.md`, including the security notes
   (never log a request or response body of these endpoints, never put a secret in a URL or an error message).
 - **Permissions:** new route `api-integrations` (`page.api-integrations`, an Admin Setup page, not in the menu) and, from the route table,
-  `api-integrations.edit`. The page edits only for `admin` (Q-188-2). The mock guards the five writes (`createApiKey`, `rotateApiKey`,
-  `revokeApiKey`, `savePayCloudTokens`, `saveAuthentications`) with `admin` or `api-integrations.edit` (403 `forbidden`).
+  `api-integrations.edit`, which is **inert**: the page and the API need `admin` (Q-188-2). The mock guards the five writes and `testConnection`
+  with `admin` only (403 `forbidden`); a test covers a non-admin holding `api-integrations.edit`.
 - **Notes:** one-line change in `adminNav.ts` (the API Integrations item gets its path and id). View-only checks are in `viewOnly.test.tsx`.
   Keyboard and focus: Create, Rotate and Revoke dialogs focus Cancel (Revoke and Rotate) or the name field (Create); after a key is revoked or
   a new key dialog closes, focus returns to Create New Key; a refused save focuses the first field with an error; Add API Token focuses the new field.
-  The Escape key closes the one-time key dialog like any dialog, so a key not copied then is lost and can be rotated.
+  Escape and a backdrop click do not close the one-time key dialog: Done is the only exit; after Done focus returns to the rotated row or to Create New Key.
+- **Admin menu cleanup:** D-AN-2 (API Keys as a disabled nav entry) is resolved here: API Keys is a tab of this page and the nav entry is removed (docs updated).
+- **Mock leniency:** the mock accepts any PayCloud key of valid shape (no check against PayCloud) and a connection test is a rule on the URL, not a real call (P-188-2).

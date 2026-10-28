@@ -539,22 +539,28 @@ backend's concern (Q-75-3).
 | Method and path                            | Body / response                                                                                                                | Errors                                     |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
 | `GET /integrations/api-keys`               | `ApiKeySummary[]`: `{ id, name, maskedKey, createdAt }`                                                                        | 5xx                                        |
-| `POST /integrations/api-keys`              | `{ name }` with `Idempotency-Key`; answers `{ key: ApiKeySummary, secret }`. **The only response that carries a secret**       | 403, 409 `duplicate`, 422 `validation`     |
-| `POST /integrations/api-keys/{id}/rotate`  | no body, `Idempotency-Key`; answers `{ key, secret }`. The old secret stops working at once                                   | 403, 404 `not-found`                       |
+| `POST /integrations/api-keys`              | `{ name }` with `Idempotency-Key`; answers `{ key: ApiKeySummary, secret }`. **The only response that carries a secret**; a replay (same `Idempotency-Key`, same body) answers `{ key, secret: null }`       | 403, 409 `duplicate`, 422 `validation`     |
+| `POST /integrations/api-keys/{id}/rotate`  | no body, `Idempotency-Key`; answers `{ key, secret }` (`secret: null` on a replay). The old secret stops working at once                                   | 403, 404 `not-found`                       |
 | `DELETE /integrations/api-keys/{id}`       | Revokes (deletes) the key                                                                                                      | 403, 404 `not-found`                       |
 | `GET /integrations/paycloud-tokens`        | `PayCloudToken[]`: `{ id, maskedKey, environment }`, environment `local`, `test`, `staging` or `production`                    | 5xx                                        |
 | `PUT /integrations/paycloud-tokens`        | `PayCloudTokenInput[]` replaces the set: `{ id?, apiKey?, environment }`. A token without `apiKey` keeps its key; a new one needs it; one left out is removed. Answers the stored list | 403, 404 `not-found`, 422 `validation`     |
 | `GET /integrations/authentications`        | `IntegrationAuth[]`: `{ provider, enabled, baseUrl, userName, hasPassword, accessId?, uuid? }`, provider `tiger-tms` or `assa-abloy` | 5xx                                        |
 | `PUT /integrations/authentications`        | `IntegrationAuthInput[]`: the same without `hasPassword`, with `password?` (omitted keeps the saved one). Saves, then tests each enabled integration; answers `{ authentications, tests: [{ provider, success }] }` | 403, 422 `validation` (`details.baseUrl`, `details.accessId`) |
-| `POST /integrations/authentications/test`  | One `IntegrationAuthInput`; tests with its values (the saved password when none is given) and does not save; answers `{ provider, success }` | 403, 404 `not-found`                       |
+| `POST /integrations/authentications/test`  | One `IntegrationAuthInput`; tests with its values (a saved password is used only if `baseUrl` and `userName` equal the saved ones; otherwise the password must be given, else `success: false`) and does not save. Needs `admin`; answers `{ provider, success }` | 403, 404 `not-found`                       |
 
 **Secrets are write-once (security notes, D-188-1).** The API accepts a secret (an API key it generates, a PayCloud key, an integration password)
 and never returns it again: lists carry `maskedKey` (bullets and the last four characters; eight characters or fewer show bullets only) or
 `hasPassword`. Backend and client must **never log** the body of these requests or responses, never put a secret in a URL or query string,
 never echo one in an error message (`ApiError` messages here are fixed text) and never write one to the change log. The browser keeps a new
 API key only in component state while its dialog is open (never storage, URL or console). Store the key and token secrets hashed or encrypted
-at rest. `Idempotency-Key` makes a retried create or rotate return the same result. Writes need `admin` or `api-integrations.edit`;
-the UI offers them to administrators only (Q-188-2). Rules: `src/app/apiIntegrations.ts` (name at most 50 characters and unique ignoring case;
+at rest. `Idempotency-Key`: a retried create or rotate returns the key summary **without the secret** (`secret: null`): the secret was shown once
+and is not kept (or, if the backend wants to replay it, only as a short-TTL encrypted copy). The same id with a different body is 409
+`idempotency-conflict`. A replay is forgotten when the key is rotated or revoked; keep only a bounded number of recent ids. **A saved
+password is never sent to a different URL or username**: saving an enabled integration with a changed URL or username and no new password
+is 422 `details.password`, and a test does the same. **Every method here except the three lists needs `admin`** (including Test Connection,
+which sends a saved password to a host); `api-integrations.edit` grants nothing (inert, Q-188-2). The backend must write an audit entry for
+each create, rotate, revoke, token change, authentication change and connection test (who, when, which integration), **never containing a
+secret**; the Change Log page list does not include them (Q-188-4). Rules: `src/app/apiIntegrations.ts` (name at most 50 characters and unique ignoring case;
 PayCloud key at most 36 characters without spaces; URL absolute `http` or `https` up to 500; Assa Abloy needs an Access ID; only an enabled
 integration must be complete).
 

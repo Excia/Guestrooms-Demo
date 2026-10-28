@@ -11,10 +11,10 @@ import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ApiError, useApi } from '../../../api';
 import type { ApiKeySummary } from '../../../api/types';
-import { API_KEY_NAME_MAX, validateKeyName } from '../../../app/apiIntegrations';
+import { API_KEY_NAME_MAX, normalizeKeyName, validateKeyName } from '../../../app/apiIntegrations';
 import { newRequestId } from '../../../lib/requestId';
 import { focusOnMount } from '../../shared/focusOnMount';
 import RemoveIconButton from '../../shared/RemoveIconButton';
@@ -45,8 +45,26 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
   const [issued, setIssued] = useState<{
     name: string;
     secret: string;
+    keyId: string;
     action: 'created' | 'rotated';
   } | null>(null);
+  // One request id per attempt: a retry of the same create or rotate reuses it (so the server can
+  // recognise it), a different name or key gets a new one. Cleared on success and on cancel.
+  const attemptRef = useRef<{ subject: string; requestId: string } | null>(null);
+  const requestIdFor = (subject: string) => {
+    if (attemptRef.current?.subject !== subject) {
+      attemptRef.current = { subject, requestId: newRequestId() };
+    }
+    return attemptRef.current.requestId;
+  };
+  const focusSoon = (id: string) => setTimeout(() => document.getElementById(id)?.focus(), 0);
+  const alreadyDone = (key: ApiKeySummary) => {
+    setKeys((list) => (list.some((k) => k.id === key.id) ? list : [...list, key]));
+    notify(
+      `The request for "${key.name}" was already completed. The key was shown once; rotate it to get a new one.`,
+      'warning',
+    );
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,10 +83,11 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
   const openCreate = () => {
     setName('');
     setNameError(null);
+    attemptRef.current = null;
     setCreating(true);
   };
 
-  const create = useCallback(async () => {
+  const create = async () => {
     if (busy) return;
     const message = validateKeyName(
       name,
@@ -82,23 +101,36 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
     try {
       const result = await api.integrations.createApiKey({
         name,
-        requestId: newRequestId(),
+        requestId: requestIdFor(normalizeKeyName(name).toLowerCase()),
       });
-      setKeys((list) => [...list, result.key]);
+      attemptRef.current = null;
       setCreating(false);
-      setIssued({ name: result.key.name, secret: result.secret, action: 'created' });
+      if (result.secret === null) {
+        alreadyDone(result.key);
+        focusSoon(CREATE_BUTTON_ID);
+      } else {
+        setKeys((list) => [...list, result.key]);
+        setIssued({
+          name: result.key.name,
+          secret: result.secret,
+          keyId: result.key.id,
+          action: 'created',
+        });
+      }
     } catch (error) {
       setNameError(
-        error instanceof ApiError && error.status === 409
-          ? 'A key with this name already exists.'
-          : error instanceof ApiError && error.status === 403
-            ? 'You may not create API keys.'
-            : 'The key could not be created. Try again.',
+        error instanceof ApiError && error.code === 'idempotency-conflict'
+          ? 'This request clashed with an earlier one. Close this window and try again.'
+          : error instanceof ApiError && error.status === 409
+            ? 'A key with this name already exists.'
+            : error instanceof ApiError && error.status === 403
+              ? 'You may not create API keys.'
+              : 'The key could not be created. Try again.',
       );
     } finally {
       setBusy(false);
     }
-  }, [api, busy, keys, name]);
+  };
 
   const confirmPending = async () => {
     if (!pending || busy) return;
@@ -108,10 +140,19 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
       if (pending.kind === 'rotate') {
         const result = await api.integrations.rotateApiKey({
           id: pending.key.id,
-          requestId: newRequestId(),
+          requestId: requestIdFor(pending.key.id),
         });
+        attemptRef.current = null;
         setKeys((list) => list.map((k) => (k.id === result.key.id ? result.key : k)));
-        setIssued({ name: result.key.name, secret: result.secret, action: 'rotated' });
+        if (result.secret === null) alreadyDone(result.key);
+        else {
+          setIssued({
+            name: result.key.name,
+            secret: result.secret,
+            keyId: result.key.id,
+            action: 'rotated',
+          });
+        }
       } else {
         await api.integrations.revokeApiKey(pending.key.id);
         setKeys((list) => list.filter((k) => k.id !== pending.key.id));
@@ -124,7 +165,9 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
       setActionError(
         error instanceof ApiError && error.status === 403
           ? 'You may not change API keys.'
-          : `The key could not be ${pending.kind === 'rotate' ? 'rotated' : 'revoked'}. Try again.`,
+          : error instanceof ApiError && error.code === 'idempotency-conflict'
+            ? 'This request clashed with an earlier one. Cancel and try again.'
+            : `The key could not be ${pending.kind === 'rotate' ? 'rotated' : 'revoked'}. Try again.`,
       );
     } finally {
       setBusy(false);
@@ -220,6 +263,7 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
                   variant="outlined"
                   size="small"
                   startIcon={<Autorenew />}
+                  id={`api-key-rotate-${key.id}`}
                   aria-label={`Rotate key ${key.name}`}
                   onClick={() => {
                     setActionError(null);
@@ -250,7 +294,10 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
           setName(value);
           setNameError(null);
         }}
-        onCancel={() => setCreating(false)}
+        onCancel={() => {
+          attemptRef.current = null;
+          setCreating(false);
+        }}
         onCreate={() => void create()}
       />
       {pending ? (
@@ -258,7 +305,11 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
           pending={pending}
           busy={busy}
           error={actionError}
-          onCancel={() => !busy && setPending(null)}
+          onCancel={() => {
+            if (busy) return;
+            attemptRef.current = null;
+            setPending(null);
+          }}
           onConfirm={() => void confirmPending()}
         />
       ) : null}
@@ -268,8 +319,11 @@ export default function ApiKeysPanel({ notify }: { notify: Notify }) {
         secret={issued?.secret ?? null}
         action={issued?.action ?? 'created'}
         onClose={() => {
+          // Back to the row that was rotated, or to Create New Key after a new key.
+          focusSoon(
+            issued?.action === 'rotated' ? `api-key-rotate-${issued.keyId}` : CREATE_BUTTON_ID,
+          );
           setIssued(null);
-          setTimeout(() => document.getElementById(CREATE_BUTTON_ID)?.focus(), 0);
         }}
       />
     </Box>

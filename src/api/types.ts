@@ -1314,7 +1314,7 @@ export interface KeycardApi {
  * `hasPassword` flag. The one exception is a new or rotated Guest Rooms API key, whose secret comes
  * back in that single response. Clients and servers must not log a request or response body of
  * these endpoints, nor put a secret in a URL, an error message or a change log entry.
- * Errors: 403 `forbidden` without edit access (administrators only); 422 `validation` (with
+ * Errors: 403 `forbidden` unless the caller holds `admin` (administrators only: `api-integrations.edit` grants nothing, Q-188-2); 409 `idempotency-conflict` (a `requestId` reused for a different request); 422 `validation` (with
  * `details` per field); 404 `not-found`; 409 `duplicate` (an API key name already in use).
  */
 export interface ApiKeySummary {
@@ -1325,10 +1325,14 @@ export interface ApiKeySummary {
   createdAt: IsoDate;
 }
 
-/** The only response that carries a Guest Rooms API key secret. */
+/**
+ * The only response that carries a Guest Rooms API key secret. `secret` is null when the request
+ * is a replay of one already completed (same `requestId`): the secret was shown once and is not
+ * kept, so the caller must rotate the key to get a new one.
+ */
 export interface IssuedApiKey {
   key: ApiKeySummary;
-  secret: string;
+  secret: string | null;
 }
 
 export type PayCloudEnvironment = 'local' | 'test' | 'staging' | 'production';
@@ -1402,12 +1406,15 @@ export interface IntegrationsApi {
     options?: RequestOptions,
   ): Promise<PayCloudToken[]>;
   listAuthentications(options?: RequestOptions): Promise<IntegrationAuth[]>;
-  /** Saves, then tests each enabled integration. */
+  /** Saves, then tests each enabled integration. 422 `details.password` when the URL or username changed and no password was typed. */
   saveAuthentications(
     inputs: IntegrationAuthInput[],
     options?: RequestOptions,
   ): Promise<SaveAuthenticationsResult>;
-  /** Tests the connection with these values (a saved password when none is given). Does not save. */
+  /**
+   * Tests the connection with these values. A saved password is used only when `baseUrl` and
+   * `userName` equal the saved ones; otherwise the password must be given. Does not save.
+   */
   testConnection(
     input: IntegrationAuthInput,
     options?: RequestOptions,

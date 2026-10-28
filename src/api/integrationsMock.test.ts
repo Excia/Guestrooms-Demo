@@ -27,8 +27,41 @@ describe('mock integrations API: API keys', () => {
     const client = createMockClient();
     const a = await client.integrations.createApiKey({ name: 'Once', requestId: 'same' });
     const b = await client.integrations.createApiKey({ name: 'Once', requestId: 'same' });
-    expect(b).toEqual(a);
+    // The replay names the key but never repeats the secret.
+    expect(a.secret).not.toBeNull();
+    expect(b).toEqual({ key: a.key, secret: null });
     expect(await client.integrations.listApiKeys()).toHaveLength(3);
+  });
+
+  it('answers 409 idempotency-conflict when a request id is reused for another request', async () => {
+    const client = createMockClient();
+    await client.integrations.createApiKey({ name: 'One', requestId: 'dup' });
+    await expect(
+      client.integrations.createApiKey({ name: 'Two', requestId: 'dup' }),
+    ).rejects.toMatchObject({ status: 409, code: 'idempotency-conflict' });
+  });
+
+  it('forgets a replay once the key is rotated or revoked, and bounds what it remembers', async () => {
+    const client = createMockClient();
+    const a = await client.integrations.createApiKey({ name: 'Gone', requestId: 'g1' });
+    await client.integrations.rotateApiKey({ id: a.key.id, requestId: 'g2' });
+    // g1 is forgotten: the same name now clashes with the existing key instead of replaying.
+    await expect(
+      client.integrations.createApiKey({ name: 'Gone', requestId: 'g1' }),
+    ).rejects.toMatchObject({ code: 'duplicate' });
+    await client.integrations.revokeApiKey(a.key.id);
+    await expect(
+      client.integrations.rotateApiKey({ id: a.key.id, requestId: 'g2' }),
+    ).rejects.toMatchObject({ status: 404 });
+    // Only the last 100 request ids are kept: the first one is replayable no more.
+    const first = await client.integrations.createApiKey({ name: 'k0', requestId: 'r0' });
+    for (let i = 1; i <= 100; i++) {
+      await client.integrations.createApiKey({ name: `k${i}`, requestId: `r${i}` });
+    }
+    await expect(
+      client.integrations.createApiKey({ name: 'k0', requestId: 'r0' }),
+    ).rejects.toMatchObject({ code: 'duplicate' });
+    expect(first.key.name).toBe('k0');
   });
 
   it('refuses a duplicate name (409) and a blank or long name (422)', async () => {
@@ -47,7 +80,7 @@ describe('mock integrations API: API keys', () => {
     const second = await client.integrations.rotateApiKey({ id: 'key-1', requestId: 'y' });
     expect(second.secret).not.toBe(first.secret);
     expect(second.key.id).toBe('key-1');
-    expect(second.key.maskedKey.endsWith(second.secret.slice(-4))).toBe(true);
+    expect(second.key.maskedKey.endsWith((second.secret as string).slice(-4))).toBe(true);
     await expect(
       client.integrations.rotateApiKey({ id: 'missing', requestId: 'z' }),
     ).rejects.toMatchObject({ status: 404 });
@@ -193,5 +226,40 @@ describe('mock integrations API: authentications', () => {
       success: true,
     });
     expect((await client.integrations.listAuthentications())[0].hasPassword).toBe(false);
+  });
+
+  it('never sends a saved password to a changed URL or username', async () => {
+    const client = createMockClient();
+    const saved = {
+      provider: 'tiger-tms' as const,
+      enabled: true,
+      baseUrl: 'https://tms.example.com',
+      userName: 'svc',
+      password: 'pw',
+    };
+    await client.integrations.saveAuthentications([saved]);
+    const { password: _password, ...keep } = saved;
+    void _password;
+    expect((await client.integrations.testConnection(keep)).success).toBe(true);
+    expect(
+      (await client.integrations.testConnection({ ...keep, baseUrl: 'https://other.example.com' }))
+        .success,
+    ).toBe(false);
+    expect(
+      (await client.integrations.testConnection({ ...keep, userName: 'someone' })).success,
+    ).toBe(false);
+    // Saving an enabled integration with a new URL needs the password again.
+    await expect(
+      client.integrations.saveAuthentications([{ ...keep, baseUrl: 'https://other.example.com' }]),
+    ).rejects.toMatchObject({ status: 422, details: { password: expect.any(Array) } });
+    const retyped = await client.integrations.saveAuthentications([
+      { ...keep, baseUrl: 'https://other.example.com', password: 'pw2' },
+    ]);
+    expect(retyped.tests[0].success).toBe(true);
+    // A disabled integration whose URL changed does not keep the password for the new address.
+    const off = await client.integrations.saveAuthentications([
+      { ...keep, enabled: false, baseUrl: 'https://third.example.com' },
+    ]);
+    expect(off.authentications[0].hasPassword).toBe(false);
   });
 });

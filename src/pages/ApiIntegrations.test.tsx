@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router';
-import { ApiProvider } from '../api';
+import { ApiError, ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { pagePermission } from '../app/permissions';
@@ -25,6 +25,15 @@ function renderPage(
       </GrantedAccess>
     </ApiProvider>,
   );
+}
+
+/** Nowhere on the page, in an input value, or in browser storage. */
+function expectGone(secret: string) {
+  expect(document.body.textContent).not.toContain(secret);
+  const inputs = Array.from(document.querySelectorAll('input, textarea')) as HTMLInputElement[];
+  expect(inputs.filter((i) => i.value.includes(secret))).toEqual([]);
+  expect(JSON.stringify({ ...localStorage })).not.toContain(secret);
+  expect(JSON.stringify({ ...sessionStorage })).not.toContain(secret);
 }
 
 const save = () => screen.getByRole('button', { name: saveButtonName('API Integrations') });
@@ -119,7 +128,7 @@ describe('PayCloud API Tokens', () => {
     expect(await screen.findByText('PayCloud API Tokens Saved')).toBeInTheDocument();
     const list = screen.getByRole('list', { name: 'PayCloud API Tokens' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(3);
-    expect(list.textContent).not.toContain('abcd-1234');
+    expectGone('abcd-1234-wxyz-9876');
     expect(
       (
         within(list).getByRole('textbox', {
@@ -230,7 +239,7 @@ describe('Authentications', () => {
     ).toBeGreaterThan(0);
     expect(field('Password')).toHaveValue('');
     expect(screen.getByText('A password is saved. Type to replace it.')).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain('pw-secret');
+    expectGone('pw-secret');
   });
 
   it('requires an Access ID for Assa Abloy and reports a failed connection test', async () => {
@@ -249,6 +258,30 @@ describe('Authentications', () => {
       (await screen.findAllByText('Credentials saved, but connection test failed for Assa Abloy.'))
         .length,
     ).toBeGreaterThan(0);
+  });
+
+  it('asks for the password again when the URL changed, for both test and save', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await openTab('Authentications');
+    await screen.findByRole('heading', { name: 'Tiger TMS' });
+    await user.click(screen.getByRole('switch', { name: 'Enable Tiger TMS' }));
+    await user.type(field('URL'), 'https://tms.example.com');
+    await user.type(field('Password'), 'pw');
+    await user.click(save());
+    await screen.findAllByText('Connection has been made successfully.');
+    await user.clear(field('URL'));
+    await user.type(field('URL'), 'https://other.example.com');
+    await user.click(screen.getByRole('button', { name: 'Test Connection to Tiger TMS' }));
+    expect(await screen.findByText(/Type the password again/)).toBeInTheDocument();
+    expect(field('Password')).toHaveFocus();
+    await user.click(save());
+    expect(field('Password')).toHaveFocus();
+    await user.type(field('Password'), 'pw2');
+    await user.click(save());
+    await waitFor(() =>
+      expect(screen.queryByText(/Type the password again/)).not.toBeInTheDocument(),
+    );
   });
 
   it('tests a connection without saving', async () => {
@@ -326,7 +359,7 @@ describe('API Keys', () => {
     await user.click(within(shown).getByRole('button', { name: 'Done' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(document.body.textContent).not.toContain(secret);
+    expectGone(secret);
     const list = await keyList();
     expect(within(list).getAllByRole('listitem')).toHaveLength(3);
     expect(within(list).getByText('Night audit')).toBeVisible();
@@ -376,7 +409,7 @@ describe('API Keys', () => {
     const secret = (within(shown).getByLabelText('API key') as HTMLInputElement).value;
     await user.click(within(shown).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(document.body.textContent).not.toContain(secret);
+    expectGone(secret);
     expect(within(await keyList()).getAllByRole('listitem')[0].textContent).not.toBe(before);
   });
 
@@ -397,7 +430,9 @@ describe('API Keys', () => {
       ),
     );
     await waitFor(() => expect(screen.queryByText('Accounting export')).not.toBeInTheDocument());
-    expect(await screen.findByText('API key "Accounting export" revoked')).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText('API key "Accounting export" revoked')).length,
+    ).toBeGreaterThan(0);
   });
 
   it('keeps the confirmation open with a message when the server refuses', async () => {
@@ -414,5 +449,100 @@ describe('API Keys', () => {
       await within(confirm).findByText('The key could not be revoked. Try again.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Accounting export')).toBeInTheDocument();
+  });
+
+  it('keeps the one-time key window open on Escape and a backdrop click: Done is the only exit', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await openTab('API Keys');
+    await keyList();
+    await user.click(screen.getByRole('button', { name: 'Rotate key Accounting export' }));
+    await user.click(await screen.findByRole('button', { name: 'Rotate' }));
+    const shown = await screen.findByRole('dialog', { name: /^API key rotated/ });
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog', { name: /^API key rotated/ })).toBeVisible();
+    const backdrop = document.querySelector('.MuiBackdrop-root') as HTMLElement;
+    await user.click(backdrop);
+    expect(screen.getByRole('dialog', { name: /^API key rotated/ })).toBeVisible();
+    await user.click(within(shown).getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // Focus goes back to the rotated row.
+    expect(screen.getByRole('button', { name: 'Rotate key Accounting export' })).toHaveFocus();
+  });
+
+  it('reuses one request id when a create is retried, and a new one for another name', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    const create = vi
+      .fn<ApiClient['integrations']['createApiKey']>()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockImplementation(client.integrations.createApiKey);
+    renderPage({ ...client, integrations: { ...client.integrations, createApiKey: create } });
+    await openTab('API Keys');
+    await keyList();
+    await user.click(screen.getByRole('button', { name: 'Create New Key' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create New API Key' });
+    await user.type(within(dialog).getByLabelText(/Key Name/), 'Retry me');
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await within(dialog).findByText('The key could not be created. Try again.');
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+    await screen.findByRole('dialog', { name: 'API key created: Retry me' });
+    const ids = create.mock.calls.map(([r]) => r.requestId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe(ids[1]);
+  });
+
+  it('says so when the request was already completed and the key cannot be shown again', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    client.integrations.createApiKey = async () => ({
+      key: {
+        id: 'key-9',
+        name: 'Lost reply',
+        maskedKey: '\u2022\u2022\u20221234',
+        createdAt: '2026-10-28',
+      },
+      secret: null,
+    });
+    renderPage(client);
+    await openTab('API Keys');
+    await keyList();
+    await user.click(screen.getByRole('button', { name: 'Create New Key' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create New API Key' });
+    await user.type(within(dialog).getByLabelText(/Key Name/), 'Lost reply');
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect((await screen.findAllByText(/already completed/)).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('dialog', { name: /^API key created/ })).not.toBeInTheDocument();
+  });
+
+  it('tells a request clash from a name that exists', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    client.integrations.createApiKey = () =>
+      Promise.reject(new ApiError(409, 'x', { code: 'idempotency-conflict' }));
+    renderPage(client);
+    await openTab('API Keys');
+    await keyList();
+    await user.click(screen.getByRole('button', { name: 'Create New Key' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Create New API Key' });
+    await user.type(within(dialog).getByLabelText(/Key Name/), 'Clash');
+    await user.click(within(dialog).getByRole('button', { name: 'Create' }));
+    expect(await within(dialog).findByText(/clashed with an earlier one/)).toBeInTheDocument();
+  });
+
+  it('shows the key in the open when copying fails, even if it was hidden', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+    renderPage();
+    await openTab('API Keys');
+    await keyList();
+    await user.click(screen.getByRole('button', { name: 'Rotate key Accounting export' }));
+    await user.click(await screen.findByRole('button', { name: 'Rotate' }));
+    const shown = await screen.findByRole('dialog', { name: /^API key rotated/ });
+    await user.click(within(shown).getByRole('button', { name: 'Hide API key' }));
+    expect(within(shown).getByLabelText('API key')).toHaveAttribute('type', 'password');
+    await user.click(within(shown).getByRole('button', { name: 'Copy Key' }));
+    await within(shown).findByText(/Could not copy/);
+    expect(within(shown).getByLabelText('API key')).toHaveAttribute('type', 'text');
   });
 });

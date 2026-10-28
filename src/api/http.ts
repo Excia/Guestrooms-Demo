@@ -1024,7 +1024,11 @@ const parseApiKeys = (body: unknown, status: number): ApiKeySummary[] => {
   return body as ApiKeySummary[];
 };
 const parseIssuedApiKey = (body: unknown, status: number): IssuedApiKey => {
-  if (!isObject(body) || !isApiKeySummary(body.key) || !isString(body.secret)) {
+  if (
+    !isObject(body) ||
+    !isApiKeySummary(body.key) ||
+    !(isString(body.secret) || body.secret === null)
+  ) {
     throw invalid(status, 'API key');
   }
   return body as unknown as IssuedApiKey;

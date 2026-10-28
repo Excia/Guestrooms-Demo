@@ -6,6 +6,7 @@ import {
   isValidUrl,
   maskSecret,
   mockConnectionWorks,
+  needsPasswordRetype,
   normalizeKeyName,
   payCloudChanged,
   saveOutcome,
@@ -128,6 +129,23 @@ describe('authentications', () => {
     const assa = draft({ provider: 'assa-abloy', accessId: ' A1 ' });
     expect(authInput(assa, () => 'new-uuid')).toMatchObject({ accessId: 'A1', uuid: 'new-uuid' });
     expect(authInput({ ...assa, uuid: 'kept' }, () => 'new-uuid').uuid).toBe('kept');
+  });
+  it('asks for the password again when the URL or username changed', () => {
+    const saved = draft();
+    expect(needsPasswordRetype(draft(), saved)).toBe(false);
+    expect(needsPasswordRetype(draft({ baseUrl: 'https://other.example.com' }), saved)).toBe(true);
+    expect(needsPasswordRetype(draft({ userName: 'x' }), saved)).toBe(true);
+    expect(
+      needsPasswordRetype(draft({ baseUrl: 'https://other.example.com', password: 'p' }), saved),
+    ).toBe(false);
+    expect(needsPasswordRetype(draft({ baseUrl: 'x' }), draft({ hasPassword: false }))).toBe(false);
+    expect(validateAuth(draft({ baseUrl: 'https://other.example.com' }), { saved })).toHaveProperty(
+      'password',
+    );
+  });
+  it('counts a changed UUID as a change', () => {
+    const saved = [draft({ provider: 'assa-abloy', accessId: 'A1', uuid: 'u1' })];
+    expect(authChanged(saved, [{ ...saved[0], uuid: 'u2' }])).toBe(true);
   });
   it('detects a change, and a typed password counts', () => {
     const saved = [draft(), draft({ provider: 'assa-abloy', accessId: 'A1' })];

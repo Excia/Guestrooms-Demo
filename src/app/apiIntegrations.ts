@@ -154,13 +154,31 @@ export function isValidUrl(value: string): boolean {
   }
 }
 
-export type AuthErrors = Partial<Record<'baseUrl' | 'accessId', string>>;
+export type AuthErrors = Partial<Record<'baseUrl' | 'accessId' | 'password', string>>;
+
+/**
+ * A saved password is only ever used for the URL and username it was saved with. When either was
+ * changed, the password must be typed again, so a saved secret can never be sent to a new address.
+ * Used by the form, and enforced by the mock and the backend (`password` 422 / failed test).
+ */
+export function needsPasswordRetype(draft: AuthDraft, saved: AuthDraft | undefined): boolean {
+  if (!saved || !saved.hasPassword || draft.password !== '') return false;
+  return (
+    draft.baseUrl.trim() !== saved.baseUrl.trim() || draft.userName.trim() !== saved.userName.trim()
+  );
+}
+
+export const PASSWORD_RETYPE_MESSAGE =
+  'Type the password again: the URL or username changed, and a saved password is not sent to a new address.';
 
 /**
  * Field messages. Only an enabled integration must be complete when saving (legacy); a Test
  * Connection always needs a valid URL, and Assa Abloy an Access ID.
  */
-export function validateAuth(draft: AuthDraft, { forTest = false } = {}): AuthErrors {
+export function validateAuth(
+  draft: AuthDraft,
+  { forTest = false, saved }: { forTest?: boolean; saved?: AuthDraft } = {},
+): AuthErrors {
   const errors: AuthErrors = {};
   if (!draft.enabled && !forTest) return errors;
   if (!isValidUrl(draft.baseUrl))
@@ -168,6 +186,7 @@ export function validateAuth(draft: AuthDraft, { forTest = false } = {}): AuthEr
   if (draft.provider === 'assa-abloy' && draft.accessId.trim() === '') {
     errors.accessId = 'Access ID is required for Assa Abloy.';
   }
+  if (needsPasswordRetype(draft, saved)) errors.password = PASSWORD_RETYPE_MESSAGE;
   return errors;
 }
 
@@ -197,7 +216,8 @@ export function authChanged(saved: readonly AuthDraft[], now: readonly AuthDraft
       draft.enabled !== was.enabled ||
       draft.baseUrl.trim() !== was.baseUrl.trim() ||
       draft.userName.trim() !== was.userName.trim() ||
-      draft.accessId.trim() !== was.accessId.trim()
+      draft.accessId.trim() !== was.accessId.trim() ||
+      draft.uuid.trim() !== was.uuid.trim()
     );
   });
 }

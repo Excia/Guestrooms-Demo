@@ -100,11 +100,14 @@ export default function AuthenticationsPanel({
   const update = (provider: IntegrationProvider, patch: Partial<AuthDraft>) =>
     setDrafts((list) => list.map((d) => (d.provider === provider ? { ...d, ...patch } : d)));
 
+  const savedOf = (provider: IntegrationProvider) => saved.find((d) => d.provider === provider);
+
   const firstError = (): string | null => {
     for (const draft of drafts) {
-      const errors = validateAuth(draft);
+      const errors = validateAuth(draft, { saved: savedOf(draft.provider) });
       if (errors.baseUrl) return fieldId(draft.provider, 'url');
       if (errors.accessId) return fieldId(draft.provider, 'access-id');
+      if (errors.password) return fieldId(draft.provider, 'password');
     }
     return null;
   };
@@ -152,11 +155,16 @@ export default function AuthenticationsPanel({
 
   const test = async (draft: AuthDraft) => {
     if (testing) return;
-    const errors = validateAuth(draft, { forTest: true });
-    if (errors.baseUrl || errors.accessId) {
+    const errors = validateAuth(draft, { forTest: true, saved: savedOf(draft.provider) });
+    if (errors.baseUrl || errors.accessId || errors.password) {
       setTestRefused(draft.provider);
       document
-        .getElementById(fieldId(draft.provider, errors.baseUrl ? 'url' : 'access-id'))
+        .getElementById(
+          fieldId(
+            draft.provider,
+            errors.baseUrl ? 'url' : errors.accessId ? 'access-id' : 'password',
+          ),
+        )
         ?.focus();
       return;
     }
@@ -210,8 +218,10 @@ export default function AuthenticationsPanel({
       {saveError ? <Alert severity="error">{saveError}</Alert> : null}
       {drafts.map((draft) => {
         const errors: AuthErrors = {
-          ...(attempted ? validateAuth(draft) : {}),
-          ...(testRefused === draft.provider ? validateAuth(draft, { forTest: true }) : {}),
+          ...(attempted ? validateAuth(draft, { saved: savedOf(draft.provider) }) : {}),
+          ...(testRefused === draft.provider
+            ? validateAuth(draft, { forTest: true, saved: savedOf(draft.provider) })
+            : {}),
         };
         const name = PROVIDER_LABELS[draft.provider];
         return (
@@ -260,8 +270,10 @@ export default function AuthenticationsPanel({
                 value={draft.password}
                 onChange={(e) => update(draft.provider, { password: e.target.value })}
                 placeholder={draft.hasPassword ? '••••••••' : undefined}
+                error={Boolean(errors.password)}
                 helperText={
-                  draft.hasPassword ? 'A password is saved. Type to replace it.' : undefined
+                  errors.password ??
+                  (draft.hasPassword ? 'A password is saved. Type to replace it.' : undefined)
                 }
                 slotProps={{
                   htmlInput: { maxLength: AUTH_FIELD_MAX, autoComplete: 'new-password' },
