@@ -16,6 +16,7 @@ const ADMIN_IDS = [
   'primary-setup',
   'booking-rules',
   'keycard-integration',
+  'api-integrations',
   'rate-categories',
   'room-types',
   'rooms',

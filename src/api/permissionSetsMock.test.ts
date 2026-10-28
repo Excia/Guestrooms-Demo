@@ -103,10 +103,39 @@ describe('mock permission sets', () => {
     await expect(viewer.bookingRules.save(rules)).rejects.toMatchObject({ status: 403 });
     await expect(viewer.roomSetup.deleteRoom('room-100')).rejects.toMatchObject({ status: 403 });
     await expect(viewer.keycards.saveEncoders([])).rejects.toMatchObject({ status: 403 });
+    await expect(
+      viewer.integrations.createApiKey({ name: 'Blocked', requestId: 'r' }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(viewer.integrations.revokeApiKey('key-1')).rejects.toMatchObject({ status: 403 });
+    await expect(viewer.integrations.savePayCloudTokens([])).rejects.toMatchObject({ status: 403 });
     const editor = createMockClient({
       grant: { role: 'x', permissions: ['page.booking-rules', 'booking-rules.edit'] },
     });
     await expect(editor.bookingRules.save(rules)).resolves.toBeDefined();
+  });
+
+  it('API Integrations need admin: api-integrations.edit alone grants nothing', async () => {
+    const holder = createMockClient({
+      grant: { role: 'x', permissions: ['page.api-integrations', 'api-integrations.edit'] },
+    });
+    await expect(holder.integrations.listApiKeys()).resolves.toBeDefined();
+    await expect(
+      holder.integrations.createApiKey({ name: 'Nope', requestId: 'r' }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(holder.integrations.savePayCloudTokens([])).rejects.toMatchObject({ status: 403 });
+    await expect(
+      holder.integrations.testConnection({
+        provider: 'tiger-tms',
+        enabled: true,
+        baseUrl: 'https://a.example.com',
+        userName: '',
+        password: 'p',
+      }),
+    ).rejects.toMatchObject({ status: 403 });
+    const admin = createMockClient({ grant: { role: 'x', permissions: ['admin'] } });
+    await expect(
+      admin.integrations.createApiKey({ name: 'Yes', requestId: 'r' }),
+    ).resolves.toBeDefined();
   });
 
   it('a PIN holder counts only while the saved set allows PIN override', async () => {

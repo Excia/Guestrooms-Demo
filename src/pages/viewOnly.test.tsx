@@ -13,6 +13,7 @@ import { SystemSettingsProvider } from '../app/SystemSettingsProvider';
 import { GrantedAccess } from '../app/testing';
 import RequireAccess from '../components/RequireAccess';
 import AddOnItems from './AddOnItems';
+import ApiIntegrations from './ApiIntegrations';
 import BookingRules from './BookingRules';
 import Employees from './Employees';
 import KeycardIntegration from './KeycardIntegration';
@@ -37,6 +38,7 @@ const PAGES: readonly [PermissionPageId, ReactElement][] = [
   ['rooms', <Rooms />],
   ['add-on-items', <AddOnItems />],
   ['keycard-integration', <KeycardIntegration />],
+  ['api-integrations', <ApiIntegrations />],
   ['employees', <Employees />],
   ['permissions', <Permissions />],
 ];

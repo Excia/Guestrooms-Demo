@@ -41,7 +41,6 @@ describe('AdminShell side navigation', () => {
       'Permissions',
       'Keycard Integration',
       'API Integrations',
-      'API Keys',
       'Rate Categories',
       'Room Types',
       'Rooms',
@@ -50,7 +49,7 @@ describe('AdminShell side navigation', () => {
     expect(screen.queryByText('Migration Tool')).not.toBeInTheDocument();
   });
 
-  it('links the setup lists and shows API Keys as unavailable until its page exists', () => {
+  it('links the setup lists and links API Integrations (API Keys is a tab of that page)', () => {
     renderShell();
     expect(screen.getByRole('link', { name: 'Rate Categories' })).toHaveAttribute(
       'href',
@@ -65,8 +64,11 @@ describe('AdminShell side navigation', () => {
       'href',
       '/admin/add-on-items',
     );
-    expect(screen.queryByRole('link', { name: 'API Keys' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'API Keys' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: 'API Integrations' })).toHaveAttribute(
+      'href',
+      '/admin/api-integrations',
+    );
+    expect(screen.queryByText('API Keys')).not.toBeInTheDocument();
   });
 
   it('draws a divider above the first entry of the second group only, from lg up', () => {

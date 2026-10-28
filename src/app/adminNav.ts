@@ -14,7 +14,7 @@ const path = (id: string) => routes.find((r) => r.id === id)?.path;
 
 // Left navigation of the Admin Setup shell (Figma 11964:11791 and ticket 7.1). "System Settings" is
 // the menu's Primary Setup page. The other entries gain a path as their tickets land.
-// Order and grouping follow the legacy app: first the Primary Setup tabs (Locations ... API Keys),
+// Order and grouping follow the legacy app: first the Primary Setup tabs (Locations ... API Integrations; API Keys is a tab of API Integrations),
 // then the setup lists the legacy Admin Setup menu lists beside Primary Setup. Legacy has no
 // Migration Tool. Notifications (legacy, last) has no page yet and is not listed.
 export const ADMIN_NAV: readonly AdminNavItem[] = [
@@ -25,8 +25,7 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { label: 'Employees', path: path('employees'), id: 'employees' },
   { label: 'Permissions', path: path('permissions'), id: 'permissions' },
   { label: 'Keycard Integration', path: path('keycard-integration'), id: 'keycard-integration' },
-  { label: 'API Integrations' },
-  { label: 'API Keys' },
+  { label: 'API Integrations', path: path('api-integrations'), id: 'api-integrations' },
   {
     label: 'Rate Categories',
     path: path('rate-categories'),

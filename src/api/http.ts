@@ -62,6 +62,12 @@ import type {
   LookupRef,
   SystemSettings,
   SystemSettingsOptions,
+  ApiKeySummary,
+  IssuedApiKey,
+  PayCloudToken,
+  IntegrationAuth,
+  ConnectionTestResult,
+  SaveAuthenticationsResult,
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { normalizeAudienceRules } from '../app/bookingRules';
@@ -1017,6 +1023,71 @@ const parseKeys = (body: unknown, status: number): string[] => {
   return body;
 };
 
+// ---- API integrations (ticket 188). A secret never appears in these shapes except `IssuedApiKey.secret`.
+const isApiKeySummary = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.name) &&
+  isString(v.maskedKey) &&
+  isString(v.createdAt);
+const parseApiKeys = (body: unknown, status: number): ApiKeySummary[] => {
+  if (!listOf(body, isApiKeySummary)) throw invalid(status, 'API keys');
+  return body as ApiKeySummary[];
+};
+const parseIssuedApiKey = (body: unknown, status: number): IssuedApiKey => {
+  if (
+    !isObject(body) ||
+    !isApiKeySummary(body.key) ||
+    !(isString(body.secret) || body.secret === null)
+  ) {
+    throw invalid(status, 'API key');
+  }
+  return body as unknown as IssuedApiKey;
+};
+const ENVIRONMENTS: readonly string[] = ['local', 'test', 'staging', 'production'];
+const PROVIDER_IDS: readonly string[] = ['tiger-tms', 'assa-abloy'];
+const isPayCloudToken = (v: unknown) =>
+  isObject(v) &&
+  isString(v.id) &&
+  isString(v.maskedKey) &&
+  isString(v.environment) &&
+  ENVIRONMENTS.includes(v.environment);
+const parsePayCloudTokens = (body: unknown, status: number): PayCloudToken[] => {
+  if (!listOf(body, isPayCloudToken)) throw invalid(status, 'PayCloud tokens');
+  return body as PayCloudToken[];
+};
+const isIntegrationAuth = (v: unknown) =>
+  isObject(v) &&
+  isString(v.provider) &&
+  PROVIDER_IDS.includes(v.provider) &&
+  typeof v.enabled === 'boolean' &&
+  isString(v.baseUrl) &&
+  isString(v.userName) &&
+  typeof v.hasPassword === 'boolean';
+const parseAuthentications = (body: unknown, status: number): IntegrationAuth[] => {
+  if (!listOf(body, isIntegrationAuth)) throw invalid(status, 'authentications');
+  return body as IntegrationAuth[];
+};
+const isConnectionTest = (v: unknown) =>
+  isObject(v) &&
+  isString(v.provider) &&
+  PROVIDER_IDS.includes(v.provider) &&
+  typeof v.success === 'boolean';
+const parseConnectionTest = (body: unknown, status: number): ConnectionTestResult => {
+  if (!isConnectionTest(body)) throw invalid(status, 'connection test');
+  return body as unknown as ConnectionTestResult;
+};
+const parseSavedAuthentications = (body: unknown, status: number): SaveAuthenticationsResult => {
+  if (
+    !isObject(body) ||
+    !listOf(body.authentications, isIntegrationAuth) ||
+    !listOf(body.tests, isConnectionTest)
+  ) {
+    throw invalid(status, 'authentications');
+  }
+  return body as unknown as SaveAuthenticationsResult;
+};
+
 const STAT_COUNTS = [
   'arrivalsToday',
   'departuresToday',
@@ -1969,6 +2040,46 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       retrieveEncoders: (o) =>
         request('/keycards/encoders/retrieve', {}, o, parseKeys, { method: 'POST' }),
     },
+    integrations: {
+      listApiKeys: (o) => request('/integrations/api-keys', {}, o, parseApiKeys),
+      createApiKey: (r, o) =>
+        request('/integrations/api-keys', {}, o, parseIssuedApiKey, {
+          method: 'POST',
+          body: { name: r.name },
+          headers: { 'Idempotency-Key': r.requestId },
+        }),
+      rotateApiKey: (r, o) =>
+        request(
+          `/integrations/api-keys/${encodeURIComponent(r.id)}/rotate`,
+          {},
+          o,
+          parseIssuedApiKey,
+          { method: 'POST', headers: { 'Idempotency-Key': r.requestId } },
+        ),
+      revokeApiKey: (id, o) =>
+        request(`/integrations/api-keys/${encodeURIComponent(id)}`, {}, o, parseNothing, {
+          method: 'DELETE',
+        }),
+      listPayCloudTokens: (o) =>
+        request('/integrations/paycloud-tokens', {}, o, parsePayCloudTokens),
+      savePayCloudTokens: (tokens, o) =>
+        request('/integrations/paycloud-tokens', {}, o, parsePayCloudTokens, {
+          method: 'PUT',
+          body: tokens,
+        }),
+      listAuthentications: (o) =>
+        request('/integrations/authentications', {}, o, parseAuthentications),
+      saveAuthentications: (inputs, o) =>
+        request('/integrations/authentications', {}, o, parseSavedAuthentications, {
+          method: 'PUT',
+          body: inputs,
+        }),
+      testConnection: (input, o) =>
+        request('/integrations/authentications/test', {}, o, parseConnectionTest, {
+          method: 'POST',
+          body: input,
+        }),
+    },
     overrides: {
       verifyPin: (r: VerifyOverridePinRequest, o) =>
         Promise.resolve().then(() => {
@@ -1994,7 +2105,10 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       listPermissionSets: (o) =>
         request('/permission-sets', { fields: 'summary' }, o, parsePermissionSetSummaries),
       savePermissionSets: (sets, o) =>
-        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets.map((s) => normalizeSet(s)) }),
+        request('/permission-sets', {}, o, parsePermissionSets, {
+          method: 'PUT',
+          body: sets.map((s) => normalizeSet(s)),
+        }),
     },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
     registrationCard: {

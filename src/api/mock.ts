@@ -47,6 +47,23 @@ import { mockRoomOptions } from './roomOptionsData';
 import { mockAddOnOptions, mockAddOns } from './addOnData';
 import { mockRateCategories, mockRateCategoryOptions } from './rateCategoryData';
 import { MOCK_RETRIEVED_ENCODERS, mockEncoderKeys } from './keycardData';
+import {
+  mockStoredApiKeys,
+  mockStoredAuths,
+  mockStoredPayCloudTokens,
+  type StoredApiKey,
+  type StoredAuth,
+  type StoredPayCloudToken,
+} from './integrationsData';
+import {
+  generateApiKeySecret,
+  maskSecret,
+  mockConnectionWorks,
+  normalizeKeyName,
+  validateAuth,
+  validateKeyName,
+  validatePayCloudKey,
+} from '../app/apiIntegrations';
 import { getFolio, postCharge, type FolioStore } from './folioData';
 import { addMember, searchMembers, seedMembers } from './memberData';
 import { buildDetail, createReservation, setEarlyLate } from './reservationDetailData';
@@ -127,6 +144,7 @@ import type {
   SystemSettingsOptions,
 } from './types';
 import { ApiError } from './types';
+import type { IntegrationAuthInput } from './types';
 import {
   assertChangeRoomRequest,
   assertCheckInRoomRequest,
@@ -244,6 +262,12 @@ export function createMockClient({
   let addOns = mockAddOns();
   let rateCategories = mockRateCategories();
   let encoderKeys = mockEncoderKeys();
+  // API Integrations (ticket 188): stored secrets stay in here; the API only returns masked ones.
+  let apiKeys = mockStoredApiKeys(today);
+  let nextApiKeyId = 3;
+  let payCloudTokens = mockStoredPayCloudTokens();
+  let nextPayCloudId = 3;
+  let auths = mockStoredAuths();
   let bookingRules = mockBookingRules();
   let locations = mockLocations();
   let employees = mockEmployees();
@@ -317,6 +341,80 @@ export function createMockClient({
             }, latencyMs);
     });
   }
+
+  const apiKeySummary = (k: StoredApiKey) => ({
+    id: k.id,
+    name: k.name,
+    maskedKey: maskSecret(k.secret),
+    createdAt: k.createdAt,
+  });
+  const payCloudSummary = (t: StoredPayCloudToken) => ({
+    id: t.id,
+    maskedKey: maskSecret(t.apiKey),
+    environment: t.environment,
+  });
+  const authSummary = (a: StoredAuth) => ({
+    provider: a.provider,
+    enabled: a.enabled,
+    baseUrl: a.baseUrl,
+    userName: a.userName,
+    hasPassword: a.password !== '',
+    ...(a.provider === 'assa-abloy' ? { accessId: a.accessId, uuid: a.uuid } : {}),
+  });
+  const mergeAuth = (stored: StoredAuth, input: IntegrationAuthInput): StoredAuth => ({
+    ...stored,
+    enabled: input.enabled,
+    baseUrl: input.baseUrl,
+    userName: input.userName,
+    // A saved password is kept only for the URL and username it was saved with.
+    password:
+      input.password ??
+      (input.baseUrl.trim() === stored.baseUrl.trim() &&
+      input.userName.trim() === stored.userName.trim()
+        ? stored.password
+        : ''),
+    accessId: input.accessId ?? stored.accessId,
+    uuid: input.uuid ?? stored.uuid,
+  });
+  // Create / rotate replays: a repeated request id answers the key WITHOUT its secret (it was shown
+  // once and is not kept). Forgotten when the key is rotated or revoked; bounded to the last 100.
+  const issued = new Map<string, { fingerprint: string; keyId: string }>();
+  const ISSUED_LIMIT = 100;
+  function forgetIssued(keyId: string) {
+    for (const [id, entry] of issued) if (entry.keyId === keyId) issued.delete(id);
+  }
+  function issue(
+    request: { requestId: string },
+    fingerprint: string,
+    apply: () => { key: ReturnType<typeof apiKeySummary>; secret: string },
+  ): { key: ReturnType<typeof apiKeySummary>; secret: string | null } {
+    const previous = issued.get(request.requestId);
+    if (previous) {
+      if (previous.fingerprint !== fingerprint) {
+        throw new ApiError(409, 'This request id was already used for a different request', {
+          code: 'idempotency-conflict',
+        });
+      }
+      const found = apiKeys.find((k) => k.id === previous.keyId);
+      if (!found) throw new ApiError(404, 'API key not found', { code: 'not-found' });
+      return { key: apiKeySummary(found), secret: null };
+    }
+    const result = apply();
+    issued.set(request.requestId, { fingerprint, keyId: result.key.id });
+    if (issued.size > ISSUED_LIMIT) issued.delete(issued.keys().next().value as string);
+    return result;
+  }
+  const authDraft = (a: StoredAuth) => ({
+    provider: a.provider,
+    enabled: a.enabled,
+    baseUrl: a.baseUrl,
+    userName: a.userName,
+    password: '',
+    hasPassword: a.password !== '',
+    accessId: a.accessId,
+    uuid: a.uuid,
+  });
+  const randomBytes = (length: number) => crypto.getRandomValues(new Uint8Array(length));
 
   const notFound = () => new ApiError(404, 'Reservation not found');
 
@@ -1624,6 +1722,164 @@ export function createMockClient({
           o,
         ),
     },
+    integrations: {
+      listApiKeys: (o) =>
+        respond(
+          () => apiKeys.map(apiKeySummary),
+          () => [],
+          o,
+        ),
+      createApiKey: (request, o) =>
+        respond(
+          () =>
+            issue(request, `create:${normalizeKeyName(request.name).toLowerCase()}`, () => {
+              const message = validateKeyName(
+                request.name,
+                apiKeys.map((k) => k.name),
+              );
+              if (message === 'A key with this name already exists.') {
+                throw new ApiError(409, 'Key name in use', { code: 'duplicate' });
+              }
+              if (message) {
+                throw new ApiError(422, 'Key name is not valid', {
+                  code: 'validation',
+                  details: { name: [message] },
+                });
+              }
+              const stored = {
+                id: `key-${nextApiKeyId++}`,
+                name: normalizeKeyName(request.name),
+                secret: generateApiKeySecret(randomBytes),
+                createdAt: today,
+              };
+              apiKeys = [...apiKeys, stored];
+              return { key: apiKeySummary(stored), secret: stored.secret };
+            }),
+          () => {
+            throw new ApiError(404, 'API key not found', { code: 'not-found' });
+          },
+          o,
+        ),
+      rotateApiKey: (request, o) =>
+        respond(
+          () =>
+            issue(request, `rotate:${request.id}`, () => {
+              const found = apiKeys.find((k) => k.id === request.id);
+              if (!found) throw new ApiError(404, 'API key not found', { code: 'not-found' });
+              forgetIssued(found.id);
+              const next = { ...found, secret: generateApiKeySecret(randomBytes) };
+              apiKeys = apiKeys.map((k) => (k.id === found.id ? next : k));
+              return { key: apiKeySummary(next), secret: next.secret };
+            }),
+          () => {
+            throw new ApiError(404, 'API key not found', { code: 'not-found' });
+          },
+          o,
+        ),
+      revokeApiKey: (id, o) =>
+        respond(
+          () => {
+            if (!apiKeys.some((k) => k.id === id)) {
+              throw new ApiError(404, 'API key not found', { code: 'not-found' });
+            }
+            apiKeys = apiKeys.filter((k) => k.id !== id);
+            forgetIssued(id);
+          },
+          () => undefined,
+          o,
+        ),
+      listPayCloudTokens: (o) =>
+        respond(
+          () => payCloudTokens.map(payCloudSummary),
+          () => [],
+          o,
+        ),
+      savePayCloudTokens: (tokens, o) =>
+        respond(
+          () => {
+            const next = tokens.map((t) => {
+              const existing = t.id ? payCloudTokens.find((x) => x.id === t.id) : undefined;
+              if (t.id && !existing) {
+                throw new ApiError(404, 'PayCloud token not found', { code: 'not-found' });
+              }
+              const apiKey = t.apiKey ?? existing?.apiKey ?? '';
+              const bad = validatePayCloudKey({
+                id: t.id ?? '',
+                apiKey,
+                environment: t.environment,
+                replacing: true,
+              });
+              if (bad || !['local', 'test', 'staging', 'production'].includes(t.environment)) {
+                throw new ApiError(422, 'PayCloud token is not valid', { code: 'validation' });
+              }
+              return {
+                id: existing?.id ?? `paycloud-${nextPayCloudId++}`,
+                apiKey,
+                environment: t.environment,
+              };
+            });
+            payCloudTokens = next;
+            return payCloudTokens.map(payCloudSummary);
+          },
+          () => [],
+          o,
+        ),
+      listAuthentications: (o) =>
+        respond(
+          () => auths.map(authSummary),
+          () => auths.map(authSummary),
+          o,
+        ),
+      saveAuthentications: (inputs, o) =>
+        respond(
+          () => {
+            const next = auths.map((stored) => {
+              const input = inputs.find((i) => i.provider === stored.provider);
+              if (!input) return stored;
+              const merged = mergeAuth(stored, input);
+              const errors = validateAuth(
+                { ...authDraft(merged), password: input.password ?? '' },
+                { saved: authDraft(stored) },
+              );
+              if (Object.keys(errors).length > 0) {
+                throw new ApiError(422, 'Authentication is not valid', {
+                  code: 'validation',
+                  details: Object.fromEntries(
+                    Object.entries(errors).map(([field, message]) => [field, [message]]),
+                  ),
+                });
+              }
+              return merged;
+            });
+            auths = next;
+            return {
+              authentications: auths.map(authSummary),
+              tests: auths
+                .filter((a) => a.enabled)
+                .map((a) => ({
+                  provider: a.provider,
+                  success: mockConnectionWorks(a.baseUrl, a.password !== ''),
+                })),
+            };
+          },
+          () => ({ authentications: auths.map(authSummary), tests: [] }),
+          o,
+        ),
+      testConnection: (input, o) =>
+        respond(
+          () => {
+            const stored = auths.find((a) => a.provider === input.provider);
+            if (!stored) throw new ApiError(404, 'Integration not found', { code: 'not-found' });
+            const merged = mergeAuth(stored, input);
+            return {
+              provider: input.provider,
+              success: mockConnectionWorks(merged.baseUrl, merged.password !== ''),
+            };
+          },
+          () => ({ provider: input.provider, success: false }),
+          o,
+        ),
+    },
     overrides: {
       verifyPin: (request, o) =>
         respond(
@@ -1735,7 +1991,38 @@ const ADMIN_WRITES: readonly [keyof ApiClient, readonly string[], AdminPageId][]
   ['keycards', ['saveEncoders', 'retrieveEncoders'], 'keycard-integration'],
 ];
 
+// API Integrations hold secrets, so every method (reads of nothing secret excepted) needs `admin`
+// itself: `api-integrations.edit` grants nothing (Q-188-2). Test Connection sends a saved password
+// to a host, so it is guarded like a write.
+const ADMIN_ONLY: readonly [keyof ApiClient, readonly string[]][] = [
+  [
+    'integrations',
+    [
+      'createApiKey',
+      'rotateApiKey',
+      'revokeApiKey',
+      'savePayCloudTokens',
+      'saveAuthentications',
+      'testConnection',
+    ],
+  ],
+];
+
 function guardAdminWrites(client: ApiClient, can: () => Permissions['can']): ApiClient {
+  for (const [area, methods] of ADMIN_ONLY) {
+    const target = client[area] as unknown as Record<string, (...args: unknown[]) => unknown>;
+    for (const name of methods) {
+      const original = target[name];
+      target[name] = (...args: unknown[]) =>
+        can()(ADMIN_PERMISSION)
+          ? original(...args)
+          : Promise.reject(
+              new ApiError(403, 'Only administrators may change API integrations', {
+                code: 'forbidden',
+              }),
+            );
+    }
+  }
   for (const [area, methods, page] of ADMIN_WRITES) {
     const target = client[area] as unknown as Record<string, (...args: unknown[]) => unknown>;
     for (const name of methods) {
