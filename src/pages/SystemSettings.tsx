@@ -73,9 +73,22 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
 
   // Answers of the backend that the form cannot know; dropped when the field changes again.
   const [serverErrors, setServerErrors] = useState<SystemSettingsErrors>({});
+  // Choices that exist now; a saved default naming a deleted category is an error on its select.
+  const known = useMemo(
+    () =>
+      options
+        ? {
+            rateCategoryIds: new Set(options.rateCategories.map((c) => c.id)),
+            memberTypeIds: new Set(options.memberTypes.map((m) => m.id)),
+          }
+        : undefined,
+    [options],
+  );
+  // Set by a refused save: the tab then also shows the "choose one" messages of empty override rows.
+  const [refused, setRefused] = useState(false);
   const errors = useMemo(
-    () => ({ ...(draft ? validateSystemSettings(draft) : {}), ...serverErrors }),
-    [draft, serverErrors],
+    () => ({ ...(draft ? validateSystemSettings(draft, known) : {}), ...serverErrors }),
+    [draft, known, serverErrors],
   );
   const editDraft = useCallback((next: SystemSettingsValues) => {
     setServerErrors({});
@@ -96,9 +109,10 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
     // Nothing to save in View-only mode (the button is gone; this guards the Enter key and the leave prompt).
     if (readOnly) return false;
     if (!draft) return false;
-    const found = validateSystemSettings(draft);
+    const found = validateSystemSettings(draft, known);
     const first = firstErrorField(found);
     if (first) {
+      setRefused(true);
       const target: TabId = isDefaultRateCategoriesField(first)
         ? 'rates'
         : isFolioField(first)
@@ -122,6 +136,7 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
       const stored = await api.systemSettings.save(draft);
       apply(stored);
       setDraft(null);
+      setRefused(false);
       setServerErrors({});
       setToast((t) => ({ open: true, id: t.id + 1 }));
       return true;
@@ -150,10 +165,15 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
     } finally {
       setSaving(false);
     }
-  }, [api, apply, draft, tab, readOnly]);
+  }, [api, apply, draft, known, tab, readOnly]);
 
   const saveButton = (
-    <SaveButton dirty={dirty} saving={saving} noun="System Settings" onClick={() => void save()} />
+    <SaveButton
+      dirty={dirty}
+      saving={saving}
+      noun="System Settings"
+      onClick={() => void save()}
+    />
   );
 
   let body;
@@ -259,6 +279,7 @@ export default function SystemSettings({ readOnly: forced = false }: { readOnly?
               rateCategories={options.rateCategories}
               memberTypes={options.memberTypes}
               errors={errors}
+              showRequired={refused}
             />
           ) : tab === 'registration' ? (
             <RegistrationCardTab

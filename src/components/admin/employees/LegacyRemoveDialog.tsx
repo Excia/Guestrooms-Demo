@@ -15,6 +15,8 @@ export interface LegacyRemoveDialogProps {
   onConfirm: () => void;
   /** Question to show; defaults to the Employee wording. */
   message?: string;
+  /** Called once the close transition has finished (e.g. to place focus). */
+  onExited?: () => void;
 }
 
 // The legacy confirmation (ConfirmDialog): title "Confirm", "Are you sure you want to remove this
@@ -26,12 +28,14 @@ export default function LegacyRemoveDialog({
   onCancel,
   onConfirm,
   message = 'Are you sure you want to remove this Employee?',
+  onExited,
 }: LegacyRemoveDialogProps) {
   const id = useId();
   return (
     <Dialog
       open={open}
       onClose={onCancel}
+      slotProps={{ transition: { onExited } }}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-message`}
     >

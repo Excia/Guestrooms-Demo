@@ -95,7 +95,6 @@ import { validateEncoderKeys } from '../app/keycards';
 import { applyRoomOrder, orderScheduleRooms } from '../app/roomOrder';
 import { holdFromRules, validateBookingRules } from '../app/bookingRules';
 import { normalizeOnlineBooking } from '../app/onlineBookingSettings';
-import { referencedRateCategoryIds } from '../app/defaultRateCategories';
 import { validateSystemSettings } from '../app/systemSettings';
 import { checkRemoveLocation, validateLocations } from '../app/locations';
 import { isEmployeeRole, lastAdministratorProblem, needsPermissionSet } from '../app/employees';
@@ -1133,21 +1132,16 @@ export function createMockClient({
       save: (settings, o) =>
         respond(
           () => {
-            const errors = validateSystemSettings(settings);
+            const errors = validateSystemSettings(settings, {
+              rateCategoryIds: new Set(rateCategories.map((c) => c.id)),
+              memberTypeIds: new Set(MOCK_BOOKING_RULES_OPTIONS.memberTypes.map((m) => m.id)),
+            });
             const house = settings.houseAccount;
             if (house && !MOCK_HOUSE_ACCOUNTS.some((a) => a.id === house.id)) {
               throw new ApiError(422, 'House account not found', { code: 'unknown-house-account' });
             }
             if (Object.keys(errors).length > 0) {
               throw new ApiError(422, 'System settings are not valid', { code: 'validation' });
-            }
-            const known = new Set(rateCategories.map((c) => c.id));
-            if (
-              !referencedRateCategoryIds(settings.defaultRateCategories).every((id) =>
-                known.has(id),
-              )
-            ) {
-              throw new ApiError(422, 'Unknown rate category', { code: 'validation' });
             }
             systemSettings = structuredClone({
               ...settings,

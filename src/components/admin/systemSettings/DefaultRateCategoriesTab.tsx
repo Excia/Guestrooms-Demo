@@ -17,6 +17,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { DefaultRateCategories, LookupRef } from '../../../api/types';
 import {
   addMemberTypeOverride,
+  DEFAULT_RATE_MESSAGES,
+  nextOverrideId,
   DEFAULT_RATE_ROWS,
   overrideFieldKey,
   removeMemberTypeOverride,
@@ -36,6 +38,11 @@ export interface DefaultRateCategoriesTabProps {
   rateCategories: readonly LookupRef[];
   memberTypes: readonly LookupRef[];
   errors: SystemSettingsErrors;
+  /**
+   * Show the "Choose ..." messages of empty override rows. Off until a save was refused, so a row
+   * just added is not red; duplicates and deleted choices always show.
+   */
+  showRequired: boolean;
 }
 
 interface TableSelectProps {
@@ -74,6 +81,7 @@ function TableSelect({
           'aria-label': label,
           'aria-labelledby': undefined,
           'aria-describedby': error ? errorId : undefined,
+          'aria-invalid': error ? true : undefined,
         }}
         sx={{ '& .MuiSelect-select': { color: current ? 'text.primary' : 'text.secondary' } }}
       >
@@ -83,7 +91,11 @@ function TableSelect({
           </MenuItem>
         ))}
       </MuiSelect>
-      {error ? <FormHelperText id={errorId}>{error}</FormHelperText> : null}
+      {error ? (
+        <FormHelperText id={errorId} role="alert">
+          {error}
+        </FormHelperText>
+      ) : null}
     </FormControl>
   );
 }
@@ -104,11 +116,19 @@ export default function DefaultRateCategoriesTab({
   rateCategories,
   memberTypes,
   errors,
+  showRequired,
 }: DefaultRateCategoriesTabProps) {
-  const nextId = useRef(1);
   const addButton = useRef<HTMLButtonElement>(null);
   const [removing, setRemoving] = useState<string | null>(null);
   const focusId = useRef<string | null>(null);
+  const focusAddAfterClose = useRef(false);
+  const shown = (key: string) => {
+    const message = errors[key as keyof SystemSettingsErrors]?.[0];
+    const required =
+      message === DEFAULT_RATE_MESSAGES.memberType ||
+      message === DEFAULT_RATE_MESSAGES.rateCategory;
+    return required && !showRequired ? undefined : message;
+  };
 
   // A new row takes focus once it is rendered.
   useEffect(() => {
@@ -174,6 +194,7 @@ export default function DefaultRateCategoriesTab({
                   options={rateCategories}
                   placeholder="Choose a rate category"
                   onChange={(id) => setDefault(row.key, id)}
+                  error={shown(`defaultRateCategories.${row.key}`)}
                 />
               </TableCell>
               <TableCell sx={{ border: 0 }} />
@@ -199,7 +220,7 @@ export default function DefaultRateCategoriesTab({
                     onChange={(id) =>
                       onChange(updateMemberTypeOverride(value, o.id, { memberTypeId: id }))
                     }
-                    error={errors[typeKey]?.[0]}
+                    error={shown(typeKey)}
                   />
                 </TableCell>
                 <TableCell sx={cellSx}>
@@ -212,7 +233,7 @@ export default function DefaultRateCategoriesTab({
                     onChange={(id) =>
                       onChange(updateMemberTypeOverride(value, o.id, { rateCategoryId: id }))
                     }
-                    error={errors[categoryKey]?.[0]}
+                    error={shown(categoryKey)}
                   />
                 </TableCell>
                 <TableCell sx={{ border: 0 }}>
@@ -231,7 +252,7 @@ export default function DefaultRateCategoriesTab({
           ref={addButton}
           startIcon={<AddCircle />}
           onClick={() => {
-            const id = `override-new-${nextId.current++}`;
+            const id = nextOverrideId(value);
             onChange(addMemberTypeOverride(value, id));
             focusId.current = id;
           }}
@@ -248,7 +269,12 @@ export default function DefaultRateCategoriesTab({
           if (removing) onChange(removeMemberTypeOverride(value, removing));
           setRemoving(null);
           // The removed row held the focus; the Add button is the nearest stable place.
-          setTimeout(() => addButton.current?.focus(), 0);
+          focusAddAfterClose.current = true;
+        }}
+        onExited={() => {
+          if (!focusAddAfterClose.current) return;
+          focusAddAfterClose.current = false;
+          addButton.current?.focus();
         }}
       />
     </Box>

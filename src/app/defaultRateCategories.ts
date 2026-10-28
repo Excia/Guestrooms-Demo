@@ -30,9 +30,20 @@ export const newMemberTypeOverride = (id: string): MemberTypeRateOverride => ({
   rateCategoryId: null,
 });
 
+/**
+ * An id for a new row that no existing row uses, whatever ids the backend made for saved rows
+ * (derived from the rows, so it stays unique across tab switches and saves).
+ */
+export function nextOverrideId(value: DefaultRateCategories): string {
+  const used = new Set(value.memberTypeOverrides.map((o) => o.id));
+  let n = value.memberTypeOverrides.length + 1;
+  while (used.has(`override-new-${n}`)) n += 1;
+  return `override-new-${n}`;
+}
+
 export const addMemberTypeOverride = (
   value: DefaultRateCategories,
-  id: string,
+  id: string = nextOverrideId(value),
 ): DefaultRateCategories => ({
   ...value,
   memberTypeOverrides: [...value.memberTypeOverrides, newMemberTypeOverride(id)],
@@ -64,31 +75,50 @@ export const DEFAULT_RATE_MESSAGES = {
   duplicate: 'This member type already has an override.',
 } as const;
 
+export const STALE_CATEGORY_MESSAGE = 'This rate category no longer exists. Choose another.';
+export const STALE_MEMBER_TYPE_MESSAGE = 'This member type no longer exists. Choose another.';
+
+/** The choices that exist now; a saved id missing from them was deleted since. */
+export interface KnownChoices {
+  rateCategoryIds: ReadonlySet<string>;
+  memberTypeIds: ReadonlySet<string>;
+}
+
 /**
  * Rules that stop a save: every override needs a member type and a rate category, and a member
  * type can have only one override. Legacy checks nothing (an empty row would save as id 0).
- * Keys are field keys (`overrideFieldKey`) with one message each.
+ * With `known`, a choice naming a rate category or member type that no longer exists is refused
+ * too, so the user must choose another instead of hitting a failure on save.
+ * Keys are field keys (`defaultRateCategories.<key>` for the fixed rows, `overrideFieldKey` for
+ * overrides) with one message each, inserted in page order: fixed rows, then each override's
+ * member type, then its rate category.
  */
 export function validateDefaultRateCategories(
   value: DefaultRateCategories,
+  known?: KnownChoices,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
+  if (known) {
+    for (const row of DEFAULT_RATE_ROWS) {
+      const id = value[row.key];
+      if (id && !known.rateCategoryIds.has(id)) {
+        errors[`defaultRateCategories.${row.key}`] = STALE_CATEGORY_MESSAGE;
+      }
+    }
+  }
   const seen = new Set<string>();
   for (const o of value.memberTypeOverrides) {
     const typeKey = overrideFieldKey(o.id, 'memberTypeId');
     if (!o.memberTypeId) errors[typeKey] = DEFAULT_RATE_MESSAGES.memberType;
-    else if (seen.has(o.memberTypeId)) errors[typeKey] = DEFAULT_RATE_MESSAGES.duplicate;
+    else if (known && !known.memberTypeIds.has(o.memberTypeId)) {
+      errors[typeKey] = STALE_MEMBER_TYPE_MESSAGE;
+    } else if (seen.has(o.memberTypeId)) errors[typeKey] = DEFAULT_RATE_MESSAGES.duplicate;
     else seen.add(o.memberTypeId);
-    if (!o.rateCategoryId) {
-      errors[overrideFieldKey(o.id, 'rateCategoryId')] = DEFAULT_RATE_MESSAGES.rateCategory;
+    const categoryKey = overrideFieldKey(o.id, 'rateCategoryId');
+    if (!o.rateCategoryId) errors[categoryKey] = DEFAULT_RATE_MESSAGES.rateCategory;
+    else if (known && !known.rateCategoryIds.has(o.rateCategoryId)) {
+      errors[categoryKey] = STALE_CATEGORY_MESSAGE;
     }
   }
   return errors;
-}
-
-/** Every rate category id the value names (for the backend check that they still exist). */
-export function referencedRateCategoryIds(value: DefaultRateCategories): string[] {
-  const ids = [value.roomBlock, value.member, value.nonMember, value.owner];
-  for (const o of value.memberTypeOverrides) ids.push(o.rateCategoryId);
-  return ids.filter((id): id is string => Boolean(id));
 }

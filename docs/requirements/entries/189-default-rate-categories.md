@@ -46,3 +46,5 @@ Legacy read only (`DefaultRateCategoriesEdit.vue`, `systemSettingsEdit` store) a
 - **Permissions:** the page's `page.primary-setup`: View access shows the tab with disabled selects and no Add or Remove.
 - **Code:** `src/app/defaultRateCategories.ts` (pure rules, tests in `defaultRateCategories.test.ts`), `src/components/admin/systemSettings/DefaultRateCategoriesTab.tsx`, page tests in `src/pages/SystemSettings.defaultRates.test.tsx`.
 - **Notes:** nothing reads the defaults yet (room block creation, pricing a reservation); those tickets own that behavior.
+
+- **Review fixes (2026-10-28):** new override rows get an id derived from the existing rows (`nextOverrideId`), so ids stay unique across tab switches, saves and backend-made ids. A saved choice naming a deleted rate category or member type is an error on its select (announced, `aria-invalid`) and blocks the save until another is chosen (D-DRC-5). The "Choose a ..." messages of an empty row appear only after a refused save; repeats and deleted choices show at once (D-DRC-6).

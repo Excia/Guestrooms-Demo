@@ -1,7 +1,7 @@
 // Business rules of System Settings (ticket 7.1): times, hour ranges and cross-field validation.
 // Pure functions; the page and the settings context only call them.
 import type { Duration, FolioDetails, SystemSettings } from '../api/types';
-import { validateDefaultRateCategories } from './defaultRateCategories';
+import { validateDefaultRateCategories, type KnownChoices } from './defaultRateCategories';
 import { customTextProblem } from './registrationCard';
 import {
   ONLINE_BOOKING_FIELD_ORDER,
@@ -130,7 +130,10 @@ const inRange = (n: number, r: { min: number; max: number }) =>
 /** The code of the 422 the backend answers when the chosen house account no longer exists. */
 export const UNKNOWN_HOUSE_ACCOUNT = 'unknown-house-account';
 
-export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors {
+export function validateSystemSettings(
+  s: SystemSettings,
+  known?: KnownChoices,
+): SystemSettingsErrors {
   const errors: SystemSettingsErrors = {};
   const add = (field: SystemSettingsField, message: string) => {
     (errors[field] ??= []).push(message);
@@ -218,7 +221,7 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
     add(field as SystemSettingsField, message);
   }
   for (const [field, message] of Object.entries(
-    validateDefaultRateCategories(s.defaultRateCategories),
+    validateDefaultRateCategories(s.defaultRateCategories, known),
   )) {
     add(field as SystemSettingsField, message);
   }

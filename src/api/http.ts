@@ -64,6 +64,7 @@ import type {
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { normalizeAudienceRules } from '../app/bookingRules';
+import { emptyDefaultRateCategories } from '../app/defaultRateCategories';
 import { isEmployeeRole } from '../app/employees';
 import { isStoredEncoderKey } from '../app/keycards';
 import { isSeasonSkuShapeValid, MAX_RATE_CENTS } from '../app/rateCategories';
@@ -687,7 +688,6 @@ const isOnlineBooking = (v: unknown) =>
   typeof v.chargeCancellationFee === 'boolean' &&
   typeof v.showAddOnsPopup === 'boolean';
 
-// Checks the shape the form relies on; the rules themselves are the backend's to enforce.
 const isNullableId = (v: unknown) => v === null || isString(v);
 const isDefaultRateCategories = (v: unknown) =>
   isObject(v) &&
@@ -701,6 +701,7 @@ const isDefaultRateCategories = (v: unknown) =>
       isNullableId(o.rateCategoryId),
   );
 
+// Checks the shape the form relies on; the rules themselves are the backend's to enforce.
 function parseSystemSettings(body: unknown, status: number): SystemSettings {
   if (
     !isObject(body) ||
@@ -735,13 +736,7 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
   return {
     ...body,
     trainingMode: body.trainingMode ?? false,
-    defaultRateCategories: body.defaultRateCategories ?? {
-      roomBlock: null,
-      member: null,
-      nonMember: null,
-      owner: null,
-      memberTypeOverrides: [],
-    },
+    defaultRateCategories: body.defaultRateCategories ?? emptyDefaultRateCategories(),
   } as unknown as SystemSettings;
 }
 
@@ -1980,10 +1975,7 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
       listPermissionSets: (o) =>
         request('/permission-sets', { fields: 'summary' }, o, parsePermissionSetSummaries),
       savePermissionSets: (sets, o) =>
-        request('/permission-sets', {}, o, parsePermissionSets, {
-          method: 'PUT',
-          body: sets.map((s) => normalizeSet(s)),
-        }),
+        request('/permission-sets', {}, o, parsePermissionSets, { method: 'PUT', body: sets.map((s) => normalizeSet(s)) }),
     },
     reports: { listCustom: (o) => request('/reports/custom', {}, o, parseCustomReports) },
     registrationCard: {

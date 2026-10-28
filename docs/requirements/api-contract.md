@@ -760,5 +760,5 @@ The four first keys are rate category ids (`RateCategorySetup.id`) or null (none
 `{id, memberTypeId, rateCategoryId}` (ids of Booking Rules member types and rate categories; `id` is client-made for an unsaved row).
 `GET /settings/system/options` gains `rateCategories` and `memberTypes`, lists of `{id, label}`. The client tolerates a response that omits
 any of these for one release (read as none chosen and empty lists); after that they will be required. `PUT` answers 422 `validation` when
-an override lacks its member type or rate category, repeats a member type, or names a rate category that no longer exists
+an override lacks its member type or rate category, repeats a member type, or any choice names a rate category or member type that no longer exists (the UI shows the same on the select and blocks the save until another is chosen)
 (`src/app/defaultRateCategories.ts`). Whether the four defaults are required is open (Q-DRC-1).
