@@ -1,7 +1,6 @@
 import type { RoomSetup, RoomTypeSetup } from '../api/types';
 import { MOCK_ROOM_SETUP_OPTIONS, mockRooms, mockRoomTypes } from '../api/roomSetupData';
 import {
-  acceptPhotoFiles,
   blankRoom,
   blankRoomType,
   changeRoomType,
@@ -11,8 +10,6 @@ import {
   duplicateName,
   effectiveDetails,
   isActiveOn,
-  MAX_PHOTOS,
-  PHOTO_MAX_BYTES,
   selectAllIds,
   setInheritDetails,
   sortSetupItems,
@@ -245,27 +242,6 @@ describe('duplicating', () => {
     expect(duplicateName('King')).toBe('Copy of King');
     expect(duplicateName('x'.repeat(50))).toHaveLength(50);
     expect(duplicateName('  ')).toBe('Copy');
-  });
-});
-
-describe('acceptPhotoFiles', () => {
-  const file = (name: string, type = 'image/png', size = 1000) => ({ name, type, size });
-  it('accepts images and explains every rejected file', () => {
-    const { accepted, errors } = acceptPhotoFiles(
-      [
-        file('a.png'),
-        file('b.pdf', 'application/pdf'),
-        file('c.png', 'image/png', PHOTO_MAX_BYTES + 1),
-      ],
-      0,
-    );
-    expect(accepted.map((f) => f.name)).toEqual(['a.png']);
-    expect(errors).toHaveLength(2);
-  });
-  it('stops at the maximum number of photos', () => {
-    const { accepted, errors } = acceptPhotoFiles([file('a.png'), file('b.png')], MAX_PHOTOS - 1);
-    expect(accepted).toHaveLength(1);
-    expect(errors[0]).toMatch(/at most 50/);
   });
 });
 

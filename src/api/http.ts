@@ -50,6 +50,7 @@ import type {
   RateCategoryOptions,
   RateCategorySetup,
   SetHousekeepingRequest,
+  RoomPhoto,
   RoomSetup,
   RoomOptions,
   RoomSetupOptions,
@@ -832,6 +833,15 @@ const parseRoomList = (body: unknown, status: number): RoomSetup[] => {
   if (!Array.isArray(body)) throw invalid(status, 'rooms');
   body.forEach((room) => parseRoomSetup(room, status));
   return body as RoomSetup[];
+};
+const parsePhotoList = (body: unknown, status: number): RoomPhoto[] => {
+  if (
+    !Array.isArray(body) ||
+    !body.every((v) => isObject(v) && isString(v.id) && isString(v.name) && isString(v.url))
+  ) {
+    throw invalid(status, 'photos');
+  }
+  return body as RoomPhoto[];
 };
 const parseNothing = () => undefined;
 
@@ -1864,6 +1874,10 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
             body: { roomIds },
           });
         }),
+    },
+    photos: {
+      // The backend takes multipart; until it exists the request carries the file metadata.
+      upload: (req, o) => request('/photos', {}, o, parsePhotoList, { method: 'POST', body: req }),
     },
     roomOptions: {
       get: (o) => request('/room-options', {}, o, parseRoomOptions),

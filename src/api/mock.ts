@@ -114,6 +114,8 @@ import {
   validateRoomType,
   withoutRoom,
 } from '../app/roomSetup';
+import { acceptPhotoFiles } from '../app/photos';
+import { newRequestId } from '../lib/requestId';
 import { addDays } from '../lib/dates';
 import type {
   ApiClient,
@@ -1307,6 +1309,22 @@ export function createMockClient({
           () => [],
           o,
         ),
+    },
+    photos: {
+      // Stores metadata only (no file bytes), and re-checks the rules like the backend would.
+      upload: (request, o) => {
+        const store = () => {
+          const { accepted, errors } = acceptPhotoFiles(request.files, request.existingCount);
+          if (errors.length > 0 || request.files.length === 0) {
+            throw new ApiError(422, 'Photos are not valid', {
+              code: 'validation',
+              details: { photos: errors },
+            });
+          }
+          return accepted.map((f) => ({ id: newRequestId(), name: f.name, url: '' }));
+        };
+        return respond(store, store, o);
+      },
     },
     roomOptions: {
       get: (o) =>
