@@ -360,6 +360,7 @@ function AddOnEditor({ data }: { data: AddOnData }) {
           />
         </Box>
         <PhotosField
+          key={editor.selectedId ?? 'new'}
           owner="add-on"
           entityId={editor.selectedId}
           id={fieldDomId('photos')}

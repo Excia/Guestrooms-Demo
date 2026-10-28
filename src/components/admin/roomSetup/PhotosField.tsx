@@ -14,9 +14,12 @@ import {
   PHOTO_RULES_HINT,
   PHOTO_TYPES,
   removePhoto,
+  sniffPhotoType,
+  storedPhotoName,
   UPLOAD_FAILED_MESSAGE,
   UPLOAD_SUCCESS_MESSAGE,
 } from '../../../app/photos';
+import { readFileHead } from '../../../lib/readFileHead';
 import ReorderIcon from '../../shared/ReorderIcon';
 import PhotoRemoveBadge from '../../shared/PhotoRemoveBadge';
 import { ErrorLines } from '../systemSettings/fieldParts';
@@ -39,6 +42,11 @@ export interface PhotosFieldProps {
 
 const previewUrl = (file: File) =>
   typeof URL.createObjectURL === 'function' ? URL.createObjectURL(file) : '';
+const revokePreview = (url: string) => {
+  if (typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+};
+
+type FocusTarget = { kind: 'badge'; id: string } | { kind: 'add' } | null;
 
 // "Photos" with ADD PHOTOS, an order dialog and removable thumbnails (Figma 11964:28502 and Image
 // Placeholder 11964:13054; behavior of the legacy ImageContainerInput, ImageUploadInput and
@@ -59,58 +67,122 @@ export default function PhotosField({
   const disabled = useDisabled(disabledProp);
   const readOnly = useReadOnly();
   const inputRef = useRef<HTMLInputElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [success, setSuccess] = useState('');
+  // The live region: upload result, "Delete is armed", "Photo removed".
+  const [announcement, setAnnouncement] = useState('');
   const [ordering, setOrdering] = useState(false);
-  const pending = usePendingDelete();
   const removeRefs = useRef(new Map<string, HTMLElement>());
-  const focusBadge = useRef<string | null>(null);
+  const focusNext = useRef<FocusTarget>(null);
   const errorId = useId();
   const headingId = useId();
   const hintId = useId();
+  // A lapsed Delete that still had the focus hands it back to the photo's remove button.
+  const pending = usePendingDelete((lapsedId) => {
+    const del = removeRefs.current.get(lapsedId)?.querySelector('[data-photo-delete]');
+    if (del && document.activeElement === del) focusNext.current = { kind: 'badge', id: lapsedId };
+  });
 
   // The latest photos and callback, for the upload that finishes after the form changed.
   const latest = useRef({ photos, onChange });
   useEffect(() => {
     latest.current = { photos, onChange };
   });
+  // An upload still running when the record changes (or the field goes away) is dropped.
   const aborter = useRef<AbortController | null>(null);
-  useEffect(() => () => aborter.current?.abort(), []);
+  useEffect(() => () => aborter.current?.abort(), [entityId]);
 
-  // After Escape on an armed Delete, the focus returns to that photo's remove badge.
+  // Preview (blob) URLs made here are revoked once their photo leaves the list (removed, or the
+  // draft replaced by the saved record or discarded) and when the field goes away.
+  const blobs = useRef(new Set<string>());
+  const shown = useRef(new Set<string>());
   useEffect(() => {
-    if (focusBadge.current === null) return;
-    removeRefs.current.get(focusBadge.current)?.querySelector<HTMLElement>('button')?.focus();
-    focusBadge.current = null;
+    const current = new Set(photos.map((p) => p.url));
+    for (const url of [...blobs.current]) {
+      if (current.has(url)) shown.current.add(url);
+      else if (shown.current.has(url)) {
+        revokePreview(url);
+        blobs.current.delete(url);
+        shown.current.delete(url);
+      }
+    }
+  }, [photos]);
+  useEffect(() => {
+    const made = blobs.current;
+    return () => {
+      made.forEach(revokePreview);
+      made.clear();
+    };
+  }, []);
+
+  // Focus once when a photo is armed: on its Delete button.
+  useEffect(() => {
+    if (pending.armedId === null) return;
+    removeRefs.current
+      .get(pending.armedId)
+      ?.querySelector<HTMLElement>('[data-photo-delete]')
+      ?.focus();
+  }, [pending.armedId]);
+  // Focus handed on after a removal, an Escape or a lapse.
+  useEffect(() => {
+    const target = focusNext.current;
+    if (target === null) return;
+    focusNext.current = null;
+    if (target.kind === 'add') addRef.current?.focus();
+    else removeRefs.current.get(target.id)?.querySelector<HTMLElement>('button')?.focus();
   });
 
   const onFiles = async (list: FileList | null) => {
     const files = Array.from(list ?? []);
     if (inputRef.current) inputRef.current.value = '';
     if (files.length === 0) return;
-    setSuccess('');
-    const { accepted, errors } = acceptPhotoFiles(files, photos.length);
-    setUploadErrors(errors);
-    if (accepted.length === 0) return;
+    setAnnouncement('');
+    const byRules = acceptPhotoFiles(files, photos.length);
     aborter.current?.abort();
     const controller = new AbortController();
     aborter.current = controller;
     setUploading(true);
     try {
+      // The extension and type are the user's word; the first bytes must agree.
+      const heads = await Promise.all(
+        byRules.accepted.map((f) => readFileHead(f).catch(() => new Uint8Array())),
+      );
+      if (controller.signal.aborted) return;
+      const accepted: File[] = [];
+      const errors = [...byRules.errors];
+      byRules.accepted.forEach((f, i) => {
+        if (sniffPhotoType(heads[i]) === f.type) accepted.push(f);
+        else errors.push(`${f.name} is not a valid JPG or PNG image.`);
+      });
+      setUploadErrors(errors);
+      if (accepted.length === 0) {
+        setUploading(false);
+        return;
+      }
       const stored = await api.photos.upload(
         {
           owner,
           entityId,
           existingCount: photos.length,
-          files: accepted.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+          files: accepted.map((f) => ({
+            name: storedPhotoName(f.name),
+            type: f.type,
+            size: f.size,
+          })),
         },
         { signal: controller.signal },
       );
       if (controller.signal.aborted) return;
-      const added = stored.map((p, i) => ({ ...p, url: p.url || previewUrl(accepted[i]) }));
+      if (stored.length !== accepted.length) throw new Error('Unexpected upload answer');
+      const added = stored.map((p, i) => {
+        if (p.url) return p;
+        const url = previewUrl(accepted[i]);
+        if (url) blobs.current.add(url);
+        return { ...p, url };
+      });
       latest.current.onChange([...latest.current.photos, ...added]);
-      setSuccess(UPLOAD_SUCCESS_MESSAGE);
+      setAnnouncement(UPLOAD_SUCCESS_MESSAGE);
     } catch {
       if (controller.signal.aborted) return;
       setUploadErrors((prev) => [...prev, UPLOAD_FAILED_MESSAGE]);
@@ -154,6 +226,7 @@ export default function PhotosField({
             ) : null}
             <Button
               id={id}
+              ref={addRef}
               variant="outlined"
               startIcon={<AddPhotoAlternate />}
               disabled={disabled || atLimit || uploading}
@@ -184,7 +257,7 @@ export default function PhotosField({
         </Box>
       ) : null}
       <Box role="status" aria-live="polite" sx={visuallyHidden}>
-        {success}
+        {announcement}
       </Box>
       {photos.length === 0 ? (
         <Typography variant="body2" sx={{ color: 'text.secondary' }}>
@@ -214,20 +287,25 @@ export default function PhotosField({
                       size="small"
                       variant="contained"
                       color="error"
-                      // Focus lands here when it is armed. aria-disabled (not disabled) keeps the
+                      // Focus lands here when it is armed (effect on armedId). aria-disabled (not disabled) keeps the
                       // focus during the first half second, when a press does nothing.
-                      ref={(el: HTMLButtonElement | null) => el?.focus()}
+                      data-photo-delete=""
                       aria-disabled={!pending.ready}
                       aria-label={`Confirm remove photo ${photo.name}`}
                       onClick={() => {
                         if (!pending.ready) return;
                         pending.cancel();
-                        onChange(removePhoto(photos, photo.id));
+                        const index = photos.findIndex((p) => p.id === photo.id);
+                        const rest = removePhoto(photos, photo.id);
+                        const next = rest[index] ?? rest[index - 1];
+                        focusNext.current = next ? { kind: 'badge', id: next.id } : { kind: 'add' };
+                        setAnnouncement('Photo removed');
+                        onChange(rest);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') {
                           pending.cancel();
-                          focusBadge.current = photo.id;
+                          focusNext.current = { kind: 'badge', id: photo.id };
                         }
                       }}
                       onBlur={pending.cancel}
@@ -236,7 +314,6 @@ export default function PhotosField({
                         top: t.spacing(0.5),
                         right: t.spacing(0.5),
                         minWidth: 0,
-                        opacity: pending.ready ? 1 : 0.7,
                       })}
                     >
                       Delete
@@ -245,7 +322,12 @@ export default function PhotosField({
                     <PhotoRemoveBadge
                       label={`Remove photo ${photo.name}`}
                       disabled={disabled}
-                      onClick={() => pending.arm(photo.id)}
+                      onClick={() => {
+                        setAnnouncement(
+                          `Press Delete to remove ${photo.name}, or Escape to cancel`,
+                        );
+                        pending.arm(photo.id);
+                      }}
                     />
                   )}
                 </PhotoThumb>

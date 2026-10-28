@@ -5,6 +5,7 @@ import { ApiProvider } from '../api';
 import { createMockClient } from '../api/mock';
 import type { ApiClient } from '../api/types';
 import { GrantedAccess, saveButtonName } from '../app/testing';
+import { photoFile } from '../components/admin/roomSetup/photoTestFiles';
 import RoomTypes from './RoomTypes';
 import { clickMoreMenuItem } from './moreMenuTestHelpers';
 
@@ -135,10 +136,7 @@ describe('Room Types page', () => {
     const client = createMockClient();
     renderPage(client);
     await loaded();
-    await user.upload(
-      screen.getByLabelText('Photo files'),
-      new File(['x'], 'pool.png', { type: 'image/png' }),
-    );
+    await user.upload(screen.getByLabelText('Photo files'), photoFile('pool.png'));
     expect(await screen.findByText('2 of 50 photos')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'pool.png' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Room Type' }));

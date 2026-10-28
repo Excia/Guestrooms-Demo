@@ -834,9 +834,10 @@ const parseRoomList = (body: unknown, status: number): RoomSetup[] => {
   body.forEach((room) => parseRoomSetup(room, status));
   return body as RoomSetup[];
 };
-const parsePhotoList = (body: unknown, status: number): RoomPhoto[] => {
+const parsePhotoList = (body: unknown, status: number, count: number): RoomPhoto[] => {
   if (
     !Array.isArray(body) ||
+    body.length !== count ||
     !body.every((v) => isObject(v) && isString(v.id) && isString(v.name) && isString(v.url))
   ) {
     throw invalid(status, 'photos');
@@ -1877,7 +1878,11 @@ export function createHttpClient(baseUrl: string, options: HttpClientOptions = {
     },
     photos: {
       // The backend takes multipart; until it exists the request carries the file metadata.
-      upload: (req, o) => request('/photos', {}, o, parsePhotoList, { method: 'POST', body: req }),
+      upload: (req, o) =>
+        request('/photos', {}, o, (b, st) => parsePhotoList(b, st, req.files.length), {
+          method: 'POST',
+          body: req,
+        }),
     },
     roomOptions: {
       get: (o) => request('/room-options', {}, o, parseRoomOptions),

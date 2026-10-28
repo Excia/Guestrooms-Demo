@@ -2,6 +2,7 @@ import Box from '@mui/material/Box';
 import type { SxProps, Theme } from '@mui/material/styles';
 import type { ReactNode } from 'react';
 import type { RoomPhoto } from '../../../api/types';
+import { cssUrl } from '../../../app/photos';
 
 export interface PhotoThumbProps {
   photo: RoomPhoto;
@@ -27,7 +28,7 @@ export default function PhotoThumb({ photo, label, dimmed, children, sx }: Photo
           overflow: 'hidden',
           bgcolor: 'action.hover',
           backgroundImage: photo.url
-            ? `url("${photo.url}")`
+            ? cssUrl(photo.url)
             : `repeating-linear-gradient(135deg, ${t.palette.action.disabledBackground} 0 ${t.spacing(1.5)}, ${t.palette.action.hover} ${t.spacing(1.5)} ${t.spacing(3)})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',

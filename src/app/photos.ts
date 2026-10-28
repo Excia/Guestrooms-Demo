@@ -32,10 +32,38 @@ export interface PhotoFile {
 export const sanitizePhotoName = (name: string): string =>
   name.trim().replace(/[^a-zA-Z0-9._-]/g, '');
 
+/**
+ * The name a photo is stored and sent under: any folder part is cut off (a path-like name such as
+ * "../../x.png" or "C:\\x.png" keeps only "x.png"), the legacy sanitizing is applied and leading dots
+ * are dropped, so the name cannot be hidden or climb a folder.
+ */
+export function storedPhotoName(name: string): string {
+  const base = name.slice(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
+  return sanitizePhotoName(base).replace(/^\.+/, '');
+}
+
+const EXTENSIONS = ['.jpg', '.jpeg', '.png'] as const;
+const hasPhotoExtension = (name: string) =>
+  EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext) && name.length > ext.length);
+
 const hasValidName = (name: string): boolean => {
-  const clean = sanitizePhotoName(name);
-  return clean.length > 0 && clean.length <= PHOTO_NAME_MAX && clean.lastIndexOf('.') > 0;
+  const clean = storedPhotoName(name);
+  return clean.length > 0 && clean.length <= PHOTO_NAME_MAX && hasPhotoExtension(clean);
 };
+
+/** The file's type from its first bytes: JPEG starts FF D8 FF, PNG with its 8-byte signature. */
+export function sniffPhotoType(bytes: Uint8Array): 'image/jpeg' | 'image/png' | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length >= png.length && png.every((b, i) => bytes[i] === b)) return 'image/png';
+  return null;
+}
+
+/** A CSS `url("...")` value with quotes, backslashes, parentheses and line breaks escaped. */
+export const cssUrl = (url: string): string =>
+  `url("${url.replace(/[\\"()\n\r\f]/g, (c) => `\\${c.charCodeAt(0).toString(16)} `)}")`;
 
 const formatMb = (bytes: number) => `${bytes / 1e6} MB`;
 
@@ -54,7 +82,7 @@ export function acceptPhotoFiles<T extends PhotoFile>(
     } else if (file.size > PHOTO_MAX_BYTES) {
       errors.push(`${file.name} is larger than ${formatMb(PHOTO_MAX_BYTES)}.`);
     } else if (!hasValidName(file.name)) {
-      errors.push(`${file.name} has an invalid file name.`);
+      errors.push(`${file.name} must be a .jpg, .jpeg or .png file with a plain name.`);
     } else if (existingCount + accepted.length >= MAX_PHOTOS) {
       errors.push(`${file.name} was not added: at most ${MAX_PHOTOS} photos.`);
     } else {

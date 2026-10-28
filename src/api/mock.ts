@@ -114,7 +114,7 @@ import {
   validateRoomType,
   withoutRoom,
 } from '../app/roomSetup';
-import { acceptPhotoFiles } from '../app/photos';
+import { acceptPhotoFiles, storedPhotoName } from '../app/photos';
 import { newRequestId } from '../lib/requestId';
 import { addDays } from '../lib/dates';
 import type {
@@ -1321,7 +1321,11 @@ export function createMockClient({
               details: { photos: errors },
             });
           }
-          return accepted.map((f) => ({ id: newRequestId(), name: f.name, url: '' }));
+          return accepted.map((f) => ({
+            id: newRequestId(),
+            name: storedPhotoName(f.name),
+            url: '',
+          }));
         };
         return respond(store, store, o);
       },

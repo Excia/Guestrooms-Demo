@@ -427,6 +427,7 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
             />
           </Box>
           <PhotosField
+            key={editor.selectedId ?? 'new'}
             owner="room"
             entityId={editor.selectedId}
             photos={details.photos}

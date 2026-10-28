@@ -18,6 +18,11 @@ describe('mock photo upload', () => {
     expect(new Set(stored.map((p) => p.id)).size).toBe(2);
   });
 
+  it('stores the sanitized name, never a path', async () => {
+    const stored = await client().photos.upload(request([png('../../a b(1).png')]));
+    expect(stored[0].name).toBe('ab1.png');
+  });
+
   it('refuses files outside the rules with a 422 that names each file', async () => {
     await expect(
       client().photos.upload(request([png('a.gif', 1000, 'image/gif')])),
