@@ -77,6 +77,8 @@ function renderViewOnly(id: PermissionPageId, page: ReactElement, client: ApiCli
 function leaks(container: HTMLElement): string[] {
   const found: string[] = [];
   for (const b of screen.queryAllByRole('button')) {
+    // Disabled left-navigation entries (pages the user cannot open, such as "Add-On Items") are not actions.
+    if (b.closest('nav[aria-label="Admin Setup"]')) continue;
     const name = (b.getAttribute('aria-label') ?? b.textContent ?? '').trim();
     if (name === '') found.push(`unnamed button: ${b.outerHTML.slice(0, 80)}`);
     else if (ACTION.test(name)) found.push(`action: ${name}`);

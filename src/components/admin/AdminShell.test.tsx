@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { ApiProvider } from '../../api';
@@ -25,6 +25,48 @@ describe('AdminShell side navigation', () => {
     renderShell();
     expect(screen.getByRole('link', { name: 'Locations' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Room Options' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('lists the legacy entries in order, without Migration Tool', () => {
+    renderShell();
+    const labels = within(screen.getByRole('navigation', { name: 'Admin Setup' }))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+    expect(labels).toEqual([
+      'Locations',
+      'Room Options',
+      'Booking Rules',
+      'System Settings',
+      'Employees',
+      'Permissions',
+      'Keycard Integration',
+      'API Integrations',
+      'API Keys',
+      'Rate Categories',
+      'Room Types',
+      'Rooms',
+      'Add-On Items',
+    ]);
+    expect(screen.queryByText('Migration Tool')).not.toBeInTheDocument();
+  });
+
+  it('links the setup lists and shows API Keys as unavailable until its page exists', () => {
+    renderShell();
+    expect(screen.getByRole('link', { name: 'Rate Categories' })).toHaveAttribute(
+      'href',
+      '/admin/rate-categories',
+    );
+    expect(screen.getByRole('link', { name: 'Room Types' })).toHaveAttribute(
+      'href',
+      '/admin/room-types',
+    );
+    expect(screen.getByRole('link', { name: 'Rooms' })).toHaveAttribute('href', '/admin/rooms');
+    expect(screen.getByRole('link', { name: 'Add-On Items' })).toHaveAttribute(
+      'href',
+      '/admin/add-on-items',
+    );
+    expect(screen.queryByRole('link', { name: 'API Keys' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'API Keys' })).toBeDisabled();
   });
 
   // Legacy SideBarControl: a 5px bar pinned to the panel edge, 15px from the tab, rounded on the left.
