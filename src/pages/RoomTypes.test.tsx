@@ -122,9 +122,29 @@ describe('Room Types page', () => {
     renderPage();
     await loaded();
     await user.click(screen.getByRole('button', { name: 'Remove photo room.jpg' }));
+    const confirm = screen.getByRole('button', { name: 'Confirm remove photo room.jpg' });
+    await waitFor(() => expect(confirm).toHaveAttribute('aria-disabled', 'false'));
+    await user.click(confirm);
     expect(screen.getByText('0 of 50 photos')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save Room Type' }));
     expect(await screen.findByText('Add at least one photo.')).toBeInTheDocument();
+  });
+
+  it('uploads a photo through the API and saves it with the room type', async () => {
+    const user = userEvent.setup();
+    const client = createMockClient();
+    renderPage(client);
+    await loaded();
+    await user.upload(
+      screen.getByLabelText('Photo files'),
+      new File(['x'], 'pool.png', { type: 'image/png' }),
+    );
+    expect(await screen.findByText('2 of 50 photos')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'pool.png' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save Room Type' }));
+    expect((await screen.findAllByText('Room Type Saved')).length).toBeGreaterThan(0);
+    const saved = await client.roomSetup.listRoomTypes();
+    expect(saved.some((t) => t.details.photos.some((p) => p.name === 'pool.png'))).toBe(true);
   });
 
   it('saves edits and shows the toast', async () => {

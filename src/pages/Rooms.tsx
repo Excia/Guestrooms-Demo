@@ -427,6 +427,8 @@ function RoomsEditor({ data }: { data: RoomSetupData }) {
             />
           </Box>
           <PhotosField
+            owner="room"
+            entityId={editor.selectedId}
             photos={details.photos}
             onChange={(photos) => setDetails({ ...details, photos })}
             disabled={inheriting}

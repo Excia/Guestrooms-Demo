@@ -360,6 +360,8 @@ function AddOnEditor({ data }: { data: AddOnData }) {
           />
         </Box>
         <PhotosField
+          owner="add-on"
+          entityId={editor.selectedId}
           id={fieldDomId('photos')}
           photos={draft.photos}
           onChange={(photos) => setDraft({ ...draft, photos })}
