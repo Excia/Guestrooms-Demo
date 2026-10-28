@@ -87,3 +87,48 @@ describe('mock house accounts', () => {
     });
   });
 });
+
+describe('default rate categories', () => {
+  it('lists the live rate categories and the member types as options', async () => {
+    const client = createMockClient();
+    const options = await client.systemSettings.getOptions();
+    expect(options.rateCategories.map((c) => c.label)).toContain('Member Rate');
+    expect(options.memberTypes.map((m) => m.label)).toContain('Junior Member');
+  });
+
+  it('stores the choices and the overrides', async () => {
+    const client = createMockClient();
+    const base = mockSystemSettings();
+    const next = {
+      ...base,
+      defaultRateCategories: {
+        ...base.defaultRateCategories,
+        owner: 'rc-comp',
+        memberTypeOverrides: [],
+      },
+    };
+    const saved = await client.systemSettings.save(next);
+    expect(saved.defaultRateCategories.owner).toBe('rc-comp');
+    expect((await client.systemSettings.get()).defaultRateCategories.memberTypeOverrides).toEqual(
+      [],
+    );
+  });
+
+  it('refuses an incomplete override or an unknown rate category with a 422', async () => {
+    const client = createMockClient();
+    const base = mockSystemSettings();
+    const incomplete = {
+      ...base,
+      defaultRateCategories: {
+        ...base.defaultRateCategories,
+        memberTypeOverrides: [{ id: 'x', memberTypeId: null, rateCategoryId: null }],
+      },
+    };
+    await expect(client.systemSettings.save(incomplete)).rejects.toMatchObject({ status: 422 });
+    const unknown = {
+      ...base,
+      defaultRateCategories: { ...base.defaultRateCategories, member: 'gone' },
+    };
+    await expect(client.systemSettings.save(unknown)).rejects.toMatchObject({ status: 422 });
+  });
+});

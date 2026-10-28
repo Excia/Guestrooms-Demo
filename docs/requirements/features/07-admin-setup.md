@@ -4,7 +4,7 @@ Epic issue: Excia/Guestrooms-Demo#69. Figma page: Admin Setup. Back to the [inde
 fields are described in [00-foundation.md](00-foundation.md).
 
 **Shell (from tickets 7.1 and 7.3 to 7.7):** left navigation Locations, Room Options, Booking Rules,
-System Settings, Employees, Permissions, Keycard Integration, API Integrations, Migration Tool; a page
+System Settings, Employees, Permissions, Keycard Integration, API Integrations, Migration Tool (the nav entry was removed, D-AN-1; four list pages were added; API Keys is a tab of API Integrations, #188); a page
 title; a primary save button. Admin-only routes (ticket 0.8). **Gaps:** Locations, Employees, Permissions
 and API Integrations appear in that navigation but have **no ticket and no design** (a follow-up epic
 "Employees and Permissions" is planned once the Permissions screenshot arrives, D-009). The menu's six
@@ -49,7 +49,7 @@ Excia/Guestrooms-Demo#70. Figma: Settings tab 11895:16081, Folio Details tab 119
 - **Implemented (Excia/Guestrooms-Demo#70, in review):** `src/pages/SystemSettings.tsx` at `/admin/primary-setup`
   inside the new Admin Setup shell `src/components/admin/AdminShell.tsx` (left navigation from
   `src/app/adminNav.ts`; entries without a page are disabled; stacks below 1200px). Tabs Settings and Folio
-  Details (the "Default Rate Categories" tab is shown disabled: no content until 7.2). Every Settings field and
+  Details (the "Default Rate Categories" tab was shown disabled here; ticket 189 enables it). Every Settings field and
   the Folio Details fields above; one draft for both tabs; "Save System Settings" is enabled only while the draft
   differs from what is saved. Pure rules in `src/app/systemSettings.ts` (5-minute step, late checkout options,
   cross-field validation, dirty check, logo file check), unit-tested. Close Settled Folios can show both of its
@@ -120,7 +120,11 @@ Rates (7.1) depend on them.
   non-default season has an optional SKU of its own (owner request; legacy has one SKU per category only); the
   rate table is compact (13px text, 66px by 28px amount fields, sticky room type column). Decisions D-RCP-1 to
   D-RCP-6, questions Q-RCP-1 to Q-RCP-3.
-- **Not built:** the "Default Rate Categories" tab in System Settings (separate ticket), pricing a night from the
+- **Default Rate Categories tab (Excia/Guestrooms-Demo#189, in review):** the System Settings tab, built from legacy
+  (`DefaultRateCategoriesEdit.vue`; no Figma content): default rate category for room blocks, members, non-members
+  and owners, plus one override per member type. Part of the System Settings draft and its one Save button; see
+  [entries/189-default-rate-categories.md](../entries/189-default-rate-categories.md).
+- **Not built:** pricing a night from the
   rates, rates for a new room type, per-room overrides (see the entry).
 - **Open questions:** Q-71-1 (design), Q-184-1 to Q-184-7.
 
@@ -293,6 +297,8 @@ Excia/Guestrooms-Demo#75. Figma: Keycard Integration 2829:6860.
 - **Open questions:** Q-75-1 to Q-75-3.
 
 ## 7.7 Migration Tool
+
+> The left-navigation entry was removed (D-AN-1, entries/admin-menu-cleanup.md); the rest of this section is unchanged.
 
 Excia/Guestrooms-Demo#76. Figma: page, errors and results 15957:84602.
 

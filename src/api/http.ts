@@ -70,6 +70,7 @@ import type {
 } from './types';
 import { normalizeRuns } from '../lib/stayPlan';
 import { normalizeAudienceRules } from '../app/bookingRules';
+import { emptyDefaultRateCategories } from '../app/defaultRateCategories';
 import { isEmployeeRole } from '../app/employees';
 import { isStoredEncoderKey } from '../app/keycards';
 import { isSeasonSkuShapeValid, MAX_RATE_CENTS } from '../app/rateCategories';
@@ -693,6 +694,19 @@ const isOnlineBooking = (v: unknown) =>
   typeof v.chargeCancellationFee === 'boolean' &&
   typeof v.showAddOnsPopup === 'boolean';
 
+const isNullableId = (v: unknown) => v === null || isString(v);
+const isDefaultRateCategories = (v: unknown) =>
+  isObject(v) &&
+  (['roomBlock', 'member', 'nonMember', 'owner'] as const).every((k) => isNullableId(v[k])) &&
+  Array.isArray(v.memberTypeOverrides) &&
+  v.memberTypeOverrides.every(
+    (o) =>
+      isObject(o) &&
+      isString(o.id) &&
+      isNullableId(o.memberTypeId) &&
+      isNullableId(o.rateCategoryId),
+  );
+
 // Checks the shape the form relies on; the rules themselves are the backend's to enforce.
 function parseSystemSettings(body: unknown, status: number): SystemSettings {
   if (
@@ -718,11 +732,18 @@ function parseSystemSettings(body: unknown, status: number): SystemSettings {
     !(body.transferItem === null || isLookup(body.transferItem)) ||
     !(body.guestRoomsArea === null || isLookup(body.guestRoomsArea)) ||
     !(body.guestMember === null || isLookup(body.guestMember)) ||
-    !(body.houseAccount === null || isLookup(body.houseAccount))
+    !(body.houseAccount === null || isLookup(body.houseAccount)) ||
+    // Tolerated for one release: a backend that does not send it yet means "none chosen".
+    (body.defaultRateCategories !== undefined &&
+      !isDefaultRateCategories(body.defaultRateCategories))
   ) {
     throw invalid(status, 'system settings');
   }
-  return { ...body, trainingMode: body.trainingMode ?? false } as unknown as SystemSettings;
+  return {
+    ...body,
+    trainingMode: body.trainingMode ?? false,
+    defaultRateCategories: body.defaultRateCategories ?? emptyDefaultRateCategories(),
+  } as unknown as SystemSettings;
 }
 
 const isAudience = (v: unknown) =>
@@ -773,11 +794,18 @@ function parseSystemSettingsOptions(body: unknown, status: number): SystemSettin
     !isObject(body) ||
     !(['timeZones', 'cardReaders', 'items', 'areas', 'members'] as const).every((k) =>
       listOf(body[k], isLookup),
-    )
+    ) ||
+    (body.rateCategories !== undefined && !listOf(body.rateCategories, isLookup)) ||
+    (body.memberTypes !== undefined && !listOf(body.memberTypes, isLookup))
   ) {
     throw invalid(status, 'system settings options');
   }
-  return body as unknown as SystemSettingsOptions;
+  // Tolerated for one release: a backend that does not list them yet offers none.
+  return {
+    rateCategories: [],
+    memberTypes: [],
+    ...body,
+  } as unknown as SystemSettingsOptions;
 }
 
 const isRoomDetails = (v: unknown) =>

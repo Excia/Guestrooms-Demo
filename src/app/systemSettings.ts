@@ -1,6 +1,7 @@
 // Business rules of System Settings (ticket 7.1): times, hour ranges and cross-field validation.
 // Pure functions; the page and the settings context only call them.
 import type { Duration, FolioDetails, SystemSettings } from '../api/types';
+import { validateDefaultRateCategories, type KnownChoices } from './defaultRateCategories';
 import { customTextProblem } from './registrationCard';
 import {
   ONLINE_BOOKING_FIELD_ORDER,
@@ -102,7 +103,8 @@ export type SystemSettingsField =
   | 'folio.phone'
   | 'folio.customText'
   | 'registrationCard.customText'
-  | OnlineBookingField;
+  | OnlineBookingField
+  | `defaultRateCategories.${string}`;
 
 /** Messages per field; Close Settled Folios can break two rules at once, as Figma shows. */
 export type SystemSettingsErrors = Partial<Record<SystemSettingsField, string[]>>;
@@ -128,7 +130,10 @@ const inRange = (n: number, r: { min: number; max: number }) =>
 /** The code of the 422 the backend answers when the chosen house account no longer exists. */
 export const UNKNOWN_HOUSE_ACCOUNT = 'unknown-house-account';
 
-export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors {
+export function validateSystemSettings(
+  s: SystemSettings,
+  known?: KnownChoices,
+): SystemSettingsErrors {
   const errors: SystemSettingsErrors = {};
   const add = (field: SystemSettingsField, message: string) => {
     (errors[field] ??= []).push(message);
@@ -208,11 +213,16 @@ export function validateSystemSettings(s: SystemSettings): SystemSettingsErrors 
   }
 
   for (const [field, message] of Object.entries(validateFolioDetails(s.folio))) {
-    add(field as SystemSettingsField, message[0]);
+    if (message) add(field as SystemSettingsField, message[0]);
   }
   const cardText = customTextProblem(s.registrationCard.customText);
   if (cardText) add('registrationCard.customText', cardText);
   for (const [field, message] of Object.entries(validateOnlineBooking(s.onlineBooking))) {
+    add(field as SystemSettingsField, message);
+  }
+  for (const [field, message] of Object.entries(
+    validateDefaultRateCategories(s.defaultRateCategories, known),
+  )) {
     add(field as SystemSettingsField, message);
   }
   return errors;
@@ -279,10 +289,16 @@ export const FIELD_ORDER: readonly SystemSettingsField[] = [
 export const isRegistrationCardField = (field: SystemSettingsField) =>
   field.startsWith('registrationCard.');
 
+export const isDefaultRateCategoriesField = (field: SystemSettingsField) =>
+  field.startsWith('defaultRateCategories.');
+
 export const isFolioField = (field: SystemSettingsField) => field.startsWith('folio.');
 
 export function firstErrorField(errors: SystemSettingsErrors): SystemSettingsField | null {
-  return FIELD_ORDER.find((f) => errors[f]) ?? null;
+  const known = FIELD_ORDER.find((f) => errors[f]);
+  if (known) return known;
+  // Override rows have dynamic keys, in the order they were added.
+  return (Object.keys(errors) as SystemSettingsField[]).find(isDefaultRateCategoriesField) ?? null;
 }
 
 /** True when the draft differs from what was last saved. */

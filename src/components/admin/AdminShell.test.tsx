@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { ApiProvider } from '../../api';
@@ -25,6 +25,61 @@ describe('AdminShell side navigation', () => {
     renderShell();
     expect(screen.getByRole('link', { name: 'Locations' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('link', { name: 'Room Options' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('lists the legacy entries in order, without Migration Tool', () => {
+    renderShell();
+    const labels = within(screen.getByRole('navigation', { name: 'Admin Setup' }))
+      .getAllByRole('listitem')
+      .map((li) => li.textContent);
+    expect(labels).toEqual([
+      'Locations',
+      'Room Options',
+      'Booking Rules',
+      'System Settings',
+      'Employees',
+      'Permissions',
+      'Keycard Integration',
+      'API Integrations',
+      'Rate Categories',
+      'Room Types',
+      'Rooms',
+      'Add-On Items',
+    ]);
+    expect(screen.queryByText('Migration Tool')).not.toBeInTheDocument();
+  });
+
+  it('links the setup lists and links API Integrations (API Keys is a tab of that page)', () => {
+    renderShell();
+    expect(screen.getByRole('link', { name: 'Rate Categories' })).toHaveAttribute(
+      'href',
+      '/admin/rate-categories',
+    );
+    expect(screen.getByRole('link', { name: 'Room Types' })).toHaveAttribute(
+      'href',
+      '/admin/room-types',
+    );
+    expect(screen.getByRole('link', { name: 'Rooms' })).toHaveAttribute('href', '/admin/rooms');
+    expect(screen.getByRole('link', { name: 'Add-On Items' })).toHaveAttribute(
+      'href',
+      '/admin/add-on-items',
+    );
+    expect(screen.getByRole('link', { name: 'API Integrations' })).toHaveAttribute(
+      'href',
+      '/admin/api-integrations',
+    );
+    expect(screen.queryByText('API Keys')).not.toBeInTheDocument();
+  });
+
+  it('draws a divider above the first entry of the second group only, from lg up', () => {
+    renderShell();
+    const css = Array.from(document.querySelectorAll('style'))
+      .map((st) => st.textContent ?? '')
+      .join('\n');
+    // Emotion writes the lg rule inside a min-width media query; only the groupStart item has it.
+    expect(
+      css.match(/@media \(min-width:1200px\)\{[^}]*padding-top:[^}]*border-top:1px solid/g),
+    ).toHaveLength(1);
   });
 
   // Legacy SideBarControl: a 5px bar pinned to the panel edge, 15px from the tab, rounded on the left.

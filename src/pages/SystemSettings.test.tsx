@@ -284,6 +284,7 @@ describe('SystemSettings page', () => {
     ]);
     const marker: Record<string, [string, string]> = {
       Settings: ['heading', 'Time Zone'],
+      'Default Rate Categories': ['combobox', '^Members default rate category'],
       'Folio Details': ['textbox', 'City'],
       'Registration Card': ['switch', 'Enable Registration Card'],
       'Online Booking': ['textbox', 'Global Booking Message'],

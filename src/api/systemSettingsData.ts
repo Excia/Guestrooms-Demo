@@ -1,3 +1,4 @@
+import { RATE_CATEGORY_IDS } from './rateCategoryData';
 import { defaultRegistrationCard } from '../app/registrationCard';
 import type {
   LookupRef,
@@ -28,6 +29,9 @@ export const MOCK_SYSTEM_SETTINGS_OPTIONS: SystemSettingsOptions = {
     { id: 'area-pool', label: 'Pool' },
     { id: 'area-spa', label: 'Spa' },
   ],
+  // Replaced by the mock client with the live Rate Categories list and the Booking Rules member types.
+  rateCategories: [],
+  memberTypes: [],
   members: [
     { id: 'member-1', label: 'First Last (Member)' },
     { id: 'member-2', label: 'Jordan Rivers (Member)' },
@@ -107,4 +111,14 @@ export const mockSystemSettings = (): SystemSettings => ({
       'By signing, the guest agrees to the club policies, including the cancellation policy and charges for damages.',
   },
   onlineBooking: mockOnlineBookingSettings(),
+  // PLACEHOLDER (P-DRC-1): invented choices; the override row is only there to show the table.
+  defaultRateCategories: {
+    roomBlock: RATE_CATEGORY_IDS.member,
+    member: RATE_CATEGORY_IDS.member,
+    nonMember: RATE_CATEGORY_IDS.nonMember,
+    owner: RATE_CATEGORY_IDS.owner,
+    memberTypeOverrides: [
+      { id: 'override-1', memberTypeId: 'honorary', rateCategoryId: RATE_CATEGORY_IDS.comp },
+    ],
+  },
 });

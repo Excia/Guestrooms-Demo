@@ -49,7 +49,7 @@ export default function RoomTypes() {
   const data = useRoomSetupData();
   if (data.status !== 'ready' || !data.options) {
     return (
-      <AdminShell active="Room Options" title="Room Types">
+      <AdminShell active="Room Types" title="Room Types">
         {data.status === 'error' ? (
           <Alert
             severity="error"
@@ -148,7 +148,7 @@ function RoomTypesEditor({ data }: { data: RoomSetupData }) {
   const title = editor.selected?.name ?? 'New Room Type';
   return (
     <AdminShell
-      active="Room Options"
+      active="Room Types"
       title={title}
       changeLog="room-types"
       sidebarLabel="Room Types"
