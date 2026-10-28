@@ -1278,6 +1278,114 @@ export interface KeycardApi {
   retrieveEncoders(options?: RequestOptions): Promise<string[]>;
 }
 
+// ---- API integrations (Admin Setup, ticket 188) ------------------------------------------------
+
+/**
+ * Secrets are write-once. The API accepts a secret when it is created or replaced and never
+ * returns it again: lists carry a masked form (`maskSecret`, `src/app/apiIntegrations.ts`) or a
+ * `hasPassword` flag. The one exception is a new or rotated Guest Rooms API key, whose secret comes
+ * back in that single response. Clients and servers must not log a request or response body of
+ * these endpoints, nor put a secret in a URL, an error message or a change log entry.
+ * Errors: 403 `forbidden` without edit access (administrators only); 422 `validation` (with
+ * `details` per field); 404 `not-found`; 409 `duplicate` (an API key name already in use).
+ */
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  /** Bullets and the last four characters; never the secret. */
+  maskedKey: string;
+  createdAt: IsoDate;
+}
+
+/** The only response that carries a Guest Rooms API key secret. */
+export interface IssuedApiKey {
+  key: ApiKeySummary;
+  secret: string;
+}
+
+export type PayCloudEnvironment = 'local' | 'test' | 'staging' | 'production';
+
+export interface PayCloudToken {
+  id: string;
+  maskedKey: string;
+  environment: PayCloudEnvironment;
+}
+
+/** `apiKey` is required for a token without an `id`, and replaces the saved key when given with one. */
+export interface PayCloudTokenInput {
+  id?: string;
+  apiKey?: string;
+  environment: PayCloudEnvironment;
+}
+
+export type IntegrationProvider = 'tiger-tms' | 'assa-abloy';
+
+export interface IntegrationAuth {
+  provider: IntegrationProvider;
+  enabled: boolean;
+  baseUrl: string;
+  userName: string;
+  /** A password is saved. Its value is never returned. */
+  hasPassword: boolean;
+  /** Assa Abloy only. */
+  accessId?: string;
+  uuid?: string;
+}
+
+/** `password` is sent only when typed; omitted keeps the saved one. */
+export interface IntegrationAuthInput {
+  provider: IntegrationProvider;
+  enabled: boolean;
+  baseUrl: string;
+  userName: string;
+  password?: string;
+  accessId?: string;
+  uuid?: string;
+}
+
+export interface ConnectionTestResult {
+  provider: IntegrationProvider;
+  success: boolean;
+}
+
+export interface SaveAuthenticationsResult {
+  authentications: IntegrationAuth[];
+  /** One result for each enabled integration, tested after saving. */
+  tests: ConnectionTestResult[];
+}
+
+export interface IntegrationsApi {
+  listApiKeys(options?: RequestOptions): Promise<ApiKeySummary[]>;
+  /** Creates a key; `requestId` makes a repeated request return the same key. */
+  createApiKey(
+    request: { name: string; requestId: string },
+    options?: RequestOptions,
+  ): Promise<IssuedApiKey>;
+  /** Replaces the secret of a key; the old secret stops working at once. */
+  rotateApiKey(
+    request: { id: string; requestId: string },
+    options?: RequestOptions,
+  ): Promise<IssuedApiKey>;
+  revokeApiKey(id: string, options?: RequestOptions): Promise<void>;
+  listPayCloudTokens(options?: RequestOptions): Promise<PayCloudToken[]>;
+  /** Replaces the set: tokens left out are removed; a token without `apiKey` keeps its key. */
+  savePayCloudTokens(
+    tokens: PayCloudTokenInput[],
+    options?: RequestOptions,
+  ): Promise<PayCloudToken[]>;
+  listAuthentications(options?: RequestOptions): Promise<IntegrationAuth[]>;
+  /** Saves, then tests each enabled integration. */
+  saveAuthentications(
+    inputs: IntegrationAuthInput[],
+    options?: RequestOptions,
+  ): Promise<SaveAuthenticationsResult>;
+  /** Tests the connection with these values (a saved password when none is given). Does not save. */
+  testConnection(
+    input: IntegrationAuthInput,
+    options?: RequestOptions,
+  ): Promise<ConnectionTestResult>;
+}
+
 // ---- booking rules (Admin Setup, ticket 7.5) --------------------------------------------------
 
 export type TimeUnit = 'days' | 'weeks' | 'months';
@@ -1888,6 +1996,7 @@ export interface ApiClient {
   addOns: AddOnApi;
   rateCategories: RateCategoryApi;
   keycards: KeycardApi;
+  integrations: IntegrationsApi;
   bookingRules: BookingRulesApi;
   locations: LocationsApi;
   employees: EmployeesApi;

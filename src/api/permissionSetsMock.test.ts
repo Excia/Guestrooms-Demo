@@ -103,6 +103,11 @@ describe('mock permission sets', () => {
     await expect(viewer.bookingRules.save(rules)).rejects.toMatchObject({ status: 403 });
     await expect(viewer.roomSetup.deleteRoom('room-100')).rejects.toMatchObject({ status: 403 });
     await expect(viewer.keycards.saveEncoders([])).rejects.toMatchObject({ status: 403 });
+    await expect(
+      viewer.integrations.createApiKey({ name: 'Blocked', requestId: 'r' }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(viewer.integrations.revokeApiKey('key-1')).rejects.toMatchObject({ status: 403 });
+    await expect(viewer.integrations.savePayCloudTokens([])).rejects.toMatchObject({ status: 403 });
     const editor = createMockClient({
       grant: { role: 'x', permissions: ['page.booking-rules', 'booking-rules.edit'] },
     });

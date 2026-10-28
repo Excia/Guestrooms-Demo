@@ -20,6 +20,6 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { label: 'Employees', path: path('employees'), id: 'employees' },
   { label: 'Permissions', path: path('permissions'), id: 'permissions' },
   { label: 'Keycard Integration', path: path('keycard-integration'), id: 'keycard-integration' },
-  { label: 'API Integrations' },
+  { label: 'API Integrations', path: path('api-integrations'), id: 'api-integrations' },
   { label: 'Migration Tool' },
 ];

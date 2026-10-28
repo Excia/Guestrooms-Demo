@@ -50,6 +50,8 @@ export const LOCATIONS_PATH = '/admin/locations';
 export const PERMISSIONS_PATH = '/admin/permissions';
 /** Employees (LP-A.4, ticket 185); the Admin Setup navigation links to it, the menu does not. */
 export const EMPLOYEES_PATH = '/admin/employees';
+/** API Integrations (ticket 188): API Keys, PayCloud API Tokens and Authentications; the Admin Setup navigation links to it, the menu does not. */
+export const API_INTEGRATIONS_PATH = '/admin/api-integrations';
 /** Stub results for the New Reservation search (ticket 1.4); not a menu link. */
 export const NEW_RESERVATION_RESULTS_PATH = '/reservations/new/results';
 
@@ -120,6 +122,13 @@ export const routes = [
     id: 'keycard-integration',
     path: KEYCARD_INTEGRATION_PATH,
     title: 'Keycard Integration',
+    section: 'admin',
+    showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
+  },
+  {
+    id: 'api-integrations',
+    path: API_INTEGRATIONS_PATH,
+    title: 'API Integrations',
     section: 'admin',
     showInMenu: false, // Figma's menu (12047:5743) omits it; the Admin Setup navigation has it.
   },

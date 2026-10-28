@@ -12,6 +12,7 @@ import {
   ADD_ON_ITEMS_PATH,
   RATE_CATEGORIES_PATH,
   ROOM_OPTIONS_PATH,
+  API_INTEGRATIONS_PATH,
   KEYCARD_INTEGRATION_PATH,
   EMPLOYEES_PATH,
   LOCATIONS_PATH,
@@ -37,6 +38,7 @@ import Permissions from './pages/Permissions';
 import AddOnItems from './pages/AddOnItems';
 import RateCategories from './pages/RateCategories';
 import RoomOptions from './pages/RoomOptions';
+import ApiIntegrations from './pages/ApiIntegrations';
 import KeycardIntegration from './pages/KeycardIntegration';
 import SystemSettings from './pages/SystemSettings';
 import Reporting from './pages/Reporting';
@@ -90,6 +92,7 @@ const pages: Partial<Record<string, ReactElement>> = {
   [RATE_CATEGORIES_PATH]: <RateCategories />,
   [ROOM_OPTIONS_PATH]: <RoomOptions />,
   [KEYCARD_INTEGRATION_PATH]: <KeycardIntegration />,
+  [API_INTEGRATIONS_PATH]: <ApiIntegrations />,
   [LOCATIONS_PATH]: <Locations />,
   [PERMISSIONS_PATH]: <Permissions />,
   [EMPLOYEES_PATH]: <Employees />,
